@@ -486,6 +486,12 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <span class="sitem-badge" id="badge-proveedores">—</span>
     </div>
   </div>
+    <div class="sitem" onclick="goPage('inventario',this)" id="nav-inventario">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      Inventario
+      <span class="sitem-badge" id="badge-inventario">—</span>
+    </div>
+  </div>
   <div class="sdivider"></div>
   <div class="sgroup">
     <div class="sgroup-label">Análisis</div>
@@ -605,6 +611,35 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div><div class="pg-title">Proveedores</div><div class="pg-title-sub">Instructores, empresas e instituciones</div></div>
   </div>
   <div id="proveedores-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando proveedores...</div></div></div>
+</div>
+
+<!-- ══ INVENTARIO ══ -->
+<div id="pg-inventario" style="display:none">
+  <div class="pg-header">
+    <div><div class="pg-title">Inventario</div><div class="pg-title-sub">Insumos y materiales para simulación</div></div>
+    <button class="btn pri" onclick="openM('modal-inventario')">+ Agregar ítem</button>
+  </div>
+  <div class="stats-row" style="margin-bottom:16px">
+    <div class="stat-card"><div class="stat-n" id="invST">0</div><div class="stat-l">Total ítems</div></div>
+    <div class="stat-card"><div class="stat-n" id="invSD">0</div><div class="stat-l">Stock disponible</div></div>
+    <div class="stat-card"><div class="stat-n" id="invSF">0</div><div class="stat-l">Fabricantes</div></div>
+    <div class="stat-card"><div class="stat-n" id="invSC">0</div><div class="stat-l">Categorías</div></div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+    <div style="position:relative;flex:1;min-width:200px">
+      <input id="inv-sq" class="search" placeholder="Buscar por nombre, código, fabricante..." oninput="invOnSearch(this.value)" style="width:100%">
+    </div>
+    <select class="mini-sel" id="inv-cat-filter" onchange="invSetFilter('cat',this.value)" style="min-width:140px">
+      <option value="">Todas las categorías</option>
+      <option>Sutura</option><option>Implante Ortopédico</option><option>Catéter</option>
+      <option>Hemostático</option><option>Neurocirugía</option><option>ORL</option><option>Otro</option>
+    </select>
+    <select class="mini-sel" id="inv-dep-filter" onchange="invSetFilter('dep',this.value)" style="min-width:160px">
+      <option value="">Todos los depósitos</option>
+    </select>
+    <button class="btn sm" onclick="invClearFilters()">Limpiar</button>
+  </div>
+  <div id="inventario-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando inventario...</div></div></div>
 </div>
 
 <!-- ══ CALENDARIO ══ -->
@@ -1091,6 +1126,7 @@ async function sb(path,opts={},retry=2){
 
 // ── STATE ──
 let tasks=[],users=[],cursos=[],alumnos=[],proveedores=[],plantillas=[],notifConfigs=[];
+let inventario=[],invFilter="all",invSearch="",editInvId=null;
 let curUser="",curF="all",q="",aq="",cursoFilter="all";
 let charts={};
 const UC=["#7C3AED","#3B82F6","#10B981","#F59E0B","#EC4899","#14B8A6"];
@@ -1204,6 +1240,7 @@ function updateSideBadges(){
   document.getElementById("badge-alumnos").textContent=alumnos.length;
   document.getElementById("badge-proveedores").textContent=proveedores.length;
   const br=document.getElementById("badge-rutinas");if(br)br.textContent=rutinas.filter(r=>r.activa).length;
+  const bi=document.getElementById("badge-inventario");if(bi)bi.textContent=inventario.length||"—";
 }
 
 // ── PAGES ──
@@ -1224,6 +1261,7 @@ function goPage(name,el){
     sb("rutinas?select=*&order=dia_del_mes").then(data=>{rutinas=data;renderRutinas()}).catch(()=>renderRutinas());
   }
   if(name==="cashflow")loadCF().then(()=>setCFTab("resumen"));
+  if(name==="inventario")loadInventario();
   if(name==="notif")renderNotifPage();
 }
 function goTo(name,el){goPage(name,el)}
@@ -2401,6 +2439,162 @@ function buildCalEventos(){
   return evs;
 }
 
+/* ── INVENTARIO ── */
+let invCatFilter="",invDepFilter="";
+
+async function loadInventario(){
+  const cont=document.getElementById("inventario-container");
+  if(cont)cont.innerHTML='<div class="loading"><div class="loader"></div><div class="lt">Cargando inventario...</div></div>';
+  try{
+    inventario=await sb("inventario?select=*&order=fabricante,nombre");
+    renderInventario();
+    const bi=document.getElementById("badge-inventario");if(bi)bi.textContent=inventario.length||"—";
+  }catch(e){
+    if(cont)cont.innerHTML='<div class="empty"><div class="ei">📦</div>No se pudo cargar el inventario.<br><small style="color:var(--tx3)">Verificá que la tabla &quot;inventario&quot; exista en Supabase.</small></div>';
+  }
+}
+
+function invOnSearch(v){invSearch=v;renderInventario()}
+function invSetFilter(type,v){if(type==="cat")invCatFilter=v;else invDepFilter=v;renderInventario()}
+function invClearFilters(){invSearch="";invCatFilter="";invDepFilter="";document.getElementById("inv-sq").value="";document.getElementById("inv-cat-filter").value="";document.getElementById("inv-dep-filter").value="";renderInventario()}
+
+function invGetVisible(){
+  return inventario.filter(i=>{
+    const matchQ=!invSearch||(i.nombre||"").toLowerCase().includes(invSearch.toLowerCase())||(i.codigo||"").toLowerCase().includes(invSearch.toLowerCase())||(i.fabricante||"").toLowerCase().includes(invSearch.toLowerCase());
+    const matchCat=!invCatFilter||i.categoria===invCatFilter;
+    const matchDep=!invDepFilter||i.deposito===invDepFilter;
+    return matchQ&&matchCat&&matchDep;
+  });
+}
+
+function renderInventario(){
+  // Stats
+  const total=inventario.length;
+  const stockDisp=inventario.reduce((s,i)=>s+(i.stock_disponible||0),0);
+  const fabricantes=new Set(inventario.map(i=>i.fabricante).filter(Boolean)).size;
+  const cats=new Set(inventario.map(i=>i.categoria).filter(Boolean)).size;
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+  set("invST",total);set("invSD",stockDisp);set("invSF",fabricantes);set("invSC",cats);
+
+  // Populate deposito filter
+  const deps=document.getElementById("inv-dep-filter");
+  if(deps&&deps.options.length<=1){
+    const uniqueDeps=[...new Set(inventario.map(i=>i.deposito).filter(Boolean))].sort();
+    uniqueDeps.forEach(d=>{const o=document.createElement("option");o.value=d;o.textContent=d;deps.appendChild(o)});
+  }
+
+  const cont=document.getElementById("inventario-container");if(!cont)return;
+  const list=invGetVisible();
+  if(!list.length){cont.innerHTML=`<div class="empty"><div class="ei">📦</div>${invSearch||invCatFilter||invDepFilter?"Sin resultados para esa búsqueda.":"No hay ítems en el inventario.<br><small style='color:var(--tx3)'>Usá la herramienta importar.html para cargar los datos.</small>"}</div>`;return}
+
+  // Group by categoria
+  const cats2=[...new Set(list.map(i=>i.categoria||"Sin categoría"))].sort();
+  const CAT_ICON={"Sutura":"🧵","Implante Ortopédico":"🦴","Catéter":"💉","Hemostático":"🩸","Neurocirugía":"🧠","ORL":"👂","Sin categoría":"📦","Otro":"📦"};
+
+  let html='<div class="table-wrap"><table class="dtable"><thead><tr><th>Código</th><th>Nombre</th><th>Fabricante</th><th>Categoría</th><th>Partida/Lote</th><th>Depósito</th><th style="text-align:right">Stock</th><th>Vencimiento</th><th>Acciones</th></tr></thead><tbody>';
+
+  cats2.forEach(cat=>{
+    const items=list.filter(i=>(i.categoria||"Sin categoría")===cat);
+    html+=`<tr style="background:var(--surf2)"><td colspan="9" style="padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--tx3)">${CAT_ICON[cat]||"📦"} ${cat} · ${items.length}</td></tr>`;
+    items.forEach(i=>{
+      const vencido=i.fecha_vencimiento&&new Date(i.fecha_vencimiento)<new Date();
+      const stockColor=i.stock_disponible<=0?"color:var(--re)":i.stock_disponible<=3?"color:var(--am)":"color:var(--gr)";
+      html+=`<tr>
+        <td style="font-family:monospace;font-size:11px;color:var(--tx3)">${esc(i.codigo||"—")}</td>
+        <td style="font-weight:500">${esc(i.nombre)}</td>
+        <td style="color:var(--tx2)">${esc(i.fabricante||"—")}</td>
+        <td><span class="badge btd" style="font-size:10px">${esc(i.categoria||"—")}</span></td>
+        <td style="font-family:monospace;font-size:11px;color:var(--tx3)">${esc(i.partida||"—")}</td>
+        <td style="color:var(--tx2);font-size:11px">${esc(i.deposito||"—")}</td>
+        <td style="text-align:right;font-weight:600;${stockColor}">${i.stock_disponible||0}</td>
+        <td style="font-size:12px;${vencido?"color:var(--re)":"color:var(--tx2)"}">${i.fecha_vencimiento?fmt(i.fecha_vencimiento):""} ${vencido?"⚠":""}</td>
+        <td><div style="display:flex;gap:4px">
+          <button class="btn sm" onclick="openEditInv('${i.id}')">✎</button>
+          <button class="btn sm danger" onclick="confirmDel('¿Eliminar ${esc(i.nombre)}?',()=>delInventario('${i.id}'))">✕</button>
+        </div></td>
+      </tr>`;
+    });
+  });
+  html+='</tbody></table></div>';
+  cont.innerHTML=html;
+}
+
+function openEditInv(id){
+  const i=inventario.find(x=>x.id===id);if(!i)return;
+  editInvId=id;
+  document.getElementById("minv-title").textContent="Editar ítem";
+  document.getElementById("inv-save-btn").textContent="Guardar cambios";
+  document.getElementById("inv-nombre").value=i.nombre||"";
+  document.getElementById("inv-codigo").value=i.codigo||"";
+  document.getElementById("inv-fabricante").value=i.fabricante||"";
+  document.getElementById("inv-cat").value=i.categoria||"";
+  document.getElementById("inv-partida").value=i.partida||"";
+  document.getElementById("inv-deposito").value=i.deposito||"";
+  document.getElementById("inv-stock-actual").value=i.stock_actual||0;
+  document.getElementById("inv-stock-res").value=i.stock_reservado||0;
+  document.getElementById("inv-stock-disp").value=i.stock_disponible||0;
+  document.getElementById("inv-venc").value=i.fecha_vencimiento||"";
+  document.getElementById("inv-obs").value=i.observaciones||"";
+  openM("modal-inventario");
+}
+
+function openAddInv(){
+  editInvId=null;
+  document.getElementById("minv-title").textContent="Nuevo ítem de inventario";
+  document.getElementById("inv-save-btn").textContent="Guardar";
+  ["inv-nombre","inv-codigo","inv-fabricante","inv-partida","inv-deposito","inv-obs"].forEach(id=>{const e=document.getElementById(id);if(e)e.value=""});
+  document.getElementById("inv-cat").value="";
+  document.getElementById("inv-venc").value="";
+  document.getElementById("inv-stock-actual").value=0;
+  document.getElementById("inv-stock-res").value=0;
+  document.getElementById("inv-stock-disp").value=0;
+  openM("modal-inventario");
+}
+
+async function saveInventario(){
+  const nombre=document.getElementById("inv-nombre").value.trim();
+  if(!nombre){toast("Escribí un nombre","err");return}
+  const data={
+    nombre,
+    codigo:document.getElementById("inv-codigo").value.trim()||null,
+    fabricante:document.getElementById("inv-fabricante").value.trim()||null,
+    categoria:document.getElementById("inv-cat").value||null,
+    partida:document.getElementById("inv-partida").value.trim()||null,
+    deposito:document.getElementById("inv-deposito").value.trim()||null,
+    stock_actual:parseInt(document.getElementById("inv-stock-actual").value)||0,
+    stock_reservado:parseInt(document.getElementById("inv-stock-res").value)||0,
+    stock_disponible:parseInt(document.getElementById("inv-stock-disp").value)||0,
+    fecha_vencimiento:document.getElementById("inv-venc").value||null,
+    observaciones:document.getElementById("inv-obs").value.trim()||null,
+    updated_at:new Date().toISOString()
+  };
+  const btn=document.getElementById("inv-save-btn");btn.disabled=true;btn.textContent="Guardando...";
+  try{
+    if(editInvId){
+      await sb(`inventario?id=eq.${editInvId}`,{method:"PATCH",body:JSON.stringify(data)});
+      const idx=inventario.findIndex(x=>x.id===editInvId);
+      if(idx>=0)inventario[idx]={...inventario[idx],...data};
+      toast("Ítem actualizado","ok");
+    }else{
+      const[c]=await sb("inventario",{method:"POST",body:JSON.stringify(data)});
+      inventario.push(c);
+      toast("Ítem agregado","ok");
+    }
+    closeM("modal-inventario");renderInventario();
+  }catch(e){toast("Error: "+e.message,"err")}
+  finally{btn.disabled=false;btn.textContent=editInvId?"Guardar cambios":"Guardar";editInvId=null}
+}
+
+async function delInventario(id){
+  try{
+    await sb(`inventario?id=eq.${id}`,{method:"DELETE"});
+    inventario=inventario.filter(x=>x.id!==id);
+    renderInventario();
+    const bi=document.getElementById("badge-inventario");if(bi)bi.textContent=inventario.length||"—";
+    toast("Ítem eliminado","ok");
+  }catch(e){toast("Error","err")}
+}
+
 // ── TOAST ──
 function toast(msg,type="inf"){const t=document.getElementById("toast");t.textContent=msg;t.className=`toast show ${type}`;clearTimeout(t._t);t._t=setTimeout(()=>{t.className="toast"},3500)}
 function showToast(msg,type="inf"){toast(msg,type)}
@@ -2689,5 +2883,37 @@ document.head.appendChild(shakeStyle);
 // Iniciar con login
 initLogin();
 </script>
+<!-- MODAL INVENTARIO -->
+<div class="mov" id="modal-inventario" onclick="closeMovOuter(event,'modal-inventario')">
+  <div class="mob" style="max-width:520px">
+    <div class="mot"><span id="minv-title">Nuevo ítem de inventario</span><button class="mcl" onclick="closeM('modal-inventario')">✕</button></div>
+    <div class="mf">
+      <div class="mrow"><label class="ml">Nombre *</label><input class="mi" id="inv-nombre" placeholder="Ej: VICRYL 2/0 MH"></div>
+      <div class="mrow"><label class="ml">Código</label><input class="mi" id="inv-codigo" placeholder="Ej: J323H"></div>
+      <div class="mrow"><label class="ml">Fabricante</label><input class="mi" id="inv-fabricante" placeholder="Ej: ETHICON"></div>
+      <div class="mrow"><label class="ml">Categoría</label>
+        <select class="mi" id="inv-cat">
+          <option value="">Sin categoría</option>
+          <option>Sutura</option><option>Implante Ortopédico</option><option>Catéter</option>
+          <option>Hemostático</option><option>Neurocirugía</option><option>ORL</option><option>Otro</option>
+        </select>
+      </div>
+      <div class="mrow"><label class="ml">Partida / Lote</label><input class="mi" id="inv-partida" placeholder="Número de lote"></div>
+      <div class="mrow"><label class="ml">Depósito</label><input class="mi" id="inv-deposito" placeholder="Ej: Z - VENCIDOS SALTA"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+        <div><label class="ml">Stock actual</label><input class="mi" id="inv-stock-actual" type="number" min="0" value="0"></div>
+        <div><label class="ml">Reservado</label><input class="mi" id="inv-stock-res" type="number" min="0" value="0"></div>
+        <div><label class="ml">Disponible</label><input class="mi" id="inv-stock-disp" type="number" min="0" value="0"></div>
+      </div>
+      <div class="mrow"><label class="ml">Vencimiento</label><input class="mi" id="inv-venc" type="date"></div>
+      <div class="mrow" style="align-items:flex-start"><label class="ml">Observaciones</label><textarea class="mi" id="inv-obs" rows="2" placeholder="Notas adicionales..." style="resize:vertical"></textarea></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+        <button class="btn" onclick="closeM('modal-inventario')">Cancelar</button>
+        <button class="btn pri" id="inv-save-btn" onclick="saveInventario()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
