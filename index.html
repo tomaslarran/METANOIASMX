@@ -485,6 +485,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       Proveedores
       <span class="sitem-badge" id="badge-proveedores">—</span>
     </div>
+    <div class="sitem" onclick="goPage('instructores',this)" id="nav-instructores">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><path d="M17 11l2 2 4-4"/></svg>
+      Instructores
+      <span class="sitem-badge" id="badge-instructores">—</span>
+    </div>
   </div>
     <div class="sitem" onclick="goPage('inventario',this)" id="nav-inventario">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
@@ -608,9 +613,29 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 <!-- ══ PROVEEDORES ══ -->
 <div id="pg-proveedores" style="display:none">
   <div class="pg-header">
-    <div><div class="pg-title">Proveedores</div><div class="pg-title-sub">Instructores, empresas e instituciones</div></div>
+    <div><div class="pg-title">Proveedores</div><div class="pg-title-sub">Empresas, instituciones y servicios externos</div></div>
   </div>
   <div id="proveedores-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando proveedores...</div></div></div>
+</div>
+
+<!-- ══ INSTRUCTORES ══ -->
+<div id="pg-instructores" style="display:none">
+  <div class="pg-header">
+    <div><div class="pg-title">Instructores</div><div class="pg-title-sub">Docentes y facilitadores de simulación</div></div>
+    <button class="btn pri" onclick="openNewModal()">+ Nuevo instructor</button>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+    <div style="position:relative;flex:1;min-width:200px">
+      <input id="inst-sq" class="search" placeholder="Buscar por nombre, especialidad, institución..." oninput="instOnSearch(this.value)" style="width:100%">
+    </div>
+    <select class="mini-sel" id="inst-activo-filter" onchange="instSetActivo(this.value)" style="min-width:130px">
+      <option value="">Todos</option>
+      <option value="true">Activos</option>
+      <option value="false">Inactivos</option>
+    </select>
+    <button class="btn sm" onclick="instClearFilters()">Limpiar</button>
+  </div>
+  <div id="instructores-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando instructores...</div></div></div>
 </div>
 
 <!-- ══ INVENTARIO ══ -->
@@ -1063,13 +1088,40 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <input type="hidden" id="prov-edit-id">
   <div class="form-grid-2">
     <div class="fg form-full"><label class="fl">Nombre *</label><input class="fi" id="p-nombre" type="text" placeholder="Nombre completo o razón social"></div>
-    <div class="fg"><label class="fl">Tipo</label><select class="fs" id="p-tipo"><option value="Instructor">Instructor</option><option value="Empresa">Empresa</option><option value="Freelance">Freelance</option><option value="Institución">Institución</option></select></div>
+    <div class="fg"><label class="fl">Tipo</label><select class="fs" id="p-tipo"><option value="Empresa">Empresa</option><option value="Freelance">Freelance</option><option value="Institución">Institución</option><option value="Otro">Otro</option></select></div>
     <div class="fg"><label class="fl">Especialidad</label><input class="fi" id="p-esp" type="text" placeholder="Ej: ACLS, RCP, Simulación médica"></div>
     <div class="fg"><label class="fl">Email</label><input class="fi" id="p-email" type="email" placeholder="correo@ejemplo.com"></div>
     <div class="fg"><label class="fl">Teléfono</label><input class="fi" id="p-tel" type="text" placeholder="+54 387..."></div>
     <div class="fg form-full"><label class="fl">Notas</label><textarea class="fta" id="p-notas" placeholder="Honorarios, condiciones, observaciones..." style="min-height:60px"></textarea></div>
   </div>
   <div class="ma"><button class="bc" onclick="closeModal('modal-proveedor')">Cancelar</button><button class="bk" id="pbtn" onclick="saveProveedor()">Guardar</button></div>
+</div>
+</div>
+
+<!-- MODAL NUEVO INSTRUCTOR -->
+<div class="mov" id="modal-instructor" onclick="if(event.target===this)closeModal('modal-instructor')">
+<div class="modal">
+  <div class="mt" id="modal-inst-title">Nuevo Instructor</div>
+  <input type="hidden" id="inst-edit-id">
+  <div class="form-grid-2">
+    <div class="fg"><label class="fl">Nombre *</label><input class="fi" id="i-nombre" type="text" placeholder="Nombre"></div>
+    <div class="fg"><label class="fl">Apellido *</label><input class="fi" id="i-apellido" type="text" placeholder="Apellido"></div>
+    <div class="fg"><label class="fl">Especialidad</label><input class="fi" id="i-esp" type="text" placeholder="Ej: ACLS, RCP, Trauma"></div>
+    <div class="fg"><label class="fl">Matrícula</label><input class="fi" id="i-matricula" type="text" placeholder="Nro. matrícula profesional"></div>
+    <div class="fg"><label class="fl">Email</label><input class="fi" id="i-email" type="email" placeholder="correo@ejemplo.com"></div>
+    <div class="fg"><label class="fl">Teléfono</label><input class="fi" id="i-tel" type="text" placeholder="+54 387..."></div>
+    <div class="fg form-full"><label class="fl">Institución</label><input class="fi" id="i-inst" type="text" placeholder="Hospital, clínica u organización"></div>
+    <div class="fg" style="display:flex;align-items:center;gap:8px;padding-top:20px">
+      <input type="checkbox" id="i-activo" checked style="accent-color:var(--ac);width:15px;height:15px">
+      <label class="fl" for="i-activo" style="margin:0">Instructor activo</label>
+    </div>
+    <div class="fg form-full"><label class="fl">Notas</label><textarea class="fta" id="i-notas" placeholder="Honorarios, disponibilidad, observaciones..." style="min-height:60px"></textarea></div>
+  </div>
+  <div class="ma">
+    <button class="bc" onclick="closeModal('modal-instructor')">Cancelar</button>
+    <button class="bdel" id="ibtn-del" style="display:none" onclick="delInstructor(document.getElementById('inst-edit-id').value,document.getElementById('i-apellido').value+' '+document.getElementById('i-nombre').value)">Eliminar</button>
+    <button class="bk" id="ibtn" onclick="saveInstructor()">Guardar</button>
+  </div>
 </div>
 </div>
 
@@ -1125,8 +1177,9 @@ async function sb(path,opts={},retry=2){
 }
 
 // ── STATE ──
-let tasks=[],users=[],cursos=[],alumnos=[],proveedores=[],plantillas=[],notifConfigs=[];
+let tasks=[],users=[],cursos=[],alumnos=[],proveedores=[],instructores=[],plantillas=[],notifConfigs=[];
 let inventario=[],invFilter="all",invSearch="",editInvId=null;
+let instSearch="",instActivo="";
 let curUser="",curF="all",q="",aq="",cursoFilter="all";
 let charts={};
 const UC=["#7C3AED","#3B82F6","#10B981","#F59E0B","#EC4899","#14B8A6"];
@@ -1159,12 +1212,13 @@ async function loadAll(){
   const rb=document.getElementById("rbtn");rb.classList.add("spin");
   toast("Conectando con Supabase...","inf");
   try{
-    [tasks,users,cursos,alumnos,proveedores,plantillas,notifConfigs,rutinas]=await Promise.all([
+    [tasks,users,cursos,alumnos,proveedores,instructores,plantillas,notifConfigs,rutinas]=await Promise.all([
       sb("tareas?select=*&order=created_at.desc"),
       sb("usuarios?select=*&order=nombre"),
       sb("cursos?select=*&order=created_at.desc"),
       sb("alumnos?select=*&order=apellido"),
       sb("proveedores?select=*&order=nombre"),
+      sb("instructores?select=*&order=apellido,nombre").catch(()=>[]),
       sb("plantillas_curso?select=*&order=nombre"),
       sb("notificaciones_config?select=*").catch(()=>[]),
       sb("rutinas?select=*&order=dia_del_mes").catch(()=>[])
@@ -1174,6 +1228,7 @@ async function loadAll(){
     renderCursos();
     renderAlumnos();
     renderProveedores();
+    renderInstructores();
     try{renderRutinas()}catch(e){}
     updateSideBadges();
     checkVencimientos();
@@ -1239,6 +1294,7 @@ function updateSideBadges(){
   document.getElementById("badge-cursos").textContent=cursos.length;
   document.getElementById("badge-alumnos").textContent=alumnos.length;
   document.getElementById("badge-proveedores").textContent=proveedores.length;
+  const binst=document.getElementById("badge-instructores");if(binst)binst.textContent=instructores.length||"—";
   const br=document.getElementById("badge-rutinas");if(br)br.textContent=rutinas.filter(r=>r.activa).length;
   const bi=document.getElementById("badge-inventario");if(bi)bi.textContent=inventario.length||"—";
 }
@@ -1252,7 +1308,7 @@ function goPage(name,el){
   if(pg)pg.style.display="block";
   document.querySelectorAll(".sitem").forEach(i=>i.classList.remove("on"));
   if(el)el.classList.add("on");
-  const labels={"tareas":"Nueva tarea","cursos":"Nuevo curso","alumnos":"Nuevo alumno","proveedores":"Nuevo proveedor"};
+  const labels={"tareas":"Nueva tarea","cursos":"Nuevo curso","alumnos":"Nuevo alumno","proveedores":"Nuevo proveedor","instructores":"Nuevo instructor"};
   const nb=document.getElementById("newBtnLabel");if(nb)nb.textContent=labels[name]||"Nuevo";
   if(name==="graficos")renderCharts();
   if(name==="calendario"){Promise.all([loadCursoTareasCalendario(),loadCF()]).then(()=>renderCalendario())}
@@ -1261,6 +1317,7 @@ function goPage(name,el){
     sb("rutinas?select=*&order=dia_del_mes").then(data=>{rutinas=data;renderRutinas()}).catch(()=>renderRutinas());
   }
   if(name==="cashflow")loadCF().then(()=>setCFTab("resumen"));
+  if(name==="instructores")renderInstructores();
   if(name==="inventario")loadInventario();
   if(name==="notif")renderNotifPage();
 }
@@ -1272,7 +1329,8 @@ function openNewModal(){
   if(curPage==="tareas")openModal("modal-tarea");
   else if(curPage==="cursos")openModal("modal-curso");
   else if(curPage==="alumnos"){document.getElementById("alum-edit-id").value="";document.getElementById("modal-alum-title").textContent="Nuevo Alumno";["a-nombre","a-apellido","a-dni","a-matricula","a-esp","a-inst","a-email","a-tel","a-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});openModal("modal-alumno")}
-  else if(curPage==="proveedores"){document.getElementById("prov-edit-id").value="";document.getElementById("modal-prov-title").textContent="Nuevo Proveedor";["p-nombre","p-email","p-tel","p-esp","p-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("p-tipo").value="Instructor";openModal("modal-proveedor")}
+  else if(curPage==="proveedores"){document.getElementById("prov-edit-id").value="";document.getElementById("modal-prov-title").textContent="Nuevo Proveedor";["p-nombre","p-email","p-tel","p-esp","p-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("p-tipo").value="Empresa";openModal("modal-proveedor")}
+  else if(curPage==="instructores"){document.getElementById("inst-edit-id").value="";document.getElementById("modal-inst-title").textContent="Nuevo Instructor";["i-nombre","i-apellido","i-esp","i-matricula","i-email","i-tel","i-inst","i-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("i-activo").checked=true;document.getElementById("ibtn-del").style.display="none";openModal("modal-instructor")}
 }
 function openModal(id){document.getElementById(id).classList.add("on")}
 function closeModal(id){document.getElementById(id).classList.remove("on")}
@@ -1691,6 +1749,77 @@ async function saveProveedor(){
     toast("Proveedor guardado","ok");
   }catch(e){toast("Error","err")}
   finally{pbtn.disabled=false;pbtn.textContent="Guardar"}
+}
+
+// ── INSTRUCTORES ──
+function instGetVisible(){
+  let list=instructores;
+  if(instSearch)list=list.filter(i=>`${i.nombre} ${i.apellido} ${i.especialidad||""} ${i.institucion||""}`.toLowerCase().includes(instSearch.toLowerCase()));
+  if(instActivo!=="")list=list.filter(i=>String(i.activo===true||i.activo===null||i.activo===undefined?true:i.activo)===instActivo);
+  return list;
+}
+function instOnSearch(v){instSearch=v;renderInstructores()}
+function instSetActivo(v){instActivo=v;renderInstructores()}
+function instClearFilters(){instSearch="";instActivo="";document.getElementById("inst-sq").value="";document.getElementById("inst-activo-filter").value="";renderInstructores()}
+
+function renderInstructores(){
+  const c=document.getElementById("instructores-container");if(!c)return;
+  const list=instGetVisible();
+  if(!list.length){c.innerHTML=`<div class="empty"><div class="ei">👨‍🏫</div>No hay instructores${instSearch?" con esa búsqueda":""}. Agregá el primero.</div>`;return}
+  const colores=["#7C3AED","#3B82F6","#10B981","#F59E0B","#EC4899","#14B8A6"];
+  c.innerHTML=`<div class="entity-grid">${list.map((p,i)=>`
+    <div class="entity-card" onclick="editInstructor('${p.id}')">
+      <div class="entity-avatar" style="background:${colores[i%colores.length]}22;color:${colores[i%colores.length]}">${initials((p.nombre||"")+" "+(p.apellido||""))}</div>
+      ${!p.activo?`<span style="position:absolute;top:10px;right:10px;font-size:10px;background:#33333380;color:var(--tx3);border-radius:4px;padding:2px 6px">Inactivo</span>`:""}
+      <div class="entity-name">${esc(p.apellido)}, ${esc(p.nombre)}</div>
+      <div class="entity-sub">${p.especialidad?esc(p.especialidad):"Sin especialidad"}${p.matricula?` · Mat. ${esc(p.matricula)}`:""}</div>
+      <div class="entity-meta">
+        ${p.institucion?`<div class="entity-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>${esc(p.institucion)}</div>`:""}
+        ${p.email?`<div class="entity-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>${esc(p.email)}</div>`:""}
+        ${p.telefono?`<div class="entity-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.62 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>${esc(p.telefono)}</div>`:""}
+        ${p.notas?`<div class="entity-row" style="color:var(--tx3);font-style:italic">${esc(p.notas.slice(0,60))}${p.notas.length>60?"...":""}</div>`:""}
+      </div>
+    </div>`).join("")}</div>`;
+}
+
+function editInstructor(id){
+  const p=instructores.find(i=>i.id===id);if(!p)return;
+  document.getElementById("inst-edit-id").value=id;
+  document.getElementById("modal-inst-title").textContent="Editar Instructor";
+  document.getElementById("i-nombre").value=p.nombre||"";
+  document.getElementById("i-apellido").value=p.apellido||"";
+  document.getElementById("i-esp").value=p.especialidad||"";
+  document.getElementById("i-matricula").value=p.matricula||"";
+  document.getElementById("i-email").value=p.email||"";
+  document.getElementById("i-tel").value=p.telefono||"";
+  document.getElementById("i-inst").value=p.institucion||"";
+  document.getElementById("i-activo").checked=p.activo!==false;
+  document.getElementById("i-notas").value=p.notas||"";
+  document.getElementById("ibtn-del").style.display="inline-flex";
+  openModal("modal-instructor");
+}
+
+async function saveInstructor(){
+  const nombre=document.getElementById("i-nombre").value.trim();
+  const apellido=document.getElementById("i-apellido").value.trim();
+  if(!nombre||!apellido){toast("Nombre y apellido son obligatorios","err");return}
+  const id=document.getElementById("inst-edit-id").value;
+  const data={nombre,apellido,especialidad:document.getElementById("i-esp").value||null,matricula:document.getElementById("i-matricula").value||null,email:document.getElementById("i-email").value||null,telefono:document.getElementById("i-tel").value||null,institucion:document.getElementById("i-inst").value||null,activo:document.getElementById("i-activo").checked,notas:document.getElementById("i-notas").value||null,updated_at:new Date().toISOString()};
+  const ibtn=document.getElementById("ibtn");ibtn.disabled=true;ibtn.textContent="Guardando...";
+  try{
+    if(id){await sb(`instructores?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(data)});const i=instructores.findIndex(x=>x.id===id);if(i>=0)instructores[i]={...instructores[i],...data};}
+    else{const [created]=await sb("instructores",{method:"POST",body:JSON.stringify(data)});instructores.push(created);}
+    closeModal("modal-instructor");renderInstructores();updateSideBadges();
+    toast("Instructor guardado","ok");
+  }catch(e){toast("Error al guardar","err")}
+  finally{ibtn.disabled=false;ibtn.textContent="Guardar"}
+}
+
+function delInstructor(id,nombre){
+  confirmDel(`¿Eliminar al instructor "${nombre}"? Esta acción no se puede deshacer.`,async()=>{
+    try{await sb(`instructores?id=eq.${id}`,{method:"DELETE"});instructores=instructores.filter(i=>i.id!==id);closeModal("modal-instructor");renderInstructores();updateSideBadges();toast("Instructor eliminado","ok")}
+    catch(e){toast("Error al eliminar","err")}
+  })
 }
 
 // ── ALUMNOS ──
@@ -2599,7 +2728,7 @@ async function delInventario(id){
 function toast(msg,type="inf"){const t=document.getElementById("toast");t.textContent=msg;t.className=`toast show ${type}`;clearTimeout(t._t);t._t=setTimeout(()=>{t.className="toast"},3500)}
 function showToast(msg,type="inf"){toast(msg,type)}
 
-document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeConfirm();["modal-tarea","modal-curso","modal-proveedor","modal-alumno"].forEach(id=>closeModal(id))}});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeConfirm();["modal-tarea","modal-curso","modal-proveedor","modal-alumno","modal-instructor"].forEach(id=>closeModal(id))}});
 
 /* ─── CALENDARIO ─────────────────────────── */
 let calYear=new Date().getFullYear();
