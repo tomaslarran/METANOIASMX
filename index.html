@@ -698,7 +698,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:10px;height:10px;border-radius:50%;background:#7C3AED;flex-shrink:0"></span>Inicio de curso</span>
     <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:10px;height:10px;border-radius:50%;background:#10B981;flex-shrink:0"></span>Fin de curso</span>
     <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:10px;height:10px;border-radius:50%;background:#3B82F6;flex-shrink:0"></span>Tarea de curso</span>
-    <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:10px;height:10px;border-radius:50%;background:#F59E0B;flex-shrink:0"></span>After del curso</span>
+    <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:10px;height:10px;border-radius:50%;background:#F59E0B;flex-shrink:0"></span>Catering del curso</span>
   </div>
 
   <!-- FILTROS -->
@@ -824,10 +824,18 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </div>
 
     <!-- Stats resumen -->
-    <div class="stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px">
-      <div class="sc"><div class="sc-l">Total ingresos (próx. mes)</div><div class="sc-v vg" id="cf-total-ing">—</div><div class="sc-s" id="cf-mes-label">cargando...</div></div>
-      <div class="sc"><div class="sc-l">Total egresos (próx. mes)</div><div class="sc-v vp" id="cf-total-egr">—</div><div class="sc-s" id="cf-mes-label2">cargando...</div></div>
-      <div class="sc"><div class="sc-l">Resultado neto</div><div class="sc-v" id="cf-resultado" style="color:var(--gr)">—</div><div class="sc-s">ingresos − egresos</div></div>
+    <div class="stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">
+      <div class="sc"><div class="sc-l">Total ingresos</div><div class="sc-v vg" id="cf-total-ing">—</div><div class="sc-s" id="cf-mes-label">cargando...</div></div>
+      <div class="sc"><div class="sc-l">Total egresos</div><div class="sc-v vp" id="cf-total-egr">—</div><div class="sc-s" id="cf-mes-label2">cargando...</div></div>
+      <div class="sc"><div class="sc-l">Resultado financiero</div><div class="sc-v" id="cf-resultado" style="color:var(--gr)">—</div><div class="sc-s">ingresos − egresos</div></div>
+      <div class="sc"><div class="sc-l">Saldo acumulado</div><div class="sc-v vb" id="cf-saldo-acum">—</div><div class="sc-s" id="cf-saldo-mes">mes actual</div></div>
+    </div>
+
+    <!-- Saldo inicial -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:var(--tx3)">
+      <span>Saldo inicial del período ($):</span>
+      <input id="cf-saldo-ini" type="number" placeholder="0" style="width:140px;padding:4px 8px;background:var(--surf2);border:1px solid var(--b);border-radius:5px;color:var(--tx);font-size:12px" oninput="setCFSaldoInicial(this.value)" title="Se resta del primer mes para calcular el saldo acumulado">
+      <span style="font-size:11px;color:var(--tx4)">el saldo acumulado parte de este valor</span>
     </div>
 
     <!-- Grilla -->
@@ -1044,6 +1052,18 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 </div>
 
+<!-- MODAL EDITAR CELDA CF -->
+<div class="mov" id="modal-cf-celda" onclick="if(event.target===this)closeModal('modal-cf-celda')">
+  <div class="modal" style="max-width:360px">
+    <div class="mt"><span id="mcel-title">Editar valor</span><button class="mt-close" onclick="closeModal('modal-cf-celda')">✕</button></div>
+    <div class="fg">
+      <label class="fl" id="mcel-label">Monto ($)</label>
+      <input class="fi" id="mcel-monto" type="number" placeholder="0" min="0" step="0.01" style="font-size:18px;text-align:right" onkeydown="if(event.key==='Enter')saveCFCelda()">
+    </div>
+    <div class="ma"><button class="bc" onclick="closeModal('modal-cf-celda')">Cancelar</button><button class="bk" id="mcel-save-btn" onclick="saveCFCelda()">Guardar</button></div>
+  </div>
+</div>
+
 <!-- MODAL NUEVA TAREA -->
 <div class="mov" id="modal-tarea" onclick="if(event.target===this)closeModal('modal-tarea')">
 <div class="modal">
@@ -1055,9 +1075,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
   <div class="fg" style="margin-bottom:12px"><label class="fl">Responsables</label><div class="user-checks" id="modalUserChecks" style="display:flex;flex-wrap:wrap;gap:5px;padding:6px 0"></div></div>
   <div class="form-grid-2">
-    <div class="fg"><label class="fl">Vencimiento</label><input class="fi" id="md" type="date" style="padding:7px 10px"></div>
-    <div class="fg"><label class="fl">Descripción</label><input class="fi" id="mdesc" type="text" placeholder="Notas..."></div>
+    <div class="fg"><label class="fl">Vencimiento</label><input class="fi" id="md" type="date" style="padding:7px 10px" onchange="checkTareaConflicto()"></div>
+    <div class="fg"><label class="fl">Hora</label><input class="fi" id="mhora" type="time" style="padding:7px 10px" placeholder="Sin hora específica"></div>
   </div>
+  <div class="fg"><label class="fl">Descripción</label><input class="fi" id="mdesc" type="text" placeholder="Notas..."></div>
+  <div id="tarea-conflicto-aviso" style="display:none;margin-top:8px;padding:8px 12px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);border-radius:6px;font-size:12px;color:#FCD34D"></div>
   <div class="ma"><button class="bc" onclick="closeModal('modal-tarea')">Cancelar</button><button class="bk" id="mbtn" onclick="createTask()">Crear tarea</button></div>
 </div>
 </div>
@@ -1084,10 +1106,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
   <div class="toggle-row">
     <label class="toggle"><input type="checkbox" id="c-after"><span class="tslider"></span></label>
-    <span class="toggle-label">¿Tiene after? (evento social post-curso)</span>
+    <span class="toggle-label">¿Tiene catering? (evento social post-curso)</span>
   </div>
   <div id="c-after-desc-wrap" style="display:none;margin-top:8px">
-    <div class="fg"><label class="fl">Descripción del after</label><input class="fi" id="c-after-desc" type="text" placeholder="Ej: Cena en Restaurante El Portal, 21hs"></div>
+    <div class="fg"><label class="fl">Descripción del catering</label><input class="fi" id="c-after-desc" type="text" placeholder="Ej: Cena en Restaurante El Portal, 21hs"></div>
   </div>
   <div class="fg" style="margin-top:12px"><label class="fl">Usar plantilla de tareas</label><select class="fs" id="c-plantilla"><option value="">Sin plantilla (crear sin tareas)</option></select></div>
   <div class="ma"><button class="bc" onclick="closeModal('modal-curso')">Cancelar</button><button class="bk" id="cbtn" onclick="createCurso()">Crear curso</button></div>
@@ -1484,18 +1506,32 @@ function onSearch(v){q=v.trim();document.getElementById("clr").classList.toggle(
 function clrSearch(){q="";document.getElementById("sq").value="";document.getElementById("clr").classList.remove("show");renderTaskList(vis())}
 function setF(f,btn){curF=f;document.querySelectorAll(".fb").forEach(b=>b.classList.remove("on"));if(btn)btn.classList.add("on");renderTareas()}
 function onUser(){curUser=document.getElementById("usel").value;renderTareas();renderCursos()}
+function checkTareaConflicto(){
+  const fecha=document.getElementById("md").value;
+  const aviso=document.getElementById("tarea-conflicto-aviso");
+  if(!fecha||!aviso){if(aviso)aviso.style.display="none";return;}
+  const conflictos=tasks.filter(t=>t.fecha_vencimiento===fecha&&t.status!=="Listo");
+  if(conflictos.length){
+    const names=conflictos.map(t=>`"${t.nombre}"`).join(", ");
+    aviso.style.display="block";
+    aviso.innerHTML=`⚠️ Ya hay ${conflictos.length} tarea${conflictos.length>1?"s":""} que vencen ese día: ${names}. Podés seguir igual o cambiar la fecha.`;
+  }else{aviso.style.display="none";}
+}
 async function createTask(){
   const nombre=document.getElementById("mn").value.trim();if(!nombre){toast("Escribí un nombre","err");return}
   const prioridad=document.getElementById("mp").value||null;const status=document.getElementById("ms").value;
-  const fecha=document.getElementById("md").value||null;const desc=document.getElementById("mdesc").value.trim()||null;
+  const fecha=document.getElementById("md").value||null;
+  const hora=document.getElementById("mhora").value||null;
+  const desc=document.getElementById("mdesc").value.trim()||null;
   const assignees=[...document.querySelectorAll("#modalUserChecks input:checked")].map(i=>i.value);
   const mbtn=document.getElementById("mbtn");mbtn.disabled=true;mbtn.textContent="Creando...";
   try{
-    const [created]=await sb("tareas",{method:"POST",body:JSON.stringify({nombre,status,prioridad,assignees,fecha_vencimiento:fecha,descripcion:desc,updated_at:new Date().toISOString()})});
+    const [created]=await sb("tareas",{method:"POST",body:JSON.stringify({nombre,status,prioridad,assignees,fecha_vencimiento:fecha,hora_inicio:hora,descripcion:desc,updated_at:new Date().toISOString()})});
     tasks.unshift(created);closeModal("modal-tarea");
-    ["mn","mp","md","mdesc"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+    ["mn","mp","md","mhora","mdesc"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
     document.getElementById("ms").value="Por Hacer";
     document.querySelectorAll("#modalUserChecks input").forEach(i=>{i.checked=false;i.closest(".uc").classList.remove("sel2")});
+    const aviso=document.getElementById("tarea-conflicto-aviso");if(aviso)aviso.style.display="none";
     renderTareas();updateSideBadges();toast(`"${nombre}" creada`,"ok");
   }catch(e){toast("Error: "+e.message,"err")}
   finally{mbtn.disabled=false;mbtn.textContent="Crear tarea"}
@@ -1530,7 +1566,7 @@ function renderCursos(){
           ${curso.fecha_inicio?`<span class="cc-pill">📅 ${fmt(curso.fecha_inicio)}</span>`:""}
           ${curso.cupos_max?`<span class="cc-pill">👥 ${curso.cupos_inscriptos||0}/${curso.cupos_max}</span>`:""}
           ${curso.arancel?`<span class="cc-pill">💰 $${curso.arancel.toLocaleString()}</span>`:""}
-          ${curso.tiene_after?`<span class="cc-pill" style="color:#C4B5FD">🎉 After</span>`:""}
+          ${curso.tiene_after?`<span class="cc-pill" style="color:#C4B5FD">🍽️ Catering</span>`:""}
           ${prov?`<span class="cc-pill">🏢 ${prov.nombre}</span>`:""}
         </div>
         <div class="cc-progress">
@@ -1581,9 +1617,9 @@ async function selectCurso(id){
         </div>
         <div class="toggle-row">
           <label class="toggle"><input type="checkbox" ${curso.tiene_after?"checked":""} onchange="updateCursoField('${id}','tiene_after',this.checked)"><span class="tslider"></span></label>
-          <span class="toggle-label">Tiene after</span>
+          <span class="toggle-label">Tiene catering</span>
         </div>
-        ${curso.tiene_after?`<div class="fg" style="margin-top:8px"><label class="fl">Descripción del after</label><input class="fi" value="${esc(curso.descripcion_after||"")}" onchange="updateCursoField('${id}','descripcion_after',this.value)" placeholder="Ej: Cena en Restaurante El Portal, 21hs"></div>`:""}
+        ${curso.tiene_after?`<div class="fg" style="margin-top:8px"><label class="fl">Descripción del catering</label><input class="fi" value="${esc(curso.descripcion_after||"")}" onchange="updateCursoField('${id}','descripcion_after',this.value)" placeholder="Ej: Cena en Restaurante El Portal, 21hs"></div>`:""}
       </div>
       <div id="cd-tareas-${id}" style="display:none">
         ${renderChecklist(tareasCurso,id)}
@@ -2125,6 +2161,8 @@ async function doDelRutina(id){
 /* ── CASH FLOW ── */
 let cfConceptos=[],cfValores=[],cfPrestamos=[],cfCobranzas=[],cfInversiones=[];
 let cfSociedad="SUDES",cfTab="resumen",cfPFilter="all",cfCobFilter="all",cfInvFilter="all";
+let cfSaldoInicial=0;
+function setCFSaldoInicial(v){cfSaldoInicial=parseFloat(String(v).replace(/\./g,"").replace(",","."))||0;renderCFResumen();}
 let editCFConcId=null,editCFPrestId=null,editCFCobId=null,editCFInvId=null;
 const MESES_CF=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
@@ -2170,90 +2208,152 @@ function setCFSociedad(s,btn){
 
 /* ── RESUMEN GRILLA ── */
 function renderCFResumen(){
-  // Generar 12 meses desde el actual
+  // Generar meses dinámicamente: desde el más antiguo en datos hasta el más nuevo + 1 mes extra adelante
   const now=new Date();
+  const nowKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  const periodos=cfValores.map(v=>v.periodo).filter(Boolean);
+  const conSocConc=cfConceptos.filter(c=>c.sociedad===cfSociedad||c.sociedad==="Ambas").map(c=>c.id);
+  const periodosSoc=cfValores.filter(v=>conSocConc.includes(v.concepto_id)).map(v=>v.periodo).filter(Boolean);
+  let minKey=periodosSoc.length?periodosSoc.reduce((a,b)=>a<b?a:b):nowKey;
+  let maxKey=periodosSoc.length?periodosSoc.reduce((a,b)=>a>b?a:b):nowKey;
+  // Garantizar que el mes actual siempre esté y que llegue al menos 1 mes adelante
+  if(nowKey<minKey)minKey=nowKey;
+  if(maxKey<nowKey)maxKey=nowKey;
+  // Sumar 1 mes al final para proyección
+  const [maxY,maxM]=maxKey.split("-").map(Number);
+  const extraDate=new Date(maxY,maxM,1);// maxM es 1-based, new Date lo toma como siguiente mes
+  const extraKey=`${extraDate.getFullYear()}-${String(extraDate.getMonth()+1).padStart(2,"0")}`;
+  if(extraKey>maxKey)maxKey=extraKey;
+  // Construir array de meses
   const meses=[];
-  for(let i=0;i<12;i++){const d=new Date(now.getFullYear(),now.getMonth()+i,1);meses.push({y:d.getFullYear(),m:d.getMonth(),label:`${MESES_CF[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`,key:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`})}
+  let cur=new Date(parseInt(minKey.slice(0,4)),parseInt(minKey.slice(5,7))-1,1);
+  const end=new Date(parseInt(maxKey.slice(0,4)),parseInt(maxKey.slice(5,7))-1,1);
+  while(cur<=end){
+    const key=`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}`;
+    const isHoy=key===nowKey;
+    const pasado=key<nowKey;
+    meses.push({y:cur.getFullYear(),m:cur.getMonth(),label:`${MESES_CF[cur.getMonth()]} ${String(cur.getFullYear()).slice(2)}`,key,pasado,actual:isHoy});
+    cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);
+  }
 
   const conceptos=cfConceptos.filter(c=>c.sociedad===cfSociedad||c.sociedad==="Ambas");
   const ingresos=conceptos.filter(c=>c.tipo==="Ingreso");
   const egresos=conceptos.filter(c=>c.tipo==="Egreso");
 
-  // Stats del primer mes futuro con datos
-  const primerMes=meses[0].key;
-  const getTotalMes=(tipo,mes)=>{
-    return conceptos.filter(c=>c.tipo===tipo).reduce((sum,c)=>{
-      const val=cfValores.find(v=>v.concepto_id===c.id&&v.periodo===mes);
-      return sum+(val?.monto||0);
-    },0);
-  };
-  const ingTotal=getTotalMes("Ingreso",primerMes);
-  const egrTotal=getTotalMes("Egreso",primerMes);
+  const getVal=(c,mkey)=>{const v=cfValores.find(v=>v.concepto_id===c.id&&v.periodo===mkey);return v?.monto||0;};
+  const getTotalTipo=(tipo,mkey)=>conceptos.filter(c=>c.tipo===tipo).reduce((s,c)=>s+getVal(c,mkey),0);
+
+  // Stats del mes actual
+  const mesActual=meses.find(m=>m.actual)||meses[3];
+  const ingTotal=getTotalTipo("Ingreso",mesActual.key);
+  const egrTotal=getTotalTipo("Egreso",mesActual.key);
   const res=ingTotal-egrTotal;
   document.getElementById("cf-total-ing").textContent="$"+Math.round(ingTotal).toLocaleString("es-AR");
   document.getElementById("cf-total-egr").textContent="$"+Math.round(egrTotal).toLocaleString("es-AR");
   const rEl=document.getElementById("cf-resultado");
-  rEl.textContent="$"+Math.round(Math.abs(res)).toLocaleString("es-AR")+(res<0?" (negativo)":"");
+  rEl.textContent="$"+Math.round(Math.abs(res)).toLocaleString("es-AR")+(res<0?" (neg)":"");
   rEl.style.color=res>=0?"var(--gr)":"var(--re)";
-  document.getElementById("cf-mes-label").textContent=meses[0].label;
-  document.getElementById("cf-mes-label2").textContent=meses[0].label;
+  document.getElementById("cf-mes-label").textContent=mesActual.label;
+  document.getElementById("cf-mes-label2").textContent=mesActual.label;
 
-  // Grilla
-  const thMeses=meses.map(m=>`<th style="min-width:90px;text-align:right;padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--tx3);border-right:1px solid var(--b);white-space:nowrap">${m.label}</th>`).join("");
+  // Calcular saldo acumulado por mes
+  let acum=cfSaldoInicial;
+  const acumPorMes={};
+  meses.forEach(m=>{
+    const ing=getTotalTipo("Ingreso",m.key);
+    const egr=getTotalTipo("Egreso",m.key);
+    acum+=ing-egr;
+    acumPorMes[m.key]=acum;
+  });
+  // Stat saldo acumulado = mes actual
+  const saldoAcumEl=document.getElementById("cf-saldo-acum");
+  const saldoAcumMesEl=document.getElementById("cf-saldo-mes");
+  if(saldoAcumEl){
+    const sa=acumPorMes[mesActual.key]||0;
+    saldoAcumEl.textContent="$"+Math.round(Math.abs(sa)).toLocaleString("es-AR")+(sa<0?" (neg)":"");
+    saldoAcumEl.style.color=sa>=0?"var(--bl)":"var(--re)";
+    if(saldoAcumMesEl)saldoAcumMesEl.textContent=mesActual.label;
+  }
+
+  // Cabeceras de mes — resaltar mes actual
+  const thMeses=meses.map(m=>{
+    const estilo=m.actual
+      ?"min-width:90px;text-align:right;padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--ac);border-right:1px solid var(--b);white-space:nowrap;background:rgba(124,58,237,.1);border-bottom:2px solid var(--ac)"
+      :"min-width:90px;text-align:right;padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:"+(m.pasado?"var(--tx4)":"var(--tx3)")+";border-right:1px solid var(--b);white-space:nowrap";
+    return`<th style="${estilo}">${m.label}</th>`;
+  }).join("");
 
   const buildRows=(list,tipo)=>{
-    const colorH=tipo==="Ingreso"?"rgba(16,185,129,.15)":"rgba(239,68,68,.12)";
+    const colorH=tipo==="Ingreso"?"rgba(16,185,129,.12)":"rgba(239,68,68,.10)";
     const colorT=tipo==="Ingreso"?"#6EE7B7":"#FCA5A5";
+    const icon=tipo==="Ingreso"?"▲ INGRESOS":"▼ EGRESOS";
     let rows=`<tr style="background:${colorH}">
-      <td colspan="${meses.length+1}" style="padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:${colorT}">${tipo==="Ingreso"?"▲ INGRESOS":"▼ EGRESOS"}</td>
+      <td colspan="${meses.length+2}" style="padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:${colorT}">${icon}</td>
     </tr>`;
     list.forEach(c=>{
       const celdas=meses.map(m=>{
-        const val=cfValores.find(v=>v.concepto_id===c.id&&v.periodo===m.key);
-        const monto=val?.monto||0;
+        const monto=getVal(c,m.key);
         const montoFmt=monto?("$"+Math.round(monto).toLocaleString("es-AR")):"—";
-        return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${monto?"var(--tx)":"var(--tx3)"};border-right:1px solid var(--b);cursor:pointer;transition:background .12s" 
-          onmouseenter="this.style.background='var(--surf2)'" onmouseleave="this.style.background=''"
-          onclick="editCFCelda('${c.id}','${m.key}','${esc(c.nombre)}','${m.label}',${monto})" 
+        const bgActual=m.actual?"background:rgba(124,58,237,.06)":"";
+        const faded=m.pasado&&!monto?"opacity:.45":"";
+        return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${monto?"var(--tx)":"var(--tx3)"};border-right:1px solid var(--b);cursor:pointer;transition:background .12s;${bgActual};${faded}"
+          onmouseenter="this.style.background='var(--surf2)'" onmouseleave="this.style.background='${m.actual?'rgba(124,58,237,.06)':''}'"
+          onclick="editCFCelda('${c.id}','${m.key}','${esc(c.nombre)}','${m.label}',${monto})"
           title="Click para editar">${montoFmt}</td>`;
       }).join("");
+      const cat=c.categoria?`<span style="font-size:9px;color:var(--tx4);margin-left:4px">${esc(c.categoria)}</span>`:"";
       rows+=`<tr style="border-bottom:1px solid var(--b)">
-        <td style="padding:7px 12px;font-size:12px;color:var(--tx2);display:flex;align-items:center;gap:6px;min-width:220px">
-          <span style="flex:1">${esc(c.nombre)}</span>
-          <button onclick="editCFConc('${c.id}')" style="background:none;border:none;cursor:pointer;color:var(--tx3);font-size:10px;padding:2px 4px;border-radius:3px" title="Editar concepto">✎</button>
-          <button onclick="delCFConc('${c.id}')" style="background:none;border:none;cursor:pointer;color:var(--tx3);font-size:10px;padding:2px 4px;border-radius:3px" title="Eliminar">✕</button>
+        <td style="padding:6px 12px;font-size:12px;color:var(--tx2);min-width:240px">
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="flex:1">${esc(c.nombre)}</span>${cat}
+            <button onclick="editCFConc('${c.id}')" style="background:none;border:none;cursor:pointer;color:var(--tx4);font-size:10px;padding:2px 3px;border-radius:3px;opacity:0;transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0" title="Editar">✎</button>
+            <button onclick="delCFConc('${c.id}')" style="background:none;border:none;cursor:pointer;color:var(--tx4);font-size:10px;padding:2px 3px;border-radius:3px;opacity:0;transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0" title="Eliminar">✕</button>
+          </div>
         </td>${celdas}
       </tr>`;
     });
-    // Fila de totales
+    // Fila total del bloque
     const totales=meses.map(m=>{
-      const total=list.reduce((sum,c)=>{const v=cfValores.find(v=>v.concepto_id===c.id&&v.periodo===m.key);return sum+(v?.monto||0)},0);
-      return`<td style="text-align:right;padding:6px 10px;font-size:12px;font-weight:700;color:${colorT};border-right:1px solid var(--b);background:${colorH}">${total?"$"+Math.round(total).toLocaleString("es-AR"):"—"}</td>`;
+      const total=list.reduce((s,c)=>s+getVal(c,m.key),0);
+      const bgActual=m.actual?"background:rgba(124,58,237,.1)":"background:"+colorH;
+      return`<td style="text-align:right;padding:6px 10px;font-size:12px;font-weight:700;color:${colorT};border-right:1px solid var(--b);${bgActual}">${total?"$"+Math.round(total).toLocaleString("es-AR"):"—"}</td>`;
     }).join("");
-    rows+=`<tr><td style="padding:6px 12px;font-size:11px;font-weight:700;color:${colorT};background:${colorH}">TOTAL ${tipo.toUpperCase()}</td>${totales}</tr>`;
+    rows+=`<tr><td style="padding:6px 12px;font-size:11px;font-weight:700;color:${colorT};background:${colorH}">TOTAL ${tipo==="Ingreso"?"INGRESOS":"EGRESOS"}</td>${totales}</tr>`;
     return rows;
   };
 
-  // Fila resultado neto
+  // Fila resultado financiero del mes
   const filaResultado=meses.map(m=>{
-    const ing=ingresos.reduce((sum,c)=>{const v=cfValores.find(v=>v.concepto_id===c.id&&v.periodo===m.key);return sum+(v?.monto||0)},0);
-    const egr=egresos.reduce((sum,c)=>{const v=cfValores.find(v=>v.concepto_id===c.id&&v.periodo===m.key);return sum+(v?.monto||0)},0);
+    const ing=getTotalTipo("Ingreso",m.key);
+    const egr=getTotalTipo("Egreso",m.key);
     const r=ing-egr;
-    return`<td style="text-align:right;padding:8px 10px;font-size:13px;font-weight:700;color:${r>=0?"var(--gr)":"var(--re)"};border-right:1px solid var(--b);background:var(--bg3)">${r?"$"+Math.round(r).toLocaleString("es-AR"):"—"}</td>`;
+    const bgActual=m.actual?"background:rgba(124,58,237,.08)":"background:var(--surf2)";
+    return`<td style="text-align:right;padding:7px 10px;font-size:12px;font-weight:700;color:${r>0?"var(--gr)":r<0?"var(--re)":"var(--tx3)"};border-right:1px solid var(--b);${bgActual}">${r?"$"+Math.round(r).toLocaleString("es-AR"):"—"}</td>`;
+  }).join("");
+
+  // Fila saldo acumulado
+  const filaSaldo=meses.map(m=>{
+    const sa=acumPorMes[m.key]||0;
+    const bgActual=m.actual?"background:rgba(124,58,237,.13)":"background:var(--surf2)";
+    return`<td style="text-align:right;padding:7px 10px;font-size:12px;font-weight:700;color:${sa>=0?"var(--bl)":"var(--re)"};border-right:1px solid var(--b);${bgActual}">${"$"+Math.round(sa).toLocaleString("es-AR")}</td>`;
   }).join("");
 
   const html=`<table style="border-collapse:collapse;width:100%;font-family:var(--f);background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);overflow:hidden">
-    <thead><tr style="background:var(--surf2);border-bottom:1px solid var(--b2)">
-      <th style="text-align:left;padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--tx3);min-width:220px">CONCEPTO</th>
+    <thead><tr style="background:var(--surf2);border-bottom:2px solid var(--b2)">
+      <th style="text-align:left;padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--tx3);min-width:240px;position:sticky;left:0;background:var(--surf2)">CONCEPTO</th>
       ${thMeses}
     </tr></thead>
     <tbody>
-      ${buildRows(ingresos,"Ingreso")}
-      <tr style="height:8px"><td colspan="${meses.length+1}"></td></tr>
       ${buildRows(egresos,"Egreso")}
+      <tr style="height:6px;background:var(--bg)"><td colspan="${meses.length+2}"></td></tr>
+      ${buildRows(ingresos,"Ingreso")}
       <tr style="border-top:2px solid var(--b2)">
-        <td style="padding:8px 12px;font-size:12px;font-weight:700;color:var(--tx);background:var(--bg3)">RESULTADO NETO</td>
+        <td style="padding:7px 12px;font-size:11px;font-weight:700;color:var(--tx);background:var(--surf2);position:sticky;left:0">RESULTADO FINANCIERO MES</td>
         ${filaResultado}
+      </tr>
+      <tr style="border-top:1px solid var(--b2)">
+        <td style="padding:7px 12px;font-size:11px;font-weight:700;color:var(--bl);background:var(--surf2);position:sticky;left:0">SALDO FINANCIERO ACUMULADO</td>
+        ${filaSaldo}
       </tr>
     </tbody>
   </table>`;
@@ -2261,21 +2361,31 @@ function renderCFResumen(){
   document.getElementById("cf-grilla-wrap").innerHTML=html;
 }
 
-async function editCFCelda(conceptoId,periodo,nombre,mesLabel,montoActual){
-  const input=prompt(`${nombre} — ${mesLabel}\nMonto actual: $${Math.round(montoActual).toLocaleString("es-AR")}\n\nIngresá el nuevo monto (sin $ ni puntos):`);
-  if(input===null)return;
-  const monto=parseFloat(input.replace(/\./g,"").replace(",","."))||0;
+let _cfCeldaConceptoId=null,_cfCeldaPeriodo=null;
+function editCFCelda(conceptoId,periodo,nombre,mesLabel,montoActual){
+  _cfCeldaConceptoId=conceptoId;_cfCeldaPeriodo=periodo;
+  document.getElementById("mcel-title").textContent=nombre+" — "+mesLabel;
+  document.getElementById("mcel-label").textContent="Monto actual: $"+Math.round(montoActual).toLocaleString("es-AR");
+  const inp=document.getElementById("mcel-monto");
+  inp.value=montoActual||"";
+  openM("modal-cf-celda");
+  setTimeout(()=>{inp.focus();inp.select()},80);
+}
+async function saveCFCelda(){
+  const monto=parseFloat(String(document.getElementById("mcel-monto").value).replace(/\./g,"").replace(",","."))||0;
+  const btn=document.getElementById("mcel-save-btn");btn.disabled=true;
   try{
-    const existing=cfValores.find(v=>v.concepto_id===conceptoId&&v.periodo===periodo);
+    const existing=cfValores.find(v=>v.concepto_id===_cfCeldaConceptoId&&v.periodo===_cfCeldaPeriodo);
     if(existing){
       await sb(`cf_valores?id=eq.${existing.id}`,{method:"PATCH",body:JSON.stringify({monto,updated_at:new Date().toISOString()})});
       existing.monto=monto;
     }else{
-      const[created]=await sb("cf_valores",{method:"POST",body:JSON.stringify({concepto_id:conceptoId,periodo,monto,updated_at:new Date().toISOString()})});
+      const[created]=await sb("cf_valores",{method:"POST",body:JSON.stringify({concepto_id:_cfCeldaConceptoId,periodo:_cfCeldaPeriodo,monto,updated_at:new Date().toISOString()})});
       cfValores.push(created);
     }
-    renderCFResumen();toast(`$${Math.round(monto).toLocaleString("es-AR")} guardado`,"ok");
+    closeM("modal-cf-celda");renderCFResumen();toast("$"+Math.round(monto).toLocaleString("es-AR")+" guardado","ok");
   }catch(e){toast("Error al guardar","err")}
+  finally{btn.disabled=false}
 }
 
 /* Conceptos CRUD */
@@ -2551,14 +2661,14 @@ function buildCalEventos(){
   const evs={};const add=(fecha,ev)=>{if(!fecha)return;const k=fecha.slice(0,10);if(!evs[k])evs[k]=[];evs[k].push(ev)};
 
   // Tareas
-  if(calFilter==="todo"||calFilter==="tareas")tasks.forEach(t=>{if(t.fecha_vencimiento&&t.status!=="Listo")add(t.fecha_vencimiento,{cls:"ev-venc",dot:"#EF4444",n:t.nombre,s:"Vencimiento tarea"})});
+  if(calFilter==="todo"||calFilter==="tareas")tasks.forEach(t=>{if(t.fecha_vencimiento&&t.status!=="Listo"){const hora=t.hora_inicio?t.hora_inicio.slice(0,5):null;add(t.fecha_vencimiento,{cls:"ev-venc",dot:"#EF4444",n:t.nombre+(hora?" 🕐"+hora:""),s:"Vencimiento tarea"+(hora?" — "+hora:""),hora:hora||"23:59"});}});
 
   // Cursos
   if(calFilter==="todo"||calFilter==="cursos"){
     cursos.forEach(c=>{
       if(c.fecha_inicio)add(c.fecha_inicio,{cls:"ev-ini",dot:"#7C3AED",n:c.nombre,s:"Inicio de curso"});
       if(c.fecha_fin)add(c.fecha_fin,{cls:"ev-fin",dot:"#10B981",n:c.nombre,s:"Fin de curso"});
-      if(c.tiene_after&&c.fecha_fin)add(c.fecha_fin,{cls:"ev-after",dot:"#F59E0B",n:c.nombre+(c.descripcion_after?" — "+c.descripcion_after:""),s:"After del curso"});
+      if(c.tiene_after&&c.fecha_fin)add(c.fecha_fin,{cls:"ev-after",dot:"#F59E0B",n:c.nombre+(c.descripcion_after?" — "+c.descripcion_after:""),s:"Catering del curso"});
     });
     cursoTareasCache.forEach(ct=>{if(ct.fecha_vencimiento&&!ct.completada){const c=cursos.find(c=>c.id===ct.curso_id);add(ct.fecha_vencimiento,{cls:"ev-ct",dot:"#3B82F6",n:ct.nombre,s:"Tarea: "+(c?c.nombre:"")})}});
   }
@@ -2823,7 +2933,8 @@ function buildEventos(){
   if(calFiltro==="todo"||calFiltro==="tareas"||calFiltro==="venc"){
     tasks.forEach(t=>{
       if(t.fecha_vencimiento&&t.status!=="Listo"){
-        addEvento(t.fecha_vencimiento,{tipo:"ev-venc",dot:"#EF4444",nombre:t.nombre,sub:"Vencimiento de tarea",id:t.id});
+        const hora=t.hora_inicio?t.hora_inicio.slice(0,5):null;
+        addEvento(t.fecha_vencimiento,{tipo:"ev-venc",dot:"#EF4444",nombre:t.nombre,sub:"Vencimiento de tarea"+(hora?" — "+hora:""),hora:hora||"23:59",id:t.id});
       }
     });
   }
@@ -2832,7 +2943,7 @@ function buildEventos(){
     cursos.forEach(c=>{
       if(c.fecha_inicio) addEvento(c.fecha_inicio,{tipo:"ev-curso-ini",dot:"#7C3AED",nombre:c.nombre,sub:"Inicio de curso",id:c.id});
       if(c.fecha_fin)    addEvento(c.fecha_fin,  {tipo:"ev-curso-fin",dot:"#10B981",nombre:c.nombre,sub:"Fin de curso",id:c.id});
-      if(c.tiene_after&&c.fecha_fin) addEvento(c.fecha_fin,{tipo:"ev-after",dot:"#F59E0B",nombre:c.nombre+(c.descripcion_after?" — "+c.descripcion_after:""),sub:"After del curso",id:c.id});
+      if(c.tiene_after&&c.fecha_fin) addEvento(c.fecha_fin,{tipo:"ev-after",dot:"#F59E0B",nombre:c.nombre+(c.descripcion_after?" — "+c.descripcion_after:""),sub:"Catering del curso",id:c.id});
     });
   }
 
@@ -2909,14 +3020,20 @@ function renderDayPanel(fecha,evs){
   document.getElementById("cal-day-title").textContent=`${nombres[dt.getDay()]} ${parseInt(d)} de ${MESES[parseInt(m)-1]} ${y}`;
   if(!evs.length){document.getElementById("cal-day-events").innerHTML=`<div class="empty" style="padding:16px"><div class="ei" style="font-size:20px">📅</div>Sin eventos este día</div>`;panel.style.display="block";return}
   const colorMap={"ev-venc":"#EF4444","ev-curso-ini":"#7C3AED","ev-curso-fin":"#10B981","ev-tarea-curso":"#3B82F6","ev-after":"#F59E0B","ev-ini":"#7C3AED","ev-fin":"#10B981","ev-ct":"#3B82F6","ev-cobr":"#10B981","ev-prest":"#EF4444","ev-inv":"#F59E0B"};
-  document.getElementById("cal-day-events").innerHTML=evs.map(ev=>`
-    <div class="day-event-item">
-      <div class="day-event-dot" style="background:${colorMap[ev.tipo]||"#7C3AED"}"></div>
+  // Ordenar por hora (tareas con hora primero, resto al final)
+  const sorted=[...evs].sort((a,b)=>{const ah=a.hora||"23:59",bh=b.hora||"23:59";return ah<bh?-1:ah>bh?1:0;});
+  document.getElementById("cal-day-events").innerHTML=sorted.map(ev=>{
+    const color=colorMap[ev.tipo]||"#7C3AED";
+    const tieneHora=ev.hora&&ev.hora!=="23:59";
+    const horaLabel=tieneHora?`<span style="font-size:11px;font-weight:700;color:${color};background:rgba(0,0,0,.2);padding:1px 6px;border-radius:4px;margin-right:6px">${ev.hora}</span>`:"";
+    return`<div class="day-event-item" style="${tieneHora?"border-left:2px solid "+color+";padding-left:8px":""}">
+      <div class="day-event-dot" style="background:${color}"></div>
       <div class="day-event-content">
-        <div class="day-event-name">${escHtml(ev.nombre)}</div>
+        <div class="day-event-name">${horaLabel}${escHtml(ev.nombre)}</div>
         <div class="day-event-sub">${escHtml(ev.sub)}</div>
       </div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
   panel.style.display="block";
 }
 
