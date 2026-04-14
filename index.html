@@ -3622,7 +3622,7 @@ async function saveComprobante(){
     total:parseFloat(document.getElementById("comp-total").value)||null,
     notas:document.getElementById("comp-notas").value.trim()||null,
     archivo_url:compArchivoUrl||null,
-    cargado_por:currentUser?.nombre||null,
+    cargado_por:loggedUser?.nombre||null,
     updated_at:new Date().toISOString()
   };
   const btn=document.getElementById("comp-save-btn");btn.disabled=true;btn.textContent="Guardando...";
