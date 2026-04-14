@@ -1074,8 +1074,15 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="fg"><label class="fl">IVA ($)</label><input class="fi" id="comp-iva-monto" type="number" placeholder="0" oninput="recalcTotal()"></div>
     </div>
     <div class="fgrid">
-      <div class="fg"><label class="fl">Otros impuestos ($)</label><input class="fi" id="comp-otros" type="number" placeholder="0" oninput="recalcTotal()"></div>
-      <div class="fg"><label class="fl">Total ($)</label><input class="fi" id="comp-total" type="number" placeholder="0" style="font-weight:700;color:var(--tx)"></div>
+      <div class="fg"><label class="fl">Perc. IVA ($)</label><input class="fi" id="comp-perc-iva" type="number" placeholder="0" oninput="recalcTotal()"></div>
+      <div class="fg"><label class="fl">Perc. IIBB ($)</label><input class="fi" id="comp-perc-iibb" type="number" placeholder="0" oninput="recalcTotal()"></div>
+    </div>
+    <div class="fgrid">
+      <div class="fg"><label class="fl">Imp. interno ($)</label><input class="fi" id="comp-imp-int" type="number" placeholder="0" oninput="recalcTotal()"></div>
+      <div class="fg"><label class="fl">Otros imp. ($)</label><input class="fi" id="comp-otros" type="number" placeholder="0" oninput="recalcTotal()"></div>
+    </div>
+    <div class="fgrid">
+      <div class="fg" style="grid-column:1/-1"><label class="fl">Total ($)</label><input class="fi" id="comp-total" type="number" placeholder="0" style="font-weight:700;color:var(--tx)"></div>
     </div>
     <div class="fg"><label class="fl">Notas</label><input class="fi" id="comp-notas" type="text" placeholder="Observaciones..."></div>
     <div class="ma">
@@ -3481,7 +3488,7 @@ function openNuevoComprobante(){
   editCompId=null;compArchivoUrl=null;
   document.getElementById("mcomp-title").textContent="Nueva Factura de Compra";
   document.getElementById("comp-save-btn").textContent="Guardar";
-  ["comp-fecha","comp-numero","comp-prov","comp-cuit","comp-concepto","comp-neto","comp-iva-monto","comp-otros","comp-total","comp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  ["comp-fecha","comp-numero","comp-prov","comp-cuit","comp-concepto","comp-neto","comp-iva-monto","comp-perc-iva","comp-perc-iibb","comp-imp-int","comp-otros","comp-total","comp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
   document.getElementById("comp-tipo").value="A";
   document.getElementById("comp-sociedad").value="SUDES";
   document.getElementById("comp-fecha").value=today();
@@ -3504,6 +3511,9 @@ function editComprobante(id){
   document.getElementById("comp-concepto").value=c.concepto||"";
   document.getElementById("comp-neto").value=c.monto_neto||"";
   document.getElementById("comp-iva-monto").value=c.iva||"";
+  document.getElementById("comp-perc-iva").value=c.percepcion_iva||"";
+  document.getElementById("comp-perc-iibb").value=c.percepcion_iibb||"";
+  document.getElementById("comp-imp-int").value=c.impuesto_interno||"";
   document.getElementById("comp-otros").value=c.otros_impuestos||"";
   document.getElementById("comp-total").value=c.total||"";
   document.getElementById("comp-notas").value=c.notas||"";
@@ -3571,6 +3581,9 @@ async function analizarConIA(){
     if(d.concepto)document.getElementById("comp-concepto").value=d.concepto;
     if(d.monto_neto!=null)document.getElementById("comp-neto").value=d.monto_neto;
     if(d.iva!=null)document.getElementById("comp-iva-monto").value=d.iva;
+    if(d.percepcion_iva!=null)document.getElementById("comp-perc-iva").value=d.percepcion_iva;
+    if(d.percepcion_iibb!=null)document.getElementById("comp-perc-iibb").value=d.percepcion_iibb;
+    if(d.impuesto_interno!=null)document.getElementById("comp-imp-int").value=d.impuesto_interno;
     if(d.otros_impuestos!=null)document.getElementById("comp-otros").value=d.otros_impuestos;
     if(d.total!=null)document.getElementById("comp-total").value=d.total;
     toast("Datos extraídos — revisá y confirmá","ok");
@@ -3581,8 +3594,11 @@ async function analizarConIA(){
 function recalcTotal(){
   const n=parseFloat(document.getElementById("comp-neto").value)||0;
   const v=parseFloat(document.getElementById("comp-iva-monto").value)||0;
+  const piva=parseFloat(document.getElementById("comp-perc-iva").value)||0;
+  const piibb=parseFloat(document.getElementById("comp-perc-iibb").value)||0;
+  const imp=parseFloat(document.getElementById("comp-imp-int").value)||0;
   const o=parseFloat(document.getElementById("comp-otros").value)||0;
-  if(n||v||o)document.getElementById("comp-total").value=(n+v+o).toFixed(2);
+  if(n||v||piva||piibb||imp||o)document.getElementById("comp-total").value=(n+v+piva+piibb+imp+o).toFixed(2);
 }
 
 async function saveComprobante(){
@@ -3598,6 +3614,9 @@ async function saveComprobante(){
     concepto:document.getElementById("comp-concepto").value.trim()||null,
     monto_neto:parseFloat(document.getElementById("comp-neto").value)||null,
     iva:parseFloat(document.getElementById("comp-iva-monto").value)||null,
+    percepcion_iva:parseFloat(document.getElementById("comp-perc-iva").value)||0,
+    percepcion_iibb:parseFloat(document.getElementById("comp-perc-iibb").value)||0,
+    impuesto_interno:parseFloat(document.getElementById("comp-imp-int").value)||0,
     otros_impuestos:parseFloat(document.getElementById("comp-otros").value)||0,
     total:parseFloat(document.getElementById("comp-total").value)||null,
     notas:document.getElementById("comp-notas").value.trim()||null,
