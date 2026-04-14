@@ -1084,6 +1084,13 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fgrid">
       <div class="fg" style="grid-column:1/-1"><label class="fl">Total ($)</label><input class="fi" id="comp-total" type="number" placeholder="0" style="font-weight:700;color:var(--tx)"></div>
     </div>
+    <div class="fgrid">
+      <div class="fg"><label class="fl">Vencimiento</label><input class="fi" id="comp-venc" type="date"></div>
+      <div class="fg" style="display:flex;align-items:center;gap:8px;padding-top:20px">
+        <label class="toggle" style="margin:0"><input type="checkbox" id="comp-calendario" onchange=""><span class="tslider"></span></label>
+        <span style="font-size:12px;color:var(--tx2)">Mostrar en calendario</span>
+      </div>
+    </div>
     <div class="fg"><label class="fl">Notas</label><input class="fi" id="comp-notas" type="text" placeholder="Observaciones..."></div>
     <div class="ma">
       <button class="bc" onclick="closeModal('modal-comprobante')">Cancelar</button>
@@ -3118,6 +3125,9 @@ function buildEventos(){
   }
 
   if(calFiltro==="todo"||calFiltro==="finanzas"){
+    comprobantes.filter(c=>c.en_calendario&&c.fecha_vencimiento&&c.estado!=="enviado_finnegans").forEach(c=>{
+      addEvento(c.fecha_vencimiento,{tipo:"ev-comp",dot:"#F97316",nombre:c.proveedor||"Factura",sub:`Venc. factura ${c.tipo||""} — ${c.sociedad} — $${Math.round(c.total||0).toLocaleString("es-AR")}`});
+    });
     cfCobranzas.filter(c=>c.estado==="Pendiente").forEach(c=>{
       addEvento(c.fecha_vencimiento,{tipo:"ev-cobr",dot:"#10B981",nombre:c.nombre,sub:`Cobranza ${c.tipo} — ${c.sociedad} — $${Math.round(c.monto).toLocaleString("es-AR")}`});
     });
@@ -3488,7 +3498,8 @@ function openNuevoComprobante(){
   editCompId=null;compArchivoUrl=null;
   document.getElementById("mcomp-title").textContent="Nueva Factura de Compra";
   document.getElementById("comp-save-btn").textContent="Guardar";
-  ["comp-fecha","comp-numero","comp-prov","comp-cuit","comp-concepto","comp-neto","comp-iva-monto","comp-perc-iva","comp-perc-iibb","comp-imp-int","comp-otros","comp-total","comp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  ["comp-fecha","comp-numero","comp-prov","comp-cuit","comp-concepto","comp-neto","comp-iva-monto","comp-perc-iva","comp-perc-iibb","comp-imp-int","comp-otros","comp-total","comp-venc","comp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  document.getElementById("comp-calendario").checked=false;
   document.getElementById("comp-tipo").value="A";
   document.getElementById("comp-sociedad").value="SUDES";
   document.getElementById("comp-fecha").value=today();
@@ -3515,6 +3526,8 @@ function editComprobante(id){
   document.getElementById("comp-perc-iibb").value=c.percepcion_iibb||"";
   document.getElementById("comp-imp-int").value=c.impuesto_interno||"";
   document.getElementById("comp-otros").value=c.otros_impuestos||"";
+  document.getElementById("comp-venc").value=c.fecha_vencimiento||"";
+  document.getElementById("comp-calendario").checked=c.en_calendario||false;
   document.getElementById("comp-total").value=c.total||"";
   document.getElementById("comp-notas").value=c.notas||"";
   if(c.archivo_url){
@@ -3586,6 +3599,7 @@ async function analizarConIA(){
     if(d.impuesto_interno!=null)document.getElementById("comp-imp-int").value=d.impuesto_interno;
     if(d.otros_impuestos!=null)document.getElementById("comp-otros").value=d.otros_impuestos;
     if(d.sociedad)document.getElementById("comp-sociedad").value=d.sociedad;
+    if(d.fecha_vencimiento)document.getElementById("comp-venc").value=d.fecha_vencimiento;
     if(d.total!=null)document.getElementById("comp-total").value=d.total;
     toast("Datos extraídos — revisá y confirmá","ok");
   }catch(e){console.error("ERROR IA COMPLETO:",e.message);toast("Error IA: "+e.message.substring(0,200),"err")}
@@ -3622,6 +3636,8 @@ async function saveComprobante(){
     total:parseFloat(document.getElementById("comp-total").value)||null,
     notas:document.getElementById("comp-notas").value.trim()||null,
     archivo_url:compArchivoUrl||null,
+    fecha_vencimiento:document.getElementById("comp-venc").value||null,
+    en_calendario:document.getElementById("comp-calendario").checked,
     cargado_por:loggedUser?.nombre||null,
     updated_at:new Date().toISOString()
   };
