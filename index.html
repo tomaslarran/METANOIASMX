@@ -1521,8 +1521,8 @@ function openNewModal(){
   else if(curPage==="proveedores"){document.getElementById("prov-edit-id").value="";document.getElementById("modal-prov-title").textContent="Nuevo Proveedor";["p-nombre","p-email","p-tel","p-esp","p-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("p-tipo").value="Empresa";openModal("modal-proveedor")}
   else if(curPage==="instructores"){document.getElementById("inst-edit-id").value="";document.getElementById("modal-inst-title").textContent="Nuevo Instructor";["i-nombre","i-apellido","i-esp","i-matricula","i-email","i-tel","i-inst","i-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("i-activo").checked=true;document.getElementById("ibtn-del").style.display="none";openModal("modal-instructor")}
 }
-function openModal(id){document.getElementById(id).classList.add("on")}
-function closeModal(id){document.getElementById(id).classList.remove("on")}
+function openModal(id){const el=document.getElementById(id);el.style.display="flex";el.classList.add("on")}
+function closeModal(id){const el=document.getElementById(id);el.classList.remove("on");el.style.display="none"}
 function openM(id){openModal(id)}
 function closeM(id){closeModal(id)}
 function closeMovOuter(e,id){if(e.target===document.getElementById(id))closeModal(id)}
