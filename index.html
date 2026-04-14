@@ -542,6 +542,18 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
   <div class="sdiv"></div>
   <div class="sgroup">
+    <div class="sgroup-label">Contabilidad</div>
+    <div class="sitem" onclick="goPage('comprobantes',this)" id="nav-comprobantes">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Comprobantes
+      <span class="sitem-badge" id="badge-comprobantes">—</span>
+    </div>
+    <div class="sitem sub" onclick="goPage('comprobantes',document.getElementById('nav-comprobantes'));setCompFilter('pendiente')">Pendientes</div>
+    <div class="sitem sub" onclick="goPage('comprobantes',document.getElementById('nav-comprobantes'));setCompFilter('revisado')">Revisados</div>
+    <div class="sitem sub" onclick="goPage('comprobantes',document.getElementById('nav-comprobantes'));setCompFilter('enviado_finnegans')">En Finnegans</div>
+  </div>
+  <div class="sdiv"></div>
+  <div class="sgroup">
     <div class="sgroup-label">Config</div>
     <div class="sitem" onclick="goTo('notif',this)" id="nav-notif">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -953,6 +965,114 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 </div>
 
+<!-- ══ COMPROBANTES DE COMPRA ══ -->
+<div id="pg-comprobantes" style="display:none">
+  <div class="pgh">
+    <div class="pgh-left">
+      <div class="pgt">Comprobantes de Compra</div>
+      <div class="pgs">Facturas recibidas · registro y envío a Finnegans</div>
+    </div>
+    <div class="pgh-right">
+      <button class="btn sec" onclick="openNuevoComprobante()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nueva factura
+      </button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px" id="comp-stats">
+    <div class="sc"><div class="sc-l">Total del mes</div><div class="sc-v vb" id="comp-stat-total">—</div><div class="sc-s" id="comp-stat-mes">cargando...</div></div>
+    <div class="sc"><div class="sc-l">IVA del mes</div><div class="sc-v va" id="comp-stat-iva">—</div><div class="sc-s">crédito fiscal</div></div>
+    <div class="sc"><div class="sc-l">Pendientes</div><div class="sc-v" id="comp-stat-pend" style="color:var(--am)">—</div><div class="sc-s">a revisar</div></div>
+    <div class="sc"><div class="sc-l">En Finnegans</div><div class="sc-v vg" id="comp-stat-finn">—</div><div class="sc-s">sincronizados</div></div>
+  </div>
+
+  <!-- Filtros -->
+  <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+    <div class="fbar">
+      <button class="fb on" onclick="setCompFilter('all',this)">Todos</button>
+      <button class="fb" onclick="setCompFilter('pendiente',this)">Pendientes</button>
+      <button class="fb" onclick="setCompFilter('revisado',this)">Revisados</button>
+      <button class="fb" onclick="setCompFilter('enviado_finnegans',this)">En Finnegans</button>
+      <div class="fsep"></div>
+      <button class="fb" onclick="setCompFilter('SUDES',this)">SUDES</button>
+      <button class="fb" onclick="setCompFilter('POINTERS',this)">POINTERS</button>
+    </div>
+    <input id="comp-search" class="fi" type="search" placeholder="Buscar proveedor..." style="width:180px;margin-left:auto" oninput="renderComprobantes()">
+  </div>
+
+  <!-- Lista -->
+  <div id="comp-lista"><div class="loading"><div class="loader"></div><div class="lt">Cargando comprobantes...</div></div></div>
+</div>
+
+<!-- MODAL NUEVO COMPROBANTE -->
+<div class="mov" id="modal-comprobante" onclick="if(event.target===this)closeModal('modal-comprobante')">
+  <div class="modal" style="max-width:520px">
+    <div class="mt">
+      <span id="mcomp-title">Nueva Factura de Compra</span>
+      <button class="mt-close" onclick="closeModal('modal-comprobante')">✕</button>
+    </div>
+
+    <!-- Upload area -->
+    <div id="comp-upload-area" style="border:2px dashed var(--b2);border-radius:10px;padding:20px;text-align:center;cursor:pointer;margin-bottom:14px;transition:border-color .2s;background:var(--bg3)" onclick="document.getElementById('comp-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--pu)'" ondragleave="this.style.borderColor='var(--b2)'" ondrop="handleCompDrop(event)">
+      <div id="comp-upload-content">
+        <div style="font-size:28px;margin-bottom:6px">📄</div>
+        <div style="font-size:13px;color:var(--tx2);font-weight:600">Tocá para subir o arrastrá aquí</div>
+        <div style="font-size:11px;color:var(--tx3);margin-top:4px">Foto, JPG, PNG o PDF · desde cámara o galería</div>
+      </div>
+      <input type="file" id="comp-file-input" accept="image/*,application/pdf" capture="environment" style="display:none" onchange="handleCompFile(this.files[0])">
+    </div>
+
+    <!-- Botón IA -->
+    <button id="comp-ia-btn" class="btn sec" style="width:100%;margin-bottom:16px;display:none" onclick="analizarConIA()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+      ✨ Analizar con IA — completar datos automáticamente
+    </button>
+
+    <!-- Formulario -->
+    <div class="fgrid">
+      <div class="fg"><label class="fl">Fecha *</label><input class="fi" id="comp-fecha" type="date"></div>
+      <div class="fg"><label class="fl">Tipo</label>
+        <select class="fs" id="comp-tipo">
+          <option value="A">Factura A</option>
+          <option value="B">Factura B</option>
+          <option value="C">Factura C</option>
+          <option value="M">Factura M</option>
+          <option value="X">Ticket / Otro</option>
+        </select>
+      </div>
+    </div>
+    <div class="fgrid">
+      <div class="fg"><label class="fl">Número</label><input class="fi" id="comp-numero" type="text" placeholder="0001-00012345"></div>
+      <div class="fg"><label class="fl">Sociedad</label>
+        <select class="fs" id="comp-sociedad">
+          <option value="SUDES">SUDES</option>
+          <option value="POINTERS">POINTERS</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg"><label class="fl">Proveedor *</label><input class="fi" id="comp-prov" type="text" placeholder="Razón social del proveedor"></div>
+    <div class="fgrid">
+      <div class="fg"><label class="fl">CUIT</label><input class="fi" id="comp-cuit" type="text" placeholder="20-12345678-9"></div>
+      <div class="fg"><label class="fl">Concepto</label><input class="fi" id="comp-concepto" type="text" placeholder="Ej: Material quirúrgico"></div>
+    </div>
+    <div class="fgrid">
+      <div class="fg"><label class="fl">Neto gravado ($)</label><input class="fi" id="comp-neto" type="number" placeholder="0" oninput="recalcTotal()"></div>
+      <div class="fg"><label class="fl">IVA ($)</label><input class="fi" id="comp-iva-monto" type="number" placeholder="0" oninput="recalcTotal()"></div>
+    </div>
+    <div class="fgrid">
+      <div class="fg"><label class="fl">Otros impuestos ($)</label><input class="fi" id="comp-otros" type="number" placeholder="0" oninput="recalcTotal()"></div>
+      <div class="fg"><label class="fl">Total ($)</label><input class="fi" id="comp-total" type="number" placeholder="0" style="font-weight:700;color:var(--tx)"></div>
+    </div>
+    <div class="fg"><label class="fl">Notas</label><input class="fi" id="comp-notas" type="text" placeholder="Observaciones..."></div>
+    <div class="ma">
+      <button class="bc" onclick="closeModal('modal-comprobante')">Cancelar</button>
+      <button class="bk" id="comp-save-btn" onclick="saveComprobante()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 </div><!-- /content -->
 </div><!-- /layout -->
 
@@ -1340,6 +1460,7 @@ function updateSideBadges(){
   const binst=document.getElementById("badge-instructores");if(binst)binst.textContent=instructores.length||"—";
   const br=document.getElementById("badge-rutinas");if(br)br.textContent=rutinas.filter(r=>r.activa).length;
   const bi=document.getElementById("badge-inventario");if(bi)bi.textContent=inventario.length||"—";
+  const bc=document.getElementById("badge-comprobantes");if(bc)bc.textContent=comprobantes.filter(c=>c.estado==="pendiente").length||"—";
 }
 
 // ── PAGES ──
@@ -1362,6 +1483,7 @@ function goPage(name,el){
   if(name==="cashflow")loadCF().then(()=>setCFTab("resumen"));
   if(name==="instructores")renderInstructores();
   if(name==="inventario")loadInventario();
+  if(name==="comprobantes")loadComprobantes();
   if(name==="notif")renderNotifPage();
 }
 function goTo(name,el){goPage(name,el)}
@@ -3236,6 +3358,247 @@ initLogin();
   </div>
 </div>
 
+
+<script>
+/* ── COMPROBANTES DE COMPRA ── */
+let comprobantes=[];
+let compFilter="all";
+let compArchivoUrl=null;
+let editCompId=null;
+
+async function loadComprobantes(){
+  try{
+    const data=await sb("comprobantes_compra?select=*&order=fecha.desc,created_at.desc");
+    comprobantes=data;
+    renderComprobantes();
+    updateCompStats();
+    updateSideBadges();
+  }catch(e){document.getElementById("comp-lista").innerHTML=`<div class="empty"><div class="ei">⚠️</div>Error al cargar</div>`;}
+}
+
+function setCompFilter(f,btn){
+  compFilter=f;
+  document.querySelectorAll("#pg-comprobantes .fb").forEach(b=>b.classList.remove("on"));
+  if(btn)btn.classList.add("on");
+  renderComprobantes();
+}
+
+function renderComprobantes(){
+  const el=document.getElementById("comp-lista");
+  if(!el)return;
+  const q=(document.getElementById("comp-search")?.value||"").toLowerCase();
+  let list=comprobantes;
+  if(compFilter==="SUDES")list=list.filter(c=>c.sociedad==="SUDES");
+  else if(compFilter==="POINTERS")list=list.filter(c=>c.sociedad==="POINTERS");
+  else if(compFilter!=="all")list=list.filter(c=>c.estado===compFilter);
+  if(q)list=list.filter(c=>(c.proveedor||"").toLowerCase().includes(q)||(c.numero||"").includes(q)||(c.concepto||"").toLowerCase().includes(q));
+  if(!list.length){el.innerHTML=`<div class="empty"><div class="ei">📄</div><div class="et">Sin comprobantes</div><div class="es">Cargá una factura con el botón "Nueva factura"</div></div>`;return;}
+
+  const estadoBadge=(e)=>{
+    const m={"pendiente":"background:rgba(245,158,11,.15);color:#FCD34D","revisado":"background:rgba(16,185,129,.15);color:#6EE7B7","enviado_finnegans":"background:rgba(59,130,246,.15);color:#93C5FD"};
+    const lbl={"pendiente":"⏳ Pendiente","revisado":"✅ Revisado","enviado_finnegans":"🔗 En Finnegans"};
+    return`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;${m[e]||"background:var(--surf2);color:var(--tx3)"}">${lbl[e]||e}</span>`;
+  };
+
+  el.innerHTML=list.map(c=>{
+    const fecha=c.fecha?new Date(c.fecha+"T00:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"2-digit"}):"—";
+    const total=c.total?("$"+Number(c.total).toLocaleString("es-AR")):"—";
+    const iva=c.iva?("$"+Number(c.iva).toLocaleString("es-AR")):"";
+    return`<div class="item-row" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surf);border:1px solid var(--b);border-radius:var(--r);margin-bottom:6px">
+      <div style="font-size:20px;width:36px;text-align:center;flex-shrink:0">${c.tipo==="A"?"🟦":c.tipo==="B"?"🟩":c.tipo==="C"?"🟨":"📄"}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.proveedor||"Sin proveedor")}</div>
+        <div style="font-size:11px;color:var(--tx3);margin-top:2px">
+          Fact. ${c.tipo||"?"} ${c.numero?`· ${esc(c.numero)}`:""} · ${fecha}
+          ${c.sociedad?`<span style="margin-left:6px;font-size:9px;font-weight:700;color:var(--pu)">${c.sociedad}</span>`:""}
+        </div>
+        ${c.concepto?`<div style="font-size:11px;color:var(--tx3);margin-top:1px">${esc(c.concepto)}</div>`:""}
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:14px;font-weight:700;color:var(--tx)">${total}</div>
+        ${iva?`<div style="font-size:10px;color:var(--tx3)">IVA ${iva}</div>`:""}
+        <div style="margin-top:4px">${estadoBadge(c.estado)}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+        ${c.archivo_url?`<button onclick="window.open('${c.archivo_url}','_blank')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Ver archivo">👁</button>`:""}
+        <button onclick="editComprobante('${c.id}')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer">✎</button>
+        ${c.estado!=="enviado_finnegans"?`<button onclick="marcarEstadoComp('${c.id}','${c.estado==="pendiente"?"revisado":"enviado_finnegans"}')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="${c.estado==="pendiente"?"Marcar revisado":"Enviar a Finnegans"}">${c.estado==="pendiente"?"✓":"→F"}</button>`:""}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function updateCompStats(){
+  const now=new Date();
+  const mesKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  const delMes=comprobantes.filter(c=>c.fecha&&c.fecha.startsWith(mesKey));
+  const totalMes=delMes.reduce((s,c)=>s+(Number(c.total)||0),0);
+  const ivaMes=delMes.reduce((s,c)=>s+(Number(c.iva)||0),0);
+  const pend=comprobantes.filter(c=>c.estado==="pendiente").length;
+  const finn=comprobantes.filter(c=>c.estado==="enviado_finnegans").length;
+  const meses=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  document.getElementById("comp-stat-total").textContent="$"+Math.round(totalMes).toLocaleString("es-AR");
+  document.getElementById("comp-stat-iva").textContent="$"+Math.round(ivaMes).toLocaleString("es-AR");
+  document.getElementById("comp-stat-pend").textContent=pend;
+  document.getElementById("comp-stat-finn").textContent=finn;
+  document.getElementById("comp-stat-mes").textContent=meses[now.getMonth()]+" "+now.getFullYear();
+}
+
+async function marcarEstadoComp(id,estado){
+  try{
+    await sb(`comprobantes_compra?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado,updated_at:new Date().toISOString()})});
+    const c=comprobantes.find(c=>c.id===id);if(c)c.estado=estado;
+    renderComprobantes();updateCompStats();
+    toast(estado==="revisado"?"Marcado como revisado":"Enviado a Finnegans","ok");
+  }catch(e){toast("Error","err")}
+}
+
+function openNuevoComprobante(){
+  editCompId=null;compArchivoUrl=null;
+  document.getElementById("mcomp-title").textContent="Nueva Factura de Compra";
+  document.getElementById("comp-save-btn").textContent="Guardar";
+  ["comp-fecha","comp-numero","comp-prov","comp-cuit","comp-concepto","comp-neto","comp-iva-monto","comp-otros","comp-total","comp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  document.getElementById("comp-tipo").value="A";
+  document.getElementById("comp-sociedad").value="SUDES";
+  document.getElementById("comp-fecha").value=today();
+  document.getElementById("comp-upload-content").innerHTML=`<div style="font-size:28px;margin-bottom:6px">📄</div><div style="font-size:13px;color:var(--tx2);font-weight:600">Tocá para subir o arrastrá aquí</div><div style="font-size:11px;color:var(--tx3);margin-top:4px">Foto, JPG, PNG o PDF · desde cámara o galería</div>`;
+  document.getElementById("comp-ia-btn").style.display="none";
+  openM("modal-comprobante");
+}
+
+function editComprobante(id){
+  const c=comprobantes.find(c=>c.id===id);if(!c)return;
+  editCompId=id;compArchivoUrl=c.archivo_url||null;
+  document.getElementById("mcomp-title").textContent="Editar Comprobante";
+  document.getElementById("comp-save-btn").textContent="Guardar cambios";
+  document.getElementById("comp-fecha").value=c.fecha||"";
+  document.getElementById("comp-tipo").value=c.tipo||"A";
+  document.getElementById("comp-numero").value=c.numero||"";
+  document.getElementById("comp-sociedad").value=c.sociedad||"SUDES";
+  document.getElementById("comp-prov").value=c.proveedor||"";
+  document.getElementById("comp-cuit").value=c.cuit||"";
+  document.getElementById("comp-concepto").value=c.concepto||"";
+  document.getElementById("comp-neto").value=c.monto_neto||"";
+  document.getElementById("comp-iva-monto").value=c.iva||"";
+  document.getElementById("comp-otros").value=c.otros_impuestos||"";
+  document.getElementById("comp-total").value=c.total||"";
+  document.getElementById("comp-notas").value=c.notas||"";
+  if(c.archivo_url){
+    document.getElementById("comp-upload-content").innerHTML=`<div style="font-size:24px">✅</div><div style="font-size:12px;color:var(--gr);margin-top:4px">Archivo cargado</div><div style="font-size:10px;color:var(--tx3)">Tocá para reemplazar</div>`;
+    document.getElementById("comp-ia-btn").style.display="block";
+  }
+  openM("modal-comprobante");
+}
+
+function handleCompDrop(e){
+  e.preventDefault();
+  document.getElementById("comp-upload-area").style.borderColor="var(--b2)";
+  const file=e.dataTransfer.files[0];
+  if(file)handleCompFile(file);
+}
+
+async function handleCompFile(file){
+  if(!file)return;
+  const maxMB=10;
+  if(file.size>maxMB*1024*1024){toast("El archivo supera los 10MB","err");return;}
+  document.getElementById("comp-upload-content").innerHTML=`<div style="font-size:22px">⏳</div><div style="font-size:12px;color:var(--tx3);margin-top:4px">Subiendo...</div>`;
+  try{
+    const ext=file.name.split(".").pop()||"jpg";
+    const fname=`${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const SUPA_URL="https://jppxmdvddvbsvymogvcp.supabase.co";
+    const KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwcHhtZHZkZHZic3Z5bW9ndmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMjcyODAsImV4cCI6MjA5MDgwMzI4MH0.KPAqCKfUteE3XK9QFqb_44Hm8jYQxfjVLkrlyGvaMhE";
+    const res=await fetch(`${SUPA_URL}/storage/v1/object/facturas/${fname}`,{
+      method:"POST",
+      headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":file.type,"x-upsert":"true"},
+      body:file
+    });
+    if(!res.ok){const t=await res.text();throw new Error(t);}
+    compArchivoUrl=`${SUPA_URL}/storage/v1/object/public/facturas/${fname}`;
+    document.getElementById("comp-upload-content").innerHTML=`<div style="font-size:24px">✅</div><div style="font-size:12px;color:var(--gr);margin-top:4px">${file.name}</div><div style="font-size:10px;color:var(--tx3)">Tocá para reemplazar</div>`;
+    document.getElementById("comp-ia-btn").style.display="block";
+    toast("Archivo subido","ok");
+  }catch(e){
+    document.getElementById("comp-upload-content").innerHTML=`<div style="font-size:28px;margin-bottom:6px">📄</div><div style="font-size:13px;color:var(--tx2);font-weight:600">Tocá para subir o arrastrá aquí</div><div style="font-size:11px;color:var(--re);margin-top:4px">Error al subir: ${e.message.slice(0,60)}</div>`;
+    toast("Error al subir archivo","err");
+  }
+}
+
+async function analizarConIA(){
+  if(!compArchivoUrl){toast("Primero subí un archivo","err");return;}
+  const btn=document.getElementById("comp-ia-btn");
+  btn.disabled=true;btn.textContent="✨ Analizando...";
+  try{
+    // Llama a la Edge Function de Supabase (se configura en el próximo paso)
+    const SUPA_URL="https://jppxmdvddvbsvymogvcp.supabase.co";
+    const KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwcHhtZHZkZHZic3Z5bW9ndmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMjcyODAsImV4cCI6MjA5MDgwMzI4MH0.KPAqCKfUteE3XK9QFqb_44Hm8jYQxfjVLkrlyGvaMhE";
+    const res=await fetch(`${SUPA_URL}/functions/v1/leer-factura`,{
+      method:"POST",
+      headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json"},
+      body:JSON.stringify({url:compArchivoUrl})
+    });
+    if(!res.ok)throw new Error(await res.text());
+    const d=await res.json();
+    // Rellenar form con datos extraídos
+    if(d.fecha)document.getElementById("comp-fecha").value=d.fecha;
+    if(d.tipo)document.getElementById("comp-tipo").value=d.tipo;
+    if(d.numero)document.getElementById("comp-numero").value=d.numero;
+    if(d.proveedor)document.getElementById("comp-prov").value=d.proveedor;
+    if(d.cuit)document.getElementById("comp-cuit").value=d.cuit;
+    if(d.concepto)document.getElementById("comp-concepto").value=d.concepto;
+    if(d.monto_neto!=null)document.getElementById("comp-neto").value=d.monto_neto;
+    if(d.iva!=null)document.getElementById("comp-iva-monto").value=d.iva;
+    if(d.otros_impuestos!=null)document.getElementById("comp-otros").value=d.otros_impuestos;
+    if(d.total!=null)document.getElementById("comp-total").value=d.total;
+    toast("Datos extraídos — revisá y confirmá","ok");
+  }catch(e){toast("IA no disponible aún — completá manualmente","err")}
+  finally{btn.disabled=false;btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg> ✨ Re-analizar con IA';}
+}
+
+function recalcTotal(){
+  const n=parseFloat(document.getElementById("comp-neto").value)||0;
+  const v=parseFloat(document.getElementById("comp-iva-monto").value)||0;
+  const o=parseFloat(document.getElementById("comp-otros").value)||0;
+  if(n||v||o)document.getElementById("comp-total").value=(n+v+o).toFixed(2);
+}
+
+async function saveComprobante(){
+  const prov=document.getElementById("comp-prov").value.trim();
+  if(!prov){toast("Escribí el proveedor","err");return;}
+  const data={
+    proveedor:prov,
+    fecha:document.getElementById("comp-fecha").value||null,
+    tipo:document.getElementById("comp-tipo").value,
+    numero:document.getElementById("comp-numero").value.trim()||null,
+    sociedad:document.getElementById("comp-sociedad").value,
+    cuit:document.getElementById("comp-cuit").value.trim()||null,
+    concepto:document.getElementById("comp-concepto").value.trim()||null,
+    monto_neto:parseFloat(document.getElementById("comp-neto").value)||null,
+    iva:parseFloat(document.getElementById("comp-iva-monto").value)||null,
+    otros_impuestos:parseFloat(document.getElementById("comp-otros").value)||0,
+    total:parseFloat(document.getElementById("comp-total").value)||null,
+    notas:document.getElementById("comp-notas").value.trim()||null,
+    archivo_url:compArchivoUrl||null,
+    cargado_por:currentUser?.nombre||null,
+    updated_at:new Date().toISOString()
+  };
+  const btn=document.getElementById("comp-save-btn");btn.disabled=true;btn.textContent="Guardando...";
+  try{
+    if(editCompId){
+      await sb(`comprobantes_compra?id=eq.${editCompId}`,{method:"PATCH",body:JSON.stringify(data)});
+      const i=comprobantes.findIndex(c=>c.id===editCompId);
+      if(i>=0)comprobantes[i]={...comprobantes[i],...data};
+      toast("Comprobante actualizado","ok");
+    }else{
+      const[created]=await sb("comprobantes_compra",{method:"POST",body:JSON.stringify({...data,estado:"pendiente"})});
+      comprobantes.unshift(created);
+      toast("Factura cargada","ok");
+    }
+    closeM("modal-comprobante");
+    renderComprobantes();updateCompStats();updateSideBadges();
+  }catch(e){toast("Error: "+e.message,"err")}
+  finally{btn.disabled=false;btn.textContent=editCompId?"Guardar cambios":"Guardar";}
+}
+</script>
 
 <script>
 if('serviceWorker' in navigator){
