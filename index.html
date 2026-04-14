@@ -3585,6 +3585,7 @@ async function analizarConIA(){
     if(d.percepcion_iibb!=null)document.getElementById("comp-perc-iibb").value=d.percepcion_iibb;
     if(d.impuesto_interno!=null)document.getElementById("comp-imp-int").value=d.impuesto_interno;
     if(d.otros_impuestos!=null)document.getElementById("comp-otros").value=d.otros_impuestos;
+    if(d.sociedad)document.getElementById("comp-sociedad").value=d.sociedad;
     if(d.total!=null)document.getElementById("comp-total").value=d.total;
     toast("Datos extraídos — revisá y confirmá","ok");
   }catch(e){console.error("ERROR IA COMPLETO:",e.message);toast("Error IA: "+e.message.substring(0,200),"err")}
