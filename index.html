@@ -3542,6 +3542,7 @@ function renderComprobantes(){
         ${c.estado!=="enviado_finnegans"
           ?`<button onclick="marcarEstadoComp('${c.id}','${c.estado==="pendiente"?"revisado":"enviado_finnegans"}')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="${c.estado==="pendiente"?"Marcar revisado":"Enviar a Finnegans"}">${c.estado==="pendiente"?"✓":"→F"}</button>`
           :`<button onclick="marcarEstadoComp('${c.id}','revisado')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Revertir a Revisado">↩</button>`}
+        <button onclick="delComprobante('${c.id}','${esc(c.proveedor||"")}','${esc(c.numero||"")}')" style="background:none;border:1px solid rgba(239,68,68,.4);border-radius:5px;color:#f87171;font-size:10px;padding:3px 7px;cursor:pointer" title="Eliminar">🗑</button>
       </div>
     </div>`;
   }).join("");
@@ -3570,6 +3571,18 @@ async function marcarEstadoComp(id,estado){
     renderComprobantes();updateCompStats();
     toast(estado==="revisado"?"Marcado como revisado":"Enviado a Finnegans","ok");
   }catch(e){toast("Error","err")}
+}
+
+function delComprobante(id,proveedor,numero){
+  const desc=proveedor+(numero?` N° ${numero}`:"");
+  confirmDel(`¿Eliminar la factura de "${desc}"? Esta acción no se puede deshacer.`,async()=>{
+    try{
+      await sb(`comprobantes_compra?id=eq.${id}`,{method:"DELETE"});
+      comprobantes=comprobantes.filter(c=>c.id!==id);
+      renderComprobantes();updateCompStats();updateSideBadges();
+      toast("Comprobante eliminado","ok");
+    }catch(e){toast("Error al eliminar","err")}
+  });
 }
 
 function openNuevoComprobante(){
@@ -3835,6 +3848,8 @@ function exportarFinnegans(){
     if(noGrav>0)items.push({prod:"impuestos internos o no gravado",precio:noGrav});
     // Si no hay desglose, usar fila genérica
     if(!items.length)items.push({prod:"SI",precio:c.monto_neto||0});
+    // IMPORTE_CONTROL = suma de todos los PRECIO del comprobante
+    const importeControl=parseFloat(items.reduce((s,i)=>s+i.precio,0).toFixed(2));
     items.forEach(item=>{
       rowNum++;
       rows.push({
@@ -3870,7 +3885,7 @@ function exportarFinnegans(){
     DIMENSIONVALORVTO:"",
     DIMENSIONVTO2:"",
     DIMENSIONVALORVTO2:"",
-    IMPORTE_CONTROL:c.total||0,
+    IMPORTE_CONTROL:importeControl,
     EQUIPO_SOLICITANTE:"",
     TIPO_ITEM:"",
     FECHAHASTA:""
