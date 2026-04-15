@@ -1715,8 +1715,15 @@ function taskCard(t){
     <div class="tea-row"><span class="al">Prioridad</span><select class="mini-sel" onchange="chgPrio('${t.id}',this.value)">${prioOpts}</select></div>
     <div class="tea-row"><span class="al">Vencimiento</span><input class="di" type="date" value="${t.fecha_vencimiento||""}" id="d-${t.id}"><button class="sdb" onclick="saveDate('${t.id}')">Guardar</button></div>
     <div class="tea-row"><span class="al">Responsables</span><div style="display:flex;flex-wrap:wrap;gap:5px">${assChecks}</div></div>
-    <div class="tea-row"><span class="al">Nombre</span><button class="sdb" onclick="editTName('${t.id}')">Editar nombre</button></div>
-    <div class="tea-row" style="align-items:flex-start"><span class="al">Descripción</span><div style="flex:1"><textarea class="desc-inp" id="desc-${t.id}" placeholder="Agregar descripción...">${esc(t.descripcion||"")}</textarea><button class="sdb" style="margin-top:4px" onclick="saveDesc('${t.id}')">Guardar</button></div></div>
+    <div class="tea-row"><span class="al">Nombre</span><input class="desc-inp" style="font-size:13px;font-weight:600" id="tname-inp-${t.id}" value="${esc(t.nombre||"")}" onblur="saveTNameDirect(this,'${t.id}')" onkeydown="if(event.key==='Enter')this.blur()"></div>
+    <div class="tea-row" style="align-items:flex-start;flex-direction:column;gap:8px">
+      <span class="al" style="margin-bottom:2px">Comentarios</span>
+      <div id="comments-${t.id}" style="width:100%;display:flex;flex-direction:column;gap:6px">${renderComments(t.descripcion,t.id)}</div>
+      <div style="display:flex;gap:6px;width:100%">
+        <textarea class="desc-inp" id="new-comment-${t.id}" placeholder="Escribí un comentario..." style="flex:1;min-height:52px;resize:vertical"></textarea>
+        <button class="sdb" style="align-self:flex-end" onclick="addComment('${t.id}')">Enviar</button>
+      </div>
+    </div>
   </div>
 </div>`;
 }
@@ -1750,6 +1757,60 @@ async function saveTName(id){
   const inp=document.getElementById("tni-"+id);const val=inp.value.trim();inp.classList.remove("show");document.getElementById("tn-"+id).classList.remove("hide");if(!val)return;
   try{await sb(`tareas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({nombre:val,updated_at:new Date().toISOString()})});
     const t=tasks.find(t=>t.id===id);if(t)t.nombre=val;toast("Nombre actualizado","ok");renderTareas();}catch(e){toast("Error","err")}
+}
+async function saveTNameDirect(inp,id){
+  const val=inp.value.trim();if(!val)return;
+  const t=tasks.find(t=>t.id===id);if(t&&t.nombre===val)return;
+  try{await sb(`tareas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({nombre:val,updated_at:new Date().toISOString()})});
+    if(t)t.nombre=val;renderTareas();}catch(e){toast("Error","err")}
+}
+
+// ── COMENTARIOS EN TAREAS ─────────────────────────────────────────────────
+function parseComments(raw){
+  if(!raw)return[];
+  try{
+    const parsed=JSON.parse(raw);
+    if(Array.isArray(parsed))return parsed;
+  }catch(e){}
+  // texto plano legado → convertir a comentario
+  return raw.trim()?[{autor:"Sistema",texto:raw,fecha:""}]:[];
+}
+function renderComments(raw,id){
+  const comments=parseComments(raw);
+  if(!comments.length)return`<div style="font-size:12px;color:var(--tx3);padding:4px 0">Sin comentarios aún.</div>`;
+  return comments.map(c=>{
+    const fecha=c.fecha?new Date(c.fecha).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"";
+    const color=memberColor(c.autor);
+    return`<div style="background:var(--surf);border:1px solid var(--b);border-radius:8px;padding:8px 10px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+        <span style="background:${color};color:#fff;border-radius:50%;width:20px;height:20px;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">${(c.autor||"?")[0].toUpperCase()}</span>
+        <span style="font-size:11px;font-weight:700;color:var(--tx)">${esc(c.autor||"")}</span>
+        ${fecha?`<span style="font-size:10px;color:var(--tx3)">${fecha}</span>`:""}
+      </div>
+      <div style="font-size:12px;color:var(--tx);white-space:pre-wrap">${esc(c.texto)}</div>
+    </div>`;
+  }).join("");
+}
+function memberColor(nombre){
+  const colors={"Amparo":"#8B5CF6","Mario":"#3B82F6","Tomás":"#10B981","Valentina":"#F59E0B","Sistema":"#6B7280"};
+  return colors[nombre]||"#6B7280";
+}
+async function addComment(id){
+  const inp=document.getElementById("new-comment-"+id);
+  const texto=(inp?.value||"").trim();
+  if(!texto)return;
+  const autor=loggedUser?.nombre||"Usuario";
+  const t=tasks.find(t=>t.id===id);
+  const comments=parseComments(t?.descripcion);
+  comments.push({autor,texto,fecha:new Date().toISOString()});
+  const newVal=JSON.stringify(comments);
+  try{
+    await sb(`tareas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({descripcion:newVal,updated_at:new Date().toISOString()})});
+    if(t)t.descripcion=newVal;
+    inp.value="";
+    const container=document.getElementById("comments-"+id);
+    if(container)container.innerHTML=renderComments(newVal,id);
+  }catch(e){toast("Error al guardar comentario","err")}
 }
 async function saveDesc(id){
   const val=document.getElementById("desc-"+id)?.value.trim()||null;
@@ -4064,3 +4125,5 @@ if('serviceWorker' in navigator){
 </script>
 </body>
 </html>
+
+                                                                                                                                                          
