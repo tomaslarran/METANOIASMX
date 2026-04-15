@@ -1515,14 +1515,22 @@ function closeSidebar(){
   document.getElementById("sidebar-overlay")?.classList.remove("on");
 }
 
-// Fix iOS: primer toque en sidebar se "swallows" por overflow-y:auto
-// Manejamos touchend directamente para garantizar respuesta inmediata
+// Fix iOS: tap en sidebar sin interferir con scroll
+// Solo dispara click si el dedo se movió menos de 10px (tap, no scroll)
 (function(){
   const sidebar=document.querySelector(".sidebar");
   if(!sidebar)return;
+  let touchStartY=0,touchStartX=0;
+  sidebar.addEventListener("touchstart",function(e){
+    touchStartY=e.touches[0].clientY;
+    touchStartX=e.touches[0].clientX;
+  },{passive:true});
   sidebar.addEventListener("touchend",function(e){
     const item=e.target.closest(".sitem");
     if(!item)return;
+    const dy=Math.abs(e.changedTouches[0].clientY-touchStartY);
+    const dx=Math.abs(e.changedTouches[0].clientX-touchStartX);
+    if(dy>10||dx>10)return; // fue scroll, no tap
     e.preventDefault();
     item.click();
   },{passive:false});
