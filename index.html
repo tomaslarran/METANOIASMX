@@ -3919,10 +3919,12 @@ function exportarFinnegans(){
     if(c.neto_21>0)items.push({prod:c.producto_neto21||"varios almacen 21%",precio:c.neto_21});
     if(c.neto_105>0)items.push({prod:c.producto_neto105||"varios almacen 10,5%",precio:c.neto_105});
     if(c.neto_exento>0)items.push({prod:c.producto_exento||"varios almacen consumidor final",precio:c.neto_exento});
-    const noGrav=(c.percepcion_iibb||0)+(c.impuesto_interno||0)+(c.otros_impuestos||0);
+    // noGrav incluye percepción IVA para que Finnegans cierre el total
+    const noGrav=(c.percepcion_iva||0)+(c.percepcion_iibb||0)+(c.impuesto_interno||0)+(c.otros_impuestos||0);
     if(noGrav>0)items.push({prod:c.producto_nograv||"impuestos internos o no gravado",precio:noGrav});
     if(!items.length)items.push({prod:"SI",precio:parseFloat((c.total||0).toFixed(2))});
-    const importeControl=parseFloat(items.reduce((s,i)=>s+i.precio,0).toFixed(2));
+    // IMPORTE_CONTROL = total de la factura (Finnegans suma neto×(1+alicuota) y compara)
+    const importeControl=parseFloat((c.total||0).toFixed(2));
     // Formatear número: tipo-XXXX-XXXXXXXX (punto de venta 4 dígitos, número 8 dígitos)
     const fmtComp=(comp)=>{
       const tipo=comp.tipo||"A";
