@@ -1021,7 +1021,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <button class="fb" onclick="setCompFilter('SUDES',this)">SUDES</button>
       <button class="fb" onclick="setCompFilter('POINTERS',this)">POINTERS</button>
     </div>
-    <input id="comp-search" class="fi" type="search" placeholder="Buscar proveedor..." style="width:180px;margin-left:auto" oninput="renderComprobantes()">
+    <select id="comp-mes-sel" class="sel" onchange="compMesFilter=this.value;renderComprobantes()" style="margin-left:auto">
+      <option value="all">Todos los meses</option>
+    </select>
+    <input id="comp-search" class="fi" type="search" placeholder="Buscar proveedor..." style="width:160px" oninput="renderComprobantes()">
   </div>
 
   <!-- Lista -->
@@ -3432,6 +3435,7 @@ initLogin();
 /* ── COMPROBANTES DE COMPRA ── */
 let comprobantes=[];
 let compFilter="all";
+let compMesFilter="all";
 let compArchivoUrl=null;
 let editCompId=null;
 
@@ -3439,10 +3443,34 @@ async function loadComprobantes(){
   try{
     const data=await sb("comprobantes_compra?select=*&order=fecha.desc,created_at.desc");
     comprobantes=data;
+    buildCompMesSelect();
     renderComprobantes();
     updateCompStats();
     updateSideBadges();
   }catch(e){document.getElementById("comp-lista").innerHTML=`<div class="empty"><div class="ei">⚠️</div>Error al cargar</div>`;}
+}
+
+function buildCompMesSelect(){
+  const sel=document.getElementById("comp-mes-sel");
+  if(!sel)return;
+  const meses=new Map();
+  comprobantes.forEach(c=>{
+    if(!c.fecha)return;
+    const ym=c.fecha.slice(0,7); // "2026-04"
+    if(!meses.has(ym)){
+      const [y,m]=ym.split("-");
+      const nombre=new Date(+y,+m-1,1).toLocaleDateString("es-AR",{month:"long",year:"numeric"});
+      meses.set(ym,nombre.charAt(0).toUpperCase()+nombre.slice(1));
+    }
+  });
+  const current=sel.value;
+  sel.innerHTML=`<option value="all">Todos los meses</option>`;
+  [...meses.entries()].sort((a,b)=>b[0].localeCompare(a[0])).forEach(([ym,label])=>{
+    const opt=document.createElement("option");
+    opt.value=ym;opt.textContent=label;
+    sel.appendChild(opt);
+  });
+  if(current&&current!=="all")sel.value=current;
 }
 
 function setCompFilter(f,btn){
@@ -3457,6 +3485,7 @@ function renderComprobantes(){
   if(!el)return;
   const q=(document.getElementById("comp-search")?.value||"").toLowerCase();
   let list=comprobantes;
+  if(compMesFilter!=="all")list=list.filter(c=>c.fecha&&c.fecha.startsWith(compMesFilter));
   if(compFilter==="SUDES")list=list.filter(c=>c.sociedad==="SUDES");
   else if(compFilter==="POINTERS")list=list.filter(c=>c.sociedad==="POINTERS");
   else if(compFilter!=="all")list=list.filter(c=>c.estado===compFilter);
@@ -3675,7 +3704,8 @@ function recalcTotal(){
 }
 
 function exportarFinnegans(){
-  const listos=comprobantes.filter(c=>c.estado==="revisado");
+  let listos=comprobantes.filter(c=>c.estado==="revisado");
+  if(compMesFilter!=="all")listos=listos.filter(c=>c.fecha&&c.fecha.startsWith(compMesFilter));
   if(!listos.length){toast("No hay comprobantes en estado 'Revisado' para exportar","err");return;}
 
   const fmt=d=>{if(!d)return"";const p=d.slice(0,10).split("-");return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d};
