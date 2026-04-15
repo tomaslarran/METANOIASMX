@@ -3711,8 +3711,8 @@ function exportarFinnegans(){
   if(compFilter==="SUDES"||compFilter==="POINTERS")listos=listos.filter(c=>c.sociedad===compFilter);
   if(!listos.length){toast("No hay comprobantes en estado 'Revisado' para exportar","err");return;}
 
-  // Convierte "YYYY-MM-DD" a Date object para que SheetJS lo escriba como fecha Excel (número)
-  const toDate=d=>{if(!d)return null;const p=d.slice(0,10).split("-");return new Date(+p[0],+p[1]-1,+p[2]);};
+  // Convierte "YYYY-MM-DD" a Date UTC para que SheetJS genere serial entero (sin decimales por timezone)
+  const toDate=d=>{if(!d)return null;const p=d.slice(0,10).split("-");return new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));};
 
   const rows=listos.map(c=>({
     NUMERO:(c.tipo||"A")+"-"+(c.numero||""),
