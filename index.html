@@ -3850,13 +3850,24 @@ function exportarFinnegans(){
     if(!items.length)items.push({prod:"SI",precio:c.monto_neto||0});
     // IMPORTE_CONTROL = suma de todos los PRECIO del comprobante
     const importeControl=parseFloat(items.reduce((s,i)=>s+i.precio,0).toFixed(2));
+    // Formatear número: tipo-XXXX-XXXXXXXX (punto de venta 4 dígitos, número 8 dígitos)
+    const fmtComp=(comp)=>{
+      const tipo=comp.tipo||"A";
+      const parts=(comp.numero||"").split("-");
+      if(parts.length===2){
+        const pv=parseInt(parts[0],10).toString().padStart(4,"0");
+        const n=parseInt(parts[1],10).toString().padStart(8,"0");
+        return `${tipo}-${pv}-${n}`;
+      }
+      return `${tipo}-${comp.numero||""}`;
+    };
     items.forEach(item=>{
       rowNum++;
       rows.push({
     NUMERO:rowNum,
     FECHA:toSerial(c.fecha),
     PROVEEDOR:getFinnProv(c),
-    COMPROBANTE:(c.tipo||"A")+"-"+(c.numero||""),
+    COMPROBANTE:fmtComp(c),
     CONDICIONPAGO:30,
     SUCURSAL:"",
     DESCRIPCION:c.proveedor||"",
