@@ -3746,6 +3746,80 @@ function exportarFinnegans(){
   if(compFilter==="SUDES"||compFilter==="POINTERS")listos=listos.filter(c=>c.sociedad===compFilter);
   if(!listos.length){toast("No hay comprobantes en estado 'Revisado' para exportar","err");return;}
 
+  // ── Tabla CUIT → código Finnegans ──────────────────────────────────────────
+  const FINN_PROV={
+    "30711111081":"ALCA S.R.L.",
+    "30711296618":"ALTO VALLE CALCHAQUI SA",
+    "30707831002":"ANACON SA",
+    "30716370964":"ARGENPAY S.A.U.",
+    "30716111748":"ARSUS SAS",
+    "30718043227":"BAZARNET S. R. L.",
+    "30686658364":"PETROSERVICE S. R. L.",
+    "27332496102":"BUSTAMANTE ARIAS FLORENCIA INE",
+    "30712462317":"CAMPO DE LOS POZUELOS SA",
+    "20224245654":"CASAP ANTONIO TAMER",
+    "30590360763":"CENCOSUD S A",
+    "30709626481":"CENTRAL NORTE CARGAS SA",
+    "30517684097":"CONS PROF DE CS ECONO DE SALTA",
+    "30710173652":"DATTATEC.COM S.R.L",
+    "30685849751":"DIA ARGENTINA S A",
+    "27299177284":"DIOLI ALINA PAOLA",
+    "30712476539":"DISTRUBUIDORA ENERGY NORTE S.R",
+    "30718334280":"ESTACION DE SERVICIO SAN LOREN",
+    "30557717400":"FERTEL",
+    "30715720805":"FIDEICOMISO DE ADMINISTRACION",
+    "30716620634":"FIRST LABEL S.R.L.",
+    "30710753527":"FONDO FIDUCIARIO CHACO PARA EL DESARROLLO DE CENTROS DE ENTRETENIMIENTOS",
+    "30526874249":"FRAVEGA S.A.C.I. e I.",
+    "30716992248":"FUNDACION HOSPITAL PUBLICO MATERNO INFANTIL",
+    "27118342106":"GAMIETEA MYRIAM DEL VALLE",
+    "20250581956":"GIMENEZ CARLOS GABRIEL",
+    "30718383656":"GRUPO LAPPER S.R.L.",
+    "27273367107":"HELLBERG ALEJANDRA",
+    "30687310434":"INC SOCIEDAD ANONIMA",
+    "27293357280":"ISSA MARIA ZULMA",
+    "20460281106":"KLEWZYC THEO JOAQUIN",
+    "33707520359":"LEON VIDRIOS",
+    "30583516790":"LIBRERIA SAN PABLO S.R.L.",
+    "30716608618":"LT GROUP S.A.S.U.",
+    "23261312344":"MENDOZA MAGDALENA ESTELA",
+    "30716460424":"METAS ARGENTINAS SA",
+    "33714950709":"OSASUN S.R.L.",
+    "30716965852":"POINTERS S.A.S.",
+    "30707494944":"PRODUCTOS QUIMICOS SALTA SRL",
+    "30715193082":"Q SEGURIDAD",
+    "23213133314":"ROMERO VERONICA RUTH",
+    "30716918498":"SI soluciones integrales SA",
+    "30717998347":"SID SOLUCIONES INTEGRALES DIGITALES",
+    "20259939470":"SIMOLIUNAS CHRISTIAN DAVID",
+    "20256542774":"SUAREZ MARIANO RAUL",
+    "20144889976":"SUCESION DE RAMIREZ LOPEZ ALFREDO LUIS",
+    "30716551438":"SUSHI BRARRIO NORTE SA",
+    "30718137841":"T7 ARGENTINA SA",
+    "20297372980":"TABOADA GAIMETA JUAN PABLO",
+    "30639453738":"TELECOM ARGENTINA S.A.",
+    "30718769600":"VIATERRA SRL",
+    "20330468522":"VILLA SARAVIA RAMIRO JAVIER",
+    "30700000218":"W&M MAYORISTA SAS",
+    "30655725829":"SODIMAC",
+    "30548083156":"COTO",
+    "33717152269":"CALM",
+    "30710258836":"BLANQUERIA HOME"
+  };
+  const normCuit=c=>(c||"").replace(/[-\s]/g,"");
+  const getFinnProv=c=>{
+    const code=FINN_PROV[normCuit(c.cuit)];
+    return code||c.proveedor||"";
+  };
+
+  // Advertir si hay proveedores sin mapeo de CUIT
+  const sinCuit=listos.filter(c=>!FINN_PROV[normCuit(c.cuit)]);
+  if(sinCuit.length){
+    const unicos=[...new Set(sinCuit.map(c=>`• ${c.proveedor} (CUIT: ${c.cuit||"sin CUIT"})`))]
+    const msg=`⚠️ Los siguientes proveedores no están mapeados en Finnegans.\nSe exportarán con el nombre tal como está cargado.\nVerificá que existan en Finnegans con ese nombre exacto:\n\n${unicos.join("\n")}\n\n¿Continuar igual?`;
+    if(!confirm(msg))return;
+  }
+
   // Serial Excel como entero puro (sin decimales) para evitar NumberFormatException en Finnegans
   const toSerial=d=>{if(!d)return"";const p=d.slice(0,10).split("-");const dt=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));const epoch=new Date(Date.UTC(1899,11,30));return Math.round((dt-epoch)/86400000);};
 
@@ -3766,7 +3840,7 @@ function exportarFinnegans(){
       rows.push({
     NUMERO:rowNum,
     FECHA:toSerial(c.fecha),
-    PROVEEDOR:c.proveedor||"",
+    PROVEEDOR:getFinnProv(c),
     COMPROBANTE:(c.tipo||"A")+"-"+(c.numero||""),
     CONDICIONPAGO:30,
     SUCURSAL:"",
