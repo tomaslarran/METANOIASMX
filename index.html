@@ -3708,6 +3708,7 @@ function recalcTotal(){
 function exportarFinnegans(){
   let listos=comprobantes.filter(c=>c.estado==="revisado");
   if(compMesFilter!=="all")listos=listos.filter(c=>c.fecha&&c.fecha.startsWith(compMesFilter));
+  if(compFilter==="SUDES"||compFilter==="POINTERS")listos=listos.filter(c=>c.sociedad===compFilter);
   if(!listos.length){toast("No hay comprobantes en estado 'Revisado' para exportar","err");return;}
 
   // Convierte "YYYY-MM-DD" a Date object para que SheetJS lo escriba como fecha Excel (número)
