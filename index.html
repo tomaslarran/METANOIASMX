@@ -1086,6 +1086,17 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="fg"><label class="fl">Neto gravado ($)</label><input class="fi" id="comp-neto" type="number" placeholder="0" oninput="recalcTotal()"></div>
       <div class="fg"><label class="fl">IVA ($)</label><input class="fi" id="comp-iva-monto" type="number" placeholder="0" oninput="recalcTotal()"></div>
     </div>
+    <!-- Desglose neto por alícuota (para exportar a Finnegans correctamente) -->
+    <div style="background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:10px 12px;margin:2px 0">
+      <div style="font-size:10px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Desglose neto (Finnegans)</div>
+      <div class="fgrid">
+        <div class="fg"><label class="fl">Neto 21%</label><input class="fi" id="comp-neto21" type="number" placeholder="0" oninput="recalcDesdeDesglose()"></div>
+        <div class="fg"><label class="fl">Neto 10,5%</label><input class="fi" id="comp-neto105" type="number" placeholder="0" oninput="recalcDesdeDesglose()"></div>
+      </div>
+      <div class="fgrid">
+        <div class="fg"><label class="fl">Neto exento</label><input class="fi" id="comp-neto-exento" type="number" placeholder="0" oninput="recalcDesdeDesglose()"></div>
+      </div>
+    </div>
     <div class="fgrid">
       <div class="fg"><label class="fl">Perc. IVA ($)</label><input class="fi" id="comp-perc-iva" type="number" placeholder="0" oninput="recalcTotal()"></div>
       <div class="fg"><label class="fl">Perc. IIBB ($)</label><input class="fi" id="comp-perc-iibb" type="number" placeholder="0" oninput="recalcTotal()"></div>
@@ -3557,7 +3568,7 @@ function openNuevoComprobante(){
   editCompId=null;compArchivoUrl=null;
   document.getElementById("mcomp-title").textContent="Nueva Factura de Compra";
   document.getElementById("comp-save-btn").textContent="Guardar";
-  ["comp-fecha","comp-numero","comp-prov","comp-cuit","comp-concepto","comp-neto","comp-iva-monto","comp-perc-iva","comp-perc-iibb","comp-imp-int","comp-otros","comp-total","comp-venc","comp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  ["comp-fecha","comp-numero","comp-prov","comp-cuit","comp-concepto","comp-neto","comp-iva-monto","comp-neto21","comp-neto105","comp-neto-exento","comp-perc-iva","comp-perc-iibb","comp-imp-int","comp-otros","comp-total","comp-venc","comp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
   document.getElementById("comp-calendario").checked=false;
   document.getElementById("comp-tipo").value="A";
   document.getElementById("comp-sociedad").value="SUDES";
@@ -3581,6 +3592,9 @@ function editComprobante(id){
   document.getElementById("comp-concepto").value=c.concepto||"";
   document.getElementById("comp-neto").value=c.monto_neto||"";
   document.getElementById("comp-iva-monto").value=c.iva||"";
+  document.getElementById("comp-neto21").value=c.neto_21||"";
+  document.getElementById("comp-neto105").value=c.neto_105||"";
+  document.getElementById("comp-neto-exento").value=c.neto_exento||"";
   document.getElementById("comp-perc-iva").value=c.percepcion_iva||"";
   document.getElementById("comp-perc-iibb").value=c.percepcion_iibb||"";
   document.getElementById("comp-imp-int").value=c.impuesto_interno||"";
@@ -3676,6 +3690,9 @@ async function analizarConIA(){
     if(d.concepto)document.getElementById("comp-concepto").value=d.concepto;
     if(d.monto_neto!=null)document.getElementById("comp-neto").value=d.monto_neto;
     if(d.iva!=null)document.getElementById("comp-iva-monto").value=d.iva;
+    if(d.neto_21!=null)document.getElementById("comp-neto21").value=d.neto_21;
+    if(d.neto_105!=null)document.getElementById("comp-neto105").value=d.neto_105;
+    if(d.neto_exento!=null)document.getElementById("comp-neto-exento").value=d.neto_exento;
     if(d.percepcion_iva!=null)document.getElementById("comp-perc-iva").value=d.percepcion_iva;
     if(d.percepcion_iibb!=null)document.getElementById("comp-perc-iibb").value=d.percepcion_iibb;
     if(d.impuesto_interno!=null)document.getElementById("comp-imp-int").value=d.impuesto_interno;
@@ -3704,6 +3721,16 @@ function recalcTotal(){
   const o=parseFloat(document.getElementById("comp-otros").value)||0;
   if(n||v||piva||piibb||imp||o)document.getElementById("comp-total").value=(n+v+piva+piibb+imp+o).toFixed(2);
 }
+// Cuando se completa el desglose por alícuota, recalcula neto e IVA automáticamente
+function recalcDesdeDesglose(){
+  const n21=parseFloat(document.getElementById("comp-neto21").value)||0;
+  const n105=parseFloat(document.getElementById("comp-neto105").value)||0;
+  const nex=parseFloat(document.getElementById("comp-neto-exento").value)||0;
+  const neto=n21+n105+nex;
+  const iva=parseFloat((n21*0.21+n105*0.105).toFixed(2));
+  if(neto){document.getElementById("comp-neto").value=neto.toFixed(2);document.getElementById("comp-iva-monto").value=iva;}
+  recalcTotal();
+}
 
 function exportarFinnegans(){
   let listos=comprobantes.filter(c=>c.estado==="revisado");
@@ -3714,18 +3741,32 @@ function exportarFinnegans(){
   // Serial Excel como entero puro (sin decimales) para evitar NumberFormatException en Finnegans
   const toSerial=d=>{if(!d)return"";const p=d.slice(0,10).split("-");const dt=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));const epoch=new Date(Date.UTC(1899,11,30));return Math.round((dt-epoch)/86400000);};
 
-  const rows=listos.map((c,i)=>({
-    NUMERO:i+1,
+  const rows=[];
+  let rowNum=0;
+  listos.forEach(c=>{
+    // Armar items por alícuota
+    const items=[];
+    if(c.neto_21>0)items.push({prod:"varios almacen 21%",precio:c.neto_21});
+    if(c.neto_105>0)items.push({prod:"varios almacen 10,5%",precio:c.neto_105});
+    if(c.neto_exento>0)items.push({prod:"varios almacen consumidor final",precio:c.neto_exento});
+    const noGrav=(c.percepcion_iibb||0)+(c.impuesto_interno||0)+(c.otros_impuestos||0);
+    if(noGrav>0)items.push({prod:"impuestos internos o no gravado",precio:noGrav});
+    // Si no hay desglose, usar fila genérica
+    if(!items.length)items.push({prod:"SI",precio:c.monto_neto||0});
+    items.forEach(item=>{
+      rowNum++;
+      rows.push({
+    NUMERO:rowNum,
     FECHA:toSerial(c.fecha),
     PROVEEDOR:c.proveedor||"",
     COMPROBANTE:(c.tipo||"A")+"-"+(c.numero||""),
     CONDICIONPAGO:30,
     SUCURSAL:"",
     DESCRIPCION:c.proveedor||"",
-    PRODUCTO:"SI",
+    PRODUCTO:item.prod,
     DESCRIPCIONITEM:c.proveedor||"",
     CANTIDAD:1,
-    PRECIO:c.monto_neto||0,
+    PRECIO:item.precio,
     PRECIOSOBRE:"",
     MONEDA_COTIZACION:"PES",
     COTIZACION:1,
@@ -3751,7 +3792,8 @@ function exportarFinnegans(){
     EQUIPO_SOLICITANTE:"",
     TIPO_ITEM:"",
     FECHAHASTA:""
-  }));
+    });});  // cierra items.forEach y listos.forEach
+  });
 
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.json_to_sheet(rows,{header:Object.keys(rows[0])});
@@ -3785,6 +3827,9 @@ async function saveComprobante(){
     concepto:document.getElementById("comp-concepto").value.trim()||null,
     monto_neto:parseFloat(document.getElementById("comp-neto").value)||null,
     iva:parseFloat(document.getElementById("comp-iva-monto").value)||null,
+    neto_21:parseFloat(document.getElementById("comp-neto21").value)||0,
+    neto_105:parseFloat(document.getElementById("comp-neto105").value)||0,
+    neto_exento:parseFloat(document.getElementById("comp-neto-exento").value)||0,
     percepcion_iva:parseFloat(document.getElementById("comp-perc-iva").value)||0,
     percepcion_iibb:parseFloat(document.getElementById("comp-perc-iibb").value)||0,
     impuesto_interno:parseFloat(document.getElementById("comp-imp-int").value)||0,
