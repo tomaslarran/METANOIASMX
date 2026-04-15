@@ -1077,10 +1077,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         </select>
       </div>
     </div>
-    <div class="fg"><label class="fl">Proveedor *</label><input class="fi" id="comp-prov" type="text" placeholder="Razón social del proveedor"></div>
+    <div class="fg"><label class="fl">Proveedor *</label><input class="fi" id="comp-prov" type="text" placeholder="Razón social del proveedor" oninput="sugerirProductosFinn()"></div>
     <div class="fgrid">
       <div class="fg"><label class="fl">CUIT</label><input class="fi" id="comp-cuit" type="text" placeholder="20-12345678-9"></div>
-      <div class="fg"><label class="fl">Concepto</label><input class="fi" id="comp-concepto" type="text" placeholder="Ej: Material quirúrgico"></div>
+      <div class="fg"><label class="fl">Concepto</label><input class="fi" id="comp-concepto" type="text" placeholder="Ej: Material quirúrgico" oninput="sugerirProductosFinn()"></div>
     </div>
     <div class="fgrid">
       <div class="fg"><label class="fl">Neto gravado ($)</label><input class="fi" id="comp-neto" type="number" placeholder="0" oninput="recalcTotal()"></div>
@@ -1090,11 +1090,50 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div style="background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:10px 12px;margin:2px 0">
       <div style="font-size:10px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Desglose neto (Finnegans)</div>
       <div class="fgrid">
-        <div class="fg"><label class="fl">Neto 21%</label><input class="fi" id="comp-neto21" type="number" placeholder="0" oninput="recalcDesdeDesglose()"></div>
-        <div class="fg"><label class="fl">Neto 10,5%</label><input class="fi" id="comp-neto105" type="number" placeholder="0" oninput="recalcDesdeDesglose()"></div>
+        <div class="fg">
+          <label class="fl">Neto 21%</label>
+          <input class="fi" id="comp-neto21" type="number" placeholder="0" oninput="recalcDesdeDesglose()" style="margin-bottom:3px">
+          <select class="fi" id="comp-prod21" style="font-size:11px">
+            <option value="">— producto —</option>
+            <option value="varios almacen 21%">varios almacen 21%</option>
+            <option value="telefonia e internet al 21%">telefonia e internet al 21%</option>
+            <option value="Varios materiales construccion 21%">Varios materiales construccion 21%</option>
+            <option value="Varios construcción">Varios construcción</option>
+            <option value="varios electrodomesticos">varios electrodomesticos</option>
+            <option value="varios representacion">varios representacion</option>
+            <option value="COMBUSTIBLES">COMBUSTIBLES</option>
+            <option value="SEGURIDAD Y VIGILANCIA">SEGURIDAD Y VIGILANCIA</option>
+            <option value="SISTEMA CONTABLE HOSTING">SISTEMA CONTABLE HOSTING</option>
+            <option value="LOGISTICA">LOGISTICA</option>
+            <option value="ASESORAMIENTO">ASESORAMIENTO</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="fl">Neto 10,5%</label>
+          <input class="fi" id="comp-neto105" type="number" placeholder="0" oninput="recalcDesdeDesglose()" style="margin-bottom:3px">
+          <select class="fi" id="comp-prod105" style="font-size:11px">
+            <option value="">— producto —</option>
+            <option value="varios almacen 10,5%">varios almacen 10,5%</option>
+            <option value="seguridad y vigilancia al 10.5">seguridad y vigilancia al 10.5</option>
+            <option value="VARIOS MATERIALES CONSTRUCCION 10.5%">VARIOS MATERIALES CONSTRUCCION 10.5%</option>
+            <option value="telefonia e internet 27%">telefonia e internet 27%</option>
+          </select>
+        </div>
       </div>
       <div class="fgrid">
-        <div class="fg"><label class="fl">Neto exento</label><input class="fi" id="comp-neto-exento" type="number" placeholder="0" oninput="recalcDesdeDesglose()"></div>
+        <div class="fg">
+          <label class="fl">Neto exento</label>
+          <input class="fi" id="comp-neto-exento" type="number" placeholder="0" oninput="recalcDesdeDesglose()" style="margin-bottom:3px">
+          <select class="fi" id="comp-prod-exento" style="font-size:11px">
+            <option value="varios almacen consumidor final">varios almacen consumidor final</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="fl">No gravado / Imp. int.</label>
+          <select class="fi" id="comp-prod-nograv" style="font-size:11px;margin-top:18px">
+            <option value="impuestos internos o no gravado">impuestos internos o no gravado</option>
+          </select>
+        </div>
       </div>
     </div>
     <div class="fgrid">
@@ -3590,6 +3629,9 @@ function openNuevoComprobante(){
   document.getElementById("mcomp-title").textContent="Nueva Factura de Compra";
   document.getElementById("comp-save-btn").textContent="Guardar";
   ["comp-fecha","comp-numero","comp-prov","comp-cuit","comp-concepto","comp-neto","comp-iva-monto","comp-neto21","comp-neto105","comp-neto-exento","comp-perc-iva","comp-perc-iibb","comp-imp-int","comp-otros","comp-total","comp-venc","comp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  ["comp-prod21","comp-prod105"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  const elEx=document.getElementById("comp-prod-exento");if(elEx)elEx.value="varios almacen consumidor final";
+  const elNG=document.getElementById("comp-prod-nograv");if(elNG)elNG.value="impuestos internos o no gravado";;
   document.getElementById("comp-calendario").checked=false;
   document.getElementById("comp-tipo").value="A";
   document.getElementById("comp-sociedad").value="SUDES";
@@ -3623,6 +3665,11 @@ function editComprobante(id){
   document.getElementById("comp-venc").value=c.fecha_vencimiento||"";
   document.getElementById("comp-calendario").checked=c.en_calendario||false;
   document.getElementById("comp-total").value=c.total||"";
+  const p21=document.getElementById("comp-prod21");if(p21)p21.value=c.producto_neto21||"";
+  const p105=document.getElementById("comp-prod105");if(p105)p105.value=c.producto_neto105||"";
+  const pEx=document.getElementById("comp-prod-exento");if(pEx)pEx.value=c.producto_exento||"varios almacen consumidor final";
+  const pNG=document.getElementById("comp-prod-nograv");if(pNG)pNG.value=c.producto_nograv||"impuestos internos o no gravado";
+  if(!c.producto_neto21&&!c.producto_neto105)sugerirProductosFinn();
   document.getElementById("comp-notas").value=c.notas||"";
   if(c.archivo_url){
     document.getElementById("comp-upload-content").innerHTML=`<div style="font-size:24px">✅</div><div style="font-size:12px;color:var(--gr);margin-top:4px">Archivo cargado</div><div style="font-size:10px;color:var(--tx3)">Tocá para reemplazar</div>`;
@@ -3720,6 +3767,7 @@ async function analizarConIA(){
     if(d.otros_impuestos!=null)document.getElementById("comp-otros").value=d.otros_impuestos;
     if(d.sociedad)document.getElementById("comp-sociedad").value=d.sociedad;
     if(d.fecha_vencimiento)document.getElementById("comp-venc").value=d.fecha_vencimiento;
+    sugerirProductosFinn();
     if(d.total!=null)document.getElementById("comp-total").value=d.total;
     toast("Datos extraídos — revisá y confirmá","ok");
   }catch(e){
@@ -3742,6 +3790,33 @@ function recalcTotal(){
   const o=parseFloat(document.getElementById("comp-otros").value)||0;
   if(n||v||piva||piibb||imp||o)document.getElementById("comp-total").value=(n+v+piva+piibb+imp+o).toFixed(2);
 }
+// Auto-sugerencia de productos Finnegans según proveedor/concepto
+function sugerirProductosFinn(){
+  const prov=(document.getElementById("comp-prov")?.value||"").toLowerCase();
+  const conc=(document.getElementById("comp-concepto")?.value||"").toLowerCase();
+  const txt=prov+" "+conc;
+  let p21="varios almacen 21%",p105="varios almacen 10,5%";
+  if(/telecom|telefon|internet|claro|movistar|personal|fibertel|cablevision|direct/.test(txt)){
+    p21="telefonia e internet al 21%";
+  } else if(/construc|material|obra|cerami|pintura|ferret|corral/.test(txt)){
+    p21="Varios materiales construccion 21%";p105="VARIOS MATERIALES CONSTRUCCION 10.5%";
+  } else if(/segur|vigilanc|alarm|signal/.test(txt)){
+    p21="SEGURIDAD Y VIGILANCIA";p105="seguridad y vigilancia al 10.5";
+  } else if(/combustib|nafta|gasoil|ypf|shell|axion|repsol|estacion/.test(txt)){
+    p21="COMBUSTIBLES";
+  } else if(/hosting|sistema|software|saas|finnegan|dattatec/.test(txt)){
+    p21="SISTEMA CONTABLE HOSTING";
+  } else if(/electrodom|heladera|lavarrop|television|fravega|garbarino/.test(txt)){
+    p21="varios electrodomesticos";
+  } else if(/representac|gastron|restaurant|cafe/.test(txt)){
+    p21="varios representacion";
+  }
+  const s21=document.getElementById("comp-prod21");
+  const s105=document.getElementById("comp-prod105");
+  if(s21)s21.value=p21;
+  if(s105)s105.value=p105;
+}
+
 // Cuando se completa el desglose por alícuota, recalcula neto e IVA automáticamente
 function recalcDesdeDesglose(){
   const n21=parseFloat(document.getElementById("comp-neto21").value)||0;
@@ -3839,16 +3914,14 @@ function exportarFinnegans(){
   const rows=[];
   let rowNum=0;
   listos.forEach(c=>{
-    // Armar items por alícuota
+    // Armar items por alícuota usando productos guardados
     const items=[];
-    if(c.neto_21>0)items.push({prod:"varios almacen 21%",precio:c.neto_21});
-    if(c.neto_105>0)items.push({prod:"varios almacen 10,5%",precio:c.neto_105});
-    if(c.neto_exento>0)items.push({prod:"varios almacen consumidor final",precio:c.neto_exento});
+    if(c.neto_21>0)items.push({prod:c.producto_neto21||"varios almacen 21%",precio:c.neto_21});
+    if(c.neto_105>0)items.push({prod:c.producto_neto105||"varios almacen 10,5%",precio:c.neto_105});
+    if(c.neto_exento>0)items.push({prod:c.producto_exento||"varios almacen consumidor final",precio:c.neto_exento});
     const noGrav=(c.percepcion_iibb||0)+(c.impuesto_interno||0)+(c.otros_impuestos||0);
-    if(noGrav>0)items.push({prod:"impuestos internos o no gravado",precio:noGrav});
-    // Si no hay desglose, usar fila genérica
-    if(!items.length)items.push({prod:"SI",precio:c.monto_neto||0});
-    // IMPORTE_CONTROL = suma de todos los PRECIO del comprobante
+    if(noGrav>0)items.push({prod:c.producto_nograv||"impuestos internos o no gravado",precio:noGrav});
+    if(!items.length)items.push({prod:"SI",precio:parseFloat((c.total||0).toFixed(2))});
     const importeControl=parseFloat(items.reduce((s,i)=>s+i.precio,0).toFixed(2));
     // Formatear número: tipo-XXXX-XXXXXXXX (punto de venta 4 dígitos, número 8 dígitos)
     const fmtComp=(comp)=>{
@@ -3947,6 +4020,10 @@ async function saveComprobante(){
     neto_21:parseFloat(document.getElementById("comp-neto21").value)||0,
     neto_105:parseFloat(document.getElementById("comp-neto105").value)||0,
     neto_exento:parseFloat(document.getElementById("comp-neto-exento").value)||0,
+    producto_neto21:document.getElementById("comp-prod21")?.value||null,
+    producto_neto105:document.getElementById("comp-prod105")?.value||null,
+    producto_exento:document.getElementById("comp-prod-exento")?.value||"varios almacen consumidor final",
+    producto_nograv:document.getElementById("comp-prod-nograv")?.value||"impuestos internos o no gravado",
     percepcion_iva:parseFloat(document.getElementById("comp-perc-iva").value)||0,
     percepcion_iibb:parseFloat(document.getElementById("comp-perc-iibb").value)||0,
     impuesto_interno:parseFloat(document.getElementById("comp-imp-int").value)||0,
