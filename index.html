@@ -3708,11 +3708,12 @@ function exportarFinnegans(){
   if(compMesFilter!=="all")listos=listos.filter(c=>c.fecha&&c.fecha.startsWith(compMesFilter));
   if(!listos.length){toast("No hay comprobantes en estado 'Revisado' para exportar","err");return;}
 
-  const fmt=d=>{if(!d)return"";const p=d.slice(0,10).split("-");return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d};
+  // Convierte "YYYY-MM-DD" a Date object para que SheetJS lo escriba como fecha Excel (número)
+  const toDate=d=>{if(!d)return null;const p=d.slice(0,10).split("-");return new Date(+p[0],+p[1]-1,+p[2]);};
 
   const rows=listos.map(c=>({
     NUMERO:(c.tipo||"A")+"-"+(c.numero||""),
-    FECHA:fmt(c.fecha),
+    FECHA:toDate(c.fecha),
     PROVEEDOR:c.proveedor||"",
     COMPROBANTE:"Factura de Compra",
     CONDICIONPAGO:"Contado Efectivo",
@@ -3727,8 +3728,8 @@ function exportarFinnegans(){
     COTIZACION:"",
     MONEDA:"Pesos",
     WORKFLOW:"",
-    FECHACOMPROBANTE:fmt(c.fecha),
-    FECHABASEVENCIMIENTO:fmt(c.fecha_vencimiento||c.fecha),
+    FECHACOMPROBANTE:toDate(c.fecha),
+    FECHABASEVENCIMIENTO:toDate(c.fecha_vencimiento||c.fecha),
     DESTINATARIO:"",
     PROVINCIA_DESTINO:"",
     PROVINCIA_DESTINO_ITEM:"",
@@ -3750,8 +3751,16 @@ function exportarFinnegans(){
   }));
 
   const wb=XLSX.utils.book_new();
-  const ws=XLSX.utils.json_to_sheet(rows,{header:Object.keys(rows[0])});
-  // Ancho de columnas
+  const ws=XLSX.utils.json_to_sheet(rows,{header:Object.keys(rows[0]),cellDates:true});
+  // Formato fecha DD/MM/YYYY para columnas de fecha (B=FECHA, Q=FECHACOMPROBANTE, R=FECHABASEVENCIMIENTO)
+  const dateFmt="DD/MM/YYYY";
+  const dateColsIdx=[1,16,17]; // índices 0-based de columnas de fecha
+  for(let r=1;r<=rows.length;r++){
+    dateColsIdx.forEach(ci=>{
+      const addr=XLSX.utils.encode_cell({r,c:ci});
+      if(ws[addr])ws[addr].z=dateFmt;
+    });
+  }
   ws["!cols"]=[{wch:18},{wch:12},{wch:25},{wch:18},{wch:18},{wch:10},{wch:30},{wch:20},{wch:30},{wch:8},{wch:12},{wch:15},{wch:10},{wch:10},{wch:8},{wch:10},{wch:12},{wch:18},{wch:12},{wch:14},{wch:16},{wch:14},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:14},{wch:10},{wch:14},{wch:14},{wch:16},{wch:10},{wch:12}];
   XLSX.utils.book_append_sheet(wb,ws,"Sheet0");
   const fecha=new Date().toISOString().slice(0,10);
