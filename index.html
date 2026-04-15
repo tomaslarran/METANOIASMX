@@ -3567,13 +3567,36 @@ function handleCompDrop(e){
   if(file)handleCompFile(file);
 }
 
+// Comprime imágenes a máx 2000px y <4MB antes de subir (límite Anthropic 5MB)
+async function comprimirImagen(file){
+  return new Promise((resolve)=>{
+    if(file.type==="application/pdf"){resolve(file);return;}
+    const img=new Image();
+    const url=URL.createObjectURL(file);
+    img.onload=()=>{
+      URL.revokeObjectURL(url);
+      const MAX=2000;
+      let w=img.width,h=img.height;
+      if(w>MAX||h>MAX){const r=Math.min(MAX/w,MAX/h);w=Math.round(w*r);h=Math.round(h*r);}
+      const canvas=document.createElement("canvas");
+      canvas.width=w;canvas.height=h;
+      canvas.getContext("2d").drawImage(img,0,0,w,h);
+      canvas.toBlob(blob=>resolve(new File([blob],file.name,{type:"image/jpeg"})),"image/jpeg",0.85);
+    };
+    img.onerror=()=>resolve(file);
+    img.src=url;
+  });
+}
+
 async function handleCompFile(file){
   if(!file)return;
   const maxMB=10;
   if(file.size>maxMB*1024*1024){toast("El archivo supera los 10MB","err");return;}
   document.getElementById("comp-upload-content").innerHTML=`<div style="font-size:22px">⏳</div><div style="font-size:12px;color:var(--tx3);margin-top:4px">Subiendo...</div>`;
   try{
-    const ext=file.name.split(".").pop()||"jpg";
+    // Comprimir si es imagen
+    if(!file.type.includes("pdf"))file=await comprimirImagen(file);
+    const ext=file.type.includes("pdf")?"pdf":"jpg";
     const fname=`${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
     const SUPA_URL="https://jppxmdvddvbsvymogvcp.supabase.co";
     const KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwcHhtZHZkZHZic3Z5bW9ndmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMjcyODAsImV4cCI6MjA5MDgwMzI4MH0.KPAqCKfUteE3XK9QFqb_44Hm8jYQxfjVLkrlyGvaMhE";
@@ -3625,7 +3648,14 @@ async function analizarConIA(){
     if(d.fecha_vencimiento)document.getElementById("comp-venc").value=d.fecha_vencimiento;
     if(d.total!=null)document.getElementById("comp-total").value=d.total;
     toast("Datos extraídos — revisá y confirmá","ok");
-  }catch(e){console.error("ERROR IA COMPLETO:",e.message);toast("Error IA: "+e.message.substring(0,200),"err")}
+  }catch(e){
+    console.error("ERROR IA:",e.message);
+    let msg=e.message;
+    try{const j=JSON.parse(msg);msg=j.error?.error?.message||j.error?.message||msg;}catch{}
+    if(msg.includes("exceeds 5 MB"))msg="La imagen es muy grande. Usá un PDF o una foto más chica.";
+    else if(msg.includes("credit"))msg="Sin créditos en la API de IA.";
+    toast("Error IA: "+msg.substring(0,120),"err");
+  }
   finally{btn.disabled=false;btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg> ✨ Re-analizar con IA';}
 }
 
