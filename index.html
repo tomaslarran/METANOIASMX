@@ -3817,6 +3817,15 @@ function exportarFinnegans(){
 async function saveComprobante(){
   const prov=document.getElementById("comp-prov").value.trim();
   if(!prov){toast("Escribí el proveedor","err");return;}
+  // Detectar duplicado (solo en alta nueva, no en edición)
+  if(!editCompId){
+    const nro=document.getElementById("comp-numero").value.trim();
+    const tipo=document.getElementById("comp-tipo").value;
+    if(nro){
+      const dup=comprobantes.find(c=>c.numero===nro&&c.tipo===tipo&&c.proveedor.toLowerCase()===prov.toLowerCase());
+      if(dup&&!confirm(`⚠️ Ya existe una Factura ${tipo} N° ${nro} de ${prov}.\n¿Querés cargarla igual?`))return;
+    }
+  }
   const data={
     proveedor:prov,
     fecha:document.getElementById("comp-fecha").value||null,
