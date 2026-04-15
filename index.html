@@ -3711,28 +3711,28 @@ function exportarFinnegans(){
   if(compFilter==="SUDES"||compFilter==="POINTERS")listos=listos.filter(c=>c.sociedad===compFilter);
   if(!listos.length){toast("No hay comprobantes en estado 'Revisado' para exportar","err");return;}
 
-  // Convierte "YYYY-MM-DD" a Date UTC para que SheetJS genere serial entero (sin decimales por timezone)
-  const toDate=d=>{if(!d)return null;const p=d.slice(0,10).split("-");return new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));};
+  // Serial Excel como entero puro (sin decimales) para evitar NumberFormatException en Finnegans
+  const toSerial=d=>{if(!d)return"";const p=d.slice(0,10).split("-");const dt=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));const epoch=new Date(Date.UTC(1899,11,30));return Math.round((dt-epoch)/86400000);};
 
-  const rows=listos.map(c=>({
-    NUMERO:(c.tipo||"A")+"-"+(c.numero||""),
-    FECHA:toDate(c.fecha),
+  const rows=listos.map((c,i)=>({
+    NUMERO:i+1,
+    FECHA:toSerial(c.fecha),
     PROVEEDOR:c.proveedor||"",
-    COMPROBANTE:"Factura de Compra",
-    CONDICIONPAGO:"Contado Efectivo",
+    COMPROBANTE:(c.tipo||"A")+"-"+(c.numero||""),
+    CONDICIONPAGO:30,
     SUCURSAL:"",
-    DESCRIPCION:c.concepto||"",
-    PRODUCTO:c.concepto||"Varios",
-    DESCRIPCIONITEM:c.concepto||"",
+    DESCRIPCION:c.proveedor||"",
+    PRODUCTO:"SI",
+    DESCRIPCIONITEM:c.proveedor||"",
     CANTIDAD:1,
-    PRECIO:c.monto_neto||0,
-    PRECIOSOBRE:"Cantidad con IVA",
-    MONEDA_COTIZACION:"",
-    COTIZACION:"",
-    MONEDA:"Pesos",
-    WORKFLOW:"",
-    FECHACOMPROBANTE:toDate(c.fecha),
-    FECHABASEVENCIMIENTO:toDate(c.fecha_vencimiento||c.fecha),
+    PRECIO:c.total||0,
+    PRECIOSOBRE:"",
+    MONEDA_COTIZACION:"PES",
+    COTIZACION:1,
+    MONEDA:"PES",
+    WORKFLOW:"CPRA-PROD",
+    FECHACOMPROBANTE:toSerial(c.fecha),
+    FECHABASEVENCIMIENTO:toSerial(c.fecha_vencimiento||c.fecha),
     DESTINATARIO:"",
     PROVINCIA_DESTINO:"",
     PROVINCIA_DESTINO_ITEM:"",
@@ -3747,23 +3747,14 @@ function exportarFinnegans(){
     DIMENSIONVALORVTO:"",
     DIMENSIONVTO2:"",
     DIMENSIONVALORVTO2:"",
-    IMPORTE_CONTROL:c.total||0,
+    IMPORTE_CONTROL:c.total||0,  // mismo que PRECIO
     EQUIPO_SOLICITANTE:"",
     TIPO_ITEM:"",
     FECHAHASTA:""
   }));
 
   const wb=XLSX.utils.book_new();
-  const ws=XLSX.utils.json_to_sheet(rows,{header:Object.keys(rows[0]),cellDates:true});
-  // Formato fecha DD/MM/YYYY para columnas de fecha (B=FECHA, Q=FECHACOMPROBANTE, R=FECHABASEVENCIMIENTO)
-  const dateFmt="DD/MM/YYYY";
-  const dateColsIdx=[1,16,17]; // índices 0-based de columnas de fecha
-  for(let r=1;r<=rows.length;r++){
-    dateColsIdx.forEach(ci=>{
-      const addr=XLSX.utils.encode_cell({r,c:ci});
-      if(ws[addr])ws[addr].z=dateFmt;
-    });
-  }
+  const ws=XLSX.utils.json_to_sheet(rows,{header:Object.keys(rows[0])});
   ws["!cols"]=[{wch:18},{wch:12},{wch:25},{wch:18},{wch:18},{wch:10},{wch:30},{wch:20},{wch:30},{wch:8},{wch:12},{wch:15},{wch:10},{wch:10},{wch:8},{wch:10},{wch:12},{wch:18},{wch:12},{wch:14},{wch:16},{wch:14},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:14},{wch:10},{wch:14},{wch:14},{wch:16},{wch:10},{wch:12}];
   XLSX.utils.book_append_sheet(wb,ws,"Sheet0");
   const fecha=new Date().toISOString().slice(0,10);
