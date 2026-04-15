@@ -467,14 +467,14 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- Overlay para cerrar sidebar en mobile -->
-<div id="sidebar-overlay" onclick="closeSidebar()" ontouchstart="closeSidebar()"></div>
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
 
 <!-- LAYOUT -->
 <div class="layout" id="main-layout" style="display:none">
 
 <!-- SIDEBAR -->
 <nav class="sidebar">
-  <div id="sidebar-close-btn" onclick="closeSidebar()" ontouchstart="closeSidebar()" style="display:none;align-items:center;justify-content:flex-end;padding:8px 14px 4px;cursor:pointer;touch-action:manipulation">
+  <div id="sidebar-close-btn" onclick="closeSidebar()" style="display:none;align-items:center;justify-content:flex-end;padding:8px 14px 4px;cursor:pointer;touch-action:manipulation">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
   </div>
   <div class="sgroup">
@@ -1483,7 +1483,12 @@ function toggleSidebar(){
   const sb=document.querySelector(".sidebar");
   const ov=document.getElementById("sidebar-overlay");
   if(sb.classList.contains("open")){sb.classList.remove("open");ov.classList.remove("on");}
-  else{sb.classList.add("open");ov.classList.add("on");}
+  else{
+    sb.classList.add("open");ov.classList.add("on");
+    // Bloquea el overlay 350ms para evitar ghost click de iOS que cierra el sidebar al instante
+    ov.style.pointerEvents="none";
+    setTimeout(()=>{ov.style.pointerEvents=""},350);
+  }
 }
 function closeSidebar(){
   document.querySelector(".sidebar")?.classList.remove("open");
