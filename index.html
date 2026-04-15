@@ -13,6 +13,7 @@
 <meta name="apple-mobile-web-app-title" content="Metanoia">
 <link rel="apple-touch-icon" href="/icons/icon-192.svg">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 :root{
@@ -989,7 +990,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="pgt">Comprobantes de Compra</div>
       <div class="pgs">Facturas recibidas · registro y envío a Finnegans</div>
     </div>
-    <div class="pgh-right">
+    <div class="pgh-right" style="display:flex;gap:8px">
+      <button class="btn sec" onclick="exportarFinnegans()" title="Exporta los comprobantes Revisados en formato Finnegans">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Exportar XLS
+      </button>
       <button class="btn sec" onclick="openNuevoComprobante()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Nueva factura
@@ -3667,6 +3672,71 @@ function recalcTotal(){
   const imp=parseFloat(document.getElementById("comp-imp-int").value)||0;
   const o=parseFloat(document.getElementById("comp-otros").value)||0;
   if(n||v||piva||piibb||imp||o)document.getElementById("comp-total").value=(n+v+piva+piibb+imp+o).toFixed(2);
+}
+
+function exportarFinnegans(){
+  const listos=comprobantes.filter(c=>c.estado==="revisado");
+  if(!listos.length){toast("No hay comprobantes en estado 'Revisado' para exportar","err");return;}
+
+  const fmt=d=>{if(!d)return"";const p=d.slice(0,10).split("-");return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d};
+
+  const rows=listos.map(c=>({
+    NUMERO:(c.tipo||"A")+"-"+(c.numero||""),
+    FECHA:fmt(c.fecha),
+    PROVEEDOR:c.proveedor||"",
+    COMPROBANTE:"Factura de Compra",
+    CONDICIONPAGO:"Contado Efectivo",
+    SUCURSAL:"",
+    DESCRIPCION:c.concepto||"",
+    PRODUCTO:c.concepto||"Varios",
+    DESCRIPCIONITEM:c.concepto||"",
+    CANTIDAD:1,
+    PRECIO:c.monto_neto||0,
+    PRECIOSOBRE:"Cantidad con IVA",
+    MONEDA_COTIZACION:"",
+    COTIZACION:"",
+    MONEDA:"Pesos",
+    WORKFLOW:"",
+    FECHACOMPROBANTE:fmt(c.fecha),
+    FECHABASEVENCIMIENTO:fmt(c.fecha_vencimiento||c.fecha),
+    DESTINATARIO:"",
+    PROVINCIA_DESTINO:"",
+    PROVINCIA_DESTINO_ITEM:"",
+    FECHAPROXIMOPASO:"",
+    DIMENSION:"",
+    DIMENSIONVALOR:"",
+    DIMENSION2:"",
+    DIMENSIONVALOR2:"",
+    DIMENSION3:"",
+    DIMENSIONVALOR3:"",
+    DIMENSIONVTO:"",
+    DIMENSIONVALORVTO:"",
+    DIMENSIONVTO2:"",
+    DIMENSIONVALORVTO2:"",
+    IMPORTE_CONTROL:c.total||0,
+    EQUIPO_SOLICITANTE:"",
+    TIPO_ITEM:"",
+    FECHAHASTA:""
+  }));
+
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.json_to_sheet(rows,{header:Object.keys(rows[0])});
+  // Ancho de columnas
+  ws["!cols"]=[{wch:18},{wch:12},{wch:25},{wch:18},{wch:18},{wch:10},{wch:30},{wch:20},{wch:30},{wch:8},{wch:12},{wch:15},{wch:10},{wch:10},{wch:8},{wch:10},{wch:12},{wch:18},{wch:12},{wch:14},{wch:16},{wch:14},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:14},{wch:10},{wch:14},{wch:14},{wch:16},{wch:10},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws,"Sheet0");
+  const fecha=new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb,`comprobantes_finnegans_${fecha}.xls`);
+  toast(`${listos.length} comprobantes exportados`,"ok");
+
+  // Ofrecer marcar como enviado_finnegans
+  setTimeout(()=>{
+    if(confirm(`¿Marcar los ${listos.length} comprobantes exportados como "En Finnegans"?`)){
+      Promise.all(listos.map(c=>
+        sb(`comprobantes_compra?id=eq.${c.id}`,{method:"PATCH",body:JSON.stringify({estado:"enviado_finnegans",updated_at:new Date().toISOString()})})
+        .then(()=>{const i=comprobantes.findIndex(x=>x.id===c.id);if(i>=0)comprobantes[i].estado="enviado_finnegans";})
+      )).then(()=>{renderComprobantes();updateCompStats();updateSideBadges();toast("Marcados como En Finnegans","ok");});
+    }
+  },500);
 }
 
 async function saveComprobante(){
