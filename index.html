@@ -57,7 +57,7 @@ body{font-family:var(--f);background:var(--bg);color:var(--tx);min-height:100vh;
 .sidebar::-webkit-scrollbar{width:0}
 .sgroup{margin-bottom:6px}
 .sgroup-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--tx3);padding:0 16px;margin-bottom:4px;margin-top:12px}
-.sitem{display:flex;align-items:center;gap:9px;padding:7px 16px;cursor:pointer;transition:all .15s;border-radius:0;color:var(--tx2);font-size:13px;font-weight:400;border-left:2px solid transparent;user-select:none}
+.sitem{display:flex;align-items:center;gap:9px;padding:7px 16px;cursor:pointer;transition:all .15s;border-radius:0;color:var(--tx2);font-size:13px;font-weight:400;border-left:2px solid transparent;user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .sitem:hover{color:var(--tx);background:rgba(255,255,255,.04)}
 .sitem.on{color:var(--tx);background:rgba(124,58,237,.1);border-left-color:var(--pu);font-weight:500}
 .sitem svg{flex-shrink:0;opacity:.7}
@@ -318,7 +318,7 @@ body{font-family:var(--f);background:var(--bg);color:var(--tx);min-height:100vh;
 mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0 1px}
 
 /* Overlay mobile */
-#sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99;backdrop-filter:blur(2px)}
+#sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99;touch-action:manipulation}
 #sidebar-overlay.on{display:block}
 
 @media(max-width:768px){
@@ -326,6 +326,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   .sidebar{transform:translateX(-100%);transition:transform .25s ease;z-index:100}
   .sidebar.open{transform:translateX(0)}
   #hamburger-btn{display:flex!important}
+  #sidebar-close-btn{display:flex!important}
   .content{margin-left:0;padding:16px 14px 80px}
   .stats{grid-template-columns:repeat(2,1fr)}
   .charts-grid,.notif-grid{grid-template-columns:1fr}
@@ -439,7 +440,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
 <!-- TOPBAR -->
 <div class="topbar" style="display:none" id="main-topbar">
-  <button id="hamburger-btn" onclick="toggleSidebar()" style="display:none;background:none;border:none;cursor:pointer;padding:6px;color:var(--tx2);margin-right:4px" aria-label="Menú">
+  <button id="hamburger-btn" onclick="toggleSidebar()" style="display:none;background:none;border:none;cursor:pointer;padding:6px;color:var(--tx2);margin-right:4px;touch-action:manipulation;-webkit-tap-highlight-color:transparent" aria-label="Menú">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
   </button>
   <span class="logo">Metanoia</span>
@@ -466,13 +467,16 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- Overlay para cerrar sidebar en mobile -->
-<div id="sidebar-overlay" onclick="closeSidebar()"></div>
+<div id="sidebar-overlay" onclick="closeSidebar()" ontouchstart="closeSidebar()"></div>
 
 <!-- LAYOUT -->
 <div class="layout" id="main-layout" style="display:none">
 
 <!-- SIDEBAR -->
 <nav class="sidebar">
+  <div id="sidebar-close-btn" onclick="closeSidebar()" ontouchstart="closeSidebar()" style="display:none;align-items:center;justify-content:flex-end;padding:8px 14px 4px;cursor:pointer;touch-action:manipulation">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </div>
   <div class="sgroup">
     <div class="sgroup-label">Principal</div>
     <div class="sitem on" onclick="goPage('tareas',this)" id="nav-tareas">
