@@ -280,6 +280,24 @@ body{font-family:var(--f);background:var(--bg);color:var(--tx);min-height:100vh;
 .save-btn:hover{background:var(--pu2)}
 .notif-info{font-size:11px;color:var(--tx3);background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:10px 12px;margin-top:10px;line-height:1.6}
 
+/* ── BELL / NOTIF PANEL ── */
+.bell-btn{position:relative;background:none;border:none;cursor:pointer;padding:7px;color:var(--tx2);display:flex;align-items:center;border-radius:var(--r);transition:background .15s;flex-shrink:0}
+.bell-btn:hover{background:var(--surf);color:var(--tx)}
+.bell-badge{position:absolute;top:2px;right:2px;background:var(--re);color:#fff;border-radius:50%;min-width:16px;height:16px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 3px;pointer-events:none;line-height:1}
+.np{position:fixed;top:calc(54px + env(safe-area-inset-top));right:12px;width:340px;max-height:460px;background:var(--surf);border:1px solid var(--b2);border-radius:var(--rl);z-index:250;display:none;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.45)}
+.np.show{display:flex}
+.np-head{padding:12px 16px;border-bottom:1px solid var(--b);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.np-title{font-size:13px;font-weight:600;color:var(--tx)}
+.np-body{overflow-y:auto;flex:1;padding:6px}
+.ni{display:flex;gap:10px;padding:9px 10px;border-radius:var(--r);cursor:pointer;transition:background .12s;margin-bottom:2px}
+.ni:hover{background:var(--surf2)}
+.ni.unread{background:var(--pll)}
+.ni-icon{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;background:var(--surf2)}
+.ni-body{flex:1;min-width:0}
+.ni-msg{font-size:12px;color:var(--tx);line-height:1.4}
+.ni-time{font-size:10px;color:var(--tx3);margin-top:2px}
+.np-empty{padding:28px;text-align:center;font-size:12px;color:var(--tx3)}
+
 /* ── CONFIRM / MODAL ── */
 .cov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:300;align-items:center;justify-content:center;padding:16px}
 .cov.on{display:flex}
@@ -449,6 +467,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="logo-sep"></div>
   <span class="logo-sub">SMX</span>
   <div class="topbar-right">
+    <button class="bell-btn" id="bell-btn" onclick="toggleNotifPanel()" title="Notificaciones">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span class="bell-badge" id="bell-badge" style="display:none">0</span>
+    </button>
     <div class="topbar-user" onclick="logout()" title="Cerrar sesión">
       <div class="topbar-user-avatar" id="topbar-avatar" style="background:#7C3AED">T</div>
       <span class="topbar-user-name" id="topbar-username">Usuario</span>
@@ -466,6 +488,15 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <span id="newBtnLabel">Nueva tarea</span>
     </button>
   </div>
+</div>
+
+<!-- NOTIF PANEL -->
+<div class="np" id="notif-panel">
+  <div class="np-head">
+    <span class="np-title">🔔 Notificaciones</span>
+    <button class="btn" style="padding:3px 8px;font-size:11px" onclick="markAllNotifsLeidas()">Todas leídas</button>
+  </div>
+  <div class="np-body" id="np-body"></div>
 </div>
 
 <!-- Overlay para cerrar sidebar en mobile -->
@@ -1732,24 +1763,28 @@ function tog(id){document.getElementById("c-"+id)?.classList.toggle("open")}
 async function chgTaskStatus(id,s){
   const c=document.getElementById("c-"+id);c.querySelectorAll(".sb").forEach(b=>b.classList.add("ld"));
   try{await sb(`tareas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({status:s,updated_at:new Date().toISOString()})});
-    const t=tasks.find(t=>t.id===id);if(t)t.status=s;toast(`Estado → ${BC[s]?.label||s}`,"ok");renderTareas();}
+    const t=tasks.find(t=>t.id===id);if(t)t.status=s;toast(`Estado → ${BC[s]?.label||s}`,"ok");renderTareas();
+    if(t)notifyAssignees(t,"modificacion",`${loggedUser?.nombre||"Alguien"} cambió el estado de "${t.nombre}" a ${BC[s]?.label||s}`,loggedUser?.id);}
   catch(e){toast("Error","err");c.querySelectorAll(".sb").forEach(b=>b.classList.remove("ld"))}
 }
 async function chgPrio(id,val){
   try{await sb(`tareas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({prioridad:val||null,updated_at:new Date().toISOString()})});
-    const t=tasks.find(t=>t.id===id);if(t)t.prioridad=val||null;toast("Prioridad actualizada","ok");renderTareas();}catch(e){toast("Error","err")}
+    const t=tasks.find(t=>t.id===id);if(t)t.prioridad=val||null;toast("Prioridad actualizada","ok");renderTareas();
+    if(t)notifyAssignees(t,"modificacion",`${loggedUser?.nombre||"Alguien"} cambió la prioridad de "${t.nombre}" a ${val||"Sin prioridad"}`,loggedUser?.id);}catch(e){toast("Error","err")}
 }
 async function toggleAssignee(tid,uid,checked){
   const t=tasks.find(t=>t.id===tid);if(!t)return;
   let ass=[...(t.assignees||[])];
   if(checked&&!ass.includes(uid))ass.push(uid);else if(!checked)ass=ass.filter(i=>i!==uid);
   try{await sb(`tareas?id=eq.${tid}`,{method:"PATCH",body:JSON.stringify({assignees:ass,updated_at:new Date().toISOString()})});
-    t.assignees=ass;const lbl=document.getElementById("ac-"+tid+"-"+uid);if(lbl)lbl.classList.toggle("sel2",checked);toast("Responsable actualizado","ok");renderTareas();}catch(e){toast("Error","err")}
+    t.assignees=ass;const lbl=document.getElementById("ac-"+tid+"-"+uid);if(lbl)lbl.classList.toggle("sel2",checked);toast("Responsable actualizado","ok");renderTareas();
+    if(checked)createNotif(uid,"asignacion",tid,`${loggedUser?.nombre||"Alguien"} te asignó la tarea "${t.nombre}"`);}catch(e){toast("Error","err")}
 }
 async function saveDate(id){
   const val=document.getElementById("d-"+id)?.value;
   try{await sb(`tareas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({fecha_vencimiento:val||null,updated_at:new Date().toISOString()})});
-    const t=tasks.find(t=>t.id===id);if(t)t.fecha_vencimiento=val||null;toast("Fecha guardada","ok");renderTareas();}catch(e){toast("Error","err")}
+    const t=tasks.find(t=>t.id===id);if(t)t.fecha_vencimiento=val||null;toast("Fecha guardada","ok");renderTareas();
+    if(t)notifyAssignees(t,"modificacion",`${loggedUser?.nombre||"Alguien"} cambió la fecha de vencimiento de "${t.nombre}"${val?` al ${val}`:""}`,loggedUser?.id);}catch(e){toast("Error","err")}
 }
 function editTName(id){document.getElementById("tn-"+id).classList.add("hide");const inp=document.getElementById("tni-"+id);inp.classList.add("show");inp.focus();inp.select()}
 function nameKey(e,id){if(e.key==="Enter")document.getElementById("tni-"+id).blur();if(e.key==="Escape"){document.getElementById("tni-"+id).classList.remove("show");document.getElementById("tn-"+id).classList.remove("hide")}}
@@ -1761,8 +1796,10 @@ async function saveTName(id){
 async function saveTNameDirect(inp,id){
   const val=inp.value.trim();if(!val)return;
   const t=tasks.find(t=>t.id===id);if(t&&t.nombre===val)return;
+  const nombreViejo=t?.nombre||"";
   try{await sb(`tareas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({nombre:val,updated_at:new Date().toISOString()})});
-    if(t)t.nombre=val;renderTareas();}catch(e){toast("Error","err")}
+    if(t)t.nombre=val;renderTareas();
+    if(t)notifyAssignees(t,"modificacion",`${loggedUser?.nombre||"Alguien"} renombró "${nombreViejo}" a "${val}"`,loggedUser?.id);}catch(e){toast("Error","err")}
 }
 
 // ── COMENTARIOS EN TAREAS ─────────────────────────────────────────────────
@@ -1810,6 +1847,7 @@ async function addComment(id){
     inp.value="";
     const container=document.getElementById("comments-"+id);
     if(container)container.innerHTML=renderComments(newVal,id);
+    if(t)notifyAssignees(t,"comentario",`${autor} comentó en "${t.nombre}": "${texto.length>60?texto.substring(0,60)+"...":texto}"`,loggedUser?.id);
   }catch(e){toast("Error al guardar comentario","err")}
 }
 async function saveDesc(id){
@@ -2289,6 +2327,176 @@ async function saveNotif(){
   }catch(e){toast("Error","err")}
 }
 
+
+// ── SISTEMA DE NOTIFICACIONES ────────────────────────────────────────────────
+let bellNotifs=[];
+let notifPollTimer=null;
+let lastNotifTime=null;
+
+async function loadNotificaciones(){
+  if(!loggedUser)return;
+  try{
+    bellNotifs=await sb(`notificaciones?usuario_id=eq.${loggedUser.id}&leida=eq.false&order=created_at.desc&limit=30`);
+    lastNotifTime=new Date().toISOString();
+    renderBell();
+  }catch(e){}
+}
+
+async function pollNotificaciones(){
+  if(!loggedUser||!lastNotifTime)return;
+  try{
+    const nuevas=await sb(`notificaciones?usuario_id=eq.${loggedUser.id}&leida=eq.false&created_at=gt.${lastNotifTime}&order=created_at.desc`);
+    lastNotifTime=new Date().toISOString();
+    if(nuevas.length){
+      nuevas.forEach(n=>{if(!bellNotifs.find(x=>x.id===n.id))bellNotifs.unshift(n);});
+      renderBell();
+      nuevas.forEach(n=>showBrowserNotif(tipoNotifLabel(n.tipo),n.mensaje));
+    }
+  }catch(e){}
+}
+
+function tipoNotifLabel(tipo){
+  const map={asignacion:"Nueva asignación",modificacion:"Tarea modificada",comentario:"Nuevo comentario",vencimiento:"Vencimiento próximo"};
+  return map[tipo]||"Notificación";
+}
+function tipoNotifIcon(tipo){
+  const map={asignacion:"👤",modificacion:"✏️",comentario:"💬",vencimiento:"⏰"};
+  return map[tipo]||"🔔";
+}
+function tiempoAtras(iso){
+  if(!iso)return"";
+  const diff=Date.now()-new Date(iso).getTime();
+  const m=Math.floor(diff/60000);
+  if(m<1)return"ahora";if(m<60)return`hace ${m}m`;
+  const h=Math.floor(m/60);if(h<24)return`hace ${h}h`;
+  return`hace ${Math.floor(h/24)}d`;
+}
+
+function renderBell(){
+  const badge=document.getElementById("bell-badge");
+  if(!badge)return;
+  const unread=bellNotifs.length;
+  if(unread>0){badge.textContent=unread>9?"9+":unread;badge.style.display="flex";}
+  else{badge.style.display="none";}
+  const panel=document.getElementById("notif-panel");
+  if(panel&&panel.classList.contains("show"))renderNotifPanel();
+}
+
+function renderNotifPanel(){
+  const body=document.getElementById("np-body");
+  if(!body)return;
+  if(!bellNotifs.length){body.innerHTML=`<div class="np-empty">Sin notificaciones nuevas 👍</div>`;return;}
+  body.innerHTML=bellNotifs.map(n=>`
+    <div class="ni unread" onclick="clickNotif('${n.id}','${n.tarea_id||""}')">
+      <div class="ni-icon">${tipoNotifIcon(n.tipo)}</div>
+      <div class="ni-body">
+        <div class="ni-msg">${esc(n.mensaje)}</div>
+        <div class="ni-time">${tiempoAtras(n.created_at)}</div>
+      </div>
+    </div>`).join("");
+}
+
+function toggleNotifPanel(){
+  const panel=document.getElementById("notif-panel");
+  if(!panel)return;
+  panel.classList.toggle("show");
+  if(panel.classList.contains("show"))renderNotifPanel();
+}
+
+async function clickNotif(id,tareaId){
+  await markNotifLeida(id);
+  document.getElementById("notif-panel")?.classList.remove("show");
+  if(tareaId){
+    goPage("tareas",document.getElementById("nav-tareas"));
+    setTimeout(()=>{
+      const el=document.getElementById("c-"+tareaId);
+      if(el){el.scrollIntoView({behavior:"smooth",block:"center"});el.classList.add("open");}
+    },350);
+  }
+}
+
+async function markNotifLeida(id){
+  try{
+    await sb(`notificaciones?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({leida:true})});
+    bellNotifs=bellNotifs.filter(n=>n.id!==id);
+    renderBell();
+  }catch(e){}
+}
+
+async function markAllNotifsLeidas(){
+  if(!loggedUser||!bellNotifs.length)return;
+  try{
+    await sb(`notificaciones?usuario_id=eq.${loggedUser.id}&leida=eq.false`,{method:"PATCH",body:JSON.stringify({leida:true})});
+    bellNotifs=[];
+    renderBell();
+    document.getElementById("notif-panel")?.classList.remove("show");
+    toast("Todas las notificaciones leídas","ok");
+  }catch(e){toast("Error","err")}
+}
+
+async function createNotif(usuario_id,tipo,tarea_id,mensaje){
+  if(!usuario_id)return;
+  try{
+    const[n]=await sb("notificaciones",{method:"POST",body:JSON.stringify({usuario_id,tipo,tarea_id:tarea_id||null,mensaje})});
+    if(loggedUser&&usuario_id===loggedUser.id){
+      if(n)bellNotifs.unshift(n);
+      renderBell();
+      showBrowserNotif(tipoNotifLabel(tipo),mensaje);
+    }
+  }catch(e){}
+}
+
+async function notifyAssignees(tarea,tipo,mensaje,excludeId){
+  const ass=tarea?.assignees||[];
+  for(const uid of ass){
+    if(uid===excludeId)continue;
+    await createNotif(uid,tipo,tarea.id,mensaje);
+  }
+}
+
+function requestPushPermission(){
+  if(!("Notification" in window))return;
+  if(Notification.permission==="default"){
+    setTimeout(()=>Notification.requestPermission(),3000);
+  }
+}
+
+function showBrowserNotif(titulo,cuerpo){
+  if(!("Notification" in window)||Notification.permission!=="granted")return;
+  try{new Notification(titulo,{body:cuerpo,icon:"/icons/icon-192.svg"});}catch(e){}
+}
+
+async function checkVencimientos(){
+  if(!loggedUser)return;
+  const hoy=new Date();hoy.setHours(0,0,0,0);
+  const manana=new Date(hoy);manana.setDate(manana.getDate()+1);
+  const limite=new Date(hoy);limite.setDate(limite.getDate()+2);
+  const misTareas=tasks.filter(t=>{
+    if(!t.fecha_vencimiento||t.status==="Listo")return false;
+    const fv=new Date(t.fecha_vencimiento+"T00:00:00");
+    return fv>=hoy&&fv<limite&&(t.assignees||[]).includes(loggedUser.id);
+  });
+  if(!misTareas.length)return;
+  const hoyStr=hoy.toISOString().split("T")[0];
+  for(const t of misTareas){
+    try{
+      const existing=await sb(`notificaciones?usuario_id=eq.${loggedUser.id}&tipo=eq.vencimiento&tarea_id=eq.${t.id}&created_at=gte.${hoyStr}T00:00:00`);
+      if(existing.length)continue;
+      const fv=new Date(t.fecha_vencimiento+"T00:00:00");
+      const esHoy=fv.getTime()===hoy.getTime();
+      const msg=esHoy?`⏰ Vence HOY: "${t.nombre}"`:`⏰ Vence mañana: "${t.nombre}"`;
+      await createNotif(loggedUser.id,"vencimiento",t.id,msg);
+    }catch(e){}
+  }
+}
+
+function startNotifPoll(){
+  if(notifPollTimer)clearInterval(notifPollTimer);
+  notifPollTimer=setInterval(pollNotificaciones,60000);
+}
+function stopNotifPoll(){
+  if(notifPollTimer){clearInterval(notifPollTimer);notifPollTimer=null;}
+}
 
 /* ── RUTINAS ── */
 let rutinas=[],rutinaFilter="all",editRutinaId=null;
@@ -3223,6 +3431,14 @@ function exportInstructoresPixelio() {
 function toast(msg,type="inf"){const t=document.getElementById("toast");t.textContent=msg;t.className=`toast show ${type}`;clearTimeout(t._t);t._t=setTimeout(()=>{t.className="toast"},3500)}
 function showToast(msg,type="inf"){toast(msg,type)}
 
+document.addEventListener("click",e=>{
+  const panel=document.getElementById("notif-panel");
+  const btn=document.getElementById("bell-btn");
+  if(panel&&panel.classList.contains("show")&&!panel.contains(e.target)&&btn&&!btn.contains(e.target)){
+    panel.classList.remove("show");
+  }
+});
+
 document.addEventListener("keydown",e=>{
   // PIN keyboard support
   const step2=document.getElementById("login-step2");
@@ -3504,11 +3720,15 @@ function enterPanel(user,isNewLogin){
   // Cargar el panel
   if(isNewLogin)toast(`Bienvenido, ${user.nombre} 👋`,"ok");
   loadAll();
+  requestPushPermission();
+  loadNotificaciones();
+  startNotifPoll();
 }
 
 function logout(){
   if(!confirm(`¿Cerrar sesión de ${loggedUser?.nombre||""}?`))return;
   sessionStorage.removeItem("smx_session");
+  stopNotifPoll();bellNotifs=[];renderBell();
   loggedUser=null;selectedLoginUser=null;pinBuffer="";
   document.getElementById("login-screen").style.display="";
   document.getElementById("main-topbar").style.display="none";
