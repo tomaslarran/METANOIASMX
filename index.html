@@ -3879,19 +3879,26 @@ function renderComprobantes(){
 }
 
 function updateCompStats(){
-  const now=new Date();
-  const mesKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
-  const delMes=comprobantes.filter(c=>c.fecha&&c.fecha.startsWith(mesKey));
-  const totalMes=delMes.reduce((s,c)=>s+(Number(c.total)||0),0);
-  const ivaMes=delMes.reduce((s,c)=>s+(Number(c.iva)||0),0);
-  const pend=comprobantes.filter(c=>c.estado==="pendiente").length;
-  const finn=comprobantes.filter(c=>c.estado==="enviado_finnegans").length;
-  const meses=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const meses=["Enero","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  let base=comprobantes;
+  let mesLabel="";
+  if(compMesFilter&&compMesFilter!=="all"){
+    base=comprobantes.filter(c=>c.fecha&&c.fecha.startsWith(compMesFilter));
+    const [anio,mes]=compMesFilter.split("-");
+    mesLabel=meses[parseInt(mes,10)-1]+" "+anio;
+  }else{
+    const now=new Date();
+    mesLabel=meses[now.getMonth()]+" "+now.getFullYear();
+  }
+  const totalMes=base.reduce((s,c)=>s+(Number(c.total)||0),0);
+  const ivaMes=base.reduce((s,c)=>s+(Number(c.iva)||0),0);
+  const pend=base.filter(c=>c.estado==="pendiente").length;
+  const finn=base.filter(c=>c.estado==="enviado_finnegans").length;
   document.getElementById("comp-stat-total").textContent="$"+Math.round(totalMes).toLocaleString("es-AR");
   document.getElementById("comp-stat-iva").textContent="$"+Math.round(ivaMes).toLocaleString("es-AR");
   document.getElementById("comp-stat-pend").textContent=pend;
   document.getElementById("comp-stat-finn").textContent=finn;
-  document.getElementById("comp-stat-mes").textContent=meses[now.getMonth()]+" "+now.getFullYear();
+  document.getElementById("comp-stat-mes").textContent=mesLabel;
 }
 
 async function marcarEstadoComp(id,estado){
