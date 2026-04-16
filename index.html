@@ -3223,7 +3223,17 @@ function exportInstructoresPixelio() {
 function toast(msg,type="inf"){const t=document.getElementById("toast");t.textContent=msg;t.className=`toast show ${type}`;clearTimeout(t._t);t._t=setTimeout(()=>{t.className="toast"},3500)}
 function showToast(msg,type="inf"){toast(msg,type)}
 
-document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeConfirm();["modal-tarea","modal-curso","modal-proveedor","modal-alumno","modal-instructor"].forEach(id=>closeModal(id))}});
+document.addEventListener("keydown",e=>{
+  // PIN keyboard support
+  const step2=document.getElementById("login-step2");
+  if(step2&&step2.classList.contains("show")){
+    if(e.key>="0"&&e.key<="9"){pinKey(e.key);return;}
+    if(e.key==="Backspace"){pinDel();return;}
+    if(e.key==="Escape"){pinClear();return;}
+    if(e.key==="Enter"&&pinBuffer.length===4){checkPin();return;}
+  }
+  if(e.key==="Escape"){closeConfirm();["modal-tarea","modal-curso","modal-proveedor","modal-alumno","modal-instructor"].forEach(id=>closeModal(id))}
+});
 
 /* ─── CALENDARIO ─────────────────────────── */
 let calYear=new Date().getFullYear();
@@ -4125,5 +4135,3 @@ if('serviceWorker' in navigator){
 </script>
 </body>
 </html>
-
-                                                                                                                                                          
