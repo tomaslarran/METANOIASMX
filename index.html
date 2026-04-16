@@ -1052,7 +1052,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <button class="fb" onclick="setCompFilter('SUDES',this)">SUDES</button>
       <button class="fb" onclick="setCompFilter('POINTERS',this)">POINTERS</button>
     </div>
-    <select id="comp-mes-sel" class="sel" onchange="compMesFilter=this.value;renderComprobantes()" style="margin-left:auto">
+    <select id="comp-mes-sel" class="sel" onchange="compMesFilter=this.value;renderComprobantes();updateCompStats()" style="margin-left:auto">
       <option value="all">Todos los meses</option>
     </select>
     <input id="comp-search" class="fi" type="search" placeholder="Buscar proveedor..." style="width:160px" oninput="renderComprobantes()">
@@ -1148,6 +1148,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
             <option value="seguridad y vigilancia al 10.5">seguridad y vigilancia al 10.5</option>
             <option value="VARIOS MATERIALES CONSTRUCCION 10.5%">VARIOS MATERIALES CONSTRUCCION 10.5%</option>
             <option value="telefonia e internet 27%">telefonia e internet 27%</option>
+            <option value="Obra Social">Obra Social</option>
           </select>
         </div>
       </div>
