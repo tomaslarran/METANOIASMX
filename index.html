@@ -1147,8 +1147,15 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
             <option value="varios almacen 10,5%">varios almacen 10,5%</option>
             <option value="seguridad y vigilancia al 10.5">seguridad y vigilancia al 10.5</option>
             <option value="VARIOS MATERIALES CONSTRUCCION 10.5%">VARIOS MATERIALES CONSTRUCCION 10.5%</option>
-            <option value="telefonia e internet 27%">telefonia e internet 27%</option>
             <option value="Obra Social">Obra Social</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="fl">Neto 27%</label>
+          <input class="fi" id="comp-neto27" type="number" placeholder="0" oninput="recalcDesdeDesglose()" style="margin-bottom:3px">
+          <select class="fi" id="comp-prod27" style="font-size:11px">
+            <option value="">— producto —</option>
+            <option value="telefonia e internet 27%">telefonia e internet 27%</option>
           </select>
         </div>
       </div>
@@ -3927,7 +3934,7 @@ function openNuevoComprobante(){
   editCompId=null;compArchivoUrl=null;
   document.getElementById("mcomp-title").textContent="Nueva Factura de Compra";
   document.getElementById("comp-save-btn").textContent="Guardar";
-  ["comp-fecha","comp-numero","comp-prov","comp-cuit","comp-concepto","comp-neto","comp-iva-monto","comp-neto21","comp-neto105","comp-neto-exento","comp-perc-iva","comp-perc-iibb","comp-imp-int","comp-otros","comp-total","comp-venc","comp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  ["comp-fecha","comp-numero","comp-prov","comp-cuit","comp-concepto","comp-neto","comp-iva-monto","comp-neto21","comp-neto105","comp-neto27","comp-neto-exento","comp-perc-iva","comp-perc-iibb","comp-imp-int","comp-otros","comp-total","comp-venc","comp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
   ["comp-prod21","comp-prod105"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
   const elEx=document.getElementById("comp-prod-exento");if(elEx)elEx.value="varios almacen consumidor final";
   const elNG=document.getElementById("comp-prod-nograv");if(elNG)elNG.value="impuestos internos o no gravado";;
@@ -3956,6 +3963,7 @@ function editComprobante(id){
   document.getElementById("comp-iva-monto").value=c.iva||"";
   document.getElementById("comp-neto21").value=c.neto_21||"";
   document.getElementById("comp-neto105").value=c.neto_105||"";
+  document.getElementById("comp-neto27").value=c.neto_27||"";
   document.getElementById("comp-neto-exento").value=c.neto_exento||"";
   document.getElementById("comp-perc-iva").value=c.percepcion_iva||"";
   document.getElementById("comp-perc-iibb").value=c.percepcion_iibb||"";
@@ -3966,6 +3974,7 @@ function editComprobante(id){
   document.getElementById("comp-total").value=c.total||"";
   const p21=document.getElementById("comp-prod21");if(p21)p21.value=c.producto_neto21||"";
   const p105=document.getElementById("comp-prod105");if(p105)p105.value=c.producto_neto105||"";
+  const p27=document.getElementById("comp-prod27");if(p27)p27.value=c.producto_neto27||"";
   const pEx=document.getElementById("comp-prod-exento");if(pEx)pEx.value=c.producto_exento||"varios almacen consumidor final";
   const pNG=document.getElementById("comp-prod-nograv");if(pNG)pNG.value=c.producto_nograv||"impuestos internos o no gravado";
   if(!c.producto_neto21&&!c.producto_neto105)sugerirProductosFinn();
@@ -4120,9 +4129,10 @@ function sugerirProductosFinn(){
 function recalcDesdeDesglose(){
   const n21=parseFloat(document.getElementById("comp-neto21").value)||0;
   const n105=parseFloat(document.getElementById("comp-neto105").value)||0;
+  const n27=parseFloat(document.getElementById("comp-neto27")?.value)||0;
   const nex=parseFloat(document.getElementById("comp-neto-exento").value)||0;
-  const neto=n21+n105+nex;
-  const iva=parseFloat((n21*0.21+n105*0.105).toFixed(2));
+  const neto=n21+n105+n27+nex;
+  const iva=parseFloat((n21*0.21+n105*0.105+n27*0.27).toFixed(2));
   if(neto){document.getElementById("comp-neto").value=neto.toFixed(2);document.getElementById("comp-iva-monto").value=iva;}
   recalcTotal();
 }
@@ -4217,6 +4227,7 @@ function exportarFinnegans(){
     const items=[];
     if(c.neto_21>0)items.push({prod:c.producto_neto21||"varios almacen 21%",precio:c.neto_21});
     if(c.neto_105>0)items.push({prod:c.producto_neto105||"varios almacen 10,5%",precio:c.neto_105});
+    if(c.neto_27>0)items.push({prod:c.producto_neto27||"telefonia e internet 27%",precio:c.neto_27});
     if(c.neto_exento>0)items.push({prod:c.producto_exento||"varios almacen consumidor final",precio:c.neto_exento});
     // noGrav incluye percepción IVA para que Finnegans cierre el total
     const noGrav=(c.percepcion_iva||0)+(c.percepcion_iibb||0)+(c.impuesto_interno||0)+(c.otros_impuestos||0);
@@ -4320,9 +4331,11 @@ async function saveComprobante(){
     iva:parseFloat(document.getElementById("comp-iva-monto").value)||null,
     neto_21:parseFloat(document.getElementById("comp-neto21").value)||0,
     neto_105:parseFloat(document.getElementById("comp-neto105").value)||0,
+    neto_27:parseFloat(document.getElementById("comp-neto27")?.value)||0,
     neto_exento:parseFloat(document.getElementById("comp-neto-exento").value)||0,
     producto_neto21:document.getElementById("comp-prod21")?.value||null,
     producto_neto105:document.getElementById("comp-prod105")?.value||null,
+    producto_neto27:document.getElementById("comp-prod27")?.value||null,
     producto_exento:document.getElementById("comp-prod-exento")?.value||"varios almacen consumidor final",
     producto_nograv:document.getElementById("comp-prod-nograv")?.value||"impuestos internos o no gravado",
     percepcion_iva:parseFloat(document.getElementById("comp-perc-iva").value)||0,
