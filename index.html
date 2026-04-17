@@ -4236,8 +4236,11 @@ function exportarFinnegans(){
     if(noGrav>0)items.push({prod:c.producto_nograv||"impuestos internos o no gravado",precio:noGrav});
     if(!items.length)items.push({prod:"SI",precio:parseFloat((c.total||0).toFixed(2))});
     // IMPORTE_CONTROL = total de la factura (Finnegans suma neto×(1+alicuota) y compara)
-    // IMPORTE_CONTROL = total de la factura
-    const importeControl=parseFloat((c.total||0).toFixed(2));
+    // IMPORTE_CONTROL = Total De Control de Finnegans (fórmula aritmética exacta)
+    const r21=n=>Math.round((n||0)*121)/100;
+    const r105=n=>Math.round((n||0)*1105)/1000;
+    const r27=n=>Math.round((n||0)*127)/100;
+    const importeControl=parseFloat((r21(c.neto_21)+r105(c.neto_105)+r27(c.neto_27)+(c.neto_exento||0)+noGrav).toFixed(2));
     // Formatear número: tipo-XXXX-XXXXXXXX (punto de venta 4 dígitos, número 8 dígitos)
     const fmtComp=(comp)=>{
       const tipo=comp.tipo||"A";
