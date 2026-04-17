@@ -4235,7 +4235,6 @@ function exportarFinnegans(){
     const noGrav=(c.percepcion_iva||0)+(c.percepcion_iibb||0)+(c.impuesto_interno||0)+(c.otros_impuestos||0);
     if(noGrav>0)items.push({prod:c.producto_nograv||"impuestos internos o no gravado",precio:noGrav});
     if(!items.length)items.push({prod:"SI",precio:parseFloat((c.total||0).toFixed(2))});
-    // IMPORTE_CONTROL = total de la factura (Finnegans suma neto×(1+alicuota) y compara)
     // IMPORTE_CONTROL = Total De Control de Finnegans (fórmula aritmética exacta)
     const r21=n=>Math.round((n||0)*121)/100;
     const r105=n=>Math.round((n||0)*1105)/1000;
@@ -4252,8 +4251,9 @@ function exportarFinnegans(){
       }
       return `${tipo}-${comp.numero||""}`;
     };
+    // NUMERO incrementa por comprobante (no por ítem) para que Finnegans agrupe las filas como una sola factura
+    rowNum++;
     items.forEach((item)=>{
-      rowNum++;
       rows.push({
     NUMERO:rowNum,
     FECHA:toSerial(c.fecha),
