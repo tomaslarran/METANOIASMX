@@ -4252,8 +4252,9 @@ function exportarFinnegans(){
       }
       return `${tipo}-${comp.numero||""}`;
     };
-    items.forEach(item=>{
+    items.forEach((item,itemIdx)=>{
       rowNum++;
+      const esUltimaFila=itemIdx===items.length-1;
       rows.push({
     NUMERO:rowNum,
     FECHA:toSerial(c.fecha),
@@ -4287,7 +4288,7 @@ function exportarFinnegans(){
     DIMENSIONVALORVTO:"",
     DIMENSIONVTO2:"",
     DIMENSIONVALORVTO2:"",
-    IMPORTE_CONTROL:importeControl,
+    IMPORTE_CONTROL:esUltimaFila?importeControl:0,
     EQUIPO_SOLICITANTE:"",
     TIPO_ITEM:"",
     FECHAHASTA:""
@@ -4382,4 +4383,3 @@ if('serviceWorker' in navigator){
 </script>
 </body>
 </html>
-
