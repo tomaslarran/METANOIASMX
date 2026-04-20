@@ -4085,15 +4085,19 @@ async function analizarConIA(){
     if(d.iva!=null)document.getElementById("comp-iva-monto").value=d.iva;
     if(d.neto_21!=null)document.getElementById("comp-neto21").value=d.neto_21;
     if(d.neto_105!=null)document.getElementById("comp-neto105").value=d.neto_105;
+    if(d.neto_27!=null)document.getElementById("comp-neto27").value=d.neto_27;
     if(d.neto_exento!=null)document.getElementById("comp-neto-exento").value=d.neto_exento;
     if(d.percepcion_iva!=null)document.getElementById("comp-perc-iva").value=d.percepcion_iva;
+    if(d.percepcion_iva_15!=null)document.getElementById("comp-perc-iva-15").value=d.percepcion_iva_15;
     if(d.percepcion_iibb!=null)document.getElementById("comp-perc-iibb").value=d.percepcion_iibb;
     if(d.impuesto_interno!=null)document.getElementById("comp-imp-int").value=d.impuesto_interno;
     if(d.otros_impuestos!=null)document.getElementById("comp-otros").value=d.otros_impuestos;
     if(d.sociedad)document.getElementById("comp-sociedad").value=d.sociedad;
     if(d.fecha_vencimiento)document.getElementById("comp-venc").value=d.fecha_vencimiento;
+    recalcDesdeDesglose();
     sugerirProductosFinn();
     if(d.total!=null)document.getElementById("comp-total").value=d.total;
+    else recalcTotal();
     toast("Datos extraídos — revisá y confirmá","ok");
   }catch(e){
     console.error("ERROR IA:",e.message);
@@ -4121,14 +4125,14 @@ function sugerirProductosFinn(){
   const prov=(document.getElementById("comp-prov")?.value||"").toLowerCase();
   const conc=(document.getElementById("comp-concepto")?.value||"").toLowerCase();
   const txt=prov+" "+conc;
-  let p21="varios almacen 21%",p105="varios almacen 10,5%";
+  let p21="varios almacen 21%",p105="varios almacen 10,5%",p27="";
   if(/telecom|telefon|internet|claro|movistar|personal|fibertel|cablevision|direct/.test(txt)){
-    p21="telefonia e internet al 21%";
-  } else if(/construc|material|obra|cerami|pintura|ferret|corral/.test(txt)){
+    p21="telefonia e internet al 21%";p27="telefonia e internet 27%";
+  } else if(/construc|material|obra|cerami|pintura|ferret|corral|sodimac|leon vidrio/.test(txt)){
     p21="Varios construcción";p105="Varios construcción";
   } else if(/segur|vigilanc|alarm|signal/.test(txt)){
     p21="SEGURIDAD Y VIGILANCIA";p105="seguridad y vigilancia al 10.5";
-  } else if(/combustib|nafta|gasoil|ypf|shell|axion|repsol|estacion/.test(txt)){
+  } else if(/combustib|nafta|gasoil|ypf|shell|axion|repsol|estacion|petroservice/.test(txt)){
     p21="COMBUSTIBLES";
   } else if(/hosting|sistema|software|saas|finnegan|dattatec/.test(txt)){
     p21="SISTEMA CONTABLE HOSTING";
@@ -4136,11 +4140,21 @@ function sugerirProductosFinn(){
     p21="varios electrodomesticos";
   } else if(/representac|gastron|restaurant|cafe/.test(txt)){
     p21="varios representacion";
+  } else if(/logistic|transporte|flete|viaterra/.test(txt)){
+    p21="LOGISTICA";
+  } else if(/asesor|consult|honorar|professional|estudio contab/.test(txt)){
+    p21="ASESORAMIENTO";
+  } else if(/obra social|osde|swiss|galeno|medicus/.test(txt)){
+    p105="Obra Social";
+  } else if(/pasaje|viaje|aerolinea|aerolin|flybondi|jetsmart/.test(txt)){
+    p105="Pasajes y viajes";
   }
   const s21=document.getElementById("comp-prod21");
   const s105=document.getElementById("comp-prod105");
+  const s27=document.getElementById("comp-prod27");
   if(s21)s21.value=p21;
   if(s105)s105.value=p105;
+  if(s27&&p27)s27.value=p27;
 }
 
 // Cuando se completa el desglose por alícuota, recalcula neto e IVA automáticamente
