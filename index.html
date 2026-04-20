@@ -1671,7 +1671,7 @@ function goPage(name,el){
   if(el)el.classList.add("on");
   const labels={"tareas":"Nueva tarea","cursos":"Nuevo curso","alumnos":"Nuevo alumno","proveedores":"Nuevo proveedor","instructores":"Nuevo instructor"};
   const nb=document.getElementById("newBtnLabel");if(nb)nb.textContent=labels[name]||"Nuevo";
-  if(name==="graficos")renderCharts();
+  if(name==="graficos"){if(!comprobantes.length)loadComprobantes().then(renderCharts);else renderCharts();}
   if(name==="calendario"){Promise.all([loadCursoTareasCalendario(),loadCF()]).then(()=>renderCalendario())}
   if(name==="rutinas"){
     // Recargar rutinas frescas al navegar
