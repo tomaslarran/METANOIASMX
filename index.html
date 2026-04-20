@@ -1088,7 +1088,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
     <!-- Formulario -->
     <div class="fgrid">
-      <div class="fg"><label class="fl">Fecha *</label><input class="fi" id="comp-fecha" type="date"></div>
+      <div class="fg"><label class="fl">Fecha emisión *</label><input class="fi" id="comp-fecha" type="date"></div>
+      <div class="fg"><label class="fl">Fecha imputación</label><input class="fi" id="comp-fecha-imp" type="date"></div>
       <div class="fg"><label class="fl">Tipo</label>
         <select class="fs" id="comp-tipo">
           <option value="A">Factura A</option>
@@ -3854,7 +3855,7 @@ function renderComprobantes(){
   if(!el)return;
   const q=(document.getElementById("comp-search")?.value||"").toLowerCase();
   let list=comprobantes;
-  if(compMesFilter!=="all")list=list.filter(c=>c.fecha&&c.fecha.startsWith(compMesFilter));
+  if(compMesFilter!=="all")list=list.filter(c=>{const fi=c.fecha_imputacion||c.fecha;return fi&&fi.startsWith(compMesFilter);});
   if(compFilter==="SUDES")list=list.filter(c=>c.sociedad==="SUDES");
   else if(compFilter==="POINTERS")list=list.filter(c=>c.sociedad==="POINTERS");
   else if(compFilter!=="all")list=list.filter(c=>c.estado===compFilter);
@@ -3903,7 +3904,7 @@ function updateCompStats(){
   let base=comprobantes;
   let mesLabel="";
   if(compMesFilter&&compMesFilter!=="all"){
-    base=comprobantes.filter(c=>c.fecha&&c.fecha.startsWith(compMesFilter));
+    base=comprobantes.filter(c=>{const fi=c.fecha_imputacion||c.fecha;return fi&&fi.startsWith(compMesFilter);});
     const [anio,mes]=compMesFilter.split("-");
     mesLabel=meses[parseInt(mes,10)-1]+" "+anio;
   }else{
@@ -3947,6 +3948,7 @@ function openNuevoComprobante(){
   document.getElementById("mcomp-title").textContent="Nueva Factura de Compra";
   document.getElementById("comp-save-btn").textContent="Guardar";
   ["comp-fecha","comp-numero","comp-prov","comp-cuit","comp-concepto","comp-neto","comp-iva-monto","comp-neto21","comp-neto105","comp-neto27","comp-neto-exento","comp-perc-iva","comp-perc-iva-15","comp-perc-iibb","comp-imp-int","comp-otros","comp-total","comp-venc","comp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  document.getElementById("comp-fecha-imp").value=today();
   ["comp-prod21","comp-prod105","comp-prod27"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
   const elEx=document.getElementById("comp-prod-exento");if(elEx)elEx.value="varios almacen consumidor final";
   const elNG=document.getElementById("comp-prod-nograv");if(elNG)elNG.value="impuestos internos o no gravado";
@@ -3985,6 +3987,7 @@ function editComprobante(id){
   document.getElementById("comp-imp-int").value=c.impuesto_interno||"";
   document.getElementById("comp-otros").value=c.otros_impuestos||"";
   document.getElementById("comp-venc").value=c.fecha_vencimiento||"";
+  document.getElementById("comp-fecha-imp").value=c.fecha_imputacion||today();
   document.getElementById("comp-calendario").checked=c.en_calendario||false;
   document.getElementById("comp-total").value=c.total||"";
   const p21=document.getElementById("comp-prod21");if(p21)p21.value=c.producto_neto21||"";
@@ -4171,9 +4174,27 @@ function recalcDesdeDesglose(){
 
 function exportarFinnegans(){
   let listos=comprobantes.filter(c=>c.estado==="revisado");
-  if(compMesFilter!=="all")listos=listos.filter(c=>c.fecha&&c.fecha.startsWith(compMesFilter));
+  if(compMesFilter!=="all")listos=listos.filter(c=>{const fi=c.fecha_imputacion||c.fecha;return fi&&fi.startsWith(compMesFilter);});
   if(compFilter==="SUDES"||compFilter==="POINTERS")listos=listos.filter(c=>c.sociedad===compFilter);
   if(!listos.length){toast("No hay comprobantes en estado 'Revisado' para exportar","err");return;}
+  // Validaciones antes de exportar
+  const errores=[];
+  listos.forEach(c=>{
+    const id=`${c.tipo||"?"}-${c.numero||"SIN NRO"} (${c.proveedor||"sin proveedor"})`;
+    if(!c.fecha)errores.push(`${id}: sin fecha de emisión`);
+    if(!c.numero)errores.push(`${id}: sin número de comprobante`);
+    if(!c.proveedor)errores.push(`${id}: sin proveedor`);
+    if(c.neto_21>0&&!c.producto_neto21)errores.push(`${id}: neto 21% sin producto`);
+    if(c.neto_105>0&&!c.producto_neto105)errores.push(`${id}: neto 10,5% sin producto`);
+    if(c.neto_27>0&&!c.producto_neto27)errores.push(`${id}: neto 27% sin producto`);
+    const sumaDesglose=(c.neto_21||0)+(c.neto_105||0)+(c.neto_27||0)+(c.neto_exento||0);
+    const netoGuardado=c.monto_neto||0;
+    if(sumaDesglose>0&&Math.abs(sumaDesglose-netoGuardado)>1)errores.push(`${id}: desglose ($${sumaDesglose.toFixed(2)}) no coincide con neto ($${netoGuardado.toFixed(2)})`);
+  });
+  if(errores.length){
+    const msg=`⚠️ Se encontraron ${errores.length} problema${errores.length>1?"s":""} antes de exportar:\n\n${errores.slice(0,8).join("\n")}${errores.length>8?`\n...y ${errores.length-8} más`:""}`;
+    if(!confirm(msg+"\n\n¿Exportar igual?"))return;
+  }
 
   // ── Tabla CUIT → código Finnegans ──────────────────────────────────────────
   const FINN_PROV={
@@ -4308,7 +4329,7 @@ function exportarFinnegans(){
     COTIZACION:1,
     MONEDA:"PES",
     WORKFLOW:"CPRA-PROD",
-    FECHACOMPROBANTE:toSerial(c.fecha),
+    FECHACOMPROBANTE:toSerial(c.fecha_imputacion||c.fecha),
     FECHABASEVENCIMIENTO:toSerial(c.fecha_vencimiento||c.fecha),
     DESTINATARIO:"",
     PROVINCIA_DESTINO:"",
@@ -4365,6 +4386,7 @@ async function saveComprobante(){
   const data={
     proveedor:prov,
     fecha:document.getElementById("comp-fecha").value||null,
+    fecha_imputacion:document.getElementById("comp-fecha-imp").value||today(),
     tipo:document.getElementById("comp-tipo").value,
     numero:document.getElementById("comp-numero").value.trim()||null,
     sociedad:document.getElementById("comp-sociedad").value,
