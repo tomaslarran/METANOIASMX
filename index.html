@@ -619,11 +619,12 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="pg-header">
     <div><div class="pg-title">Tareas</div><div class="pg-title-sub">Gestión de tareas del equipo Metanoia</div></div>
   </div>
-  <div class="stats">
+  <div class="stats" style="grid-template-columns:repeat(5,1fr)">
     <div class="sc"><div class="sc-l">Total</div><div class="sc-v vp" id="sT">—</div><div class="sc-s">tareas</div></div>
     <div class="sc"><div class="sc-l">Por hacer</div><div class="sc-v va" id="sPH">—</div><div class="sc-s">pendientes</div></div>
     <div class="sc"><div class="sc-l">En progreso</div><div class="sc-v vb" id="sEP">—</div><div class="sc-s">en curso</div></div>
     <div class="sc"><div class="sc-l">Completadas</div><div class="sc-v vg" id="sLI">—</div><div class="sc-s">listas</div></div>
+    <div class="sc" style="cursor:pointer" onclick="setF('venc',document.querySelector('.fb[onclick*=venc]'))"><div class="sc-l">Vencidas</div><div class="sc-v" style="color:var(--re)" id="sVE">—</div><div class="sc-s">⚠ sin completar</div></div>
   </div>
   <div class="toolbar">
     <div class="sw">
@@ -641,6 +642,14 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <button class="fb" onclick="setF('Alta',this)">🔴 Alta prioridad <span class="fc2" id="fc-hi">—</span></button>
       <button class="fb" onclick="setF('venc',this)">⚠ Vencidas <span class="fc2" id="fc-ve">—</span></button>
     </div>
+  </div>
+  <div style="margin-bottom:10px">
+    <select class="sel" id="cat-filter" onchange="setCatFilter(this.value)" style="font-size:12px">
+      <option value="">Todas las categorías</option>
+      <option>Administración</option><option>Finanzas</option><option>Operaciones</option>
+      <option>Cursos</option><option>RRHH</option><option>Legal/Impositivo</option>
+      <option>Marketing</option><option>General</option>
+    </select>
   </div>
   <div id="container"><div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div></div>
 </div>
@@ -1347,7 +1356,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg"><label class="fl">Vencimiento</label><input class="fi" id="md" type="date" style="padding:7px 10px" onchange="checkTareaConflicto()"></div>
     <div class="fg"><label class="fl">Hora</label><input class="fi" id="mhora" type="time" style="padding:7px 10px" placeholder="Sin hora específica"></div>
   </div>
-  <div class="fg"><label class="fl">Descripción</label><input class="fi" id="mdesc" type="text" placeholder="Notas..."></div>
+  <div class="form-grid-2">
+    <div class="fg"><label class="fl">Categoría</label><select class="fs" id="mcat"><option value="">Sin categoría</option><option>Administración</option><option>Finanzas</option><option>Operaciones</option><option>Cursos</option><option>RRHH</option><option>Legal/Impositivo</option><option>Marketing</option><option>General</option></select></div>
+    <div class="fg"><label class="fl">Descripción</label><input class="fi" id="mdesc" type="text" placeholder="Notas..."></div>
+  </div>
   <div id="tarea-conflicto-aviso" style="display:none;margin-top:8px;padding:8px 12px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);border-radius:6px;font-size:12px;color:#FCD34D"></div>
   <div class="ma"><button class="bc" onclick="closeModal('modal-tarea')">Cancelar</button><button class="bk" id="mbtn" onclick="createTask()">Crear tarea</button></div>
 </div>
@@ -1484,7 +1496,7 @@ async function sb(path,opts={},retry=2){
 let tasks=[],users=[],cursos=[],alumnos=[],proveedores=[],instructores=[],plantillas=[],notifConfigs=[];
 let inventario=[],invFilter="all",invSearch="",editInvId=null;
 let instSearch="",instActivo="";
-let curUser="",curF="all",q="",aq="",cursoFilter="all";
+let curUser="",curF="all",curCat="",q="",aq="",cursoFilter="all";
 let charts={};
 const UC=["#7C3AED","#3B82F6","#10B981","#F59E0B","#EC4899","#14B8A6"];
 
@@ -1697,7 +1709,8 @@ function vis(){
     if(curF==="Alta")byF=t.prioridad==="Alta";
     else if(curF==="venc")byF=days(t.fecha_vencimiento)!==null&&days(t.fecha_vencimiento)<0&&t.status!=="Listo";
     else if(curF!=="all")byF=t.status===curF;
-    return byU&&byF&&(!q||t.nombre.toLowerCase().includes(q.toLowerCase()));
+    const byCat=!curCat||(t.categoria||"")=== curCat;
+    return byU&&byF&&byCat&&(!q||t.nombre.toLowerCase().includes(q.toLowerCase()));
   });
 }
 function base(){return!curUser?tasks:tasks.filter(t=>(t.assignees||[]).includes(curUser))}
@@ -1709,6 +1722,8 @@ function updStats(){
   document.getElementById("sPH").textContent=b.filter(t=>t.status==="Por Hacer").length;
   document.getElementById("sEP").textContent=b.filter(t=>t.status==="En Progreso").length;
   document.getElementById("sLI").textContent=b.filter(t=>t.status==="Listo").length;
+  const ve=b.filter(t=>days(t.fecha_vencimiento)!==null&&days(t.fecha_vencimiento)<0&&t.status!=="Listo").length;
+  const sVE=document.getElementById("sVE");if(sVE){sVE.textContent=ve;sVE.closest(".sc").style.borderColor=ve>0?"var(--re)":"";}
 }
 function updCounts(){
   const b=base();
@@ -1728,8 +1743,15 @@ function renderTaskList(list){
   const LBL={"Bloqueado":"Bloqueadas","Por Hacer":"Por hacer","En Progreso":"En progreso","Listo":"Completadas"};
   const g={};ORD.forEach(s=>g[s]=[]);
   list.forEach(t=>{const k=ORD.includes(t.status)?t.status:"Por Hacer";g[k].push(t)});
+  // Ordenar cada grupo por fecha de vencimiento: más urgentes primero, sin fecha al final
+  const sortByDue=arr=>arr.sort((a,b)=>{
+    if(!a.fecha_vencimiento&&!b.fecha_vencimiento)return 0;
+    if(!a.fecha_vencimiento)return 1;
+    if(!b.fecha_vencimiento)return -1;
+    return a.fecha_vencimiento.localeCompare(b.fecha_vencimiento);
+  });
   let html="";
-  ORD.forEach(s=>{if(!g[s].length)return;html+=`<div class="sl">${LBL[s]} · ${g[s].length}</div><div class="tlist">`;g[s].forEach(t=>html+=taskCard(t));html+=`</div>`});
+  ORD.forEach(s=>{if(!g[s].length)return;html+=`<div class="sl">${LBL[s]} · ${g[s].length}</div><div class="tlist">`;sortByDue(g[s]).forEach(t=>html+=taskCard(t));html+=`</div>`});
   c.innerHTML=html;
 }
 
@@ -1755,7 +1777,7 @@ function taskCard(t){
     <div class="ti">
       <div class="tname" id="tn-${t.id}">${hl(t.nombre||"Sin nombre",q)}</div>
       <input class="tname-inp" id="tni-${t.id}" type="text" value="${esc(t.nombre)}" onblur="saveTName('${t.id}')" onkeydown="nameKey(event,'${t.id}')">
-      <div class="tmeta"><span class="badge ${sc.cls}">${sc.label}</span>${pc?`<span class="dot2 ${pc.dot}"></span><span style="font-size:11px;color:var(--tx3)">${t.prioridad}</span>`:""}${assHtml}${dueHtml}</div>
+      <div class="tmeta"><span class="badge ${sc.cls}">${sc.label}</span>${pc?`<span class="dot2 ${pc.dot}"></span><span style="font-size:11px;color:var(--tx3)">${t.prioridad}</span>`:""}${t.categoria?`<span style="font-size:10px;color:var(--tx3);background:var(--surf2);border:1px solid var(--b);border-radius:4px;padding:1px 6px">${t.categoria}</span>`:""}${assHtml}${dueHtml}</div>
     </div>
     <div class="tc-right" onclick="event.stopPropagation()">
       <button class="del-btn" onclick="confirmDel('¿Eliminar &quot;${esc(t.nombre)}&quot;?',()=>delTask('${t.id}'))"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
@@ -1763,11 +1785,13 @@ function taskCard(t){
     <svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
   </div>
   <div class="tea" onclick="event.stopPropagation()">
+    <div class="tea-row"><span class="al">Categoría</span><select class="mini-sel" id="cat-${t.id}" onchange="saveCategoria('${t.id}')"><option value="">Sin categoría</option>${["Administración","Finanzas","Operaciones","Cursos","RRHH","Legal/Impositivo","Marketing","General"].map(c=>`<option${t.categoria===c?" selected":""}>${c}</option>`).join("")}</select></div>
     <div class="tea-row"><span class="al">Estado</span>${sBtns}</div>
     <div class="tea-row"><span class="al">Prioridad</span><select class="mini-sel" onchange="chgPrio('${t.id}',this.value)">${prioOpts}</select></div>
     <div class="tea-row"><span class="al">Vencimiento</span><input class="di" type="date" value="${t.fecha_vencimiento||""}" id="d-${t.id}"><button class="sdb" onclick="saveDate('${t.id}')">Guardar</button></div>
     <div class="tea-row"><span class="al">Responsables</span><div style="display:flex;flex-wrap:wrap;gap:5px">${assChecks}</div></div>
     <div class="tea-row"><span class="al">Nombre</span><input class="desc-inp" style="font-size:13px;font-weight:600" id="tname-inp-${t.id}" value="${esc(t.nombre||"")}" onblur="saveTNameDirect(this,'${t.id}')" onkeydown="if(event.key==='Enter')this.blur()"></div>
+    <div class="tea-row" style="align-items:flex-start;gap:8px"><span class="al" style="padding-top:4px">Descripción</span><div style="flex:1;display:flex;gap:6px"><textarea class="desc-inp" id="notas-${t.id}" placeholder="Agregar descripción..." style="flex:1;min-height:44px;resize:vertical">${esc(t.notas||"")}</textarea><button class="sdb" style="align-self:flex-end" onclick="saveNotas('${t.id}')">Guardar</button></div></div>
     <div class="tea-row" style="align-items:flex-start;flex-direction:column;gap:8px">
       <span class="al" style="margin-bottom:2px">Comentarios</span>
       <div id="comments-${t.id}" style="width:100%;display:flex;flex-direction:column;gap:6px">${renderComments(t.descripcion,t.id)}</div>
@@ -1800,6 +1824,16 @@ async function toggleAssignee(tid,uid,checked){
   try{await sb(`tareas?id=eq.${tid}`,{method:"PATCH",body:JSON.stringify({assignees:ass,updated_at:new Date().toISOString()})});
     t.assignees=ass;const lbl=document.getElementById("ac-"+tid+"-"+uid);if(lbl)lbl.classList.toggle("sel2",checked);toast("Responsable actualizado","ok");renderTareas();
     if(checked)createNotif(uid,"asignacion",tid,`${loggedUser?.nombre||"Alguien"} te asignó la tarea "${t.nombre}"`);}catch(e){toast("Error","err")}
+}
+async function saveCategoria(id){
+  const val=document.getElementById("cat-"+id)?.value||null;
+  try{await sb(`tareas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({categoria:val,updated_at:new Date().toISOString()})});
+    const t=tasks.find(t=>t.id===id);if(t)t.categoria=val;renderTareas();toast("Categoría guardada","ok");}catch(e){toast("Error","err")}
+}
+async function saveNotas(id){
+  const val=document.getElementById("notas-"+id)?.value.trim()||null;
+  try{await sb(`tareas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({notas:val,updated_at:new Date().toISOString()})});
+    const t=tasks.find(t=>t.id===id);if(t)t.notas=val;toast("Descripción guardada","ok");}catch(e){toast("Error","err")}
 }
 async function saveDate(id){
   const val=document.getElementById("d-"+id)?.value;
@@ -1882,6 +1916,7 @@ async function delTask(id){
 function onSearch(v){q=v.trim();document.getElementById("clr").classList.toggle("show",!!q);renderTaskList(vis())}
 function clrSearch(){q="";document.getElementById("sq").value="";document.getElementById("clr").classList.remove("show");renderTaskList(vis())}
 function setF(f,btn){curF=f;document.querySelectorAll(".fb").forEach(b=>b.classList.remove("on"));if(btn)btn.classList.add("on");renderTareas()}
+function setCatFilter(v){curCat=v;renderTareas()}
 function onUser(){curUser=document.getElementById("usel").value;renderTareas();renderCursos()}
 function checkTareaConflicto(){
   const fecha=document.getElementById("md").value;
@@ -1900,12 +1935,13 @@ async function createTask(){
   const fecha=document.getElementById("md").value||null;
   const hora=document.getElementById("mhora").value||null;
   const desc=document.getElementById("mdesc").value.trim()||null;
+  const cat=document.getElementById("mcat").value||null;
   const assignees=[...document.querySelectorAll("#modalUserChecks input:checked")].map(i=>i.value);
   const mbtn=document.getElementById("mbtn");mbtn.disabled=true;mbtn.textContent="Creando...";
   try{
-    const [created]=await sb("tareas",{method:"POST",body:JSON.stringify({nombre,status,prioridad,assignees,fecha_vencimiento:fecha,hora_inicio:hora,descripcion:desc,updated_at:new Date().toISOString()})});
+    const [created]=await sb("tareas",{method:"POST",body:JSON.stringify({nombre,status,prioridad,assignees,fecha_vencimiento:fecha,hora_inicio:hora,notas:desc||null,categoria:cat,updated_at:new Date().toISOString()})});
     tasks.unshift(created);closeModal("modal-tarea");
-    ["mn","mp","md","mhora","mdesc"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+    ["mn","mp","md","mhora","mdesc","mcat"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
     document.getElementById("ms").value="Por Hacer";
     document.querySelectorAll("#modalUserChecks input").forEach(i=>{i.checked=false;i.closest(".uc").classList.remove("sel2")});
     const aviso=document.getElementById("tarea-conflicto-aviso");if(aviso)aviso.style.display="none";
