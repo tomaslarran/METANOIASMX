@@ -816,12 +816,18 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 <!-- ══ GRÁFICOS ══ -->
 <div id="pg-graficos" style="display:none">
   <div class="pg-header"><div><div class="pg-title">Gráficos</div><div class="pg-title-sub">Progreso y estadísticas del equipo</div></div></div>
+
+  <!-- Panel de Alertas -->
+  <div id="dash-alertas" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px"></div>
+
   <div class="charts-grid">
     <div class="chart-card"><div class="chart-title">Estado de tareas</div><div class="chart-wrap"><canvas id="chartEstado"></canvas></div></div>
     <div class="chart-card"><div class="chart-title">Prioridad</div><div class="chart-wrap"><canvas id="chartPrio"></canvas></div></div>
     <div class="chart-card"><div class="chart-title">Tareas por persona</div><div class="chart-wrap"><canvas id="chartPersona"></canvas></div></div>
     <div class="chart-card"><div class="chart-title">Progreso del equipo</div><div class="prog-item" id="progList" style="flex-direction:column;align-items:stretch"></div></div>
-    <div class="chart-card chart-full"><div class="chart-title">Estado de cursos</div><div class="chart-wrap" style="height:140px"><canvas id="chartCursos"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">Tareas por categoría</div><div class="chart-wrap"><canvas id="chartCategoria"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">Estado de cursos</div><div class="chart-wrap"><canvas id="chartCursos"></canvas></div></div>
+    <div class="chart-card chart-full"><div class="chart-title">Comprobantes del mes — por proveedor</div><div class="chart-wrap" style="height:200px"><canvas id="chartComps"></canvas></div></div>
   </div>
 </div>
 
@@ -2338,6 +2344,26 @@ function renderCharts(){
   if(!tasks.length&&!cursos.length)return;
   const CDEFS={plugins:{legend:{labels:{color:"#9899B0",font:{family:"Barlow",size:11},boxWidth:10}}},scales:{x:{ticks:{color:"#5A5C72",font:{size:10}},grid:{color:"rgba(255,255,255,.05)"}},y:{ticks:{color:"#5A5C72",font:{size:10}},grid:{color:"rgba(255,255,255,.05)"}}}};
 
+  // ── Panel de Alertas ──
+  const hoy=today();
+  const manana=new Date();manana.setDate(manana.getDate()+1);const mananaStr=manana.toISOString().slice(0,10);
+  const vencidas=tasks.filter(t=>days(t.fecha_vencimiento)!==null&&days(t.fecha_vencimiento)<0&&t.status!=="Listo").length;
+  const sinResponsable=tasks.filter(t=>(!t.assignees||!t.assignees.length)&&t.status!=="Listo").length;
+  const proxVenc=tasks.filter(t=>t.fecha_vencimiento&&(t.fecha_vencimiento===hoy||t.fecha_vencimiento===mananaStr)&&t.status!=="Listo").length;
+  const compPend=comprobantes.filter(c=>c.estado==="pendiente").length;
+  const alertas=[
+    {label:"Tareas vencidas",val:vencidas,color:vencidas>0?"var(--re)":"var(--gr)",icon:"⚠",sub:"sin completar",click:"setTareaFilter('venc')"},
+    {label:"Vencen hoy/mañana",val:proxVenc,color:proxVenc>0?"var(--am)":"var(--gr)",icon:"⏰",sub:"próximas",click:"setTareaFilter('all')"},
+    {label:"Sin responsable",val:sinResponsable,color:sinResponsable>0?"var(--am)":"var(--gr)",icon:"👤",sub:"tareas sin asignar",click:"setTareaFilter('all')"},
+    {label:"Comprobantes pendientes",val:compPend,color:compPend>0?"var(--pu)":"var(--gr)",icon:"📄",sub:"a revisar",click:"goPage('comprobantes',document.getElementById('nav-comprobantes'))"},
+  ];
+  document.getElementById("dash-alertas").innerHTML=alertas.map(a=>`
+    <div class="sc" style="cursor:pointer;border-color:${a.val>0?a.color:''}" onclick="${a.click}">
+      <div class="sc-l">${a.label}</div>
+      <div class="sc-v" style="color:${a.color};font-size:28px">${a.val}</div>
+      <div class="sc-s">${a.icon} ${a.sub}</div>
+    </div>`).join("");
+
   destroyChart("estado");
   const bySt=["Por Hacer","En Progreso","Listo","Bloqueado"].map(s=>tasks.filter(t=>t.status===s).length);
   charts.estado=new Chart(document.getElementById("chartEstado"),{type:"doughnut",data:{labels:["Por hacer","En progreso","Listo","Bloqueado"],datasets:[{data:bySt,backgroundColor:["rgba(245,158,11,.8)","rgba(59,130,246,.8)","rgba(16,185,129,.8)","rgba(239,68,68,.8)"],borderColor:"#1E2235",borderWidth:2}]},options:{...CDEFS,cutout:"65%",plugins:{legend:{position:"right",labels:{color:"#9899B0",font:{family:"Barlow",size:11},boxWidth:8}}},scales:{x:{display:false},y:{display:false}}}});
@@ -2357,6 +2383,27 @@ function renderCharts(){
   const estados=["Borrador","Convocatoria","Inscripciones","En curso","Completado","Cancelado"];
   const cursosData=estados.map(e=>cursos.filter(c=>c.estado===e).length);
   charts.cursos=new Chart(document.getElementById("chartCursos"),{type:"bar",data:{labels:estados,datasets:[{data:cursosData,backgroundColor:["rgba(90,92,114,.7)","rgba(59,130,246,.8)","rgba(245,158,11,.8)","rgba(124,58,237,.8)","rgba(16,185,129,.8)","rgba(239,68,68,.7)"],borderRadius:4,borderSkipped:false}]},options:{...CDEFS,plugins:{legend:{display:false}},scales:{x:{ticks:{color:"#5A5C72",font:{size:10}},grid:{display:false}},y:{ticks:{color:"#5A5C72",font:{size:10},stepSize:1},grid:{color:"rgba(255,255,255,.05)"}}}}});
+
+  // ── Tareas por categoría ──
+  destroyChart("categoria");
+  const CATS=["Administración","Finanzas","Operaciones","Cursos","RRHH","Legal/Impositivo","Marketing","General"];
+  const catData=CATS.map(c=>tasks.filter(t=>(t.categoria||"General")===c).length);
+  const catColors=["rgba(124,58,237,.8)","rgba(16,185,129,.8)","rgba(59,130,246,.8)","rgba(245,158,11,.8)","rgba(236,72,153,.8)","rgba(239,68,68,.8)","rgba(20,184,166,.8)","rgba(90,92,114,.7)"];
+  charts.categoria=new Chart(document.getElementById("chartCategoria"),{type:"bar",data:{labels:CATS,datasets:[{data:catData,backgroundColor:catColors,borderRadius:4,borderSkipped:false}]},options:{...CDEFS,plugins:{legend:{display:false}},scales:{x:{ticks:{color:"#5A5C72",font:{size:9}},grid:{display:false}},y:{ticks:{color:"#5A5C72",font:{size:10},stepSize:1},grid:{color:"rgba(255,255,255,.05)"}}}}});
+
+  // ── Comprobantes del mes por proveedor (top 8) ──
+  destroyChart("comps");
+  const mesActual=today().slice(0,7);
+  const compsMes=comprobantes.filter(c=>{const fi=c.fecha_imputacion||c.fecha;return fi&&fi.startsWith(mesActual);});
+  const provMap={};compsMes.forEach(c=>{const p=c.proveedor||"Sin proveedor";provMap[p]=(provMap[p]||0)+(c.total||0);});
+  const provSorted=Object.entries(provMap).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const provLabels=provSorted.map(([p])=>p.length>20?p.slice(0,18)+"…":p);
+  const provData=provSorted.map(([,v])=>v);
+  if(provData.length){
+    charts.comps=new Chart(document.getElementById("chartComps"),{type:"bar",data:{labels:provLabels,datasets:[{data:provData,backgroundColor:"rgba(124,58,237,.75)",borderRadius:4,borderSkipped:false}]},options:{...CDEFS,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>"$"+Math.round(ctx.raw).toLocaleString("es-AR")}}},scales:{x:{ticks:{color:"#5A5C72",font:{size:10}},grid:{display:false}},y:{ticks:{color:"#5A5C72",font:{size:10},callback:v=>"$"+Math.round(v/1000)+"k"},grid:{color:"rgba(255,255,255,.05)"}}}}});
+  }else{
+    const el=document.getElementById("chartComps");if(el)el.closest(".chart-card").querySelector(".chart-title").textContent="Comprobantes del mes — sin datos";
+  }
 }
 
 // ── NOTIFICACIONES ──
