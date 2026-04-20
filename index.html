@@ -1128,7 +1128,6 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
             <option value="">— producto —</option>
             <option value="varios almacen 21%">varios almacen 21%</option>
             <option value="telefonia e internet al 21%">telefonia e internet al 21%</option>
-            <option value="Varios materiales construccion 21%">Varios materiales construccion 21%</option>
             <option value="Varios construcción">Varios construcción</option>
             <option value="varios electrodomesticos">varios electrodomesticos</option>
             <option value="varios representacion">varios representacion</option>
@@ -1147,7 +1146,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
             <option value="">— producto —</option>
             <option value="varios almacen 10,5%">varios almacen 10,5%</option>
             <option value="seguridad y vigilancia al 10.5">seguridad y vigilancia al 10.5</option>
-            <option value="VARIOS MATERIALES CONSTRUCCION 10.5%">VARIOS MATERIALES CONSTRUCCION 10.5%</option>
+            <option value="Varios construcción">Varios construcción</option>
             <option value="Obra Social">Obra Social</option>
             <option value="Pasajes y viajes">Pasajes y viajes</option>
           </select>
@@ -1171,19 +1170,31 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         </div>
         <div class="fg">
           <label class="fl">No gravado / Imp. int.</label>
-          <select class="fi" id="comp-prod-nograv" style="font-size:11px;margin-top:18px">
+          <input class="fi" id="comp-imp-int" type="number" placeholder="Imp. int." oninput="recalcTotal()" style="margin-bottom:3px">
+          <input class="fi" id="comp-otros" type="number" placeholder="Otros imp." oninput="recalcTotal()" style="margin-bottom:3px">
+          <select class="fi" id="comp-prod-nograv" style="font-size:11px">
             <option value="impuestos internos o no gravado">impuestos internos o no gravado</option>
           </select>
         </div>
       </div>
     </div>
     <div class="fgrid">
-      <div class="fg"><label class="fl">Perc. IVA ($)</label><input class="fi" id="comp-perc-iva" type="number" placeholder="0" oninput="recalcTotal()"></div>
-      <div class="fg"><label class="fl">Perc. IIBB ($)</label><input class="fi" id="comp-perc-iibb" type="number" placeholder="0" oninput="recalcTotal()"></div>
-    </div>
-    <div class="fgrid">
-      <div class="fg"><label class="fl">Imp. interno ($)</label><input class="fi" id="comp-imp-int" type="number" placeholder="0" oninput="recalcTotal()"></div>
-      <div class="fg"><label class="fl">Otros imp. ($)</label><input class="fi" id="comp-otros" type="number" placeholder="0" oninput="recalcTotal()"></div>
+      <div class="fg">
+        <label class="fl">Perc. IVA ($)</label>
+        <input class="fi" id="comp-perc-iva" type="number" placeholder="0" oninput="recalcTotal()" style="margin-bottom:3px">
+        <select class="fi" id="comp-prod-perc-iva" style="font-size:11px">
+          <option value="">— alícuota —</option>
+          <option value="percepcion iva 3%">percepcion iva 3%</option>
+          <option value="percepcion iva 1.5%">percepcion iva 1.5%</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="fl">Perc. IIBB ($)</label>
+        <input class="fi" id="comp-perc-iibb" type="number" placeholder="0" oninput="recalcTotal()" style="margin-bottom:3px">
+        <select class="fi" id="comp-prod-perc-iibb" style="font-size:11px">
+          <option value="iibb salta">iibb salta</option>
+        </select>
+      </div>
     </div>
     <div class="fgrid">
       <div class="fg" style="grid-column:1/-1"><label class="fl">Total ($)</label><input class="fi" id="comp-total" type="number" placeholder="0" style="font-weight:700;color:var(--tx)"></div>
@@ -3937,9 +3948,11 @@ function openNuevoComprobante(){
   document.getElementById("mcomp-title").textContent="Nueva Factura de Compra";
   document.getElementById("comp-save-btn").textContent="Guardar";
   ["comp-fecha","comp-numero","comp-prov","comp-cuit","comp-concepto","comp-neto","comp-iva-monto","comp-neto21","comp-neto105","comp-neto27","comp-neto-exento","comp-perc-iva","comp-perc-iibb","comp-imp-int","comp-otros","comp-total","comp-venc","comp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
-  ["comp-prod21","comp-prod105"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  ["comp-prod21","comp-prod105","comp-prod27"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
   const elEx=document.getElementById("comp-prod-exento");if(elEx)elEx.value="varios almacen consumidor final";
-  const elNG=document.getElementById("comp-prod-nograv");if(elNG)elNG.value="impuestos internos o no gravado";;
+  const elNG=document.getElementById("comp-prod-nograv");if(elNG)elNG.value="impuestos internos o no gravado";
+  const elPIva=document.getElementById("comp-prod-perc-iva");if(elPIva)elPIva.value="";
+  const elPIibb=document.getElementById("comp-prod-perc-iibb");if(elPIibb)elPIibb.value="iibb salta";
   document.getElementById("comp-calendario").checked=false;
   document.getElementById("comp-tipo").value="A";
   document.getElementById("comp-sociedad").value="SUDES";
@@ -3979,6 +3992,8 @@ function editComprobante(id){
   const p27=document.getElementById("comp-prod27");if(p27)p27.value=c.producto_neto27||"";
   const pEx=document.getElementById("comp-prod-exento");if(pEx)pEx.value=c.producto_exento||"varios almacen consumidor final";
   const pNG=document.getElementById("comp-prod-nograv");if(pNG)pNG.value=c.producto_nograv||"impuestos internos o no gravado";
+  const pPIva=document.getElementById("comp-prod-perc-iva");if(pPIva)pPIva.value=c.producto_perc_iva||"";
+  const pPIibb=document.getElementById("comp-prod-perc-iibb");if(pPIibb)pPIibb.value=c.producto_perc_iibb||"iibb salta";
   if(!c.producto_neto21&&!c.producto_neto105)sugerirProductosFinn();
   document.getElementById("comp-notas").value=c.notas||"";
   if(c.archivo_url){
@@ -4109,7 +4124,7 @@ function sugerirProductosFinn(){
   if(/telecom|telefon|internet|claro|movistar|personal|fibertel|cablevision|direct/.test(txt)){
     p21="telefonia e internet al 21%";
   } else if(/construc|material|obra|cerami|pintura|ferret|corral/.test(txt)){
-    p21="Varios materiales construccion 21%";p105="VARIOS MATERIALES CONSTRUCCION 10.5%";
+    p21="Varios construcción";p105="Varios construcción";
   } else if(/segur|vigilanc|alarm|signal/.test(txt)){
     p21="SEGURIDAD Y VIGILANCIA";p105="seguridad y vigilancia al 10.5";
   } else if(/combustib|nafta|gasoil|ypf|shell|axion|repsol|estacion/.test(txt)){
@@ -4231,15 +4246,20 @@ function exportarFinnegans(){
     if(c.neto_105>0)items.push({prod:c.producto_neto105||"varios almacen 10,5%",precio:c.neto_105});
     if(c.neto_27>0)items.push({prod:c.producto_neto27||"telefonia e internet 27%",precio:c.neto_27});
     if(c.neto_exento>0)items.push({prod:c.producto_exento||"varios almacen consumidor final",precio:c.neto_exento});
-    // noGrav incluye percepción IVA para que Finnegans cierre el total
-    const noGrav=(c.percepcion_iva||0)+(c.percepcion_iibb||0)+(c.impuesto_interno||0)+(c.otros_impuestos||0);
+    // noGrav = solo imp. interno y otros (las percepciones van como filas separadas)
+    const noGrav=(c.impuesto_interno||0)+(c.otros_impuestos||0);
     if(noGrav>0)items.push({prod:c.producto_nograv||"impuestos internos o no gravado",precio:noGrav});
+    // Percepciones como filas propias
+    const percIva=c.percepcion_iva||0;
+    const percIibb=c.percepcion_iibb||0;
+    if(percIva>0)items.push({prod:c.producto_perc_iva||"percepcion iva 3%",precio:percIva});
+    if(percIibb>0)items.push({prod:c.producto_perc_iibb||"iibb salta",precio:percIibb});
     if(!items.length)items.push({prod:"SI",precio:parseFloat((c.total||0).toFixed(2))});
-    // IMPORTE_CONTROL = Total De Control de Finnegans (fórmula aritmética exacta)
+    // IMPORTE_CONTROL = Total De Control de Finnegans (fórmula aritmética exacta, incluye percepciones)
     const r21=n=>Math.round((n||0)*121)/100;
     const r105=n=>Math.round((n||0)*1105)/1000;
     const r27=n=>Math.round((n||0)*127)/100;
-    const importeControl=parseFloat((r21(c.neto_21)+r105(c.neto_105)+r27(c.neto_27)+(c.neto_exento||0)+noGrav).toFixed(2));
+    const importeControl=parseFloat((r21(c.neto_21)+r105(c.neto_105)+r27(c.neto_27)+(c.neto_exento||0)+noGrav+percIva+percIibb).toFixed(2));
     // Formatear número: tipo-XXXX-XXXXXXXX (punto de venta 4 dígitos, número 8 dígitos)
     const fmtComp=(comp)=>{
       const tipo=comp.tipo||"A";
@@ -4346,6 +4366,8 @@ async function saveComprobante(){
     producto_nograv:document.getElementById("comp-prod-nograv")?.value||"impuestos internos o no gravado",
     percepcion_iva:parseFloat(document.getElementById("comp-perc-iva").value)||0,
     percepcion_iibb:parseFloat(document.getElementById("comp-perc-iibb").value)||0,
+    producto_perc_iva:document.getElementById("comp-prod-perc-iva")?.value||null,
+    producto_perc_iibb:document.getElementById("comp-prod-perc-iibb")?.value||"iibb salta",
     impuesto_interno:parseFloat(document.getElementById("comp-imp-int").value)||0,
     otros_impuestos:parseFloat(document.getElementById("comp-otros").value)||0,
     total:parseFloat(document.getElementById("comp-total").value)||null,
