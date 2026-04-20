@@ -1180,21 +1180,20 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </div>
     <div class="fgrid">
       <div class="fg">
-        <label class="fl">Perc. IVA ($)</label>
-        <input class="fi" id="comp-perc-iva" type="number" placeholder="0" oninput="recalcTotal()" style="margin-bottom:3px">
-        <select class="fi" id="comp-prod-perc-iva" style="font-size:11px">
-          <option value="">— alícuota —</option>
-          <option value="percepcion iva 3%">percepcion iva 3%</option>
-          <option value="percepcion iva 1.5%">percepcion iva 1.5%</option>
-        </select>
+        <label class="fl">Perc. IVA 3% ($)</label>
+        <input class="fi" id="comp-perc-iva" type="number" placeholder="0" oninput="recalcTotal()">
       </div>
       <div class="fg">
-        <label class="fl">Perc. IIBB ($)</label>
-        <input class="fi" id="comp-perc-iibb" type="number" placeholder="0" oninput="recalcTotal()" style="margin-bottom:3px">
-        <select class="fi" id="comp-prod-perc-iibb" style="font-size:11px">
-          <option value="iibb salta">iibb salta</option>
-        </select>
+        <label class="fl">Perc. IVA 1,5% ($)</label>
+        <input class="fi" id="comp-perc-iva-15" type="number" placeholder="0" oninput="recalcTotal()">
       </div>
+    </div>
+    <div class="fgrid">
+      <div class="fg">
+        <label class="fl">Perc. IIBB ($)</label>
+        <input class="fi" id="comp-perc-iibb" type="number" placeholder="0" oninput="recalcTotal()">
+      </div>
+      <div class="fg"></div>
     </div>
     <div class="fgrid">
       <div class="fg" style="grid-column:1/-1"><label class="fl">Total ($)</label><input class="fi" id="comp-total" type="number" placeholder="0" style="font-weight:700;color:var(--tx)"></div>
@@ -3947,7 +3946,7 @@ function openNuevoComprobante(){
   editCompId=null;compArchivoUrl=null;
   document.getElementById("mcomp-title").textContent="Nueva Factura de Compra";
   document.getElementById("comp-save-btn").textContent="Guardar";
-  ["comp-fecha","comp-numero","comp-prov","comp-cuit","comp-concepto","comp-neto","comp-iva-monto","comp-neto21","comp-neto105","comp-neto27","comp-neto-exento","comp-perc-iva","comp-perc-iibb","comp-imp-int","comp-otros","comp-total","comp-venc","comp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  ["comp-fecha","comp-numero","comp-prov","comp-cuit","comp-concepto","comp-neto","comp-iva-monto","comp-neto21","comp-neto105","comp-neto27","comp-neto-exento","comp-perc-iva","comp-perc-iva-15","comp-perc-iibb","comp-imp-int","comp-otros","comp-total","comp-venc","comp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
   ["comp-prod21","comp-prod105","comp-prod27"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
   const elEx=document.getElementById("comp-prod-exento");if(elEx)elEx.value="varios almacen consumidor final";
   const elNG=document.getElementById("comp-prod-nograv");if(elNG)elNG.value="impuestos internos o no gravado";
@@ -3981,6 +3980,7 @@ function editComprobante(id){
   document.getElementById("comp-neto27").value=c.neto_27||"";
   document.getElementById("comp-neto-exento").value=c.neto_exento||"";
   document.getElementById("comp-perc-iva").value=c.percepcion_iva||"";
+  document.getElementById("comp-perc-iva-15").value=c.percepcion_iva_15||"";
   document.getElementById("comp-perc-iibb").value=c.percepcion_iibb||"";
   document.getElementById("comp-imp-int").value=c.impuesto_interno||"";
   document.getElementById("comp-otros").value=c.otros_impuestos||"";
@@ -4110,10 +4110,11 @@ function recalcTotal(){
   const n=parseFloat(document.getElementById("comp-neto").value)||0;
   const v=parseFloat(document.getElementById("comp-iva-monto").value)||0;
   const piva=parseFloat(document.getElementById("comp-perc-iva").value)||0;
+  const piva15=parseFloat(document.getElementById("comp-perc-iva-15")?.value)||0;
   const piibb=parseFloat(document.getElementById("comp-perc-iibb").value)||0;
   const imp=parseFloat(document.getElementById("comp-imp-int").value)||0;
   const o=parseFloat(document.getElementById("comp-otros").value)||0;
-  if(n||v||piva||piibb||imp||o)document.getElementById("comp-total").value=(n+v+piva+piibb+imp+o).toFixed(2);
+  if(n||v||piva||piva15||piibb||imp||o)document.getElementById("comp-total").value=(n+v+piva+piva15+piibb+imp+o).toFixed(2);
 }
 // Auto-sugerencia de productos Finnegans según proveedor/concepto
 function sugerirProductosFinn(){
@@ -4251,15 +4252,17 @@ function exportarFinnegans(){
     if(noGrav>0)items.push({prod:c.producto_nograv||"impuestos internos o no gravado",precio:noGrav});
     // Percepciones como filas propias
     const percIva=c.percepcion_iva||0;
+    const percIva15=c.percepcion_iva_15||0;
     const percIibb=c.percepcion_iibb||0;
-    if(percIva>0)items.push({prod:c.producto_perc_iva||"percepcion iva 3%",precio:percIva});
+    if(percIva>0)items.push({prod:"percepcion iva 3%",precio:percIva});
+    if(percIva15>0)items.push({prod:"percepcion iva 1.5%",precio:percIva15});
     if(percIibb>0)items.push({prod:c.producto_perc_iibb||"iibb salta",precio:percIibb});
     if(!items.length)items.push({prod:"SI",precio:parseFloat((c.total||0).toFixed(2))});
     // IMPORTE_CONTROL = Total De Control de Finnegans (fórmula aritmética exacta, incluye percepciones)
     const r21=n=>Math.round((n||0)*121)/100;
     const r105=n=>Math.round((n||0)*1105)/1000;
     const r27=n=>Math.round((n||0)*127)/100;
-    const importeControl=parseFloat((r21(c.neto_21)+r105(c.neto_105)+r27(c.neto_27)+(c.neto_exento||0)+noGrav+percIva+percIibb).toFixed(2));
+    const importeControl=parseFloat((r21(c.neto_21)+r105(c.neto_105)+r27(c.neto_27)+(c.neto_exento||0)+noGrav+percIva+percIva15+percIibb).toFixed(2));
     // Formatear número: tipo-XXXX-XXXXXXXX (punto de venta 4 dígitos, número 8 dígitos)
     const fmtComp=(comp)=>{
       const tipo=comp.tipo||"A";
@@ -4365,8 +4368,8 @@ async function saveComprobante(){
     producto_exento:document.getElementById("comp-prod-exento")?.value||"varios almacen consumidor final",
     producto_nograv:document.getElementById("comp-prod-nograv")?.value||"impuestos internos o no gravado",
     percepcion_iva:parseFloat(document.getElementById("comp-perc-iva").value)||0,
+    percepcion_iva_15:parseFloat(document.getElementById("comp-perc-iva-15")?.value)||0,
     percepcion_iibb:parseFloat(document.getElementById("comp-perc-iibb").value)||0,
-    producto_perc_iva:document.getElementById("comp-prod-perc-iva")?.value||null,
     producto_perc_iibb:document.getElementById("comp-prod-perc-iibb")?.value||"iibb salta",
     impuesto_interno:parseFloat(document.getElementById("comp-imp-int").value)||0,
     otros_impuestos:parseFloat(document.getElementById("comp-otros").value)||0,
