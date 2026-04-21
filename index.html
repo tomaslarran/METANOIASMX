@@ -3712,16 +3712,16 @@ async function apAnalizar(){
   document.getElementById("ap-step1").style.display="none";
   document.getElementById("ap-step2").style.display="";
   try{
-    // Subir archivo a Supabase Storage (bucket comprobantes)
-    const ext=apArchivoFile.name.split(".").pop();
-    const fname=`prestamos/analisis_${Date.now()}.${ext}`;
-    const upRes=await fetch(`${SUPA_URL_P}/storage/v1/object/comprobantes/${fname}`,{
+    // Subir archivo a Supabase Storage (bucket Facturas)
+    const ext=apArchivoFile.name.split(".").pop()||"pdf";
+    const fname=`prestamos_${Date.now()}.${ext}`;
+    const upRes=await fetch(`${SUPA_URL_P}/storage/v1/object/Facturas/${fname}`,{
       method:"POST",
       headers:{"apikey":KEY_P,"Authorization":"Bearer "+KEY_P,"Content-Type":apArchivoFile.type,"x-upsert":"true"},
       body:apArchivoFile
     });
-    if(!upRes.ok)throw new Error("Error al subir archivo");
-    apArchivoUrl=`${SUPA_URL_P}/storage/v1/object/public/comprobantes/${fname}`;
+    if(!upRes.ok){const t=await upRes.text();throw new Error("Upload: "+t.slice(0,80));}
+    apArchivoUrl=`${SUPA_URL_P}/storage/v1/object/public/Facturas/${fname}`;
 
     // Llamar Edge Function
     const res=await fetch(`${SUPA_URL_P}/functions/v1/leer-prestamo`,{
