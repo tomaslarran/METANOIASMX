@@ -980,22 +980,15 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <!-- TAB: INVERSIONES -->
   <div id="cfpg-inversiones" style="display:none">
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
-      <div class="fbar">
-        <button class="fb on" onclick="setInvFilter('all',this)">Todas</button>
-        <button class="fb" onclick="setInvFilter('FCI',this)">FCI</button>
-        <button class="fb" onclick="setInvFilter('Plazo Fijo',this)">Plazo Fijo</button>
-        <button class="fb" onclick="setInvFilter('Acciones',this)">Acciones</button>
-        <button class="fb" onclick="setInvFilter('Cripto',this)">Cripto</button>
-        <button class="fb" onclick="setInvFilter('Otro',this)">Otro</button>
-      </div>
-      <button class="btn sm pri" onclick="openAddInversion()" style="margin-left:auto">+ Nueva inversión</button>
+      <div style="font-size:13px;color:var(--tx2);flex:1">Panel por empresa — capital, estado y ciclos de inversión</div>
+      <button class="btn sm pri" onclick="openAddInversion()">+ Nueva inversión</button>
     </div>
 
-    <div class="stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">
-      <div class="sc"><div class="sc-l">Capital invertido</div><div class="sc-v vb" id="inv-capital">—</div><div class="sc-s">total</div></div>
+    <div class="stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
+      <div class="sc"><div class="sc-l">Capital invertido</div><div class="sc-v vb" id="inv-capital">—</div><div class="sc-s">activas — todas</div></div>
       <div class="sc"><div class="sc-l">Valor actual</div><div class="sc-v vg" id="inv-valor">—</div><div class="sc-s">estimado</div></div>
       <div class="sc"><div class="sc-l">Rendimiento total</div><div class="sc-v" id="inv-rend" style="color:var(--gr)">—</div><div class="sc-s">ganancia/pérdida</div></div>
-      <div class="sc"><div class="sc-l">Inversiones activas</div><div class="sc-v vp" id="inv-count">—</div><div class="sc-s">en curso</div></div>
+      <div class="sc"><div class="sc-l">Activas</div><div class="sc-v vp" id="inv-count">—</div><div class="sc-s">en curso</div></div>
     </div>
 
     <div id="cf-inversiones-list"><div class="loading"><div class="loader"></div><div class="lt">Cargando inversiones...</div></div></div>
@@ -1260,7 +1253,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="fg"><label class="fl">Tipo</label><select class="fs" id="cfi-tipo"><option>FCI</option><option>Plazo Fijo</option><option>Acciones</option><option>ON/Bono</option><option>Cripto</option><option>Otro</option></select></div>
       <div class="fg"><label class="fl">Entidad / Broker</label><input class="fi" id="cfi-entidad" type="text" placeholder="Ej: Banco Macro, IOL..."></div>
     </div>
-    <div class="fg"><label class="fl">Sociedad / Titular</label><select class="fs" id="cfi-soc"><option value="SUDES">SUDES</option><option value="POINTERS">POINTERS</option><option value="Personal">Personal</option></select></div>
+    <div class="fg"><label class="fl">Sociedad / Titular</label><select class="fs" id="cfi-soc"><option value="SUDES">SUDES</option><option value="POINTERS">POINTERS</option><option value="AMPARO">AMPARO</option><option value="MARIO">MARIO</option><option value="Personal">Personal</option></select></div>
     <div class="fgrid">
       <div class="fg"><label class="fl">Capital invertido ($)</label><input class="fi" id="cfi-capital" type="number" placeholder="0" min="0" step="0.01"></div>
       <div class="fg"><label class="fl">Valor actual ($)</label><input class="fi" id="cfi-valor" type="number" placeholder="0" min="0" step="0.01"></div>
@@ -1275,6 +1268,25 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </div>
     <div class="fg"><label class="fl">Notas</label><textarea class="fi fta" id="cfi-notas" placeholder="Condiciones, rendimientos, observaciones..." style="min-height:52px"></textarea></div>
     <div class="ma"><button class="bc" onclick="closeModal('modal-cf-inversion')">Cancelar</button><button class="bk" id="cfi-save-btn" onclick="saveCFInversion()">Guardar</button></div>
+  </div>
+</div>
+
+<!-- ══ MODAL RESCATE/CICLO INVERSIÓN ══ -->
+<div class="mov" id="modal-cf-rescate" onclick="if(event.target===this)closeModal('modal-cf-rescate')">
+  <div class="modal">
+    <div class="mt"><span id="mcr-title">Rescatar inversión</span><button class="mt-close" onclick="closeModal('modal-cf-rescate')">✕</button></div>
+    <input type="hidden" id="cfr-inv-id">
+    <div id="cfr-info" style="background:var(--surf2);border:1px solid var(--b);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--tx2)"></div>
+    <div class="fgrid">
+      <div class="fg"><label class="fl">Fecha de rescate *</label><input class="fi" id="cfr-fecha" type="date"></div>
+      <div class="fg"><label class="fl">Monto recuperado ($)</label><input class="fi" id="cfr-monto" type="number" placeholder="0" step="0.01"></div>
+    </div>
+    <div class="fg"><label class="fl">Notas del rescate</label><input class="fi" id="cfr-notas" type="text" placeholder="Ej: rescate anticipado, TNA obtenida..."></div>
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 0 6px;border-top:1px solid var(--b);margin-top:8px">
+      <input type="checkbox" id="cfr-reinvertir" style="accent-color:var(--ac);width:15px;height:15px" onchange="toggleReinvertir()">
+      <label for="cfr-reinvertir" style="font-size:13px;color:var(--tx2);cursor:pointer">Reinvertir — abrir formulario de nueva inversión al guardar</label>
+    </div>
+    <div class="ma"><button class="bc" onclick="closeModal('modal-cf-rescate')">Cancelar</button><button class="bk" id="cfr-save-btn" onclick="saveRescate()">Confirmar rescate</button></div>
   </div>
 </div>
 
@@ -3182,10 +3194,15 @@ function delCFCob(id){
 }
 
 /* ── INVERSIONES ── */
-function setInvFilter(f,btn){cfInvFilter=f;document.querySelectorAll("#cfpg-inversiones .fb").forEach(b=>b.classList.remove("on"));if(btn)btn.classList.add("on");renderCFInversiones()}
+const INV_EMPRESAS=[
+  {key:"POINTERS",label:"POINTERS",icon:"🏢",color:"#6366F1"},
+  {key:"SUDES",label:"SUDES",icon:"🏥",color:"#10B981"},
+  {key:"AMPARO",label:"AMPARO",icon:"🏛",color:"#F59E0B"},
+  {key:"MARIO",label:"MARIO",icon:"👤",color:"#8B5CF6"},
+  {key:"Personal",label:"Personal",icon:"💼",color:"#64748B"}
+];
 
 function renderCFInversiones(){
-  const list=cfInvFilter==="all"?cfInversiones:cfInversiones.filter(i=>i.tipo===cfInvFilter);
   const activas=cfInversiones.filter(i=>i.estado==="Activa");
   const totalCap=activas.reduce((s,i)=>s+(i.capital||0),0);
   const totalVal=activas.reduce((s,i)=>s+(i.valor_actual||i.capital||0),0);
@@ -3197,43 +3214,167 @@ function renderCFInversiones(){
   if(rendEl){rendEl.textContent=(rend>=0?"+":"")+"$"+Math.round(Math.abs(rend)).toLocaleString("es-AR");rendEl.style.color=rend>=0?"var(--gr)":"var(--re)"}
   set("inv-count",activas.length);
   const cont=document.getElementById("cf-inversiones-list");if(!cont)return;
-  if(!list.length){cont.innerHTML=`<div class="empty"><div class="ei">📈</div>No hay inversiones registradas.<br><button class="btn sm pri" style="margin-top:10px" onclick="openAddInversion()">Registrar primera inversión</button></div>`;return}
 
   const TIPO_COLOR={FCI:"bpr","Plazo Fijo":"bdo",Acciones:"bbl",Cripto:"btd","ON/Bono":"btd",Otro:"btd"};
   const EST_COLOR={Activa:"bdo",Vencida:"btd",Rescatada:"bpr"};
 
-  cont.innerHTML=`<div style="display:flex;flex-direction:column;gap:8px">${list.map(inv=>{
-    const cap=inv.capital||0,val=inv.valor_actual||cap;
-    const rend=val-cap;const rendPct=cap?((rend/cap)*100).toFixed(1):0;
-    const d=inv.fecha_vencimiento?days(inv.fecha_vencimiento):null;
-    const vencAlert=d!==null&&d<=7&&d>=0?"⚠ ":d!==null&&d<0?"🔴 ":"";
-    const socColor=inv.sociedad==="SUDES"?"bpr":inv.sociedad==="POINTERS"?"bdo":"btd";
-    return`<div class="tc" style="cursor:default">
-      <div class="tcm" style="cursor:default;flex-wrap:wrap;gap:8px">
-        <div style="flex:1;min-width:200px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
-            <span style="font-size:14px;font-weight:600;color:var(--tx)">${esc(inv.nombre)}</span>
-            <span class="badge ${TIPO_COLOR[inv.tipo]||"btd"}">${inv.tipo}</span>
-            <span class="badge ${socColor}">${inv.sociedad}</span>
-            <span class="badge ${EST_COLOR[inv.estado]||"btd"}">${inv.estado}</span>
+  // Build per-company panels — only show companies with investments OR main 4
+  const mainCos=["POINTERS","SUDES","AMPARO","MARIO"];
+  const usedCos=[...new Set(cfInversiones.map(i=>i.sociedad||"Personal"))];
+  const allCos=[...new Set([...mainCos,...usedCos])];
+
+  let html='<div style="display:flex;flex-direction:column;gap:12px">';
+
+  allCos.forEach(socKey=>{
+    const empresa=INV_EMPRESAS.find(e=>e.key===socKey)||{key:socKey,label:socKey,icon:"💼",color:"#64748B"};
+    const invs=cfInversiones.filter(i=>(i.sociedad||"Personal")===socKey);
+    const act=invs.filter(i=>i.estado==="Activa");
+    const cap=act.reduce((s,i)=>s+(i.capital||0),0);
+    const val=act.reduce((s,i)=>s+(i.valor_actual||i.capital||0),0);
+    const rendE=val-cap;
+    const rendPct=cap?((rendE/cap)*100).toFixed(1):"0.0";
+    const vencProx=invs.filter(i=>i.estado==="Activa"&&i.fecha_vencimiento&&days(i.fecha_vencimiento)<=7&&days(i.fecha_vencimiento)>=0);
+    const vencPasados=invs.filter(i=>i.estado==="Activa"&&i.fecha_vencimiento&&days(i.fecha_vencimiento)<0);
+
+    html+=`<div class="tc" style="cursor:default;padding:0;overflow:hidden">
+      <!-- Company header -->
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--surf2);border-bottom:1px solid var(--b);cursor:pointer" onclick="toggleInvPanel('${socKey}')">
+        <span style="font-size:18px">${empresa.icon}</span>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="font-size:15px;font-weight:700;color:var(--tx)">${empresa.label}</span>
+            ${act.length?`<span style="font-size:11px;background:${empresa.color}22;color:${empresa.color};border:1px solid ${empresa.color}44;border-radius:4px;padding:1px 7px;font-weight:600">${act.length} activa${act.length!==1?"s":""}</span>`:""}
+            ${vencPasados.length?`<span style="font-size:11px;background:#FCA5A522;color:#FCA5A5;border:1px solid #FCA5A544;border-radius:4px;padding:1px 7px">🔴 ${vencPasados.length} vencida${vencPasados.length!==1?"s":""}</span>`:""}
+            ${vencProx.length?`<span style="font-size:11px;background:#FCD34D22;color:#FCD34D;border:1px solid #FCD34D44;border-radius:4px;padding:1px 7px">⚠ vence pronto</span>`:""}
           </div>
-          <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px">
-            <span style="color:var(--tx3)">Capital: <strong style="color:var(--tx)">$${Math.round(cap).toLocaleString("es-AR")}</strong></span>
-            <span style="color:var(--tx3)">Valor actual: <strong style="color:var(--gr)">$${Math.round(val).toLocaleString("es-AR")}</strong></span>
-            <span style="color:${rend>=0?"var(--gr)":"var(--re)"}"><strong>${rend>=0?"+":""}$${Math.round(Math.abs(rend)).toLocaleString("es-AR")} (${rend>=0?"+":""}${rendPct}%)</strong></span>
-            ${inv.entidad?`<span style="color:var(--tx3)">${esc(inv.entidad)}</span>`:""}
-            ${inv.tasa?`<span style="color:var(--am)">📊 ${esc(inv.tasa)}</span>`:""}
-            ${inv.fecha_vencimiento?`<span style="color:${d!==null&&d<=7?"#FCD34D":"var(--tx3)"}">${vencAlert}Vence: ${fmt(inv.fecha_vencimiento)}${d!==null?" ("+Math.abs(d)+"d"+(d<0?" pasado":" restante")+")":""}</span>`:""}
-          </div>
-          ${inv.notas?`<div style="font-size:11px;color:var(--tx3);margin-top:4px">${esc(inv.notas)}</div>`:""}
+          ${act.length?`<div style="display:flex;gap:16px;margin-top:4px;font-size:12px;color:var(--tx3)">
+            <span>Capital: <strong style="color:var(--tx)">$${Math.round(cap).toLocaleString("es-AR")}</strong></span>
+            <span>Valor: <strong style="color:var(--gr)">$${Math.round(val).toLocaleString("es-AR")}</strong></span>
+            <span style="color:${rendE>=0?"var(--gr)":"var(--re)"}"><strong>${rendE>=0?"+":""}$${Math.round(Math.abs(rendE)).toLocaleString("es-AR")} (${rendE>=0?"+":""}${rendPct}%)</strong></span>
+          </div>`:`<div style="font-size:12px;color:var(--tx3);margin-top:2px">Sin inversiones activas</div>`}
         </div>
-        <div style="display:flex;gap:5px;align-items:flex-start">
-          <button class="btn sm" onclick="editCFInv('${inv.id}')">Editar</button>
-          <button class="btn sm danger" onclick="delCFInv('${inv.id}')">Eliminar</button>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button class="btn sm" onclick="event.stopPropagation();openAddInversionPara('${socKey}')">+ Agregar</button>
+          <span id="inv-arrow-${socKey}" style="color:var(--tx3);font-size:14px;transition:transform .2s">${invs.length?"▾":"▾"}</span>
         </div>
       </div>
+
+      <!-- Investment list (collapsible) -->
+      <div id="inv-panel-${socKey}" style="${invs.length===0?"display:none":""}">
+        ${invs.length===0?"":`<div style="padding:8px 12px;display:flex;flex-direction:column;gap:6px">
+          ${invs.map(inv=>{
+            const icap=inv.capital||0,ival=inv.valor_actual||icap;
+            const ir=ival-icap;const irPct=icap?((ir/icap)*100).toFixed(1):"0.0";
+            const d=inv.fecha_vencimiento?days(inv.fecha_vencimiento):null;
+            const vencAlert=d!==null&&d<0?"🔴 ":d!==null&&d<=7?"⚠ ":"";
+            const isActiva=inv.estado==="Activa";
+            return`<div style="background:var(--bg);border:1px solid var(--b);border-radius:8px;padding:10px 12px;display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
+              <div style="flex:1;min-width:180px">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
+                  <span style="font-size:13px;font-weight:600;color:var(--tx)">${esc(inv.nombre)}</span>
+                  <span class="badge ${TIPO_COLOR[inv.tipo]||"btd"}" style="font-size:10px">${inv.tipo||"—"}</span>
+                  <span class="badge ${EST_COLOR[inv.estado]||"btd"}" style="font-size:10px">${inv.estado}</span>
+                </div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--tx3)">
+                  <span>Capital: <strong style="color:var(--tx)">$${Math.round(icap).toLocaleString("es-AR")}</strong></span>
+                  ${isActiva?`<span>Valor: <strong style="color:var(--gr)">$${Math.round(ival).toLocaleString("es-AR")}</strong></span>`:""}
+                  ${isActiva&&icap?`<span style="color:${ir>=0?"var(--gr)":"var(--re)"}"><strong>${ir>=0?"+":""}${irPct}%</strong></span>`:""}
+                  ${inv.monto_recuperado&&!isActiva?`<span>Recuperado: <strong style="color:var(--gr)">$${Math.round(inv.monto_recuperado).toLocaleString("es-AR")}</strong></span>`:""}
+                  ${inv.entidad?`<span>📍 ${esc(inv.entidad)}</span>`:""}
+                  ${inv.tasa?`<span>📊 ${esc(inv.tasa)}</span>`:""}
+                  ${inv.fecha_vencimiento?`<span style="color:${d!==null&&d<=7?"#FCD34D":"var(--tx3)"}">${vencAlert}${inv.estado==="Rescatada"?"Rescatado":"Vence"}: ${fmt(inv.fecha_rescate||inv.fecha_vencimiento)}${isActiva&&d!==null?" ("+Math.abs(d)+"d"+(d<0?" pasado":" restante")+")":""}</span>`:""}
+                </div>
+                ${inv.notas?`<div style="font-size:10px;color:var(--tx3);margin-top:3px;font-style:italic">${esc(inv.notas)}</div>`:""}
+              </div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
+                ${isActiva?`<button class="btn sm pri" onclick="openRescateModal('${inv.id}')" title="Registrar rescate o vencimiento">Rescatar</button>`:""}
+                <button class="btn sm" onclick="editCFInv('${inv.id}')">✎</button>
+                <button class="btn sm danger" onclick="delCFInv('${inv.id}')">✕</button>
+              </div>
+            </div>`;
+          }).join("")}
+        </div>`}
+      </div>
     </div>`;
-  }).join("")}</div>`;
+  });
+
+  html+="</div>";
+  cont.innerHTML=html;
+
+  // Set arrow states
+  allCos.forEach(socKey=>{
+    const panel=document.getElementById(`inv-panel-${socKey}`);
+    const arrow=document.getElementById(`inv-arrow-${socKey}`);
+    if(panel&&arrow){arrow.textContent=panel.style.display==="none"?"▸":"▾";}
+  });
+}
+
+function toggleInvPanel(socKey){
+  const panel=document.getElementById(`inv-panel-${socKey}`);
+  const arrow=document.getElementById(`inv-arrow-${socKey}`);
+  if(!panel)return;
+  const showing=panel.style.display!=="none";
+  panel.style.display=showing?"none":"";
+  if(arrow)arrow.textContent=showing?"▸":"▾";
+}
+
+function openAddInversionPara(soc){
+  openAddInversion();
+  document.getElementById("cfi-soc").value=soc;
+}
+
+function openRescateModal(id){
+  const inv=cfInversiones.find(i=>i.id===id);if(!inv)return;
+  document.getElementById("cfr-inv-id").value=id;
+  document.getElementById("mcr-title").textContent=`Rescatar: ${inv.nombre}`;
+  const d=document.getElementById("cfr-info");
+  d.innerHTML=`<strong>${esc(inv.nombre)}</strong> · ${inv.tipo||""} · ${inv.sociedad||""}<br>Capital: $${Math.round(inv.capital||0).toLocaleString("es-AR")} · Valor actual: $${Math.round(inv.valor_actual||inv.capital||0).toLocaleString("es-AR")}${inv.fecha_vencimiento?` · Vence: ${fmt(inv.fecha_vencimiento)}`:""}`;
+  document.getElementById("cfr-fecha").value=today();
+  document.getElementById("cfr-monto").value=inv.valor_actual||inv.capital||"";
+  document.getElementById("cfr-notas").value="";
+  document.getElementById("cfr-reinvertir").checked=false;
+  document.getElementById("cfr-save-btn").disabled=false;
+  openModal("modal-cf-rescate");
+}
+
+function toggleReinvertir(){
+  // visual feedback only — actual logic in saveRescate
+}
+
+async function saveRescate(){
+  const id=document.getElementById("cfr-inv-id").value;
+  const fecha=document.getElementById("cfr-fecha").value;
+  const monto=parseFloat(document.getElementById("cfr-monto").value)||null;
+  const notas=document.getElementById("cfr-notas").value.trim()||null;
+  const reinvertir=document.getElementById("cfr-reinvertir").checked;
+  if(!fecha){toast("Elegí una fecha de rescate","err");return}
+  const btn=document.getElementById("cfr-save-btn");btn.disabled=true;
+  try{
+    const inv=cfInversiones.find(i=>i.id===id);
+    const patch={estado:"Rescatada",fecha_rescate:fecha,monto_recuperado:monto,updated_at:new Date().toISOString()};
+    if(notas&&inv)patch.notas=(inv.notas?inv.notas+"\n":"")+`[Rescate ${fecha}] ${notas}`;
+    await sb(`cf_inversiones?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(patch)});
+    const idx=cfInversiones.findIndex(i=>i.id===id);
+    if(idx>=0)cfInversiones[idx]={...cfInversiones[idx],...patch};
+    toast("Inversión rescatada","ok");
+    closeModal("modal-cf-rescate");
+    renderCFInversiones();
+    if(reinvertir){
+      // Pre-fill nueva inversión con datos del rescatado
+      const src=cfInversiones.find(i=>i.id===id);
+      openAddInversion();
+      if(src){
+        document.getElementById("cfi-tipo").value=src.tipo||"FCI";
+        document.getElementById("cfi-entidad").value=src.entidad||"";
+        document.getElementById("cfi-soc").value=src.sociedad||"SUDES";
+        document.getElementById("cfi-tasa").value=src.tasa||"";
+        document.getElementById("cfi-capital").value=monto||src.capital||"";
+        document.getElementById("cfi-inicio").value=fecha;
+        document.getElementById("mci-title").textContent="Reinversión (basada en rescate)";
+      }
+    }
+  }catch(e){toast("Error: "+e.message,"err")}
+  finally{btn.disabled=false}
 }
 
 function openAddInversion(){
