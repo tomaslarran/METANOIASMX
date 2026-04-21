@@ -1433,6 +1433,22 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 </div>
 
+<!-- ══ MODAL CONFIRMAR PAGO CUOTA ══ -->
+<div class="mov" id="modal-pago-cuota" onclick="if(event.target===this)closeM('modal-pago-cuota')">
+  <div class="modal" style="max-width:380px">
+    <div class="mt"><span id="mpc-title">Confirmar pago</span><button class="mt-close" onclick="closeM('modal-pago-cuota')">✕</button></div>
+    <div style="padding:0 20px 20px;display:flex;flex-direction:column;gap:14px">
+      <div id="mpc-resumen" style="background:var(--surf2);border-radius:var(--r);padding:12px 14px;font-size:13px;border:1px solid var(--b)"></div>
+      <div class="fg"><label class="fl">Fecha de pago</label><input type="date" id="mpc-fecha" class="fi"></div>
+      <div class="fg"><label class="fl">Monto abonado</label><input type="number" id="mpc-monto" class="fi" placeholder="0" step="0.01"></div>
+      <div style="display:flex;gap:8px;padding-top:4px">
+        <button class="bc" onclick="closeM('modal-pago-cuota')" style="flex:1">Cancelar</button>
+        <button class="bk" id="mpc-save-btn" onclick="confirmarPagoCuota()" style="flex:1">✓ Confirmar pago</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="mov" id="modal-cf-cobranza" onclick="if(event.target===this)closeModal('modal-cf-cobranza')">
   <div class="modal">
     <div class="mt"><span id="mco-title">Nueva Cobranza</span><button class="mt-close" onclick="closeModal('modal-cf-cobranza')">✕</button></div>
@@ -1842,6 +1858,7 @@ async function renderAlertas(){
     if(d===null||d>30)return;
     alertas.push({tipo:"cuota",icon:"💳",urgencia:d<0?"critica":d===0?"hoy":d<=7?"semana":"mes",d,
       titulo:`Cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${p.nombre}`,sub:`${fmtNum(c.monto_total,true)} · ${p.sociedad}`,fecha:c.fecha,
+      cuotaId:c.id,prestId:p.id,
       onclick:`goPage('cashflow',document.getElementById('nav-cashflow'));setCFTab('prestamos')`});
   });
 
@@ -1883,15 +1900,21 @@ async function renderAlertas(){
   const row=a=>{
     const u=UC[a.urgencia];
     const dStr=a.d<0?`Venció hace ${Math.abs(a.d)}d`:a.d===0?"Hoy":`En ${a.d}d`;
+    const pagarBtn=a.tipo==="cuota"&&a.cuotaId
+      ?`<button onclick="event.stopPropagation();abrirModalPago('${a.cuotaId}','${a.prestId}')" style="flex-shrink:0;background:var(--pu);border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer;white-space:nowrap">Pagar</button>`
+      :"";
     return`<div onclick="${a.onclick}" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:var(--r);cursor:pointer;background:${u.bg};border:1px solid ${u.border};margin-bottom:6px;transition:filter .15s" onmouseenter="this.style.filter='brightness(1.12)'" onmouseleave="this.style.filter=''">
       <span style="font-size:16px;flex-shrink:0">${a.icon}</span>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.titulo)}</div>
         <div style="font-size:11px;color:var(--tx3)">${a.sub||""}</div>
       </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:11px;font-weight:700;color:${u.dot}">${dStr}</div>
-        <div style="font-size:10px;color:var(--tx4)">${fmt(a.fecha)}</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <div style="text-align:right">
+          <div style="font-size:11px;font-weight:700;color:${u.dot}">${dStr}</div>
+          <div style="font-size:10px;color:var(--tx4)">${fmt(a.fecha)}</div>
+        </div>
+        ${pagarBtn}
       </div>
     </div>`;
   };
@@ -4010,21 +4033,53 @@ function togglePrestCuotas(id){
   if(el)el.style.display=el.style.display==="none"?"":"none";
 }
 
-async function marcarCuotaPagada(cuotaId,prestId){
+let _mpcCuotaId=null,_mpcPrestId=null;
+function marcarCuotaPagada(cuotaId,prestId){abrirModalPago(cuotaId,prestId)}
+
+function abrirModalPago(cuotaId,prestId){
+  const c=cfPrestCuotas.find(x=>x.id===cuotaId);
+  const p=cfPrestamos.find(x=>x.id===prestId);
+  if(!c||!p)return;
+  _mpcCuotaId=cuotaId;_mpcPrestId=prestId;
+  document.getElementById("mpc-title").textContent=`Pagar cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${p.nombre}`;
+  document.getElementById("mpc-resumen").innerHTML=`
+    <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+      <span style="color:var(--tx3)">Total cuota</span>
+      <span style="font-weight:700;color:var(--re)">${fmtNum(c.monto_total,true)}</span>
+    </div>
+    ${c.capital!=null?`<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--tx3)">Capital</span><span style="color:var(--gr)">${fmtNum(c.capital,true)}</span></div>`:""}
+    ${c.intereses!=null?`<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--tx3)">Intereses</span><span style="color:#FCA5A5">${fmtNum(c.intereses,true)}</span></div>`:""}
+    <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--b)">
+      <span style="color:var(--tx3)">Vencimiento original</span>
+      <span style="color:var(--tx)">${fmt(c.fecha)}</span>
+    </div>`;
+  document.getElementById("mpc-fecha").value=today();
+  document.getElementById("mpc-monto").value=c.monto_total!=null?parseFloat(c.monto_total).toFixed(2):"";
+  openM("modal-pago-cuota");
+  setTimeout(()=>document.getElementById("mpc-fecha").focus(),80);
+}
+
+async function confirmarPagoCuota(){
+  const fecha=document.getElementById("mpc-fecha").value||today();
+  const btn=document.getElementById("mpc-save-btn");btn.disabled=true;
   try{
-    await sb(`cf_prestamos_cuotas?id=eq.${cuotaId}`,{method:"PATCH",body:JSON.stringify({pagada:true})});
-    const c=cfPrestCuotas.find(c=>c.id===cuotaId);if(c)c.pagada=true;
-    // Actualizar saldo del préstamo
-    const prest=cfPrestamos.find(p=>p.id===prestId);
-    const cuotaObj=cfPrestCuotas.find(c=>c.id===cuotaId);
-    if(prest&&cuotaObj){
-      const nuevoSaldo=Math.max(0,(prest.saldo_actual||0)-(cuotaObj.capital||cuotaObj.monto_total||0));
-      const cuotasPend=cfPrestCuotas.filter(c=>c.prestamo_id===prestId&&!c.pagada).length;
-      await sb(`cf_prestamos?id=eq.${prestId}`,{method:"PATCH",body:JSON.stringify({saldo_actual:nuevoSaldo,cuotas_pendientes:cuotasPend,updated_at:new Date().toISOString()})});
+    await sb(`cf_prestamos_cuotas?id=eq.${_mpcCuotaId}`,{method:"PATCH",body:JSON.stringify({pagada:true,fecha_pago:fecha,updated_at:new Date().toISOString()})});
+    const c=cfPrestCuotas.find(x=>x.id===_mpcCuotaId);
+    if(c){c.pagada=true;c.fecha_pago=fecha;}
+    const prest=cfPrestamos.find(p=>p.id===_mpcPrestId);
+    if(prest&&c){
+      const nuevoSaldo=Math.max(0,(prest.saldo_actual||0)-(c.capital||c.monto_total||0));
+      const cuotasPend=cfPrestCuotas.filter(x=>x.prestamo_id===_mpcPrestId&&!x.pagada).length;
+      await sb(`cf_prestamos?id=eq.${_mpcPrestId}`,{method:"PATCH",body:JSON.stringify({saldo_actual:nuevoSaldo,cuotas_pendientes:cuotasPend,updated_at:new Date().toISOString()})});
       prest.saldo_actual=nuevoSaldo;prest.cuotas_pendientes=cuotasPend;
     }
-    toast("Cuota marcada como pagada ✓","ok");renderCFPrestamos();
+    closeM("modal-pago-cuota");
+    toast(`✓ Cuota pagada — ${fmtNum(c?.monto_total,true)}`,"ok");
+    renderCFPrestamos();
+    renderCFResumen();
+    if(curPage==="alertas")renderAlertas();
   }catch(e){toast("Error: "+e.message,"err")}
+  finally{btn.disabled=false;_mpcCuotaId=null;_mpcPrestId=null;}
 }
 
 /* ── ANALIZAR PRÉSTAMO CON IA ── */
