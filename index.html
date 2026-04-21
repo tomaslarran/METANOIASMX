@@ -1609,6 +1609,7 @@ const UC=["#7C3AED","#3B82F6","#10B981","#F59E0B","#EC4899","#14B8A6"];
 function today(){return new Date().toISOString().split("T")[0]}
 function days(d){if(!d)return null;return Math.ceil((new Date(d)-new Date(today()))/86400000)}
 function fmt(d){if(!d)return"";const[y,m,dd]=d.split("-");return`${dd}/${m}/${y}`}
+function fmtNum(v,siempre2=false){if(v==null||v==="")return"—";const n=parseFloat(v);if(isNaN(n))return"—";const dec=n%1!==0||siempre2;return"$"+n.toLocaleString("es-AR",{minimumFractionDigits:dec?2:0,maximumFractionDigits:2})}
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
 function hl(t,q2){if(!q2)return esc(t);const re=new RegExp(`(${q2.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")})`,"gi");return esc(t).replace(re,'<mark class="hl">$1</mark>')}
 function uColor(id){const i=users.findIndex(u=>u.id===id);return UC[i%UC.length]||"#7C3AED"}
@@ -3345,10 +3346,10 @@ function renderCFPrestamos(){
               return`<tr style="border-top:1px solid var(--surf2);${c.pagada?"opacity:.5":""}${venc?" background:rgba(239,68,68,.05)":""}${prox?" background:rgba(245,158,11,.05)":""}">
                 <td style="padding:6px 10px;color:var(--tx3)">${c.nro_cuota||"—"}</td>
                 <td style="padding:6px 10px;color:${venc?"#FCA5A5":prox?"#FCD34D":"var(--tx2)"}">${fmt(c.fecha)}${venc?" ⚠":prox?" ⏰":""}</td>
-                <td style="padding:6px 10px;text-align:right;font-weight:600;color:var(--tx)">$${Math.round(c.monto_total||0).toLocaleString("es-AR")}</td>
-                <td style="padding:6px 10px;text-align:right;color:var(--gr)">${c.capital!=null?"$"+Math.round(c.capital).toLocaleString("es-AR"):"—"}</td>
-                <td style="padding:6px 10px;text-align:right;color:#FCA5A5">${c.intereses!=null?"$"+Math.round(c.intereses).toLocaleString("es-AR"):"—"}</td>
-                <td style="padding:6px 10px;text-align:right;color:var(--tx3)">${c.saldo_restante!=null?"$"+Math.round(c.saldo_restante).toLocaleString("es-AR"):"—"}</td>
+                <td style="padding:6px 10px;text-align:right;font-weight:600;color:var(--tx)">${fmtNum(c.monto_total,true)}</td>
+                <td style="padding:6px 10px;text-align:right;color:var(--gr)">${fmtNum(c.capital)}</td>
+                <td style="padding:6px 10px;text-align:right;color:#FCA5A5">${fmtNum(c.intereses)}</td>
+                <td style="padding:6px 10px;text-align:right;color:var(--tx3)">${fmtNum(c.saldo_restante)}</td>
                 <td style="padding:6px 10px;text-align:center">
                   ${c.pagada?'<span class="badge bdo" style="font-size:10px">Pagada</span>':
                     `<button class="btn sm" style="font-size:10px;padding:2px 8px" onclick="marcarCuotaPagada('${c.id}','${p.id}')">Marcar pagada</button>`}
@@ -3357,9 +3358,9 @@ function renderCFPrestamos(){
             }).join("")}</tbody>
             <tfoot><tr style="background:var(--surf2);border-top:2px solid var(--b)">
               <td colspan="2" style="padding:7px 10px;font-weight:700;color:var(--tx)">TOTAL</td>
-              <td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--tx)">$${Math.round(cuotas.reduce((s,c)=>s+(c.monto_total||0),0)).toLocaleString("es-AR")}</td>
-              <td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--gr)">${totalCapital?"$"+Math.round(totalCapital).toLocaleString("es-AR"):"—"}</td>
-              <td style="padding:7px 10px;text-align:right;font-weight:700;color:#FCA5A5">${totalIntereses?"$"+Math.round(totalIntereses).toLocaleString("es-AR"):"—"}</td>
+              <td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--tx)">${fmtNum(cuotas.reduce((s,c)=>s+(c.monto_total||0),0),true)}</td>
+              <td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--gr)">${totalCapital?fmtNum(totalCapital,true):"—"}</td>
+              <td style="padding:7px 10px;text-align:right;font-weight:700;color:#FCA5A5">${totalIntereses?fmtNum(totalIntereses,true):"—"}</td>
               <td colspan="2"></td>
             </tr></tfoot>
           </table>
@@ -3901,9 +3902,9 @@ function apMostrarResultado(data){
       <tbody>${apCuotasExtraidas.map(c=>`<tr style="border-top:1px solid var(--surf2)${c.pagada?" opacity:.5":""}">
         <td style="padding:5px 10px;color:var(--tx3)">${c.nro||"—"}</td>
         <td style="padding:5px 10px;color:var(--tx2)">${fmt(c.fecha)}</td>
-        <td style="padding:5px 10px;text-align:right;font-weight:600">$${Math.round(c.monto_total||0).toLocaleString("es-AR")}</td>
-        ${tieneDet?`<td style="padding:5px 10px;text-align:right;color:var(--gr)">${c.capital!=null?"$"+Math.round(c.capital).toLocaleString("es-AR"):"—"}</td><td style="padding:5px 10px;text-align:right;color:#FCA5A5">${c.intereses!=null?"$"+Math.round(c.intereses).toLocaleString("es-AR"):"—"}</td>`:""}
-        <td style="padding:5px 10px;text-align:right;color:var(--tx3)">${c.saldo_restante!=null?"$"+Math.round(c.saldo_restante).toLocaleString("es-AR"):"—"}</td>
+        <td style="padding:5px 10px;text-align:right;font-weight:600">${fmtNum(c.monto_total,true)}</td>
+        ${tieneDet?`<td style="padding:5px 10px;text-align:right;color:var(--gr)">${fmtNum(c.capital)}</td><td style="padding:5px 10px;text-align:right;color:#FCA5A5">${fmtNum(c.intereses)}</td>`:""}
+        <td style="padding:5px 10px;text-align:right;color:var(--tx3)">${fmtNum(c.saldo_restante)}</td>
         <td style="padding:5px 10px;text-align:center">${c.pagada?'<span class="badge bdo" style="font-size:10px">Pagada</span>':'<span style="font-size:10px;color:var(--tx3)">Pendiente</span>'}</td>
       </tr>`).join("")}</tbody>
     </table>`;
@@ -3914,9 +3915,9 @@ function apMostrarResultado(data){
   const totalCap=apCuotasExtraidas.reduce((s,c)=>s+(c.capital||0),0);
   const pend=apCuotasExtraidas.filter(c=>!c.pagada).length;
   document.getElementById("ap-cuotas-resumen").innerHTML=
-    `${apCuotasExtraidas.length} cuotas · ${pend} pendientes · Total: <strong>$${Math.round(totalCuotas).toLocaleString("es-AR")}</strong>`+
-    (totalCap?` · Capital: <strong style="color:var(--gr)">$${Math.round(totalCap).toLocaleString("es-AR")}</strong>`:"")+
-    (totalInt?` · Intereses: <strong style="color:#FCA5A5">$${Math.round(totalInt).toLocaleString("es-AR")}</strong>`:"");
+    `${apCuotasExtraidas.length} cuotas · ${pend} pendientes · Total: <strong>${fmtNum(totalCuotas,true)}</strong>`+
+    (totalCap?` · Capital: <strong style="color:var(--gr)">${fmtNum(totalCap,true)}</strong>`:"")+
+    (totalInt?` · Intereses: <strong style="color:#FCA5A5">${fmtNum(totalInt,true)}</strong>`:"");
 }
 
 async function apGuardar(){
