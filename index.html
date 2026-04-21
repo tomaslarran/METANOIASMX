@@ -1277,13 +1277,22 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="mt"><span id="mcr-title">Rescatar inversión</span><button class="mt-close" onclick="closeModal('modal-cf-rescate')">✕</button></div>
     <input type="hidden" id="cfr-inv-id">
     <div id="cfr-info" style="background:var(--surf2);border:1px solid var(--b);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--tx2)"></div>
+    <!-- Tipo de rescate -->
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button id="cfr-btn-parcial" class="btn sm on" style="flex:1;justify-content:center" onclick="setCfrTipo('parcial')">Rescate parcial</button>
+      <button id="cfr-btn-total" class="btn sm" style="flex:1;justify-content:center" onclick="setCfrTipo('total')">Rescate total</button>
+    </div>
+    <div id="cfr-tipo-info-parcial" style="font-size:12px;color:var(--tx3);margin-bottom:10px;padding:8px 12px;background:var(--surf2);border-radius:6px">La inversión sigue <strong>Activa</strong>. Se registra el monto retirado y se actualiza el valor restante.</div>
+    <div id="cfr-tipo-info-total" style="display:none;font-size:12px;color:var(--tx3);margin-bottom:10px;padding:8px 12px;background:var(--surf2);border-radius:6px">Se cierra la inversión marcándola como <strong>Rescatada</strong>. El rendimiento total queda registrado en el historial.</div>
+    <input type="hidden" id="cfr-tipo" value="parcial">
     <div class="fgrid">
       <div class="fg"><label class="fl">Fecha de rescate *</label><input class="fi" id="cfr-fecha" type="date"></div>
-      <div class="fg"><label class="fl">Monto recuperado ($)</label><input class="fi" id="cfr-monto" type="number" placeholder="0" step="0.01"></div>
+      <div class="fg"><label class="fl">Monto rescatado ($) *</label><input class="fi" id="cfr-monto" type="number" placeholder="0" step="0.01" oninput="updateCfrResumen()"></div>
     </div>
-    <div class="fg"><label class="fl">Notas del rescate</label><input class="fi" id="cfr-notas" type="text" placeholder="Ej: rescate anticipado, TNA obtenida..."></div>
-    <div style="display:flex;align-items:center;gap:8px;padding:10px 0 6px;border-top:1px solid var(--b);margin-top:8px">
-      <input type="checkbox" id="cfr-reinvertir" style="accent-color:var(--ac);width:15px;height:15px" onchange="toggleReinvertir()">
+    <div id="cfr-resumen" style="font-size:12px;color:var(--tx3);margin-bottom:10px;display:none"></div>
+    <div class="fg"><label class="fl">Notas</label><input class="fi" id="cfr-notas" type="text" placeholder="Ej: rescate anticipado, TNA obtenida..."></div>
+    <div id="cfr-reinvertir-wrap" style="display:none;align-items:center;gap:8px;padding:10px 0 6px;border-top:1px solid var(--b);margin-top:8px">
+      <input type="checkbox" id="cfr-reinvertir" style="accent-color:var(--ac);width:15px;height:15px">
       <label for="cfr-reinvertir" style="font-size:13px;color:var(--tx2);cursor:pointer">Reinvertir — abrir formulario de nueva inversión al guardar</label>
     </div>
     <div class="ma"><button class="bc" onclick="closeModal('modal-cf-rescate')">Cancelar</button><button class="bk" id="cfr-save-btn" onclick="saveRescate()">Confirmar rescate</button></div>
@@ -2801,7 +2810,7 @@ async function doDelRutina(id){
 }
 
 /* ── CASH FLOW ── */
-let cfConceptos=[],cfValores=[],cfPrestamos=[],cfCobranzas=[],cfInversiones=[];
+let cfConceptos=[],cfValores=[],cfPrestamos=[],cfCobranzas=[],cfInversiones=[],cfInvMovs=[];
 let cfSociedad="SUDES",cfTab="resumen",cfPFilter="all",cfCobFilter="all",cfInvFilter="all";
 let cfSaldoInicial=0;
 function setCFSaldoInicial(v){cfSaldoInicial=parseFloat(String(v).replace(/\./g,"").replace(",","."))||0;renderCFResumen();}
@@ -2810,12 +2819,13 @@ const MESES_CF=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov
 
 async function loadCF(){
   try{
-    [cfConceptos,cfValores,cfPrestamos,cfCobranzas,cfInversiones]=await Promise.all([
+    [cfConceptos,cfValores,cfPrestamos,cfCobranzas,cfInversiones,cfInvMovs]=await Promise.all([
       sb("cf_conceptos?select=*&order=tipo,nombre"),
       sb("cf_valores?select=*"),
       sb("cf_prestamos?select=*&order=sociedad,tipo"),
       sb("cf_cobranzas?select=*&order=fecha_vencimiento"),
-      sb("cf_inversiones?select=*&order=created_at.desc").catch(()=>[])
+      sb("cf_inversiones?select=*&order=created_at.desc").catch(()=>[]),
+      sb("cf_inversiones_movimientos?select=*&order=fecha.desc").catch(()=>[])
     ]);
     // Badge: cobranzas vencidas + préstamos próximos
     const hoy=today();
@@ -3206,7 +3216,12 @@ function renderCFInversiones(){
   const activas=cfInversiones.filter(i=>i.estado==="Activa");
   const totalCap=activas.reduce((s,i)=>s+(i.capital||0),0);
   const totalVal=activas.reduce((s,i)=>s+(i.valor_actual||i.capital||0),0);
-  const rend=totalVal-totalCap;
+  // Rendimiento total: valor actual de activas + todo lo rescatado históricamente - capital total activas
+  const totalRescatadoGlobal=cfInvMovs.filter(m=>{
+    const inv=cfInversiones.find(i=>i.id===m.inversion_id);
+    return inv&&inv.estado==="Activa";
+  }).reduce((s,m)=>s+(m.monto||0),0);
+  const rend=(totalVal+totalRescatadoGlobal)-totalCap;
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
   set("inv-capital","$"+Math.round(totalCap).toLocaleString("es-AR"));
   set("inv-valor","$"+Math.round(totalVal).toLocaleString("es-AR"));
@@ -3263,33 +3278,55 @@ function renderCFInversiones(){
       <div id="inv-panel-${socKey}" style="${invs.length===0?"display:none":""}">
         ${invs.length===0?"":`<div style="padding:8px 12px;display:flex;flex-direction:column;gap:6px">
           ${invs.map(inv=>{
-            const icap=inv.capital||0,ival=inv.valor_actual||icap;
-            const ir=ival-icap;const irPct=icap?((ir/icap)*100).toFixed(1):"0.0";
+            const movs=cfInvMovs.filter(m=>m.inversion_id===inv.id);
+            const icap=inv.capital||0;
+            const ival=inv.valor_actual||icap;
+            const isActiva=inv.estado==="Activa";
+            // Rendimiento real = suma de todos los rescates + valor_actual restante - capital original
+            const totalRescatado=movs.reduce((s,m)=>s+(m.monto||0),0);
+            const rendReal=(isActiva?ival:0)+totalRescatado-icap;
+            const rendPct=icap?((rendReal/icap)*100).toFixed(1):"0.0";
             const d=inv.fecha_vencimiento?days(inv.fecha_vencimiento):null;
             const vencAlert=d!==null&&d<0?"🔴 ":d!==null&&d<=7?"⚠ ":"";
-            const isActiva=inv.estado==="Activa";
-            return`<div style="background:var(--bg);border:1px solid var(--b);border-radius:8px;padding:10px 12px;display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
-              <div style="flex:1;min-width:180px">
-                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
-                  <span style="font-size:13px;font-weight:600;color:var(--tx)">${esc(inv.nombre)}</span>
-                  <span class="badge ${TIPO_COLOR[inv.tipo]||"btd"}" style="font-size:10px">${inv.tipo||"—"}</span>
-                  <span class="badge ${EST_COLOR[inv.estado]||"btd"}" style="font-size:10px">${inv.estado}</span>
+            return`<div style="background:var(--bg);border:1px solid var(--b);border-radius:8px;padding:10px 12px">
+              <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
+                <div style="flex:1;min-width:180px">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
+                    <span style="font-size:13px;font-weight:600;color:var(--tx)">${esc(inv.nombre)}</span>
+                    <span class="badge ${TIPO_COLOR[inv.tipo]||"btd"}" style="font-size:10px">${inv.tipo||"—"}</span>
+                    <span class="badge ${EST_COLOR[inv.estado]||"btd"}" style="font-size:10px">${inv.estado}</span>
+                  </div>
+                  <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--tx3)">
+                    <span>Capital: <strong style="color:var(--tx)">$${Math.round(icap).toLocaleString("es-AR")}</strong></span>
+                    ${isActiva?`<span>Valor actual: <strong style="color:var(--gr)">$${Math.round(ival).toLocaleString("es-AR")}</strong></span>`:""}
+                    ${totalRescatado>0?`<span>Rescatado: <strong style="color:var(--am)">$${Math.round(totalRescatado).toLocaleString("es-AR")}</strong></span>`:""}
+                    <span style="color:${rendReal>=0?"var(--gr)":"var(--re)"}"><strong>${rendReal>=0?"+":""}$${Math.round(Math.abs(rendReal)).toLocaleString("es-AR")} (${rendReal>=0?"+":""}${rendPct}%)</strong></span>
+                    ${inv.entidad?`<span>📍 ${esc(inv.entidad)}</span>`:""}
+                    ${inv.tasa?`<span>📊 ${esc(inv.tasa)}</span>`:""}
+                    ${inv.fecha_vencimiento?`<span style="color:${d!==null&&d<=7?"#FCD34D":"var(--tx3)"}">${vencAlert}${isActiva?"Vence":"Cerrada"}: ${fmt(inv.fecha_rescate||inv.fecha_vencimiento)}${isActiva&&d!==null?" ("+Math.abs(d)+"d"+(d<0?" pasado":" restante")+")":""}</span>`:""}
+                  </div>
+                  ${inv.notas?`<div style="font-size:10px;color:var(--tx3);margin-top:3px;font-style:italic">${esc(inv.notas)}</div>`:""}
+                  ${movs.length?`<button onclick="toggleInvHistory('${inv.id}')" style="background:none;border:none;color:var(--ac);font-size:11px;cursor:pointer;padding:4px 0;margin-top:4px">📋 Ver historial (${movs.length} movimiento${movs.length!==1?"s":""})</button>`:""}
                 </div>
-                <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--tx3)">
-                  <span>Capital: <strong style="color:var(--tx)">$${Math.round(icap).toLocaleString("es-AR")}</strong></span>
-                  ${isActiva?`<span>Valor: <strong style="color:var(--gr)">$${Math.round(ival).toLocaleString("es-AR")}</strong></span>`:""}
-                  ${isActiva&&icap?`<span style="color:${ir>=0?"var(--gr)":"var(--re)"}"><strong>${ir>=0?"+":""}${irPct}%</strong></span>`:""}
-                  ${inv.monto_recuperado&&!isActiva?`<span>Recuperado: <strong style="color:var(--gr)">$${Math.round(inv.monto_recuperado).toLocaleString("es-AR")}</strong></span>`:""}
-                  ${inv.entidad?`<span>📍 ${esc(inv.entidad)}</span>`:""}
-                  ${inv.tasa?`<span>📊 ${esc(inv.tasa)}</span>`:""}
-                  ${inv.fecha_vencimiento?`<span style="color:${d!==null&&d<=7?"#FCD34D":"var(--tx3)"}">${vencAlert}${inv.estado==="Rescatada"?"Rescatado":"Vence"}: ${fmt(inv.fecha_rescate||inv.fecha_vencimiento)}${isActiva&&d!==null?" ("+Math.abs(d)+"d"+(d<0?" pasado":" restante")+")":""}</span>`:""}
+                <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
+                  ${isActiva?`<button class="btn sm pri" onclick="openRescateModal('${inv.id}')">Rescatar</button>`:""}
+                  <button class="btn sm" onclick="editCFInv('${inv.id}')">✎</button>
+                  <button class="btn sm danger" onclick="delCFInv('${inv.id}')">✕</button>
                 </div>
-                ${inv.notas?`<div style="font-size:10px;color:var(--tx3);margin-top:3px;font-style:italic">${esc(inv.notas)}</div>`:""}
               </div>
-              <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
-                ${isActiva?`<button class="btn sm pri" onclick="openRescateModal('${inv.id}')" title="Registrar rescate o vencimiento">Rescatar</button>`:""}
-                <button class="btn sm" onclick="editCFInv('${inv.id}')">✎</button>
-                <button class="btn sm danger" onclick="delCFInv('${inv.id}')">✕</button>
+              <!-- Historial de movimientos (colapsable) -->
+              <div id="inv-hist-${inv.id}" style="display:none;margin-top:10px;border-top:1px solid var(--b);padding-top:10px">
+                <div style="font-size:11px;font-weight:600;color:var(--tx3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Historial de rescates</div>
+                ${movs.map(m=>`<div style="display:flex;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--surf2);font-size:12px">
+                  <span style="color:var(--tx3);min-width:90px">${fmt(m.fecha)}</span>
+                  <span class="badge ${m.tipo==="Rescate Parcial"?"btd":"bpr"}" style="font-size:10px">${m.tipo}</span>
+                  <span style="color:var(--am);font-weight:600">$${Math.round(m.monto||0).toLocaleString("es-AR")}</span>
+                  ${m.notas?`<span style="color:var(--tx3);font-style:italic">${esc(m.notas)}</span>`:""}
+                </div>`).join("")}
+                <div style="display:flex;justify-content:space-between;padding-top:8px;font-size:12px;font-weight:600">
+                  <span style="color:var(--tx3)">Total rescatado:</span>
+                  <span style="color:var(--am)">$${Math.round(totalRescatado).toLocaleString("es-AR")}</span>
+                </div>
               </div>
             </div>`;
           }).join("")}
@@ -3309,6 +3346,11 @@ function renderCFInversiones(){
   });
 }
 
+function toggleInvHistory(id){
+  const el=document.getElementById(`inv-hist-${id}`);
+  if(el)el.style.display=el.style.display==="none"?"":"none";
+}
+
 function toggleInvPanel(socKey){
   const panel=document.getElementById(`inv-panel-${socKey}`);
   const arrow=document.getElementById(`inv-arrow-${socKey}`);
@@ -3323,22 +3365,58 @@ function openAddInversionPara(soc){
   document.getElementById("cfi-soc").value=soc;
 }
 
+function setCfrTipo(tipo){
+  document.getElementById("cfr-tipo").value=tipo;
+  document.getElementById("cfr-btn-parcial").classList.toggle("on",tipo==="parcial");
+  document.getElementById("cfr-btn-total").classList.toggle("on",tipo==="total");
+  document.getElementById("cfr-tipo-info-parcial").style.display=tipo==="parcial"?"":"none";
+  document.getElementById("cfr-tipo-info-total").style.display=tipo==="total"?"":"none";
+  document.getElementById("cfr-reinvertir-wrap").style.display=tipo==="total"?"flex":"none";
+  updateCfrResumen();
+}
+
+function updateCfrResumen(){
+  const id=document.getElementById("cfr-inv-id").value;
+  const inv=cfInversiones.find(i=>i.id===id);if(!inv)return;
+  const monto=parseFloat(document.getElementById("cfr-monto").value)||0;
+  const tipo=document.getElementById("cfr-tipo").value;
+  const res=document.getElementById("cfr-resumen");
+  if(!monto){res.style.display="none";return}
+  if(tipo==="parcial"){
+    const restante=(inv.valor_actual||inv.capital||0)-monto;
+    res.style.display="";
+    res.innerHTML=`Valor restante estimado: <strong>$${Math.round(restante).toLocaleString("es-AR")}</strong>`;
+    res.style.color=restante<0?"#FCA5A5":"var(--tx3)";
+  } else {
+    const movs=cfInvMovs.filter(m=>m.inversion_id===id);
+    const yaRescatado=movs.reduce((s,m)=>s+(m.monto||0),0);
+    const totalRecup=yaRescatado+monto;
+    const rend=totalRecup-(inv.capital||0);
+    res.style.display="";
+    res.innerHTML=`Total recuperado: <strong>$${Math.round(totalRecup).toLocaleString("es-AR")}</strong> · Rendimiento final: <strong style="color:${rend>=0?"var(--gr)":"var(--re)"}">${rend>=0?"+":""}$${Math.round(Math.abs(rend)).toLocaleString("es-AR")}</strong>`;
+  }
+}
+
 function openRescateModal(id){
   const inv=cfInversiones.find(i=>i.id===id);if(!inv)return;
   document.getElementById("cfr-inv-id").value=id;
   document.getElementById("mcr-title").textContent=`Rescatar: ${inv.nombre}`;
+  const movs=cfInvMovs.filter(m=>m.inversion_id===id);
+  const yaRescatado=movs.reduce((s,m)=>s+(m.monto||0),0);
   const d=document.getElementById("cfr-info");
-  d.innerHTML=`<strong>${esc(inv.nombre)}</strong> · ${inv.tipo||""} · ${inv.sociedad||""}<br>Capital: $${Math.round(inv.capital||0).toLocaleString("es-AR")} · Valor actual: $${Math.round(inv.valor_actual||inv.capital||0).toLocaleString("es-AR")}${inv.fecha_vencimiento?` · Vence: ${fmt(inv.fecha_vencimiento)}`:""}`;
+  d.innerHTML=`<strong>${esc(inv.nombre)}</strong> · ${inv.tipo||""} · ${inv.sociedad||""}<br>
+    Capital original: <strong>$${Math.round(inv.capital||0).toLocaleString("es-AR")}</strong> ·
+    Valor actual: <strong style="color:var(--gr)">$${Math.round(inv.valor_actual||inv.capital||0).toLocaleString("es-AR")}</strong>
+    ${yaRescatado>0?` · Ya rescatado: <strong style="color:var(--am)">$${Math.round(yaRescatado).toLocaleString("es-AR")}</strong>`:""}
+    ${inv.fecha_vencimiento?` · Vence: ${fmt(inv.fecha_vencimiento)}`:""}`;
   document.getElementById("cfr-fecha").value=today();
-  document.getElementById("cfr-monto").value=inv.valor_actual||inv.capital||"";
+  document.getElementById("cfr-monto").value="";
   document.getElementById("cfr-notas").value="";
   document.getElementById("cfr-reinvertir").checked=false;
+  document.getElementById("cfr-resumen").style.display="none";
   document.getElementById("cfr-save-btn").disabled=false;
+  setCfrTipo("parcial");
   openModal("modal-cf-rescate");
-}
-
-function toggleReinvertir(){
-  // visual feedback only — actual logic in saveRescate
 }
 
 async function saveRescate(){
@@ -3346,21 +3424,43 @@ async function saveRescate(){
   const fecha=document.getElementById("cfr-fecha").value;
   const monto=parseFloat(document.getElementById("cfr-monto").value)||null;
   const notas=document.getElementById("cfr-notas").value.trim()||null;
+  const tipo=document.getElementById("cfr-tipo").value;
   const reinvertir=document.getElementById("cfr-reinvertir").checked;
   if(!fecha){toast("Elegí una fecha de rescate","err");return}
+  if(!monto){toast("Ingresá el monto rescatado","err");return}
   const btn=document.getElementById("cfr-save-btn");btn.disabled=true;
   try{
     const inv=cfInversiones.find(i=>i.id===id);
-    const patch={estado:"Rescatada",fecha_rescate:fecha,monto_recuperado:monto,updated_at:new Date().toISOString()};
-    if(notas&&inv)patch.notas=(inv.notas?inv.notas+"\n":"")+`[Rescate ${fecha}] ${notas}`;
+
+    // 1. Guardar movimiento
+    const [mov]=await sb("cf_inversiones_movimientos",{method:"POST",body:JSON.stringify({
+      inversion_id:id,
+      tipo:tipo==="parcial"?"Rescate Parcial":"Rescate Total",
+      fecha,monto,notas
+    })});
+    cfInvMovs.unshift(mov);
+
+    // 2. Actualizar inversión
+    const patch={updated_at:new Date().toISOString()};
+    if(tipo==="total"){
+      patch.estado="Rescatada";
+      patch.fecha_rescate=fecha;
+      // monto_recuperado = suma total de todos los movimientos
+      const totalRecup=cfInvMovs.filter(m=>m.inversion_id===id).reduce((s,m)=>s+(m.monto||0),0);
+      patch.monto_recuperado=totalRecup;
+    } else {
+      // Parcial: actualizar valor_actual restando lo rescatado
+      const nuevoValor=Math.max(0,(inv.valor_actual||inv.capital||0)-monto);
+      patch.valor_actual=nuevoValor;
+    }
     await sb(`cf_inversiones?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(patch)});
     const idx=cfInversiones.findIndex(i=>i.id===id);
     if(idx>=0)cfInversiones[idx]={...cfInversiones[idx],...patch};
-    toast("Inversión rescatada","ok");
+
+    toast(tipo==="total"?"Inversión rescatada ✓":"Rescate parcial registrado ✓","ok");
     closeModal("modal-cf-rescate");
     renderCFInversiones();
-    if(reinvertir){
-      // Pre-fill nueva inversión con datos del rescatado
+    if(tipo==="total"&&reinvertir){
       const src=cfInversiones.find(i=>i.id===id);
       openAddInversion();
       if(src){
