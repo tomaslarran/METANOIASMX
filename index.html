@@ -829,6 +829,19 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="chart-card"><div class="chart-title">Estado de cursos</div><div class="chart-wrap"><canvas id="chartCursos"></canvas></div></div>
     <div class="chart-card chart-full"><div class="chart-title">Comprobantes del mes — por proveedor</div><div class="chart-wrap" style="height:200px"><canvas id="chartComps"></canvas></div></div>
   </div>
+
+  <!-- Panel financiero -->
+  <div style="margin-top:24px">
+    <div style="font-size:13px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px">📊 Análisis financiero — Intereses</div>
+    <div id="dash-fin-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px"></div>
+    <div class="charts-grid" style="grid-template-columns:1fr 1fr">
+      <div class="chart-card"><div class="chart-title">Costo vs rendimiento</div><div class="chart-wrap"><canvas id="chartFinComp"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">Intereses por préstamo (total del plan)</div><div class="chart-wrap"><canvas id="chartPrestInt"></canvas></div></div>
+    </div>
+    <div class="charts-grid" style="grid-template-columns:1fr;margin-top:0">
+      <div class="chart-card chart-full"><div class="chart-title">Cuotas próximas 3 meses — capital vs intereses</div><div class="chart-wrap" style="height:200px"><canvas id="chartCuotasMes"></canvas></div></div>
+    </div>
+  </div>
 </div>
 
 
@@ -1757,7 +1770,12 @@ function goPage(name,el){
   if(el)el.classList.add("on");
   const labels={"tareas":"Nueva tarea","cursos":"Nuevo curso","alumnos":"Nuevo alumno","proveedores":"Nuevo proveedor","instructores":"Nuevo instructor"};
   const nb=document.getElementById("newBtnLabel");if(nb)nb.textContent=labels[name]||"Nuevo";
-  if(name==="graficos"){if(!comprobantes.length)loadComprobantes().then(renderCharts);else renderCharts();}
+  if(name==="graficos"){
+    const loads=[];
+    if(!comprobantes.length)loads.push(loadComprobantes());
+    if(!cfPrestamos.length||!cfInversiones.length)loads.push(loadCF());
+    if(loads.length)Promise.all(loads).then(renderCharts);else renderCharts();
+  }
   if(name==="calendario"){Promise.all([loadCursoTareasCalendario(),loadCF()]).then(()=>renderCalendario())}
   if(name==="rutinas"){
     // Recargar rutinas frescas al navegar
@@ -2489,6 +2507,123 @@ function renderCharts(){
     charts.comps=new Chart(document.getElementById("chartComps"),{type:"bar",data:{labels:provLabels,datasets:[{data:provData,backgroundColor:"rgba(124,58,237,.75)",borderRadius:4,borderSkipped:false}]},options:{...CDEFS,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>"$"+Math.round(ctx.raw).toLocaleString("es-AR")}}},scales:{x:{ticks:{color:"#5A5C72",font:{size:10}},grid:{display:false}},y:{ticks:{color:"#5A5C72",font:{size:10},callback:v=>"$"+Math.round(v/1000)+"k"},grid:{color:"rgba(255,255,255,.05)"}}}}});
   }else{
     const el=document.getElementById("chartComps");if(el)el.closest(".chart-card").querySelector(".chart-title").textContent="Comprobantes del mes — sin datos";
+  }
+
+  // ── ANÁLISIS FINANCIERO ──
+  renderFinanciero(CDEFS);
+}
+
+function renderFinanciero(CDEFS){
+  if(!CDEFS){CDEFS={plugins:{legend:{labels:{color:"#9899B0",font:{family:"Barlow",size:11},boxWidth:10}}},scales:{x:{ticks:{color:"#5A5C72",font:{size:10}},grid:{color:"rgba(255,255,255,.05)"}},y:{ticks:{color:"#5A5C72",font:{size:10}},grid:{color:"rgba(255,255,255,.05)"}}}};}
+  const $=id=>document.getElementById(id);
+
+  // ── Calcular totales ──
+  // Intereses préstamos
+  const cuotasConInt=cfPrestCuotas.filter(c=>c.intereses!=null);
+  const intPagado=cuotasConInt.filter(c=>c.pagada).reduce((s,c)=>s+(c.intereses||0),0);
+  const intPendiente=cuotasConInt.filter(c=>!c.pagada).reduce((s,c)=>s+(c.intereses||0),0);
+  const intTotalPrest=intPagado+intPendiente;
+
+  // Rendimiento inversiones: (valor_actual + rescates) - capital (activas) + (recuperado - capital) (rescatadas)
+  const activas=cfInversiones.filter(i=>i.estado==="Activa");
+  const rescatadas=cfInversiones.filter(i=>i.estado==="Rescatada");
+  const rendActivas=activas.reduce((s,i)=>{
+    const movs=cfInvMovs.filter(m=>m.inversion_id===i.id);
+    const rescatado=movs.reduce((a,m)=>a+(m.monto||0),0);
+    return s+(i.valor_actual||i.capital||0)+rescatado-(i.capital||0);
+  },0);
+  const rendRescatadas=rescatadas.reduce((s,i)=>{
+    const movs=cfInvMovs.filter(m=>m.inversion_id===i.id);
+    const recuperado=movs.reduce((a,m)=>a+(m.monto||0),0)||(i.monto_recuperado||0);
+    return s+recuperado-(i.capital||0);
+  },0);
+  const rendTotal=rendActivas+rendRescatadas;
+  const balance=rendTotal-intPagado;
+
+  // ── Stats cards ──
+  const fin=$("dash-fin-stats");
+  if(fin){
+    const fmtM=v=>"$"+Math.round(Math.abs(v)).toLocaleString("es-AR");
+    fin.innerHTML=[
+      {label:"Intereses pagados",val:intPagado,color:"var(--re)",icon:"💸",sub:"préstamos — histórico"},
+      {label:"Intereses pendientes",val:intPendiente,color:"var(--am)",icon:"📅",sub:"por pagar (plan)"},
+      {label:"Rendimiento inversiones",val:rendTotal,color:rendTotal>=0?"var(--gr)":"var(--re)",icon:"📈",sub:"ganancia neta total"},
+      {label:"Balance neto",val:balance,color:balance>=0?"var(--gr)":"var(--re)",icon:balance>=0?"✅":"⚠",sub:balance>=0?"ganás más de lo que pagás":"pagás más de lo que ganás"},
+    ].map(a=>`<div class="sc" style="${a.val<0?"border-color:var(--re)":""}">
+      <div class="sc-l">${a.label}</div>
+      <div class="sc-v" style="color:${a.color};font-size:22px">${(a.val<0?"-":"")}${fmtM(a.val)}</div>
+      <div class="sc-s">${a.icon} ${a.sub}</div>
+    </div>`).join("");
+  }
+
+  // ── Gráfico comparativo: Costo vs Rendimiento ──
+  destroyChart("finComp");
+  const fcEl=$("chartFinComp");
+  if(fcEl){
+    charts.finComp=new Chart(fcEl,{
+      type:"bar",
+      data:{
+        labels:["Intereses\npagados","Int. pendientes","Rendimiento\ninversiones"],
+        datasets:[{
+          data:[intPagado,intPendiente,rendTotal],
+          backgroundColor:["rgba(239,68,68,.75)","rgba(245,158,11,.75)","rgba(16,185,129,.75)"],
+          borderRadius:5,borderSkipped:false
+        }]
+      },
+      options:{...CDEFS,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>"$"+Math.round(ctx.raw).toLocaleString("es-AR")}}},scales:{x:{ticks:{color:"#5A5C72",font:{size:10}},grid:{display:false}},y:{ticks:{color:"#5A5C72",font:{size:10},callback:v=>"$"+Math.round(v/1000)+"k"},grid:{color:"rgba(255,255,255,.05)"}}}}
+    });
+  }
+
+  // ── Intereses por préstamo (top 8) ──
+  destroyChart("prestInt");
+  const piEl=$("chartPrestInt");
+  if(piEl){
+    const prestConCuotas=cfPrestamos.filter(p=>cfPrestCuotas.some(c=>c.prestamo_id===p.id&&c.intereses!=null));
+    const prestData=prestConCuotas.map(p=>{
+      const cuotas=cfPrestCuotas.filter(c=>c.prestamo_id===p.id);
+      const intTotal=cuotas.reduce((s,c)=>s+(c.intereses||0),0);
+      const capTotal=cuotas.reduce((s,c)=>s+(c.capital||0),0);
+      return{nombre:p.nombre.length>18?p.nombre.slice(0,16)+"…":p.nombre,intTotal,capTotal};
+    }).sort((a,b)=>b.intTotal-a.intTotal).slice(0,8);
+    if(prestData.length){
+      charts.prestInt=new Chart(piEl,{
+        type:"bar",
+        data:{
+          labels:prestData.map(p=>p.nombre),
+          datasets:[
+            {label:"Capital",data:prestData.map(p=>p.capTotal),backgroundColor:"rgba(59,130,246,.7)",borderRadius:[0,0,4,4],borderSkipped:"top"},
+            {label:"Intereses",data:prestData.map(p=>p.intTotal),backgroundColor:"rgba(239,68,68,.7)",borderRadius:[4,4,0,0],borderSkipped:"bottom"}
+          ]
+        },
+        options:{...CDEFS,plugins:{legend:{labels:{color:"#9899B0",font:{size:10},boxWidth:8}}},scales:{x:{stacked:true,ticks:{color:"#5A5C72",font:{size:9}},grid:{display:false}},y:{stacked:true,ticks:{color:"#5A5C72",font:{size:10},callback:v=>"$"+Math.round(v/1000)+"k"},grid:{color:"rgba(255,255,255,.05)"}}}}
+      });
+    } else {
+      piEl.closest(".chart-card").querySelector(".chart-title").textContent="Intereses por préstamo — sin datos de cuotas";
+    }
+  }
+
+  // ── Cuotas próximos 3 meses: capital vs intereses por mes ──
+  destroyChart("cuotasMes");
+  const cmEl=$("chartCuotasMes");
+  if(cmEl){
+    const hoy=new Date();
+    const meses=[];
+    for(let i=0;i<3;i++){const d=new Date(hoy.getFullYear(),hoy.getMonth()+i,1);meses.push({key:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`,label:["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][d.getMonth()]+" "+d.getFullYear()});}
+    const capPorMes=meses.map(m=>cfPrestCuotas.filter(c=>!c.pagada&&c.fecha&&c.fecha.startsWith(m.key)).reduce((s,c)=>s+(c.capital||0),0));
+    const intPorMes=meses.map(m=>cfPrestCuotas.filter(c=>!c.pagada&&c.fecha&&c.fecha.startsWith(m.key)).reduce((s,c)=>s+(c.intereses||0),0));
+    const sinDet=meses.map(m=>cfPrestCuotas.filter(c=>!c.pagada&&c.fecha&&c.fecha.startsWith(m.key)&&c.capital==null&&c.intereses==null).reduce((s,c)=>s+(c.monto_total||0),0));
+    charts.cuotasMes=new Chart(cmEl,{
+      type:"bar",
+      data:{
+        labels:meses.map(m=>m.label),
+        datasets:[
+          {label:"Capital",data:capPorMes,backgroundColor:"rgba(59,130,246,.75)",borderRadius:[0,0,4,4],borderSkipped:"top"},
+          {label:"Intereses",data:intPorMes,backgroundColor:"rgba(239,68,68,.75)",borderRadius:[4,4,0,0],borderSkipped:"bottom"},
+          {label:"Sin detalle",data:sinDet,backgroundColor:"rgba(90,92,114,.6)",borderRadius:4,borderSkipped:false}
+        ]
+      },
+      options:{...CDEFS,plugins:{legend:{labels:{color:"#9899B0",font:{size:10},boxWidth:8}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+": $"+Math.round(ctx.raw).toLocaleString("es-AR")}}},scales:{x:{stacked:true,ticks:{color:"#5A5C72",font:{size:11}},grid:{display:false}},y:{stacked:true,ticks:{color:"#5A5C72",font:{size:10},callback:v=>"$"+Math.round(v/1000)+"k"},grid:{color:"rgba(255,255,255,.05)"}}}}
+    });
   }
 }
 
@@ -3825,6 +3960,8 @@ async function apGuardar(){
     }
     toast(`Préstamo guardado con ${apCuotasExtraidas.length} cuotas ✓`,"ok");
     closeModal("modal-analizar-prestamo");
+    // Recargar todo CF para asegurar que cuotas y préstamo estén sincronizados
+    await loadCF();
     renderCFPrestamos();
   }catch(e){toast("Error: "+e.message,"err")}
   finally{btn.disabled=false}
