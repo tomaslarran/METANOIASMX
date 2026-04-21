@@ -940,7 +940,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <button class="fb" onclick="setPFilter2('Informal',this)">Informal</button>
         <button class="fb" onclick="setPFilter2('Vehículo',this)">Vehículos</button>
       </div>
-      <button class="btn sm pri" onclick="openAddPrestamo()" style="margin-left:auto">+ Préstamo</button>
+      <div style="display:flex;gap:6px;margin-left:auto">
+        <button class="btn sm" onclick="openAnalizarPrestamo()">🤖 Analizar imagen</button>
+        <button class="btn sm pri" onclick="openAddPrestamo()">+ Préstamo</button>
+      </div>
     </div>
 
     <!-- Stats préstamos -->
@@ -1268,6 +1271,68 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </div>
     <div class="fg"><label class="fl">Notas</label><textarea class="fi fta" id="cfi-notas" placeholder="Condiciones, rendimientos, observaciones..." style="min-height:52px"></textarea></div>
     <div class="ma"><button class="bc" onclick="closeModal('modal-cf-inversion')">Cancelar</button><button class="bk" id="cfi-save-btn" onclick="saveCFInversion()">Guardar</button></div>
+  </div>
+</div>
+
+<!-- ══ MODAL ANALIZAR PRÉSTAMO CON IA ══ -->
+<div class="mov" id="modal-analizar-prestamo" onclick="if(event.target===this)closeModal('modal-analizar-prestamo')">
+  <div class="modal" style="max-width:680px">
+    <div class="mt"><span>🤖 Analizar plan de pagos con IA</span><button class="mt-close" onclick="closeModal('modal-analizar-prestamo')">✕</button></div>
+
+    <!-- PASO 1: Upload -->
+    <div id="ap-step1">
+      <div style="font-size:13px;color:var(--tx2);margin-bottom:14px">Subí una foto o captura del resumen del préstamo. La IA va a extraer fechas, cuotas, capital e intereses.</div>
+      <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:2px dashed var(--b);border-radius:10px;padding:30px 20px;cursor:pointer;color:var(--tx3);transition:border-color .2s" id="ap-drop-label" ondragover="event.preventDefault()" ondrop="apHandleDrop(event)">
+        <span style="font-size:32px">📷</span>
+        <span style="font-size:14px;font-weight:500;color:var(--tx2)">Tocá para subir imagen o PDF</span>
+        <span style="font-size:12px">JPG, PNG o PDF del resumen del préstamo</span>
+        <input type="file" id="ap-file" accept="image/*,application/pdf" style="display:none" onchange="apHandleFile(this.files[0])">
+      </label>
+      <div id="ap-preview" style="display:none;margin-top:12px;text-align:center">
+        <img id="ap-preview-img" style="max-width:100%;max-height:220px;border-radius:8px;border:1px solid var(--b)" src="">
+        <div id="ap-preview-name" style="font-size:12px;color:var(--tx3);margin-top:6px"></div>
+      </div>
+      <div class="ma" style="margin-top:16px">
+        <button class="bc" onclick="closeModal('modal-analizar-prestamo')">Cancelar</button>
+        <button class="bk" id="ap-btn-analizar" onclick="apAnalizar()" disabled>Analizar con IA</button>
+      </div>
+    </div>
+
+    <!-- PASO 2: Analizando -->
+    <div id="ap-step2" style="display:none;text-align:center;padding:30px 0">
+      <div class="loader" style="margin:0 auto 14px"></div>
+      <div style="font-size:14px;color:var(--tx2)">Analizando documento...</div>
+      <div style="font-size:12px;color:var(--tx3);margin-top:6px">La IA está leyendo fechas, cuotas y desglose de capital/intereses</div>
+    </div>
+
+    <!-- PASO 3: Resultado -->
+    <div id="ap-step3" style="display:none">
+      <div style="font-size:13px;color:var(--tx2);margin-bottom:12px">Revisá los datos extraídos antes de guardar:</div>
+      <!-- Datos del préstamo -->
+      <div style="background:var(--surf2);border:1px solid var(--b);border-radius:8px;padding:12px 14px;margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Datos del préstamo</div>
+        <div class="fgrid" style="gap:8px">
+          <div class="fg"><label class="fl">Nombre</label><input class="fi" id="ap-nombre" type="text" placeholder="Nombre del préstamo"></div>
+          <div class="fg"><label class="fl">Entidad</label><input class="fi" id="ap-entidad" type="text" placeholder="Banco o entidad"></div>
+        </div>
+        <div class="fgrid" style="gap:8px;margin-top:8px">
+          <div class="fg"><label class="fl">Sociedad</label><select class="fs" id="ap-soc"><option value="SUDES">SUDES</option><option value="POINTERS">POINTERS</option><option value="Personal">Personal</option></select></div>
+          <div class="fg"><label class="fl">Tipo</label><select class="fs" id="ap-tipo"><option>Bancario</option><option>Informal</option><option>Tarjeta</option><option>Otro</option></select></div>
+        </div>
+        <div class="fgrid" style="gap:8px;margin-top:8px">
+          <div class="fg"><label class="fl">Tasa</label><input class="fi" id="ap-tasa" type="text" placeholder="Ej: TNA 42%"></div>
+          <div class="fg"><label class="fl">Monto original ($)</label><input class="fi" id="ap-monto-orig" type="number" placeholder="0"></div>
+        </div>
+      </div>
+      <!-- Tabla de cuotas -->
+      <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Cronograma de cuotas extraído</div>
+      <div id="ap-tabla-cuotas" style="max-height:280px;overflow-y:auto;border:1px solid var(--b);border-radius:8px"></div>
+      <div id="ap-cuotas-resumen" style="font-size:12px;color:var(--tx3);margin-top:8px;padding:8px 12px;background:var(--surf2);border-radius:6px"></div>
+      <div class="ma" style="margin-top:14px">
+        <button class="bc" onclick="apReset()">← Volver</button>
+        <button class="bk" id="ap-btn-guardar" onclick="apGuardar()">Guardar préstamo y cuotas</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2810,7 +2875,7 @@ async function doDelRutina(id){
 }
 
 /* ── CASH FLOW ── */
-let cfConceptos=[],cfValores=[],cfPrestamos=[],cfCobranzas=[],cfInversiones=[],cfInvMovs=[];
+let cfConceptos=[],cfValores=[],cfPrestamos=[],cfCobranzas=[],cfInversiones=[],cfInvMovs=[],cfPrestCuotas=[];
 let cfSociedad="SUDES",cfTab="resumen",cfPFilter="all",cfCobFilter="all",cfInvFilter="all";
 let cfSaldoInicial=0;
 function setCFSaldoInicial(v){cfSaldoInicial=parseFloat(String(v).replace(/\./g,"").replace(",","."))||0;renderCFResumen();}
@@ -2819,13 +2884,14 @@ const MESES_CF=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov
 
 async function loadCF(){
   try{
-    [cfConceptos,cfValores,cfPrestamos,cfCobranzas,cfInversiones,cfInvMovs]=await Promise.all([
+    [cfConceptos,cfValores,cfPrestamos,cfCobranzas,cfInversiones,cfInvMovs,cfPrestCuotas]=await Promise.all([
       sb("cf_conceptos?select=*&order=tipo,nombre"),
       sb("cf_valores?select=*"),
       sb("cf_prestamos?select=*&order=sociedad,tipo"),
       sb("cf_cobranzas?select=*&order=fecha_vencimiento"),
       sb("cf_inversiones?select=*&order=created_at.desc").catch(()=>[]),
-      sb("cf_inversiones_movimientos?select=*&order=fecha.desc").catch(()=>[])
+      sb("cf_inversiones_movimientos?select=*&order=fecha.desc").catch(()=>[]),
+      sb("cf_prestamos_cuotas?select=*&order=fecha").catch(()=>[])
     ]);
     // Badge: cobranzas vencidas + préstamos próximos
     const hoy=today();
@@ -3088,30 +3154,80 @@ function renderCFPrestamos(){
   cont.innerHTML=`<div style="display:flex;flex-direction:column;gap:8px">${list.map(p=>{
     const d=p.fecha_vencimiento?days(p.fecha_vencimiento):null;
     const vencCls=d!==null&&d<0?"color:#FCA5A5":d!==null&&d<=7?"color:#FCD34D":"color:var(--tx3)";
-    const pct=p.cuotas_totales&&p.cuotas_pagadas?Math.round(p.cuotas_pagadas/p.cuotas_totales*100):null;
+    const cuotas=cfPrestCuotas.filter(c=>c.prestamo_id===p.id).sort((a,b)=>a.fecha>b.fecha?1:-1);
+    const cuotasPend=cuotas.filter(c=>!c.pagada);
+    const cuotasPag=cuotas.filter(c=>c.pagada);
+    const pct=cuotas.length?Math.round(cuotasPag.length/cuotas.length*100):
+              (p.cuotas_totales&&p.cuotas_pendientes?Math.round((p.cuotas_totales-p.cuotas_pendientes)/p.cuotas_totales*100):null);
+    const proxCuota=cuotasPend[0];
+    const totalIntereses=cuotas.reduce((s,c)=>s+(c.intereses||0),0);
+    const totalCapital=cuotas.reduce((s,c)=>s+(c.capital||0),0);
     const socCls=p.sociedad==="SUDES"?"bpr":"bdo";
-    return`<div class="tc" style="cursor:default">
-      <div class="tcm" style="cursor:default">
+    return`<div class="tc" style="cursor:default;padding:0;overflow:hidden">
+      <div class="tcm" style="cursor:default;padding:12px 14px">
         <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
             <span style="font-size:14px;font-weight:500;color:var(--tx)">${esc(p.nombre)}</span>
             <span class="badge ${socCls}">${p.sociedad}</span>
             <span class="badge btd">${p.tipo}</span>
             ${!p.activo?'<span class="badge bbl">Inactivo</span>':""}
           </div>
-          <div style="display:flex;gap:16px;flex-wrap:wrap">
-            <span style="font-size:12px;color:var(--tx3)">Saldo: <span style="color:var(--re);font-weight:600">$${Math.round(p.saldo_actual||0).toLocaleString("es-AR")}</span></span>
-            ${p.cuota_mensual?`<span style="font-size:12px;color:var(--tx3)">Cuota: <span style="color:var(--am);font-weight:600">$${Math.round(p.cuota_mensual).toLocaleString("es-AR")}</span></span>`:""}
-            ${p.cuotas_pendientes?`<span style="font-size:12px;color:var(--tx3)">${p.cuotas_pendientes} cuotas restantes</span>`:""}
-            ${p.entidad?`<span style="font-size:12px;color:var(--tx3)">${esc(p.entidad)}</span>`:""}
-            ${p.fecha_vencimiento?`<span style="font-size:12px;${vencCls}">Vence: ${fmt(p.fecha_vencimiento)}${d!==null?" ("+Math.abs(d)+"d"+(d<0?" pasado":" restante")+")":""}</span>`:""}
+          <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px">
+            <span style="color:var(--tx3)">Saldo: <strong style="color:var(--re)">$${Math.round(p.saldo_actual||0).toLocaleString("es-AR")}</strong></span>
+            ${proxCuota?`<span style="color:var(--tx3)">Próx. cuota: <strong style="color:var(--am)">$${Math.round(proxCuota.monto_total||0).toLocaleString("es-AR")}</strong> — ${fmt(proxCuota.fecha)}</span>`:
+              p.cuota_mensual?`<span style="color:var(--tx3)">Cuota: <strong style="color:var(--am)">$${Math.round(p.cuota_mensual).toLocaleString("es-AR")}</strong></span>`:""}
+            ${cuotas.length?`<span style="color:var(--tx3)">${cuotasPag.length}/${cuotas.length} cuotas pagas</span>`:
+              p.cuotas_pendientes?`<span style="color:var(--tx3)">${p.cuotas_pendientes} cuotas restantes</span>`:""}
+            ${totalIntereses>0?`<span style="color:var(--tx3)">Intereses totales: <strong style="color:#FCA5A5">$${Math.round(totalIntereses).toLocaleString("es-AR")}</strong></span>`:""}
+            ${p.entidad?`<span style="color:var(--tx3)">📍 ${esc(p.entidad)}</span>`:""}
           </div>
-          ${pct!==null?`<div style="margin-top:8px"><div style="height:4px;background:var(--surf2);border-radius:2px;overflow:hidden"><div style="width:${pct}%;height:100%;background:var(--pu);border-radius:2px"></div></div><span style="font-size:10px;color:var(--tx3)">${pct}% pagado</span></div>`:""}
+          ${pct!==null?`<div style="margin-top:8px"><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--tx3);margin-bottom:3px"><span>${pct}% pagado</span>${cuotas.length?`<span>${cuotasPend.length} pendiente${cuotasPend.length!==1?"s":""}</span>`:""}</div><div style="height:5px;background:var(--surf2);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:var(--pu);border-radius:3px;transition:width .3s"></div></div></div>`:""}
           ${p.notas?`<div style="font-size:11px;color:var(--tx3);margin-top:4px">${esc(p.notas)}</div>`:""}
+          ${cuotas.length?`<button onclick="togglePrestCuotas('${p.id}')" style="background:none;border:none;color:var(--ac);font-size:11px;cursor:pointer;padding:4px 0;margin-top:4px">📅 Ver cronograma completo (${cuotas.length} cuotas)</button>`:""}
         </div>
         <div style="display:flex;gap:5px;flex-direction:column;align-items:flex-end">
           <button class="btn sm" onclick="editCFPrest('${p.id}')">Editar</button>
           <button class="btn sm danger" onclick="delCFPrest('${p.id}')">Eliminar</button>
+        </div>
+      </div>
+      <!-- Cronograma de cuotas -->
+      <div id="prest-cuotas-${p.id}" style="display:none;border-top:1px solid var(--b)">
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="background:var(--surf2)">
+              <th style="padding:7px 10px;text-align:left;color:var(--tx3);font-weight:600">#</th>
+              <th style="padding:7px 10px;text-align:left;color:var(--tx3);font-weight:600">Fecha</th>
+              <th style="padding:7px 10px;text-align:right;color:var(--tx3);font-weight:600">Total</th>
+              <th style="padding:7px 10px;text-align:right;color:var(--gr);font-weight:600">Capital</th>
+              <th style="padding:7px 10px;text-align:right;color:#FCA5A5;font-weight:600">Intereses</th>
+              <th style="padding:7px 10px;text-align:right;color:var(--tx3);font-weight:600">Saldo</th>
+              <th style="padding:7px 10px;text-align:center;color:var(--tx3);font-weight:600">Estado</th>
+            </tr></thead>
+            <tbody>${cuotas.map(c=>{
+              const dc=c.fecha?days(c.fecha):null;
+              const venc=!c.pagada&&dc!==null&&dc<0;
+              const prox=!c.pagada&&dc!==null&&dc<=3&&dc>=0;
+              return`<tr style="border-top:1px solid var(--surf2);${c.pagada?"opacity:.5":""}${venc?" background:rgba(239,68,68,.05)":""}${prox?" background:rgba(245,158,11,.05)":""}">
+                <td style="padding:6px 10px;color:var(--tx3)">${c.nro_cuota||"—"}</td>
+                <td style="padding:6px 10px;color:${venc?"#FCA5A5":prox?"#FCD34D":"var(--tx2)"}">${fmt(c.fecha)}${venc?" ⚠":prox?" ⏰":""}</td>
+                <td style="padding:6px 10px;text-align:right;font-weight:600;color:var(--tx)">$${Math.round(c.monto_total||0).toLocaleString("es-AR")}</td>
+                <td style="padding:6px 10px;text-align:right;color:var(--gr)">${c.capital!=null?"$"+Math.round(c.capital).toLocaleString("es-AR"):"—"}</td>
+                <td style="padding:6px 10px;text-align:right;color:#FCA5A5">${c.intereses!=null?"$"+Math.round(c.intereses).toLocaleString("es-AR"):"—"}</td>
+                <td style="padding:6px 10px;text-align:right;color:var(--tx3)">${c.saldo_restante!=null?"$"+Math.round(c.saldo_restante).toLocaleString("es-AR"):"—"}</td>
+                <td style="padding:6px 10px;text-align:center">
+                  ${c.pagada?'<span class="badge bdo" style="font-size:10px">Pagada</span>':
+                    `<button class="btn sm" style="font-size:10px;padding:2px 8px" onclick="marcarCuotaPagada('${c.id}','${p.id}')">Marcar pagada</button>`}
+                </td>
+              </tr>`;
+            }).join("")}</tbody>
+            <tfoot><tr style="background:var(--surf2);border-top:2px solid var(--b)">
+              <td colspan="2" style="padding:7px 10px;font-weight:700;color:var(--tx)">TOTAL</td>
+              <td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--tx)">$${Math.round(cuotas.reduce((s,c)=>s+(c.monto_total||0),0)).toLocaleString("es-AR")}</td>
+              <td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--gr)">${totalCapital?"$"+Math.round(totalCapital).toLocaleString("es-AR"):"—"}</td>
+              <td style="padding:7px 10px;text-align:right;font-weight:700;color:#FCA5A5">${totalIntereses?"$"+Math.round(totalIntereses).toLocaleString("es-AR"):"—"}</td>
+              <td colspan="2"></td>
+            </tr></tfoot>
+          </table>
         </div>
       </div>
     </div>`;
@@ -3525,6 +3641,195 @@ function delCFInv(id){
   });
 }
 
+/* ── PRÉSTAMOS — CRONOGRAMA / IA ── */
+function togglePrestCuotas(id){
+  const el=document.getElementById(`prest-cuotas-${id}`);
+  if(el)el.style.display=el.style.display==="none"?"":"none";
+}
+
+async function marcarCuotaPagada(cuotaId,prestId){
+  try{
+    await sb(`cf_prestamos_cuotas?id=eq.${cuotaId}`,{method:"PATCH",body:JSON.stringify({pagada:true})});
+    const c=cfPrestCuotas.find(c=>c.id===cuotaId);if(c)c.pagada=true;
+    // Actualizar saldo del préstamo
+    const prest=cfPrestamos.find(p=>p.id===prestId);
+    const cuotaObj=cfPrestCuotas.find(c=>c.id===cuotaId);
+    if(prest&&cuotaObj){
+      const nuevoSaldo=Math.max(0,(prest.saldo_actual||0)-(cuotaObj.capital||cuotaObj.monto_total||0));
+      const cuotasPend=cfPrestCuotas.filter(c=>c.prestamo_id===prestId&&!c.pagada).length;
+      await sb(`cf_prestamos?id=eq.${prestId}`,{method:"PATCH",body:JSON.stringify({saldo_actual:nuevoSaldo,cuotas_pendientes:cuotasPend,updated_at:new Date().toISOString()})});
+      prest.saldo_actual=nuevoSaldo;prest.cuotas_pendientes=cuotasPend;
+    }
+    toast("Cuota marcada como pagada ✓","ok");renderCFPrestamos();
+  }catch(e){toast("Error: "+e.message,"err")}
+}
+
+/* ── ANALIZAR PRÉSTAMO CON IA ── */
+let apArchivoUrl=null,apArchivoFile=null,apCuotasExtraidas=[];
+const SUPA_URL_P="https://jppxmdvddvbsvymogvcp.supabase.co";
+const KEY_P="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwcHhtZHZkZHZic3Z5bW9ndmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMjcyODAsImV4cCI6MjA5MDgwMzI4MH0.KPAqCKfUteE3XK9QFqb_44Hm8jYQxfjVLkrlyGvaMhE";
+
+function openAnalizarPrestamo(){
+  apReset();
+  openModal("modal-analizar-prestamo");
+}
+
+function apReset(){
+  apArchivoUrl=null;apArchivoFile=null;apCuotasExtraidas=[];
+  document.getElementById("ap-step1").style.display="";
+  document.getElementById("ap-step2").style.display="none";
+  document.getElementById("ap-step3").style.display="none";
+  document.getElementById("ap-preview").style.display="none";
+  document.getElementById("ap-preview-img").src="";
+  document.getElementById("ap-btn-analizar").disabled=true;
+  document.getElementById("ap-file").value="";
+}
+
+function apHandleDrop(e){
+  e.preventDefault();
+  const f=e.dataTransfer.files[0];if(f)apHandleFile(f);
+}
+
+function apHandleFile(file){
+  if(!file)return;
+  apArchivoFile=file;
+  document.getElementById("ap-btn-analizar").disabled=false;
+  document.getElementById("ap-drop-label").style.borderColor="var(--ac)";
+  const prev=document.getElementById("ap-preview");
+  if(file.type.startsWith("image/")){
+    const reader=new FileReader();
+    reader.onload=e=>{document.getElementById("ap-preview-img").src=e.target.result;prev.style.display=""};
+    reader.readAsDataURL(file);
+  } else {
+    document.getElementById("ap-preview-img").src="";
+    prev.style.display="";
+  }
+  document.getElementById("ap-preview-name").textContent=file.name+" ("+Math.round(file.size/1024)+" KB)";
+}
+
+async function apAnalizar(){
+  if(!apArchivoFile){toast("Seleccioná un archivo primero","err");return}
+  document.getElementById("ap-step1").style.display="none";
+  document.getElementById("ap-step2").style.display="";
+  try{
+    // Subir archivo a Supabase Storage (bucket comprobantes)
+    const ext=apArchivoFile.name.split(".").pop();
+    const fname=`prestamos/analisis_${Date.now()}.${ext}`;
+    const upRes=await fetch(`${SUPA_URL_P}/storage/v1/object/comprobantes/${fname}`,{
+      method:"POST",
+      headers:{"apikey":KEY_P,"Authorization":"Bearer "+KEY_P,"Content-Type":apArchivoFile.type,"x-upsert":"true"},
+      body:apArchivoFile
+    });
+    if(!upRes.ok)throw new Error("Error al subir archivo");
+    apArchivoUrl=`${SUPA_URL_P}/storage/v1/object/public/comprobantes/${fname}`;
+
+    // Llamar Edge Function
+    const res=await fetch(`${SUPA_URL_P}/functions/v1/leer-prestamo`,{
+      method:"POST",
+      headers:{"apikey":KEY_P,"Authorization":"Bearer "+KEY_P,"Content-Type":"application/json"},
+      body:JSON.stringify({url:apArchivoUrl})
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error);
+    apMostrarResultado(data);
+  }catch(e){
+    toast("Error: "+e.message,"err");
+    document.getElementById("ap-step1").style.display="";
+    document.getElementById("ap-step2").style.display="none";
+  }
+}
+
+function apMostrarResultado(data){
+  document.getElementById("ap-step2").style.display="none";
+  document.getElementById("ap-step3").style.display="";
+  // Pre-llenar campos
+  document.getElementById("ap-nombre").value=data.nombre_prestamo||data.entidad||"";
+  document.getElementById("ap-entidad").value=data.entidad||"";
+  document.getElementById("ap-tasa").value=[data.tasa_nominal_anual,data.tasa_efectiva_anual].filter(Boolean).join(" / ")||"";
+  document.getElementById("ap-monto-orig").value=data.monto_original||"";
+  apCuotasExtraidas=data.cuotas||[];
+  // Render tabla de cuotas
+  const tabla=document.getElementById("ap-tabla-cuotas");
+  if(!apCuotasExtraidas.length){
+    tabla.innerHTML=`<div style="padding:20px;text-align:center;color:var(--tx3);font-size:13px">No se encontraron cuotas — podés agregarlas manualmente desde el préstamo</div>`;
+  } else {
+    const tieneDet=apCuotasExtraidas.some(c=>c.capital!=null||c.intereses!=null);
+    tabla.innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:var(--surf2)">
+        <th style="padding:6px 10px;text-align:left;color:var(--tx3)">#</th>
+        <th style="padding:6px 10px;text-align:left;color:var(--tx3)">Fecha</th>
+        <th style="padding:6px 10px;text-align:right;color:var(--tx3)">Total</th>
+        ${tieneDet?`<th style="padding:6px 10px;text-align:right;color:var(--gr)">Capital</th><th style="padding:6px 10px;text-align:right;color:#FCA5A5">Intereses</th>`:""}
+        <th style="padding:6px 10px;text-align:right;color:var(--tx3)">Saldo</th>
+        <th style="padding:6px 10px;text-align:center;color:var(--tx3)">Estado</th>
+      </tr></thead>
+      <tbody>${apCuotasExtraidas.map(c=>`<tr style="border-top:1px solid var(--surf2)${c.pagada?" opacity:.5":""}">
+        <td style="padding:5px 10px;color:var(--tx3)">${c.nro||"—"}</td>
+        <td style="padding:5px 10px;color:var(--tx2)">${fmt(c.fecha)}</td>
+        <td style="padding:5px 10px;text-align:right;font-weight:600">$${Math.round(c.monto_total||0).toLocaleString("es-AR")}</td>
+        ${tieneDet?`<td style="padding:5px 10px;text-align:right;color:var(--gr)">${c.capital!=null?"$"+Math.round(c.capital).toLocaleString("es-AR"):"—"}</td><td style="padding:5px 10px;text-align:right;color:#FCA5A5">${c.intereses!=null?"$"+Math.round(c.intereses).toLocaleString("es-AR"):"—"}</td>`:""}
+        <td style="padding:5px 10px;text-align:right;color:var(--tx3)">${c.saldo_restante!=null?"$"+Math.round(c.saldo_restante).toLocaleString("es-AR"):"—"}</td>
+        <td style="padding:5px 10px;text-align:center">${c.pagada?'<span class="badge bdo" style="font-size:10px">Pagada</span>':'<span style="font-size:10px;color:var(--tx3)">Pendiente</span>'}</td>
+      </tr>`).join("")}</tbody>
+    </table>`;
+  }
+  // Resumen
+  const totalCuotas=apCuotasExtraidas.reduce((s,c)=>s+(c.monto_total||0),0);
+  const totalInt=apCuotasExtraidas.reduce((s,c)=>s+(c.intereses||0),0);
+  const totalCap=apCuotasExtraidas.reduce((s,c)=>s+(c.capital||0),0);
+  const pend=apCuotasExtraidas.filter(c=>!c.pagada).length;
+  document.getElementById("ap-cuotas-resumen").innerHTML=
+    `${apCuotasExtraidas.length} cuotas · ${pend} pendientes · Total: <strong>$${Math.round(totalCuotas).toLocaleString("es-AR")}</strong>`+
+    (totalCap?` · Capital: <strong style="color:var(--gr)">$${Math.round(totalCap).toLocaleString("es-AR")}</strong>`:"")+
+    (totalInt?` · Intereses: <strong style="color:#FCA5A5">$${Math.round(totalInt).toLocaleString("es-AR")}</strong>`:"");
+}
+
+async function apGuardar(){
+  const nombre=document.getElementById("ap-nombre").value.trim();
+  if(!nombre){toast("Poné un nombre al préstamo","err");return}
+  const btn=document.getElementById("ap-btn-guardar");btn.disabled=true;
+  try{
+    const cuotasPend=apCuotasExtraidas.filter(c=>!c.pagada);
+    const proxCuota=cuotasPend.sort((a,b)=>a.fecha>b.fecha?1:-1)[0];
+    const ultimaCuota=apCuotasExtraidas[apCuotasExtraidas.length-1];
+    const saldoPend=cuotasPend.reduce((s,c)=>s+(c.capital||c.monto_total||0),0)||null;
+    const data={
+      nombre,
+      entidad:document.getElementById("ap-entidad").value.trim()||null,
+      sociedad:document.getElementById("ap-soc").value,
+      tipo:document.getElementById("ap-tipo").value,
+      notas:document.getElementById("ap-tasa").value?`Tasa: ${document.getElementById("ap-tasa").value}`:null,
+      saldo_actual:saldoPend||parseFloat(document.getElementById("ap-monto-orig").value)||null,
+      cuota_mensual:proxCuota?proxCuota.monto_total:null,
+      cuotas_pendientes:cuotasPend.length||null,
+      fecha_vencimiento:ultimaCuota?.fecha||null,
+      activo:true,
+      updated_at:new Date().toISOString()
+    };
+    const[prest]=await sb("cf_prestamos",{method:"POST",body:JSON.stringify(data)});
+    cfPrestamos.push(prest);
+    // Guardar cuotas
+    if(apCuotasExtraidas.length){
+      const cuotasData=apCuotasExtraidas.map(c=>({
+        prestamo_id:prest.id,
+        nro_cuota:c.nro||null,
+        fecha:c.fecha||null,
+        monto_total:c.monto_total||null,
+        capital:c.capital||null,
+        intereses:c.intereses||null,
+        saldo_restante:c.saldo_restante||null,
+        pagada:c.pagada||false
+      }));
+      const nuevasCuotas=await sb("cf_prestamos_cuotas",{method:"POST",body:JSON.stringify(cuotasData)});
+      cfPrestCuotas.push(...(Array.isArray(nuevasCuotas)?nuevasCuotas:[]));
+    }
+    toast(`Préstamo guardado con ${apCuotasExtraidas.length} cuotas ✓`,"ok");
+    closeModal("modal-analizar-prestamo");
+    renderCFPrestamos();
+  }catch(e){toast("Error: "+e.message,"err")}
+  finally{btn.disabled=false}
+}
+
 /* ── INTEGRACIÓN CASH FLOW → CALENDARIO ── */
 // Extender buildCalEventos para incluir vencimientos del CF
 const _buildCalEventosOrig=typeof buildCalEventos==="function"?buildCalEventos:null;
@@ -3549,8 +3854,16 @@ function buildCalEventos(){
     cfCobranzas.filter(c=>c.estado==="Pendiente").forEach(c=>{
       add(c.fecha_vencimiento,{cls:"ev-cobr",dot:"#10B981",n:c.nombre,s:`Cobranza ${c.tipo} — ${c.sociedad} — $${Math.round(c.monto).toLocaleString("es-AR")}`});
     });
-    // Préstamos con vencimiento próximo
-    cfPrestamos.filter(p=>p.activo&&p.fecha_vencimiento).forEach(p=>{
+    // Cuotas de préstamos pendientes
+    cfPrestCuotas.filter(c=>!c.pagada&&c.fecha).forEach(c=>{
+      const prest=cfPrestamos.find(p=>p.id===c.prestamo_id);
+      if(!prest||!prest.activo)return;
+      const dc=days(c.fecha);
+      const urgente=dc!==null&&dc<=3&&dc>=-1;
+      add(c.fecha,{cls:"ev-prest",dot:urgente?"#EF4444":"#F97316",n:`Cuota ${c.nro_cuota?`#${c.nro_cuota} — `:""}${prest.nombre}`,s:`$${Math.round(c.monto_total||0).toLocaleString("es-AR")}${c.capital!=null?` (cap: $${Math.round(c.capital).toLocaleString("es-AR")}`:""}${c.intereses!=null?` · int: $${Math.round(c.intereses).toLocaleString("es-AR")})`:""}` });
+    });
+    // Préstamos sin cronograma — usar fecha_vencimiento
+    cfPrestamos.filter(p=>p.activo&&p.fecha_vencimiento&&!cfPrestCuotas.some(c=>c.prestamo_id===p.id)).forEach(p=>{
       add(p.fecha_vencimiento,{cls:"ev-prest",dot:"#EF4444",n:p.nombre,s:`Vencimiento préstamo — $${Math.round(p.saldo_actual||0).toLocaleString("es-AR")}`});
     });
     // Inversiones con vencimiento
