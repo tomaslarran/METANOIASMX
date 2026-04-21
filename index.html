@@ -1613,9 +1613,24 @@ function fmtNum(v,siempre2=false){if(v==null||v==="")return"—";const n=parseFl
 
 function calcTasaEstimada(cuotas){
   try{
-    const validas=cuotas.filter(c=>parseFloat(c.capital)>0&&parseFloat(c.intereses)>0&&c.saldo_restante!=null);
-    if(validas.length<2)return null;
-    const tasas=validas.map(c=>parseFloat(c.intereses)/(parseFloat(c.saldo_restante)+parseFloat(c.capital)));
+    const sorted=cuotas
+      .filter(c=>parseFloat(c.capital)>0&&parseFloat(c.intereses)>0)
+      .sort((a,b)=>(a.nro_cuota||0)-(b.nro_cuota||0));
+    if(sorted.length<2)return null;
+    // Si no hay saldo_restante, lo reconstruimos: saldo_anterior = suma del capital restante desde esta cuota
+    let saldoAcum=sorted.reduce((s,c)=>s+parseFloat(c.capital),0);
+    const tasas=sorted.map(c=>{
+      const cap=parseFloat(c.capital);
+      const int=parseFloat(c.intereses);
+      // saldo_anterior = saldo_restante + capital (si existe), o saldo acumulado reconstruido
+      const saldoAnterior=c.saldo_restante!=null&&parseFloat(c.saldo_restante)>0
+        ?parseFloat(c.saldo_restante)+cap
+        :saldoAcum;
+      saldoAcum-=cap;
+      const t=int/saldoAnterior;
+      return isFinite(t)&&t>0?t:null;
+    }).filter(t=>t!==null);
+    if(!tasas.length)return null;
     const tasaMensual=tasas.reduce((s,t)=>s+t,0)/tasas.length;
     if(!isFinite(tasaMensual)||tasaMensual<=0)return null;
     const tna=tasaMensual*12*100;
