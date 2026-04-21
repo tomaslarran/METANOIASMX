@@ -1612,16 +1612,16 @@ function fmt(d){if(!d)return"";const[y,m,dd]=d.split("-");return`${dd}/${m}/${y}
 function fmtNum(v,siempre2=false){if(v==null||v==="")return"—";const n=parseFloat(v);if(isNaN(n))return"—";const dec=n%1!==0||siempre2;return"$"+n.toLocaleString("es-AR",{minimumFractionDigits:dec?2:0,maximumFractionDigits:2})}
 
 function calcTasaEstimada(cuotas){
-  // Necesitamos cuotas con capital, intereses y saldo_restante
-  const validas=cuotas.filter(c=>c.capital>0&&c.intereses>0&&c.saldo_restante!=null);
-  if(validas.length<2)return null;
-  // Tasa mensual de cada cuota = intereses / saldo_anterior
-  // saldo_anterior = saldo_restante + capital (saldo antes de amortizar esta cuota)
-  const tasas=validas.map(c=>c.intereses/(c.saldo_restante+c.capital));
-  const tasaMensual=tasas.reduce((s,t)=>s+t,0)/tasas.length;
-  const tna=tasaMensual*12*100;
-  const tea=(Math.pow(1+tasaMensual,12)-1)*100;
-  return{tasaMensual:tasaMensual*100,tna,tea};
+  try{
+    const validas=cuotas.filter(c=>parseFloat(c.capital)>0&&parseFloat(c.intereses)>0&&c.saldo_restante!=null);
+    if(validas.length<2)return null;
+    const tasas=validas.map(c=>parseFloat(c.intereses)/(parseFloat(c.saldo_restante)+parseFloat(c.capital)));
+    const tasaMensual=tasas.reduce((s,t)=>s+t,0)/tasas.length;
+    if(!isFinite(tasaMensual)||tasaMensual<=0)return null;
+    const tna=tasaMensual*12*100;
+    const tea=(Math.pow(1+tasaMensual,12)-1)*100;
+    return{tasaMensual:tasaMensual*100,tna,tea};
+  }catch(e){return null}
 }
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
 function hl(t,q2){if(!q2)return esc(t);const re=new RegExp(`(${q2.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")})`,"gi");return esc(t).replace(re,'<mark class="hl">$1</mark>')}
@@ -3306,6 +3306,7 @@ function renderCFPrestamos(){
     const cuotas=cfPrestCuotas.filter(c=>c.prestamo_id===p.id).sort((a,b)=>a.fecha>b.fecha?1:-1);
     const cuotasPend=cuotas.filter(c=>!c.pagada);
     const cuotasPag=cuotas.filter(c=>c.pagada);
+    const tasaEst=calcTasaEstimada(cuotas);
     const pct=cuotas.length?Math.round(cuotasPag.length/cuotas.length*100):
               (p.cuotas_totales&&p.cuotas_pendientes?Math.round((p.cuotas_totales-p.cuotas_pendientes)/p.cuotas_totales*100):null);
     const proxCuota=cuotasPend[0];
@@ -3332,13 +3333,10 @@ function renderCFPrestamos(){
           </div>
           ${pct!==null?`<div style="margin-top:8px"><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--tx3);margin-bottom:3px"><span>${pct}% pagado</span>${cuotas.length?`<span>${cuotasPend.length} pendiente${cuotasPend.length!==1?"s":""}</span>`:""}</div><div style="height:5px;background:var(--surf2);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:var(--pu);border-radius:3px;transition:width .3s"></div></div></div>`:""}
           ${p.notas?`<div style="font-size:11px;color:var(--tx3);margin-top:4px">${esc(p.notas)}</div>`:""}
-          ${cuotas.length?(()=>{
-            const te=calcTasaEstimada(cuotas);
-            return`<div style="display:flex;align-items:center;gap:10px;margin-top:4px;flex-wrap:wrap">
+          ${cuotas.length?`<div style="display:flex;align-items:center;gap:10px;margin-top:4px;flex-wrap:wrap">
               <button onclick="togglePrestCuotas('${p.id}')" style="background:none;border:none;color:var(--ac);font-size:11px;cursor:pointer;padding:0">📅 Ver cronograma completo (${cuotas.length} cuotas)</button>
-              ${te?`<span style="font-size:11px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);border-radius:4px;padding:1px 8px;color:var(--am)">📊 TNA ~${te.tna.toFixed(1)}% · TEA ~${te.tea.toFixed(1)}% · ${te.tasaMensual.toFixed(3)}% mens.</span>`:""}
-            </div>`;
-          })():""}
+              ${tasaEst?`<span style="font-size:11px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);border-radius:4px;padding:1px 8px;color:var(--am)">📊 TNA ~${tasaEst.tna.toFixed(1)}% · TEA ~${tasaEst.tea.toFixed(1)}% · ${tasaEst.tasaMensual.toFixed(3)}% mens.</span>`:""}
+            </div>`:""}
         </div>
         <div style="display:flex;gap:5px;flex-direction:column;align-items:flex-end">
           <button class="btn sm" onclick="editCFPrest('${p.id}')">Editar</button>
