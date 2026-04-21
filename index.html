@@ -3129,7 +3129,15 @@ function renderCFResumen(){
   const egresos=conceptos.filter(c=>c.tipo==="Egreso");
 
   const getVal=(c,mkey)=>{const v=cfValores.find(v=>v.concepto_id===c.id&&v.periodo===mkey);return v?.monto||0;};
-  const getTotalTipo=(tipo,mkey)=>conceptos.filter(c=>c.tipo===tipo).reduce((s,c)=>s+getVal(c,mkey),0);
+  const getCuotasTotalMes=(mkey)=>cfPrestamos
+    .filter(p=>p.activo&&p.incluir_en_cf!==false&&(p.sociedad===cfSociedad||cfSociedad==="Ambas"))
+    .reduce((s,p)=>s+cfPrestCuotas
+      .filter(c=>c.prestamo_id===p.id&&!c.pagada&&c.fecha&&c.fecha.startsWith(mkey))
+      .reduce((a,c)=>a+(parseFloat(c.monto_total)||0),0),0);
+  const getTotalTipo=(tipo,mkey)=>{
+    const base=conceptos.filter(c=>c.tipo===tipo).reduce((s,c)=>s+getVal(c,mkey),0);
+    return tipo==="Egreso"?base+getCuotasTotalMes(mkey):base;
+  };
 
   // Stats del mes actual
   const mesActual=meses.find(m=>m.actual)||meses[3];
@@ -3200,9 +3208,42 @@ function renderCFResumen(){
         </td>${celdas}
       </tr>`;
     });
-    // Fila total del bloque
+    // Cuotas de préstamos integradas dentro de egresos
+    if(tipo==="Egreso"){
+      const prestCF=cfPrestamos.filter(p=>p.activo&&p.incluir_en_cf!==false&&
+        (p.sociedad===cfSociedad||cfSociedad==="Ambas")&&
+        cfPrestCuotas.some(c=>c.prestamo_id===p.id));
+      if(prestCF.length){
+        rows+=`<tr style="background:rgba(239,68,68,.05)">
+          <td colspan="${meses.length+2}" style="padding:3px 12px 3px 22px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#FCA5A5">↳ Cuotas préstamos</td>
+        </tr>`;
+        prestCF.forEach(p=>{
+          const cuotasP=cfPrestCuotas.filter(c=>c.prestamo_id===p.id&&!c.pagada);
+          const celdas=meses.map(m=>{
+            const cuotasMes=cuotasP.filter(c=>c.fecha&&c.fecha.startsWith(m.key));
+            const total=cuotasMes.reduce((s,c)=>s+(parseFloat(c.monto_total)||0),0);
+            const cap=cuotasMes.reduce((s,c)=>s+(parseFloat(c.capital)||0),0);
+            const int=cuotasMes.reduce((s,c)=>s+(parseFloat(c.intereses)||0),0);
+            const bgActual=m.actual?"background:rgba(124,58,237,.06)":"";
+            const tooltip=total&&(cap||int)?`Capital: $${Math.round(cap).toLocaleString("es-AR")} | Int: $${Math.round(int).toLocaleString("es-AR")}`:"";
+            return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${total?"var(--re)":"var(--tx3)"};border-right:1px solid var(--b);${bgActual}" title="${tooltip}">${total?fmtNum(total,true):"—"}</td>`;
+          }).join("");
+          const socCls=p.sociedad==="SUDES"?"bpr":"bdo";
+          rows+=`<tr style="border-bottom:1px solid var(--b)">
+            <td style="padding:6px 12px 6px 22px;font-size:12px;color:var(--tx2);min-width:240px">
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:10px;color:var(--tx4)">🔒</span>
+                <span style="flex:1">${esc(p.nombre)}</span>
+                <span class="badge ${socCls}" style="font-size:9px">${p.sociedad}</span>
+              </div>
+            </td>${celdas}
+          </tr>`;
+        });
+      }
+    }
+    // Fila total del bloque (incluye cuotas para Egreso via getTotalTipo)
     const totales=meses.map(m=>{
-      const total=list.reduce((s,c)=>s+getVal(c,m.key),0);
+      const total=getTotalTipo(tipo,m.key);
       const bgActual=m.actual?"background:rgba(124,58,237,.1)":"background:"+colorH;
       return`<td style="text-align:right;padding:6px 10px;font-size:12px;font-weight:700;color:${colorT};border-right:1px solid var(--b);${bgActual}">${total?"$"+Math.round(total).toLocaleString("es-AR"):"—"}</td>`;
     }).join("");
@@ -3248,64 +3289,9 @@ function renderCFResumen(){
 
   document.getElementById("cf-grilla-wrap").innerHTML=html;
 
-  // ── Sección cuotas préstamos ──
-  const prestConCF=cfPrestamos.filter(p=>p.activo&&p.incluir_en_cf!==false&&cfPrestCuotas.some(c=>c.prestamo_id===p.id));
+  // Cuotas ahora integradas dentro del buildRows de Egresos
   const cfCuotasWrap=document.getElementById("cf-cuotas-wrap");
-  if(!cfCuotasWrap)return;
-  if(!prestConCF.length){cfCuotasWrap.innerHTML="";return;}
-
-  const thC=meses.map(m=>{
-    const estilo=m.actual
-      ?"min-width:90px;text-align:right;padding:6px 10px;font-size:10px;font-weight:700;color:var(--ac);border-right:1px solid var(--b);white-space:nowrap;background:rgba(124,58,237,.1);border-bottom:2px solid var(--ac)"
-      :"min-width:90px;text-align:right;padding:6px 10px;font-size:10px;font-weight:700;color:"+(m.pasado?"var(--tx4)":"var(--tx3)")+";border-right:1px solid var(--b);white-space:nowrap";
-    return`<th style="${estilo}">${m.label}</th>`;
-  }).join("");
-
-  let rowsCuotas=`<tr style="background:rgba(239,68,68,.10)">
-    <td colspan="${meses.length+2}" style="padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#FCA5A5">▼ CUOTAS PRÉSTAMOS</td>
-  </tr>`;
-
-  prestConCF.forEach(p=>{
-    const cuotasP=cfPrestCuotas.filter(c=>c.prestamo_id===p.id&&!c.pagada);
-    const celdas=meses.map(m=>{
-      const cuotasMes=cuotasP.filter(c=>c.fecha&&c.fecha.startsWith(m.key));
-      const total=cuotasMes.reduce((s,c)=>s+(parseFloat(c.monto_total)||0),0);
-      const cap=cuotasMes.reduce((s,c)=>s+(parseFloat(c.capital)||0),0);
-      const int=cuotasMes.reduce((s,c)=>s+(parseFloat(c.intereses)||0),0);
-      const bgActual=m.actual?"background:rgba(124,58,237,.06)":"";
-      const tooltip=total&&(cap||int)?`Capital: $${Math.round(cap).toLocaleString("es-AR")} | Int: $${Math.round(int).toLocaleString("es-AR")}`:"";
-      return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${total?"var(--re)":"var(--tx3)"};border-right:1px solid var(--b);${bgActual}" title="${tooltip}">${total?fmtNum(total,true):"—"}</td>`;
-    }).join("");
-    const socCls=p.sociedad==="SUDES"?"bpr":"bdo";
-    rowsCuotas+=`<tr style="border-bottom:1px solid var(--b)">
-      <td style="padding:6px 12px;font-size:12px;color:var(--tx2);min-width:240px">
-        <div style="display:flex;align-items:center;gap:6px">
-          <span style="flex:1">${esc(p.nombre)}</span>
-          <span class="badge ${socCls}" style="font-size:9px">${p.sociedad}</span>
-        </div>
-      </td>${celdas}
-    </tr>`;
-  });
-
-  // Fila total cuotas por mes
-  const totalesCuotas=meses.map(m=>{
-    const tot=prestConCF.reduce((s,p)=>{
-      return s+cfPrestCuotas.filter(c=>c.prestamo_id===p.id&&!c.pagada&&c.fecha&&c.fecha.startsWith(m.key)).reduce((a,c)=>a+(parseFloat(c.monto_total)||0),0);
-    },0);
-    const bgActual=m.actual?"background:rgba(124,58,237,.1)":"background:rgba(239,68,68,.10)";
-    return`<td style="text-align:right;padding:6px 10px;font-size:12px;font-weight:700;color:#FCA5A5;border-right:1px solid var(--b);${bgActual}">${tot?fmtNum(tot,true):"—"}</td>`;
-  }).join("");
-  rowsCuotas+=`<tr><td style="padding:6px 12px;font-size:11px;font-weight:700;color:#FCA5A5;background:rgba(239,68,68,.10)">TOTAL CUOTAS</td>${totalesCuotas}</tr>`;
-
-  cfCuotasWrap.innerHTML=`<div style="margin-top:12px;overflow-x:auto">
-    <table style="border-collapse:collapse;width:100%;font-family:var(--f);background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);overflow:hidden">
-      <thead><tr style="background:var(--surf2);border-bottom:2px solid var(--b2)">
-        <th style="text-align:left;padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--tx3);min-width:240px">PRÉSTAMO</th>
-        ${thC}
-      </tr></thead>
-      <tbody>${rowsCuotas}</tbody>
-    </table>
-  </div>`;
+  if(cfCuotasWrap)cfCuotasWrap.innerHTML="";
 }
 
 let _cfCeldaConceptoId=null,_cfCeldaPeriodo=null;
@@ -4415,7 +4401,20 @@ function buildEventos(){
     cfCobranzas.filter(c=>c.estado==="Pendiente").forEach(c=>{
       addEvento(c.fecha_vencimiento,{tipo:"ev-cobr",dot:"#10B981",nombre:c.nombre,sub:`Cobranza ${c.tipo} — ${c.sociedad} — $${Math.round(c.monto).toLocaleString("es-AR")}`});
     });
-    cfPrestamos.filter(p=>p.activo&&p.fecha_vencimiento).forEach(p=>{
+    // Cuotas de préstamos pendientes (por fecha exacta)
+    cfPrestCuotas.filter(c=>!c.pagada&&c.fecha).forEach(c=>{
+      const prest=cfPrestamos.find(p=>p.id===c.prestamo_id);
+      if(!prest||!prest.activo||prest.incluir_en_cf===false)return;
+      const dc=days(c.fecha);
+      const urgente=dc!==null&&dc<=3&&dc>=-1;
+      const cap=c.capital!=null?` · cap: $${Math.round(parseFloat(c.capital)).toLocaleString("es-AR")}`:"";
+      const int=c.intereses!=null?` · int: $${Math.round(parseFloat(c.intereses)).toLocaleString("es-AR")}`:"";
+      addEvento(c.fecha,{tipo:"ev-prest",dot:urgente?"#EF4444":"#F97316",
+        nombre:`Cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${prest.nombre}`,
+        sub:`${fmtNum(c.monto_total,true)} · ${prest.sociedad}${cap}${int}`});
+    });
+    // Préstamos sin cronograma — vencimiento general
+    cfPrestamos.filter(p=>p.activo&&p.incluir_en_cf!==false&&p.fecha_vencimiento&&!cfPrestCuotas.some(c=>c.prestamo_id===p.id)).forEach(p=>{
       addEvento(p.fecha_vencimiento,{tipo:"ev-prest",dot:"#EF4444",nombre:p.nombre,sub:`Vencimiento préstamo — $${Math.round(p.saldo_actual||0).toLocaleString("es-AR")}`});
     });
     cfInversiones.filter(i=>i.estado==="Activa"&&i.fecha_vencimiento).forEach(i=>{
