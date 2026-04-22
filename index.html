@@ -1471,18 +1471,34 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
 <!-- ══ MODAL EMPLEADO ══ -->
 <div class="mov" id="modal-empleado" onclick="if(event.target===this)closeM('modal-empleado')">
-  <div class="modal" style="max-width:440px">
+  <div class="modal" style="max-width:460px">
     <div class="mt"><span id="memp-title">Nuevo Empleado</span><button class="mt-close" onclick="closeM('modal-empleado')">✕</button></div>
     <div class="fg"><label class="fl">Nombre *</label><input class="fi" id="emp-nombre" type="text" placeholder="Nombre completo"></div>
-    <div class="fg"><label class="fl">Categoría *</label>
-      <select class="fi" id="emp-cat">
-        <option>Honorarios Gerenciales</option>
-        <option>Contratado</option>
-        <option>Instructor</option>
-      </select>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="fg"><label class="fl">Categoría *</label>
+        <select class="fi" id="emp-cat">
+          <option>Honorarios Gerenciales</option>
+          <option>Contratado</option>
+          <option>Instructor</option>
+        </select>
+      </div>
+      <div class="fg"><label class="fl">Empresa *</label>
+        <select class="fi" id="emp-soc"><option>SUDES</option><option>POINTERS</option></select>
+      </div>
     </div>
-    <div class="fg"><label class="fl">Empresa *</label>
-      <select class="fi" id="emp-soc"><option>SUDES</option><option>POINTERS</option></select>
+    <!-- Tipo sueldo: Fijo / Variable -->
+    <div class="fg">
+      <label class="fl">Tipo de sueldo</label>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <label style="flex:1;cursor:pointer">
+          <input type="radio" name="emp-tipo" id="emp-tipo-fijo" value="Fijo" checked style="accent-color:var(--ac)">
+          <span style="font-size:12px;color:var(--tx2);margin-left:5px"><strong>Fijo</strong> — aparece todos los meses</span>
+        </label>
+        <label style="flex:1;cursor:pointer">
+          <input type="radio" name="emp-tipo" id="emp-tipo-var" value="Variable" style="accent-color:var(--ac)">
+          <span style="font-size:12px;color:var(--tx2);margin-left:5px"><strong>Variable</strong> — solo cuando se carga</span>
+        </label>
+      </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="fg"><label class="fl">Monto mensual ($)</label><input class="fi" id="emp-monto" type="number" step="0.01" placeholder="0"></div>
@@ -1951,9 +1967,9 @@ async function renderAlertas(){
       onclick:`goPage('cashflow',document.getElementById('nav-cashflow'));setCFTab('cobranzas')`});
   });
 
-  // Sueldos pendientes del mes actual
+  // Sueldos fijos pendientes del mes actual (Variable no alertan automáticamente)
   const mesPago=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
-  cfEmpleados.filter(e=>e.activo).forEach(e=>{
+  cfEmpleados.filter(e=>e.activo&&e.tipo!=="Variable").forEach(e=>{
     const pago=cfPagosEmpleados.find(p=>p.empleado_id===e.id&&p.periodo===mesPago);
     if(pago?.pagado)return;
     const diaPago=e.dia_pago||5;
@@ -3394,7 +3410,10 @@ function renderCFResumen(){
       .reduce((a,c)=>a+(parseFloat(c.monto_total)||0),0),0);
   const getEmpValMes=(emp,mkey)=>{
     const pago=cfPagosEmpleados.find(p=>p.empleado_id===emp.id&&p.periodo===mkey);
-    return pago?.monto!=null?parseFloat(pago.monto):parseFloat(emp.monto_mensual)||0;
+    if(pago?.monto!=null)return parseFloat(pago.monto);
+    // Variable: solo muestra monto si hay registro de pago (aunque sea pendiente)
+    if(emp.tipo==="Variable")return pago?parseFloat(emp.monto_mensual)||0:0;
+    return parseFloat(emp.monto_mensual)||0;
   };
   const getSueldosTotalMes=(mkey)=>cfEmpleados
     .filter(e=>e.activo&&(e.sociedad===cfSociedad||cfSociedad==="Ambas"))
@@ -3845,11 +3864,12 @@ async function renderSueldos(){
             <span style="font-size:13px;font-weight:500;color:var(--tx)">${esc(emp.nombre)}</span>
             <span class="badge ${socCls}" style="font-size:9px">${emp.sociedad}</span>
           </div>
-          <div style="font-size:12px;color:var(--tx3)">
-            ${fmtNum(emp.monto_mensual,true)}/mes
-            ${emp.dia_pago?` · Vence día ${emp.dia_pago}`:""}
-            ${pagado&&pago.fecha_pago?` · Pagado ${fmt(pago.fecha_pago)}`:""}
-            ${emp.notas?` · <em>${esc(emp.notas)}</em>`:""}
+          <div style="font-size:12px;color:var(--tx3);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span>${fmtNum(emp.monto_mensual,true)}/mes</span>
+            <span class="badge" style="font-size:9px;background:${emp.tipo==="Variable"?"rgba(59,130,246,.15)":"rgba(16,185,129,.15)"};color:${emp.tipo==="Variable"?"#3B82F6":"var(--gr)"};border:1px solid ${emp.tipo==="Variable"?"rgba(59,130,246,.3)":"rgba(16,185,129,.3)"}">${emp.tipo||"Fijo"}</span>
+            ${emp.dia_pago?`<span>· Día ${emp.dia_pago}</span>`:""}
+            ${pagado&&pago.fecha_pago?`<span>· Pagado ${fmt(pago.fecha_pago)}</span>`:""}
+            ${emp.notas?`<span>· <em>${esc(emp.notas)}</em></span>`:""}
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
@@ -3878,6 +3898,7 @@ function openAddEmpleado(){
   document.getElementById("emp-soc").value="SUDES";
   document.getElementById("emp-monto").value="";
   document.getElementById("emp-dia").value="5";
+  document.getElementById("emp-tipo-fijo").checked=true;
   openM("modal-empleado");
   setTimeout(()=>document.getElementById("emp-nombre").focus(),80);
 }
@@ -3894,13 +3915,18 @@ function openEditEmpleado(id){
   document.getElementById("emp-monto").value=emp.monto_mensual||"";
   document.getElementById("emp-dia").value=emp.dia_pago||5;
   document.getElementById("emp-notas").value=emp.notas||"";
+  const tipoVar=document.getElementById("emp-tipo-var");
+  const tipoFijo=document.getElementById("emp-tipo-fijo");
+  if(emp.tipo==="Variable"&&tipoVar)tipoVar.checked=true;
+  else if(tipoFijo)tipoFijo.checked=true;
   openM("modal-empleado");
 }
 
 async function saveEmpleado(){
   const nombre=document.getElementById("emp-nombre").value.trim();
   if(!nombre){toast("Escribí un nombre","err");return;}
-  const data={nombre,categoria:document.getElementById("emp-cat").value,sociedad:document.getElementById("emp-soc").value,monto_mensual:parseFloat(document.getElementById("emp-monto").value)||0,dia_pago:parseInt(document.getElementById("emp-dia").value)||5,notas:document.getElementById("emp-notas").value.trim()||null,activo:true,updated_at:new Date().toISOString()};
+  const tipo=document.querySelector('input[name="emp-tipo"]:checked')?.value||"Fijo";
+  const data={nombre,categoria:document.getElementById("emp-cat").value,sociedad:document.getElementById("emp-soc").value,tipo,monto_mensual:parseFloat(document.getElementById("emp-monto").value)||0,dia_pago:parseInt(document.getElementById("emp-dia").value)||5,notas:document.getElementById("emp-notas").value.trim()||null,activo:true,updated_at:new Date().toISOString()};
   const btn=document.getElementById("memp-save-btn");btn.disabled=true;
   try{
     if(editEmpId){
