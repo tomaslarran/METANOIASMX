@@ -594,6 +594,13 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="sitem sub" onclick="goTo('cashflow',document.getElementById('nav-cashflow'));setCFTab('prestamos')">Préstamos</div>
     <div class="sitem sub" onclick="goTo('cashflow',document.getElementById('nav-cashflow'));setCFTab('cobranzas')">Cobranzas</div>
     <div class="sitem sub" onclick="goTo('cashflow',document.getElementById('nav-cashflow'));setCFTab('inversiones')">Inversiones</div>
+    <div class="sitem" onclick="goPage('sueldos',this)" id="nav-sueldos">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/><line x1="20" y1="8" x2="20" y2="14"/></svg>
+      Sueldos
+      <span class="sitem-badge" id="badge-sueldos" style="display:none"></span>
+    </div>
+    <div class="sitem sub" onclick="goPage('sueldos',document.getElementById('nav-sueldos'));setSueldosFiltro('SUDES',document.querySelector('#sf-sudes'))">SUDES</div>
+    <div class="sitem sub" onclick="goPage('sueldos',document.getElementById('nav-sueldos'));setSueldosFiltro('POINTERS',document.querySelector('#sf-pointers'))">POINTERS</div>
   </div>
   <div class="sdiv"></div>
   <div class="sgroup">
@@ -1053,6 +1060,35 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 </div>
 
+<!-- ══ SUELDOS ══ -->
+<div id="pg-sueldos" style="display:none">
+  <div class="pgh">
+    <div class="pgh-left"><div class="pgt">Sueldos</div><div class="pgs">Personal, honorarios y contratados</div></div>
+    <button class="bk" onclick="openAddEmpleado()">+ Empleado</button>
+  </div>
+  <!-- Stats -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin-bottom:18px">
+    <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:14px 16px"><div style="font-size:11px;color:var(--tx3);margin-bottom:4px">Total SUDES/mes</div><div style="font-size:20px;font-weight:700;color:var(--re)" id="sue-total-s">—</div></div>
+    <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:14px 16px"><div style="font-size:11px;color:var(--tx3);margin-bottom:4px">Total POINTERS/mes</div><div style="font-size:20px;font-weight:700;color:var(--re)" id="sue-total-p">—</div></div>
+    <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:14px 16px"><div style="font-size:11px;color:var(--tx3);margin-bottom:4px">Pendientes este mes</div><div style="font-size:20px;font-weight:700;color:var(--am)" id="sue-pend">—</div></div>
+    <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:14px 16px"><div style="font-size:11px;color:var(--tx3);margin-bottom:4px">Empleados activos</div><div style="font-size:20px;font-weight:700;color:var(--tx)" id="sue-count">—</div></div>
+  </div>
+  <!-- Filtros empresa -->
+  <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+    <button class="fb on" onclick="setSueldosFiltro('all',this)" id="sf-all">Todos</button>
+    <button class="fb" onclick="setSueldosFiltro('SUDES',this)" id="sf-sudes">SUDES</button>
+    <button class="fb" onclick="setSueldosFiltro('POINTERS',this)" id="sf-pointers">POINTERS</button>
+    <div style="flex:1"></div>
+    <!-- Selector de mes -->
+    <div style="display:flex;align-items:center;gap:6px">
+      <button class="btn sm" onclick="navMesSueldos(-1)">‹</button>
+      <span id="sue-mes-label" style="font-size:13px;font-weight:600;color:var(--tx);min-width:90px;text-align:center">—</span>
+      <button class="btn sm" onclick="navMesSueldos(1)">›</button>
+    </div>
+  </div>
+  <div id="sueldos-list"></div>
+</div>
+
 <!-- ══ COMPROBANTES DE COMPRA ══ -->
 <div id="pg-comprobantes" style="display:none">
   <div class="pgh">
@@ -1430,6 +1466,51 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <label for="cfp-incluir-cf" style="font-size:13px;color:var(--tx2);cursor:pointer">Incluir cuotas en Cash Flow y Calendario</label>
     </div>
     <div class="ma"><button class="bc" onclick="closeModal('modal-cf-prestamo')">Cancelar</button><button class="bk" id="cfp-save-btn" onclick="saveCFPrestamo()">Guardar</button></div>
+  </div>
+</div>
+
+<!-- ══ MODAL EMPLEADO ══ -->
+<div class="mov" id="modal-empleado" onclick="if(event.target===this)closeM('modal-empleado')">
+  <div class="modal" style="max-width:440px">
+    <div class="mt"><span id="memp-title">Nuevo Empleado</span><button class="mt-close" onclick="closeM('modal-empleado')">✕</button></div>
+    <div class="fg"><label class="fl">Nombre *</label><input class="fi" id="emp-nombre" type="text" placeholder="Nombre completo"></div>
+    <div class="fg"><label class="fl">Categoría *</label>
+      <select class="fi" id="emp-cat">
+        <option>Honorarios Gerenciales</option>
+        <option>Contratado</option>
+        <option>Instructor</option>
+      </select>
+    </div>
+    <div class="fg"><label class="fl">Empresa *</label>
+      <select class="fi" id="emp-soc"><option>SUDES</option><option>POINTERS</option></select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="fg"><label class="fl">Monto mensual ($)</label><input class="fi" id="emp-monto" type="number" step="0.01" placeholder="0"></div>
+      <div class="fg"><label class="fl">Día de pago</label><input class="fi" id="emp-dia" type="number" min="1" max="31" value="5"></div>
+    </div>
+    <div class="fg"><label class="fl">Notas</label><textarea class="fi" id="emp-notas" rows="2" placeholder="Observaciones opcionales"></textarea></div>
+    <div class="ma">
+      <button id="memp-del-btn" class="bc danger" style="display:none" onclick="delEmpleado()">Eliminar</button>
+      <button class="bc" onclick="closeM('modal-empleado')">Cancelar</button>
+      <button class="bk" id="memp-save-btn" onclick="saveEmpleado()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL PAGO EMPLEADO ══ -->
+<div class="mov" id="modal-pago-empleado" onclick="if(event.target===this)closeM('modal-pago-empleado')">
+  <div class="modal" style="max-width:380px">
+    <div class="mt"><span id="mpe-title">Confirmar pago</span><button class="mt-close" onclick="closeM('modal-pago-empleado')">✕</button></div>
+    <div style="padding:0 20px 20px;display:flex;flex-direction:column;gap:14px">
+      <div id="mpe-resumen" style="background:var(--surf2);border-radius:var(--r);padding:12px 14px;font-size:13px;border:1px solid var(--b)"></div>
+      <div class="fg"><label class="fl">Fecha de pago</label><input type="date" id="mpe-fecha" class="fi"></div>
+      <div class="fg"><label class="fl">Monto abonado</label><input type="number" id="mpe-monto" class="fi" step="0.01" placeholder="0"></div>
+      <div class="fg"><label class="fl">Notas (opcional)</label><input type="text" id="mpe-notas" class="fi" placeholder="Ej: Transferencia banco"></div>
+      <div style="display:flex;gap:8px;padding-top:4px">
+        <button class="bc" onclick="closeM('modal-pago-empleado')" style="flex:1">Cancelar</button>
+        <button class="bk" id="mpe-save-btn" onclick="confirmarPagoEmpleado()" style="flex:1">✓ Confirmar pago</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1870,6 +1951,21 @@ async function renderAlertas(){
       onclick:`goPage('cashflow',document.getElementById('nav-cashflow'));setCFTab('cobranzas')`});
   });
 
+  // Sueldos pendientes del mes actual
+  const mesPago=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  cfEmpleados.filter(e=>e.activo).forEach(e=>{
+    const pago=cfPagosEmpleados.find(p=>p.empleado_id===e.id&&p.periodo===mesPago);
+    if(pago?.pagado)return;
+    const diaPago=e.dia_pago||5;
+    const fechaPago=`${mesPago}-${String(diaPago).padStart(2,"0")}`;
+    const d=days(fechaPago);
+    if(d===null||d>30)return;
+    alertas.push({tipo:"sueldo",icon:"👤",urgencia:d<0?"critica":d===0?"hoy":d<=7?"semana":"mes",d,
+      titulo:e.nombre,sub:`${fmtNum(e.monto_mensual,true)} · ${e.categoria} · ${e.sociedad}`,fecha:fechaPago,
+      empId:e.id,periodo:mesPago,
+      onclick:`goPage('sueldos',document.getElementById('nav-sueldos'))`});
+  });
+
   cfInversiones.filter(i=>i.estado==="activa"&&i.fecha_vencimiento).forEach(i=>{
     const d=days(i.fecha_vencimiento);
     if(d===null||d>60)return;
@@ -1902,6 +1998,8 @@ async function renderAlertas(){
     const dStr=a.d<0?`Venció hace ${Math.abs(a.d)}d`:a.d===0?"Hoy":`En ${a.d}d`;
     const pagarBtn=a.tipo==="cuota"&&a.cuotaId
       ?`<button onclick="event.stopPropagation();abrirModalPago('${a.cuotaId}','${a.prestId}')" style="flex-shrink:0;background:var(--pu);border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer;white-space:nowrap">Pagar</button>`
+      :a.tipo==="sueldo"&&a.empId
+      ?`<button onclick="event.stopPropagation();abrirPagoEmpleado('${a.empId}','${a.periodo}')" style="flex-shrink:0;background:var(--pu);border:none;color:#fff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer;white-space:nowrap">Pagar</button>`
       :"";
     return`<div onclick="${a.onclick}" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:var(--r);cursor:pointer;background:${u.bg};border:1px solid ${u.border};margin-bottom:6px;transition:filter .15s" onmouseenter="this.style.filter='brightness(1.12)'" onmouseleave="this.style.filter=''">
       <span style="font-size:16px;flex-shrink:0">${a.icon}</span>
@@ -1970,6 +2068,7 @@ function goPage(name,el){
     sb("rutinas?select=*&order=dia_del_mes").then(data=>{rutinas=data;renderRutinas()}).catch(()=>renderRutinas());
   }
   if(name==="alertas"){const load=cfPrestamos.length?Promise.resolve():loadCF().catch(()=>{});load.then(renderAlertas);}
+  if(name==="sueldos"){const load=cfEmpleados.length?Promise.resolve():loadCF().catch(()=>{});load.then(renderSueldos);}
   if(name==="cashflow")loadCF().then(()=>setCFTab("resumen"));
   if(name==="instructores")renderInstructores();
   if(name==="inventario")loadInventario();
@@ -3200,6 +3299,9 @@ async function doDelRutina(id){
 
 /* ── CASH FLOW ── */
 let cfConceptos=[],cfValores=[],cfPrestamos=[],cfCobranzas=[],cfInversiones=[],cfInvMovs=[],cfPrestCuotas=[];
+let cfEmpleados=[],cfPagosEmpleados=[];
+let cfSueldosFiltro="all",cfSueldosMes=null;
+let editEmpId=null,_mpeEmpId=null,_mpePeriodo=null;
 let cfSociedad="SUDES",cfTab="resumen",cfPFilter="all",cfCobFilter="all",cfInvFilter="all";
 let cfSaldoInicial=0;
 function setCFSaldoInicial(v){cfSaldoInicial=parseFloat(String(v).replace(/\./g,"").replace(",","."))||0;renderCFResumen();}
@@ -3208,14 +3310,16 @@ const MESES_CF=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov
 
 async function loadCF(){
   try{
-    [cfConceptos,cfValores,cfPrestamos,cfCobranzas,cfInversiones,cfInvMovs,cfPrestCuotas]=await Promise.all([
+    [cfConceptos,cfValores,cfPrestamos,cfCobranzas,cfInversiones,cfInvMovs,cfPrestCuotas,cfEmpleados,cfPagosEmpleados]=await Promise.all([
       sb("cf_conceptos?select=*&order=tipo,nombre"),
       sb("cf_valores?select=*"),
       sb("cf_prestamos?select=*&order=sociedad,tipo"),
       sb("cf_cobranzas?select=*&order=fecha_vencimiento"),
       sb("cf_inversiones?select=*&order=created_at.desc").catch(()=>[]),
       sb("cf_inversiones_movimientos?select=*&order=fecha.desc").catch(()=>[]),
-      sb("cf_prestamos_cuotas?select=*&order=fecha").catch(()=>[])
+      sb("cf_prestamos_cuotas?select=*&order=fecha").catch(()=>[]),
+      sb("cf_empleados?select=*&order=categoria,nombre").catch(()=>[]),
+      sb("cf_pagos_empleados?select=*&order=periodo.desc").catch(()=>[])
     ]);
     // Badge: cobranzas vencidas + préstamos próximos
     const hoy=today();
@@ -3288,9 +3392,16 @@ function renderCFResumen(){
     .reduce((s,p)=>s+cfPrestCuotas
       .filter(c=>c.prestamo_id===p.id&&!c.pagada&&c.fecha&&c.fecha.startsWith(mkey))
       .reduce((a,c)=>a+(parseFloat(c.monto_total)||0),0),0);
+  const getEmpValMes=(emp,mkey)=>{
+    const pago=cfPagosEmpleados.find(p=>p.empleado_id===emp.id&&p.periodo===mkey);
+    return pago?.monto!=null?parseFloat(pago.monto):parseFloat(emp.monto_mensual)||0;
+  };
+  const getSueldosTotalMes=(mkey)=>cfEmpleados
+    .filter(e=>e.activo&&(e.sociedad===cfSociedad||cfSociedad==="Ambas"))
+    .reduce((s,e)=>s+getEmpValMes(e,mkey),0);
   const getTotalTipo=(tipo,mkey)=>{
     const base=conceptos.filter(c=>c.tipo===tipo).reduce((s,c)=>s+getVal(c,mkey),0);
-    return tipo==="Egreso"?base+getCuotasTotalMes(mkey):base;
+    return tipo==="Egreso"?base+getCuotasTotalMes(mkey)+getSueldosTotalMes(mkey):base;
   };
 
   // Stats del mes actual
@@ -3392,6 +3503,43 @@ function renderCFResumen(){
               </div>
             </td>${celdas}
           </tr>`;
+        });
+      }
+    }
+    // Sueldos y honorarios integrados en egresos
+    if(tipo==="Egreso"){
+      const CATS_EMP=["Honorarios Gerenciales","Contratado","Instructor"];
+      const empsActivos=cfEmpleados.filter(e=>e.activo&&(e.sociedad===cfSociedad||cfSociedad==="Ambas"));
+      if(empsActivos.length){
+        rows+=`<tr style="background:rgba(239,68,68,.05)">
+          <td colspan="${meses.length+2}" style="padding:3px 12px 3px 22px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#FCA5A5">↳ Sueldos y honorarios</td>
+        </tr>`;
+        CATS_EMP.forEach(cat=>{
+          const catEmps=empsActivos.filter(e=>e.categoria===cat);
+          if(!catEmps.length)return;
+          rows+=`<tr style="background:rgba(239,68,68,.03)">
+            <td colspan="${meses.length+2}" style="padding:2px 12px 2px 32px;font-size:9px;color:var(--tx4);font-style:italic">${cat}</td>
+          </tr>`;
+          catEmps.forEach(emp=>{
+            const celdas=meses.map(m=>{
+              const monto=getEmpValMes(emp,m.key);
+              const pago=cfPagosEmpleados.find(p=>p.empleado_id===emp.id&&p.periodo===m.key);
+              const pagado=pago?.pagado;
+              const bgActual=m.actual?"background:rgba(124,58,237,.06)":"";
+              const display=monto?("$"+Math.round(monto).toLocaleString("es-AR")+(pagado?" ✓":"")):pagado?"✓":"—";
+              return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${monto?pagado?"var(--gr)":"var(--re)":"var(--tx3)"};border-right:1px solid var(--b);${bgActual}" title="${pagado?"Pagado "+fmt(pago.fecha_pago||""):"Pendiente"}">${display}</td>`;
+            }).join("");
+            const socCls=emp.sociedad==="SUDES"?"bpr":"bdo";
+            rows+=`<tr style="border-bottom:1px solid var(--b)">
+              <td style="padding:6px 12px 6px 32px;font-size:12px;color:var(--tx2);min-width:240px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="font-size:10px;color:var(--tx4)">👤</span>
+                  <span style="flex:1">${esc(emp.nombre)}</span>
+                  <span class="badge ${socCls}" style="font-size:9px">${emp.sociedad}</span>
+                </div>
+              </td>${celdas}
+            </tr>`;
+          });
         });
       }
     }
@@ -3624,6 +3772,219 @@ function delCFPrest(id){
   confirmDel("¿Eliminar este préstamo?",async()=>{
     try{await sb(`cf_prestamos?id=eq.${id}`,{method:"DELETE"});cfPrestamos=cfPrestamos.filter(p=>p.id!==id);renderCFPrestamos();toast("Eliminado","ok")}catch(e){toast("Error","err")}
   });
+}
+
+/* ── SUELDOS ── */
+const CATS_SUE=["Honorarios Gerenciales","Contratado","Instructor"];
+const CAT_ICON={"Honorarios Gerenciales":"🏛","Contratado":"📋","Instructor":"🎓"};
+
+function setSueldosFiltro(f,btn){
+  cfSueldosFiltro=f;
+  document.querySelectorAll("#pg-sueldos .fb").forEach(b=>b.classList.remove("on"));
+  if(btn)btn.classList.add("on");
+  renderSueldos();
+}
+
+function navMesSueldos(dir){
+  if(!cfSueldosMes){const n=new Date();cfSueldosMes=`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;}
+  const[y,m]=cfSueldosMes.split("-").map(Number);
+  const nd=new Date(y,m-1+dir,1);
+  cfSueldosMes=`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,"0")}`;
+  renderSueldos();
+}
+
+async function renderSueldos(){
+  if(!cfSueldosMes){const n=new Date();cfSueldosMes=`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;}
+  if(!cfEmpleados.length&&cfPrestamos.length===0)await loadCF().catch(()=>{});
+
+  const mesLabel=`${MESES_CF[parseInt(cfSueldosMes.slice(5,7))-1]} ${cfSueldosMes.slice(0,4)}`;
+  const el=document.getElementById("sue-mes-label");if(el)el.textContent=mesLabel;
+
+  const activos=cfEmpleados.filter(e=>e.activo);
+  const filtrados=activos.filter(e=>cfSueldosFiltro==="all"||e.sociedad===cfSueldosFiltro);
+
+  const totalS=activos.filter(e=>e.sociedad==="SUDES").reduce((s,e)=>s+(parseFloat(e.monto_mensual)||0),0);
+  const totalP=activos.filter(e=>e.sociedad==="POINTERS").reduce((s,e)=>s+(parseFloat(e.monto_mensual)||0),0);
+  const pend=activos.filter(e=>{const p=cfPagosEmpleados.find(x=>x.empleado_id===e.id&&x.periodo===cfSueldosMes);return!p?.pagado;}).length;
+
+  const s=document.getElementById("sue-total-s");if(s)s.textContent="$"+Math.round(totalS).toLocaleString("es-AR");
+  const p=document.getElementById("sue-total-p");if(p)p.textContent="$"+Math.round(totalP).toLocaleString("es-AR");
+  const pd=document.getElementById("sue-pend");if(pd){pd.textContent=pend;pd.style.color=pend>0?"var(--am)":"var(--gr)";}
+  const cnt=document.getElementById("sue-count");if(cnt)cnt.textContent=activos.length;
+
+  // Badge sidebar
+  const badge=document.getElementById("badge-sueldos");
+  const hoyMes=`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`;
+  const pendHoy=activos.filter(e=>{const pg=cfPagosEmpleados.find(x=>x.empleado_id===e.id&&x.periodo===hoyMes);return!pg?.pagado;}).length;
+  if(badge){badge.style.display=pendHoy?"":"none";badge.textContent=pendHoy||"";}
+
+  const cont=document.getElementById("sueldos-list");
+  if(!cont)return;
+  if(!filtrados.length){cont.innerHTML=`<div class="empty"><div class="ei">👥</div>No hay empleados${cfSueldosFiltro!=="all"?" en "+cfSueldosFiltro:""}. <button class="btn" onclick="openAddEmpleado()" style="margin-top:8px">+ Agregar</button></div>`;return;}
+
+  let html="";
+  CATS_SUE.forEach(cat=>{
+    const catEmps=filtrados.filter(e=>e.categoria===cat);
+    if(!catEmps.length)return;
+    const catTotal=catEmps.reduce((s,e)=>s+(parseFloat(e.monto_mensual)||0),0);
+    html+=`<div style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:14px">${CAT_ICON[cat]||"👤"}</span>
+        <span style="font-size:13px;font-weight:700;color:var(--tx)">${cat}</span>
+        <span style="font-size:11px;color:var(--tx3)">(${catEmps.length})</span>
+        <span style="margin-left:auto;font-size:12px;font-weight:600;color:var(--re)">$${Math.round(catTotal).toLocaleString("es-AR")}/mes</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">`;
+    catEmps.forEach(emp=>{
+      const pago=cfPagosEmpleados.find(x=>x.empleado_id===emp.id&&x.periodo===cfSueldosMes);
+      const pagado=pago?.pagado;
+      const socCls=emp.sociedad==="SUDES"?"bpr":"bdo";
+      html+=`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:12px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
+            <span style="font-size:13px;font-weight:500;color:var(--tx)">${esc(emp.nombre)}</span>
+            <span class="badge ${socCls}" style="font-size:9px">${emp.sociedad}</span>
+          </div>
+          <div style="font-size:12px;color:var(--tx3)">
+            ${fmtNum(emp.monto_mensual,true)}/mes
+            ${emp.dia_pago?` · Vence día ${emp.dia_pago}`:""}
+            ${pagado&&pago.fecha_pago?` · Pagado ${fmt(pago.fecha_pago)}`:""}
+            ${emp.notas?` · <em>${esc(emp.notas)}</em>`:""}
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${pagado
+            ?`<span class="badge bdo" style="font-size:10px;padding:3px 10px">✓ Pagado</span>
+               <button class="btn sm danger" onclick="desmarcarPagoEmpleado('${emp.id}','${cfSueldosMes}')" style="font-size:10px;padding:2px 8px">Desmarcar</button>`
+            :`<span class="badge bpr" style="font-size:10px;padding:3px 10px">Pendiente</span>
+               <button class="btn sm" style="background:var(--pu);color:#fff;font-size:10px;padding:3px 10px" onclick="abrirPagoEmpleado('${emp.id}','${cfSueldosMes}')">Pagar</button>`
+          }
+          <button class="btn sm" onclick="openEditEmpleado('${emp.id}')">✎</button>
+        </div>
+      </div>`;
+    });
+    html+="</div></div>";
+  });
+  cont.innerHTML=html;
+}
+
+function openAddEmpleado(){
+  editEmpId=null;
+  document.getElementById("memp-title").textContent="Nuevo Empleado";
+  document.getElementById("memp-save-btn").textContent="Guardar";
+  document.getElementById("memp-del-btn").style.display="none";
+  ["emp-nombre","emp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  document.getElementById("emp-cat").value="Honorarios Gerenciales";
+  document.getElementById("emp-soc").value="SUDES";
+  document.getElementById("emp-monto").value="";
+  document.getElementById("emp-dia").value="5";
+  openM("modal-empleado");
+  setTimeout(()=>document.getElementById("emp-nombre").focus(),80);
+}
+
+function openEditEmpleado(id){
+  const emp=cfEmpleados.find(e=>e.id===id);if(!emp)return;
+  editEmpId=id;
+  document.getElementById("memp-title").textContent="Editar Empleado";
+  document.getElementById("memp-save-btn").textContent="Guardar cambios";
+  document.getElementById("memp-del-btn").style.display="";
+  document.getElementById("emp-nombre").value=emp.nombre||"";
+  document.getElementById("emp-cat").value=emp.categoria||"Honorarios Gerenciales";
+  document.getElementById("emp-soc").value=emp.sociedad||"SUDES";
+  document.getElementById("emp-monto").value=emp.monto_mensual||"";
+  document.getElementById("emp-dia").value=emp.dia_pago||5;
+  document.getElementById("emp-notas").value=emp.notas||"";
+  openM("modal-empleado");
+}
+
+async function saveEmpleado(){
+  const nombre=document.getElementById("emp-nombre").value.trim();
+  if(!nombre){toast("Escribí un nombre","err");return;}
+  const data={nombre,categoria:document.getElementById("emp-cat").value,sociedad:document.getElementById("emp-soc").value,monto_mensual:parseFloat(document.getElementById("emp-monto").value)||0,dia_pago:parseInt(document.getElementById("emp-dia").value)||5,notas:document.getElementById("emp-notas").value.trim()||null,activo:true,updated_at:new Date().toISOString()};
+  const btn=document.getElementById("memp-save-btn");btn.disabled=true;
+  try{
+    if(editEmpId){
+      await sb(`cf_empleados?id=eq.${editEmpId}`,{method:"PATCH",body:JSON.stringify(data)});
+      const i=cfEmpleados.findIndex(e=>e.id===editEmpId);if(i>=0)cfEmpleados[i]={...cfEmpleados[i],...data};
+      toast("Empleado actualizado","ok");
+    }else{
+      const[created]=await sb("cf_empleados",{method:"POST",body:JSON.stringify(data)});
+      cfEmpleados.push(created);toast("Empleado creado ✓","ok");
+    }
+    closeM("modal-empleado");renderSueldos();renderCFResumen();
+  }catch(e){toast("Error: "+e.message,"err")}
+  finally{btn.disabled=false;editEmpId=null;}
+}
+
+function delEmpleado(){
+  const emp=cfEmpleados.find(e=>e.id===editEmpId);if(!emp)return;
+  confirmDel(`¿Eliminar a ${emp.nombre}? Se eliminarán también sus pagos registrados.`,async()=>{
+    try{
+      await sb(`cf_empleados?id=eq.${editEmpId}`,{method:"DELETE"});
+      cfEmpleados=cfEmpleados.filter(e=>e.id!==editEmpId);
+      cfPagosEmpleados=cfPagosEmpleados.filter(p=>p.empleado_id!==editEmpId);
+      closeM("modal-empleado");renderSueldos();renderCFResumen();toast("Empleado eliminado","ok");
+    }catch(e){toast("Error","err")}
+  });
+}
+
+function abrirPagoEmpleado(empId,periodo){
+  const emp=cfEmpleados.find(e=>e.id===empId);if(!emp)return;
+  _mpeEmpId=empId;_mpePeriodo=periodo;
+  const mesLabel=`${MESES_CF[parseInt(periodo.slice(5,7))-1]} ${periodo.slice(0,4)}`;
+  document.getElementById("mpe-title").textContent=`Pagar ${emp.nombre} — ${mesLabel}`;
+  document.getElementById("mpe-resumen").innerHTML=`
+    <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+      <span style="color:var(--tx3)">Monto mensual</span>
+      <span style="font-weight:700;color:var(--re)">${fmtNum(emp.monto_mensual,true)}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+      <span style="color:var(--tx3)">Categoría</span>
+      <span style="color:var(--tx)">${emp.categoria}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between">
+      <span style="color:var(--tx3)">Empresa</span>
+      <span class="badge ${emp.sociedad==="SUDES"?"bpr":"bdo"}" style="font-size:10px">${emp.sociedad}</span>
+    </div>`;
+  document.getElementById("mpe-fecha").value=today();
+  document.getElementById("mpe-monto").value=emp.monto_mensual!=null?parseFloat(emp.monto_mensual).toFixed(2):"";
+  document.getElementById("mpe-notas").value="";
+  openM("modal-pago-empleado");
+  setTimeout(()=>document.getElementById("mpe-fecha").focus(),80);
+}
+
+async function confirmarPagoEmpleado(){
+  const fecha=document.getElementById("mpe-fecha").value||today();
+  const monto=parseFloat(document.getElementById("mpe-monto").value)||null;
+  const notas=document.getElementById("mpe-notas").value.trim()||null;
+  const btn=document.getElementById("mpe-save-btn");btn.disabled=true;
+  try{
+    const data={empleado_id:_mpeEmpId,periodo:_mpePeriodo,monto,pagado:true,fecha_pago:fecha,notas,updated_at:new Date().toISOString()};
+    const existe=cfPagosEmpleados.find(p=>p.empleado_id===_mpeEmpId&&p.periodo===_mpePeriodo);
+    if(existe){
+      await sb(`cf_pagos_empleados?id=eq.${existe.id}`,{method:"PATCH",body:JSON.stringify(data)});
+      Object.assign(existe,data);
+    }else{
+      const[created]=await sb("cf_pagos_empleados",{method:"POST",body:JSON.stringify(data)});
+      cfPagosEmpleados.push(created);
+    }
+    closeM("modal-pago-empleado");
+    const emp=cfEmpleados.find(e=>e.id===_mpeEmpId);
+    toast(`✓ ${emp?.nombre||"Empleado"} — pago registrado`,"ok");
+    renderSueldos();renderCFResumen();
+    if(curPage==="alertas")renderAlertas();
+  }catch(e){toast("Error: "+e.message,"err")}
+  finally{btn.disabled=false;_mpeEmpId=null;_mpePeriodo=null;}
+}
+
+async function desmarcarPagoEmpleado(empId,periodo){
+  const pago=cfPagosEmpleados.find(p=>p.empleado_id===empId&&p.periodo===periodo);
+  if(!pago)return;
+  try{
+    await sb(`cf_pagos_empleados?id=eq.${pago.id}`,{method:"PATCH",body:JSON.stringify({pagado:false,fecha_pago:null,updated_at:new Date().toISOString()})});
+    pago.pagado=false;pago.fecha_pago=null;
+    renderSueldos();renderCFResumen();toast("Pago desmarcado","inf");
+  }catch(e){toast("Error","err")}
 }
 
 /* ── COBRANZAS ── */
@@ -5516,3 +5877,5 @@ if('serviceWorker' in navigator){
 </script>
 </body>
 </html>
+
+      
