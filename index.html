@@ -3858,29 +3858,48 @@ async function renderSueldos(){
       const pago=cfPagosEmpleados.find(x=>x.empleado_id===emp.id&&x.periodo===cfSueldosMes);
       const pagado=pago?.pagado;
       const socCls=emp.sociedad==="SUDES"?"bpr":"bdo";
-      html+=`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:12px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
-            <span style="font-size:13px;font-weight:500;color:var(--tx)">${esc(emp.nombre)}</span>
-            <span class="badge ${socCls}" style="font-size:9px">${emp.sociedad}</span>
+
+      // Tira de historial: últimos 6 meses + próximo
+      const ahora=new Date();
+      const histMeses=[];
+      for(let i=5;i>=-1;i--){
+        const d=new Date(ahora.getFullYear(),ahora.getMonth()-i,1);
+        const mk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+        const pg=cfPagosEmpleados.find(x=>x.empleado_id===emp.id&&x.periodo===mk);
+        histMeses.push({mk,label:MESES_CF[d.getMonth()],pagado:pg?.pagado||false});
+      }
+      const histHtml=histMeses.map(m=>{
+        const sel=m.mk===cfSueldosMes;
+        const bg=m.pagado?"rgba(16,185,129,.2)":"rgba(239,68,68,.12)";
+        const col=m.pagado?"var(--gr)":"var(--re)";
+        const border=sel?`2px solid var(--ac)`:`1px solid ${m.pagado?"rgba(16,185,129,.3)":"rgba(239,68,68,.2)"}`;
+        return`<span onclick="cfSueldosMes='${m.mk}';renderSueldos()" title="${m.mk}" style="font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;background:${bg};color:${col};border:${border};white-space:nowrap;font-weight:${sel?"700":"400"}">${m.label}${m.pagado?" ✓":""}</span>`;
+      }).join("");
+
+      html+=`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:12px 14px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
+              <span style="font-size:13px;font-weight:500;color:var(--tx)">${esc(emp.nombre)}</span>
+              <span class="badge ${socCls}" style="font-size:9px">${emp.sociedad}</span>
+              <span class="badge" style="font-size:9px;background:${emp.tipo==="Variable"?"rgba(59,130,246,.15)":"rgba(16,185,129,.15)"};color:${emp.tipo==="Variable"?"#3B82F6":"var(--gr)"};border:1px solid ${emp.tipo==="Variable"?"rgba(59,130,246,.3)":"rgba(16,185,129,.3)"}">${emp.tipo||"Fijo"}</span>
+            </div>
+            <div style="font-size:11px;color:var(--tx3)">
+              ${fmtNum(emp.monto_mensual,true)}/mes${emp.dia_pago?` · Día ${emp.dia_pago}`:""}${emp.notas?` · ${esc(emp.notas)}`:""}
+            </div>
           </div>
-          <div style="font-size:12px;color:var(--tx3);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span>${fmtNum(emp.monto_mensual,true)}/mes</span>
-            <span class="badge" style="font-size:9px;background:${emp.tipo==="Variable"?"rgba(59,130,246,.15)":"rgba(16,185,129,.15)"};color:${emp.tipo==="Variable"?"#3B82F6":"var(--gr)"};border:1px solid ${emp.tipo==="Variable"?"rgba(59,130,246,.3)":"rgba(16,185,129,.3)"}">${emp.tipo||"Fijo"}</span>
-            ${emp.dia_pago?`<span>· Día ${emp.dia_pago}</span>`:""}
-            ${pagado&&pago.fecha_pago?`<span>· Pagado ${fmt(pago.fecha_pago)}</span>`:""}
-            ${emp.notas?`<span>· <em>${esc(emp.notas)}</em></span>`:""}
+          <div style="display:flex;align-items:center;gap:6px">
+            ${pagado
+              ?`<span class="badge bdo" style="font-size:10px;padding:3px 10px">✓ ${cfSueldosMes.slice(0,7)===(new Date().getFullYear()+"-"+String(new Date().getMonth()+1).padStart(2,"0"))?"Este mes":cfSueldosMes} pagado</span>
+                 <button class="btn sm" onclick="desmarcarPagoEmpleado('${emp.id}','${cfSueldosMes}')" style="font-size:10px;padding:2px 8px;color:var(--re)">↩ Desmarcar</button>`
+              :`<span class="badge bpr" style="font-size:10px;padding:3px 10px">Pendiente</span>
+                 <button class="btn sm" style="background:var(--pu);color:#fff;font-size:10px;padding:3px 10px" onclick="abrirPagoEmpleado('${emp.id}','${cfSueldosMes}')">Pagar</button>`
+            }
+            <button class="btn sm" onclick="openEditEmpleado('${emp.id}')">✎</button>
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          ${pagado
-            ?`<span class="badge bdo" style="font-size:10px;padding:3px 10px">✓ Pagado</span>
-               <button class="btn sm danger" onclick="desmarcarPagoEmpleado('${emp.id}','${cfSueldosMes}')" style="font-size:10px;padding:2px 8px">Desmarcar</button>`
-            :`<span class="badge bpr" style="font-size:10px;padding:3px 10px">Pendiente</span>
-               <button class="btn sm" style="background:var(--pu);color:#fff;font-size:10px;padding:3px 10px" onclick="abrirPagoEmpleado('${emp.id}','${cfSueldosMes}')">Pagar</button>`
-          }
-          <button class="btn sm" onclick="openEditEmpleado('${emp.id}')">✎</button>
-        </div>
+        <!-- Historial de meses -->
+        <div style="display:flex;gap:5px;flex-wrap:wrap">${histHtml}</div>
       </div>`;
     });
     html+="</div></div>";
