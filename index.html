@@ -4007,9 +4007,11 @@ async function desmarcarPagoEmpleado(empId,periodo){
   const pago=cfPagosEmpleados.find(p=>p.empleado_id===empId&&p.periodo===periodo);
   if(!pago)return;
   try{
-    await sb(`cf_pagos_empleados?id=eq.${pago.id}`,{method:"PATCH",body:JSON.stringify({pagado:false,fecha_pago:null,updated_at:new Date().toISOString()})});
-    pago.pagado=false;pago.fecha_pago=null;
-    renderSueldos();renderCFResumen();toast("Pago desmarcado","inf");
+    await sb(`cf_pagos_empleados?id=eq.${pago.id}`,{method:"DELETE"});
+    cfPagosEmpleados=cfPagosEmpleados.filter(p=>p.id!==pago.id);
+    renderSueldos();renderCFResumen();
+    if(curPage==="alertas")renderAlertas();
+    toast("Pago desmarcado — queda pendiente","inf");
   }catch(e){toast("Error","err")}
 }
 
