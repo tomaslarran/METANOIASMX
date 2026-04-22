@@ -3409,10 +3409,15 @@ function renderCFResumen(){
       .filter(c=>c.prestamo_id===p.id&&!c.pagada&&c.fecha&&c.fecha.startsWith(mkey))
       .reduce((a,c)=>a+(parseFloat(c.monto_total)||0),0),0);
   const getEmpValMes=(emp,mkey)=>{
+    // No mostrar meses anteriores a la creación del empleado
+    const creadoMes=emp.created_at?emp.created_at.slice(0,7):null;
+    if(creadoMes&&mkey<creadoMes)return 0;
     const pago=cfPagosEmpleados.find(p=>p.empleado_id===emp.id&&p.periodo===mkey);
+    // Pagado: ya salió el dinero, no cuenta como egreso pendiente
+    if(pago?.pagado)return 0;
     if(pago?.monto!=null)return parseFloat(pago.monto);
-    // Variable: solo muestra monto si hay registro de pago (aunque sea pendiente)
-    if(emp.tipo==="Variable")return pago?parseFloat(emp.monto_mensual)||0:0;
+    // Variable: solo muestra si hay registro
+    if(emp.tipo==="Variable")return 0;
     return parseFloat(emp.monto_mensual)||0;
   };
   const getSueldosTotalMes=(mkey)=>cfEmpleados
@@ -3541,12 +3546,23 @@ function renderCFResumen(){
           </tr>`;
           catEmps.forEach(emp=>{
             const celdas=meses.map(m=>{
-              const monto=getEmpValMes(emp,m.key);
               const pago=cfPagosEmpleados.find(p=>p.empleado_id===emp.id&&p.periodo===m.key);
               const pagado=pago?.pagado;
+              const monto=getEmpValMes(emp,m.key); // 0 si pagado o antes de creación
               const bgActual=m.actual?"background:rgba(124,58,237,.06)":"";
-              const display=monto?("$"+Math.round(monto).toLocaleString("es-AR")+(pagado?" ✓":"")):pagado?"✓":"—";
-              return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${monto?pagado?"var(--gr)":"var(--re)":"var(--tx3)"};border-right:1px solid var(--b);${bgActual}" title="${pagado?"Pagado "+fmt(pago.fecha_pago||""):"Pendiente"}">${display}</td>`;
+              const creadoMes=emp.created_at?emp.created_at.slice(0,7):null;
+              const antesDeCreacion=creadoMes&&m.key<creadoMes;
+              let display,color;
+              if(antesDeCreacion){display="—";color="var(--tx4)";}
+              else if(pagado){
+                const montoReal=pago.monto!=null?parseFloat(pago.monto):(parseFloat(emp.monto_mensual)||0);
+                display=`<span style="font-size:10px">✓</span>${montoReal?"<br><span style='font-size:10px;opacity:.6'>$"+Math.round(montoReal).toLocaleString("es-AR")+"</span>":""}`;
+                color="var(--gr)";
+              }else if(monto){
+                display="$"+Math.round(monto).toLocaleString("es-AR");
+                color="var(--re)";
+              }else{display="—";color="var(--tx3)";}
+              return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${color};border-right:1px solid var(--b);${bgActual};line-height:1.3" title="${pagado?"Pagado "+fmt(pago?.fecha_pago||""):antesDeCreacion?"Antes del alta":"Pendiente"}">${display}</td>`;
             }).join("");
             const socCls=emp.sociedad==="SUDES"?"bpr":"bdo";
             rows+=`<tr style="border-bottom:1px solid var(--b)">
