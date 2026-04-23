@@ -124,6 +124,7 @@ body{font-family:var(--f);background:var(--bg);color:var(--tx);min-height:100vh;
 .badge{display:inline-flex;align-items:center;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:600}
 .btd{background:rgba(255,255,255,.06);color:var(--tx2)}
 .bpr{background:var(--bll);color:#93C5FD}
+.bac{background:rgba(16,185,129,.15);color:#6EE7B7}
 .bdo{background:var(--gl);color:#6EE7B7}
 .bbl{background:var(--rl2);color:#FCA5A5}
 .dot2{width:5px;height:5px;border-radius:50%;flex-shrink:0}
@@ -1436,6 +1437,22 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- ══ MODAL RESCATE/CICLO INVERSIÓN ══ -->
+<!-- Modal: Agregar capital a inversión -->
+<div class="mov" id="modal-agregar-capital" onclick="if(event.target===this)closeModal('modal-agregar-capital')">
+  <div class="modal">
+    <div class="mt"><span id="mac-title">Agregar capital</span><button class="mt-close" onclick="closeModal('modal-agregar-capital')">✕</button></div>
+    <input type="hidden" id="mac-inv-id">
+    <div id="mac-info" style="background:var(--surf2);border:1px solid var(--b);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--tx2)"></div>
+    <div class="fgrid">
+      <div class="fg"><label class="fl">Fecha del aporte *</label><input class="fi" id="mac-fecha" type="date"></div>
+      <div class="fg"><label class="fl">Monto a agregar ($) *</label><input class="fi" id="mac-monto" type="number" placeholder="0" step="0.01" oninput="updateMacResumen()"></div>
+    </div>
+    <div id="mac-resumen" style="font-size:12px;color:var(--tx3);margin:0 0 10px;padding:8px 12px;background:var(--surf2);border-radius:6px;display:none"></div>
+    <div class="fg"><label class="fl">Notas</label><input class="fi" id="mac-notas" type="text" placeholder="Ej: reinversión de rendimientos, aporte adicional..."></div>
+    <div class="ma"><button class="bc" onclick="closeModal('modal-agregar-capital')">Cancelar</button><button class="bk" id="mac-save-btn" onclick="confirmarAgregarCapital()">💰 Confirmar aporte</button></div>
+  </div>
+</div>
+
 <div class="mov" id="modal-cf-rescate" onclick="if(event.target===this)closeModal('modal-cf-rescate')">
   <div class="modal">
     <div class="mt"><span id="mcr-title">Rescatar inversión</span><button class="mt-close" onclick="closeModal('modal-cf-rescate')">✕</button></div>
@@ -4487,6 +4504,7 @@ function renderCFInversiones(){
                   ${movs.length?`<button onclick="toggleInvHistory('${inv.id}')" style="background:none;border:none;color:var(--ac);font-size:11px;cursor:pointer;padding:4px 0;margin-top:4px">📋 Ver historial (${movs.length} movimiento${movs.length!==1?"s":""})</button>`:""}
                 </div>
                 <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
+                  ${isActiva?`<button class="btn sm" style="background:var(--gr);color:#fff" onclick="openAgregarCapital('${inv.id}')">💰 + Capital</button>`:""}
                   ${isActiva?`<button class="btn sm pri" onclick="openRescateModal('${inv.id}')">Rescatar</button>`:""}
                   <button class="btn sm" onclick="editCFInv('${inv.id}')">✎</button>
                   <button class="btn sm danger" onclick="delCFInv('${inv.id}')">✕</button>
@@ -4494,13 +4512,13 @@ function renderCFInversiones(){
               </div>
               <!-- Historial de movimientos (colapsable) -->
               <div id="inv-hist-${inv.id}" style="display:none;margin-top:10px;border-top:1px solid var(--b);padding-top:10px">
-                <div style="font-size:11px;font-weight:600;color:var(--tx3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Historial de rescates</div>
-                ${movs.map(m=>`<div style="display:flex;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--surf2);font-size:12px">
+                <div style="font-size:11px;font-weight:600;color:var(--tx3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Historial de movimientos</div>
+                ${movs.map(m=>{const esAporte=m.tipo==="Aporte de capital";return`<div style="display:flex;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--surf2);font-size:12px">
                   <span style="color:var(--tx3);min-width:90px">${fmt(m.fecha)}</span>
-                  <span class="badge ${m.tipo==="Rescate Parcial"?"btd":"bpr"}" style="font-size:10px">${m.tipo}</span>
-                  <span style="color:var(--am);font-weight:600">$${Math.round(m.monto||0).toLocaleString("es-AR")}</span>
+                  <span class="badge ${esAporte?"bac":m.tipo==="Rescate Parcial"?"btd":"bpr"}" style="font-size:10px">${m.tipo}</span>
+                  <span style="color:${esAporte?"var(--gr)":"var(--am)"};font-weight:600">${esAporte?"+":""}$${Math.round(m.monto||0).toLocaleString("es-AR")}</span>
                   ${m.notas?`<span style="color:var(--tx3);font-style:italic">${esc(m.notas)}</span>`:""}
-                </div>`).join("")}
+                </div>`}).join("")}
                 <div style="display:flex;justify-content:space-between;padding-top:8px;font-size:12px;font-weight:600">
                   <span style="color:var(--tx3)">Total rescatado:</span>
                   <span style="color:var(--am)">$${Math.round(totalRescatado).toLocaleString("es-AR")}</span>
@@ -4573,6 +4591,68 @@ function updateCfrResumen(){
     res.style.display="";
     res.innerHTML=`Total recuperado: <strong>$${Math.round(totalRecup).toLocaleString("es-AR")}</strong> · Rendimiento final: <strong style="color:${rend>=0?"var(--gr)":"var(--re)"}">${rend>=0?"+":""}$${Math.round(Math.abs(rend)).toLocaleString("es-AR")}</strong>`;
   }
+}
+
+function openAgregarCapital(id){
+  const inv=cfInversiones.find(i=>i.id===id);if(!inv)return;
+  document.getElementById("mac-inv-id").value=id;
+  document.getElementById("mac-title").textContent=`Agregar capital: ${inv.nombre}`;
+  document.getElementById("mac-info").innerHTML=
+    `<strong>${esc(inv.nombre)}</strong> · ${inv.tipo||""} · ${inv.sociedad||""}<br>
+     Capital actual: <strong>$${Math.round(inv.capital||0).toLocaleString("es-AR")}</strong> ·
+     Valor actual: <strong style="color:var(--gr)">$${Math.round(inv.valor_actual||inv.capital||0).toLocaleString("es-AR")}</strong>`;
+  document.getElementById("mac-fecha").value=today();
+  document.getElementById("mac-monto").value="";
+  document.getElementById("mac-notas").value="";
+  document.getElementById("mac-resumen").style.display="none";
+  document.getElementById("mac-save-btn").disabled=false;
+  openModal("modal-agregar-capital");
+  setTimeout(()=>document.getElementById("mac-monto").focus(),80);
+}
+
+function updateMacResumen(){
+  const id=document.getElementById("mac-inv-id").value;
+  const monto=parseFloat(document.getElementById("mac-monto").value)||0;
+  const inv=cfInversiones.find(i=>i.id===id);
+  const el=document.getElementById("mac-resumen");
+  if(!inv||!monto){el.style.display="none";return;}
+  const nuevoCapital=(inv.capital||0)+monto;
+  const nuevoValor=(inv.valor_actual||inv.capital||0)+monto;
+  el.style.display="block";
+  el.innerHTML=`Nuevo capital: <strong>$${Math.round(nuevoCapital).toLocaleString("es-AR")}</strong> · Nuevo valor: <strong style="color:var(--gr)">$${Math.round(nuevoValor).toLocaleString("es-AR")}</strong>`;
+}
+
+async function confirmarAgregarCapital(){
+  const id=document.getElementById("mac-inv-id").value;
+  const fecha=document.getElementById("mac-fecha").value;
+  const monto=parseFloat(document.getElementById("mac-monto").value)||0;
+  const notas=document.getElementById("mac-notas").value.trim()||null;
+  if(!fecha){toast("Elegí una fecha","err");return;}
+  if(!monto||monto<=0){toast("Ingresá un monto válido","err");return;}
+  const btn=document.getElementById("mac-save-btn");btn.disabled=true;
+  try{
+    const inv=cfInversiones.find(i=>i.id===id);if(!inv)throw new Error("Inversión no encontrada");
+
+    // 1. Registrar movimiento
+    const [mov]=await sb("cf_inversiones_movimientos",{method:"POST",body:JSON.stringify({
+      inversion_id:id,tipo:"Aporte de capital",fecha,monto,notas
+    })});
+    cfInvMovs.unshift(mov);
+
+    // 2. Actualizar capital y valor_actual en la inversión
+    const nuevoCapital=(parseFloat(inv.capital)||0)+monto;
+    const nuevoValor=(parseFloat(inv.valor_actual)||parseFloat(inv.capital)||0)+monto;
+    const patch={capital:nuevoCapital,valor_actual:nuevoValor,updated_at:new Date().toISOString()};
+    await sb(`cf_inversiones?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(patch)});
+    const idx=cfInversiones.findIndex(i=>i.id===id);
+    if(idx>=0)cfInversiones[idx]={...cfInversiones[idx],...patch};
+
+    toast("Capital agregado ✓","ok");
+    closeModal("modal-agregar-capital");
+    renderCFInversiones();
+    if(curPage==="graficos")renderFinanciero();
+  }catch(e){toast("Error: "+e.message,"err");}
+  finally{btn.disabled=false;}
 }
 
 function openRescateModal(id){
