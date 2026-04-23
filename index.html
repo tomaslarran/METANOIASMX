@@ -591,11 +591,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       Cash Flow
       <span class="sitem-badge" id="badge-cf">—</span>
     </div>
-    <div class="sitem sub" onclick="goTo('cashflow',document.getElementById('nav-cashflow'));setCFTab('resumen')">Resumen mensual</div>
-    <div class="sitem sub" onclick="goTo('cashflow',document.getElementById('nav-cashflow'));setCFTab('prestamos')">Préstamos</div>
-    <div class="sitem sub" onclick="goTo('cashflow',document.getElementById('nav-cashflow'));setCFTab('cobranzas')">Cobranzas</div>
-    <div class="sitem sub" onclick="goTo('cashflow',document.getElementById('nav-cashflow'));setCFTab('inversiones')">Inversiones</div>
-    <div class="sitem sub" onclick="goTo('cashflow',document.getElementById('nav-cashflow'));setCFTab('historial')">📋 Historial pagos</div>
+    <div class="sitem sub" onclick="cfTab='resumen';goTo('cashflow',document.getElementById('nav-cashflow'))">Resumen mensual</div>
+    <div class="sitem sub" onclick="cfTab='prestamos';goTo('cashflow',document.getElementById('nav-cashflow'))">Préstamos</div>
+    <div class="sitem sub" onclick="cfTab='cobranzas';goTo('cashflow',document.getElementById('nav-cashflow'))">Cobranzas</div>
+    <div class="sitem sub" onclick="cfTab='inversiones';goTo('cashflow',document.getElementById('nav-cashflow'))">Inversiones</div>
+    <div class="sitem sub" onclick="cfTab='historial';goTo('cashflow',document.getElementById('nav-cashflow'))">📋 Historial pagos</div>
     <div class="sitem" onclick="goPage('sueldos',this)" id="nav-sueldos">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/><line x1="20" y1="8" x2="20" y2="14"/></svg>
       Sueldos
@@ -2137,7 +2137,7 @@ function goPage(name,el){
   }
   if(name==="alertas"){const load=cfPrestamos.length?Promise.resolve():loadCF().catch(()=>{});load.then(renderAlertas);}
   if(name==="sueldos"){const load=cfEmpleados.length?Promise.resolve():loadCF().catch(()=>{});load.then(renderSueldos);}
-  if(name==="cashflow")loadCF().then(()=>setCFTab("resumen"));
+  if(name==="cashflow")loadCF().then(()=>setCFTab(cfTab||"resumen"));
   if(name==="instructores")renderInstructores();
   if(name==="inventario")loadInventario();
   if(name==="comprobantes")loadComprobantes();
@@ -2145,8 +2145,8 @@ function goPage(name,el){
 }
 function goTo(name,el){goPage(name,el)}
 function renderNotifPage(){if(users.length>0&&document.querySelector(".nu-btn"))selectNotifUser(users[0].id,document.querySelector(".nu-btn"))}
-function setTareaFilter(s){curF=s;document.querySelectorAll(".fb").forEach(b=>b.classList.remove("on"));renderTareas();goPage("tareas",document.getElementById("nav-tareas"))}
-function setCursoFilter(f){cursoFilter=f;document.getElementById("curso-filter-label").textContent=f==="activos"?"Cursos activos":f==="borrador"?"Borradores":f==="completados"?"Completados":"Todos los cursos";renderCursos();goPage("cursos",document.getElementById("nav-cursos"))}
+function setTareaFilter(s){curF=s;document.querySelectorAll("#pg-tareas .fb").forEach(b=>b.classList.remove("on"));goPage("tareas",document.getElementById("nav-tareas"));renderTareas();}
+function setCursoFilter(f){cursoFilter=f;goPage("cursos",document.getElementById("nav-cursos"));document.getElementById("curso-filter-label").textContent=f==="activos"?"Cursos activos":f==="borrador"?"Borradores":f==="completados"?"Completados":"Todos los cursos";renderCursos();}
 function openNewModal(){
   if(curPage==="tareas")openModal("modal-tarea");
   else if(curPage==="cursos")openModal("modal-curso");
