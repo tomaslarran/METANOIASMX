@@ -4407,6 +4407,41 @@ const INV_EMPRESAS=[
   {key:"Personal",label:"Personal",icon:"💼",color:"#64748B"}
 ];
 
+function calcCapitalProm(inv,movs){
+  const fechaInicio=inv.fecha_inicio;
+  if(!fechaInicio)return null;
+  const hoyStr=today();
+  const fechaFin=(inv.estado==="Rescatada"&&inv.fecha_rescate)?inv.fecha_rescate:hoyStr;
+  const msDay=86400000;
+  const t0=new Date(fechaInicio).getTime();
+  const tF=new Date(fechaFin).getTime();
+  const diasTotal=Math.max(1,Math.round((tF-t0)/msDay));
+  // Aportes ordenados por fecha
+  const aportes=movs.filter(m=>m.tipo==="Aporte de capital").slice().sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const sumaAportes=aportes.reduce((s,m)=>s+(parseFloat(m.monto)||0),0);
+  const capitalInicial=(parseFloat(inv.capital)||0)-sumaAportes;
+  // Calcular promedio ponderado por días
+  let capActual=capitalInicial;
+  let tPrev=t0;
+  let sumaPond=0;
+  for(const ap of aportes){
+    const tAp=new Date(ap.fecha).getTime();
+    const dias=Math.max(0,Math.round((tAp-tPrev)/msDay));
+    sumaPond+=capActual*dias;
+    capActual+=parseFloat(ap.monto)||0;
+    tPrev=tAp;
+  }
+  sumaPond+=capActual*Math.max(0,Math.round((tF-tPrev)/msDay));
+  const capitalProm=Math.round(sumaPond/diasTotal);
+  // Rendimiento neto (sin aportes en rescatado)
+  const rescates=movs.filter(m=>m.tipo!=="Aporte de capital").reduce((s,m)=>s+(parseFloat(m.monto)||0),0);
+  const ival=parseFloat(inv.valor_actual)||parseFloat(inv.capital)||0;
+  const rendReal=(inv.estado==="Activa"?ival:0)+rescates-(parseFloat(inv.capital)||0);
+  const tasaTotal=capitalProm>0?(rendReal/capitalProm)*100:0;
+  const tna=diasTotal>0?(tasaTotal/diasTotal)*365:0;
+  return{capitalProm,diasTotal,tasaTotal,tna,rendReal};
+}
+
 function renderCFInversiones(){
   const activas=cfInversiones.filter(i=>i.estado==="Activa");
   const totalCap=activas.reduce((s,i)=>s+(i.capital||0),0);
@@ -4477,10 +4512,11 @@ function renderCFInversiones(){
             const icap=inv.capital||0;
             const ival=inv.valor_actual||icap;
             const isActiva=inv.estado==="Activa";
-            // Rendimiento real = suma de todos los rescates + valor_actual restante - capital original
-            const totalRescatado=movs.reduce((s,m)=>s+(m.monto||0),0);
+            // Rescates = movimientos que NO son aportes de capital
+            const totalRescatado=movs.filter(m=>m.tipo!=="Aporte de capital").reduce((s,m)=>s+(m.monto||0),0);
             const rendReal=(isActiva?ival:0)+totalRescatado-icap;
             const rendPct=icap?((rendReal/icap)*100).toFixed(1):"0.0";
+            const cp=calcCapitalProm(inv,movs);
             const d=inv.fecha_vencimiento?days(inv.fecha_vencimiento):null;
             const vencAlert=d!==null&&d<0?"🔴 ":d!==null&&d<=7?"⚠ ":"";
             return`<div style="background:var(--bg);border:1px solid var(--b);border-radius:8px;padding:10px 12px">
@@ -4501,6 +4537,15 @@ function renderCFInversiones(){
                     ${inv.fecha_vencimiento?`<span style="color:${d!==null&&d<=7?"#FCD34D":"var(--tx3)"}">${vencAlert}${isActiva?"Vence":"Cerrada"}: ${fmt(inv.fecha_rescate||inv.fecha_vencimiento)}${isActiva&&d!==null?" ("+Math.abs(d)+"d"+(d<0?" pasado":" restante")+")":""}</span>`:""}
                   </div>
                   ${inv.notas?`<div style="font-size:10px;color:var(--tx3);margin-top:3px;font-style:italic">${esc(inv.notas)}</div>`:""}
+                  ${cp?`<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;margin-top:6px;padding:5px 8px;background:var(--surf2);border-radius:5px;align-items:center">
+                    <span style="color:var(--tx3);font-weight:600">📐 Cap. promedio:</span>
+                    <span style="color:var(--tx);font-weight:700">$${cp.capitalProm.toLocaleString("es-AR")}</span>
+                    <span style="color:var(--tx3)">${cp.diasTotal} días invertidos</span>
+                    <span style="color:var(--tx3)">·</span>
+                    <span>TNA est.: <strong style="color:${cp.tna>=0?"var(--gr)":"var(--re)"}">${cp.tna>=0?"+":""}${cp.tna.toFixed(1)}%</strong></span>
+                    <span style="color:var(--tx3)">·</span>
+                    <span>Rend./prom.: <strong style="color:${cp.tasaTotal>=0?"var(--gr)":"var(--re)"}">${cp.tasaTotal>=0?"+":""}${cp.tasaTotal.toFixed(1)}%</strong></span>
+                  </div>`:""}
                   ${movs.length?`<button onclick="toggleInvHistory('${inv.id}')" style="background:none;border:none;color:var(--ac);font-size:11px;cursor:pointer;padding:4px 0;margin-top:4px">📋 Ver historial (${movs.length} movimiento${movs.length!==1?"s":""})</button>`:""}
                 </div>
                 <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
@@ -4519,9 +4564,17 @@ function renderCFInversiones(){
                   <span style="color:${esAporte?"var(--gr)":"var(--am)"};font-weight:600">${esAporte?"+":""}$${Math.round(m.monto||0).toLocaleString("es-AR")}</span>
                   ${m.notas?`<span style="color:var(--tx3);font-style:italic">${esc(m.notas)}</span>`:""}
                 </div>`}).join("")}
-                <div style="display:flex;justify-content:space-between;padding-top:8px;font-size:12px;font-weight:600">
+                ${movs.filter(m=>m.tipo==="Aporte de capital").length?`<div style="display:flex;justify-content:space-between;padding-top:8px;font-size:12px;font-weight:600">
+                  <span style="color:var(--tx3)">Total aportes:</span>
+                  <span style="color:var(--gr)">+$${Math.round(movs.filter(m=>m.tipo==="Aporte de capital").reduce((s,m)=>s+(m.monto||0),0)).toLocaleString("es-AR")}</span>
+                </div>`:""}
+                ${totalRescatado>0?`<div style="display:flex;justify-content:space-between;padding-top:4px;font-size:12px;font-weight:600">
                   <span style="color:var(--tx3)">Total rescatado:</span>
                   <span style="color:var(--am)">$${Math.round(totalRescatado).toLocaleString("es-AR")}</span>
+                </div>`:""}
+                <div style="display:flex;justify-content:space-between;padding-top:4px;font-size:12px;font-weight:600;border-top:1px solid var(--b);margin-top:4px">
+                  <span style="color:var(--tx3)">Rendimiento neto:</span>
+                  <span style="color:${rendReal>=0?"var(--gr)":"var(--re)"}">${rendReal>=0?"+":""}$${Math.round(Math.abs(rendReal)).toLocaleString("es-AR")}</span>
                 </div>
               </div>
             </div>`;
@@ -4660,7 +4713,7 @@ function openRescateModal(id){
   document.getElementById("cfr-inv-id").value=id;
   document.getElementById("mcr-title").textContent=`Rescatar: ${inv.nombre}`;
   const movs=cfInvMovs.filter(m=>m.inversion_id===id);
-  const yaRescatado=movs.reduce((s,m)=>s+(m.monto||0),0);
+  const yaRescatado=movs.filter(m=>m.tipo!=="Aporte de capital").reduce((s,m)=>s+(m.monto||0),0);
   const d=document.getElementById("cfr-info");
   d.innerHTML=`<strong>${esc(inv.nombre)}</strong> · ${inv.tipo||""} · ${inv.sociedad||""}<br>
     Capital original: <strong>$${Math.round(inv.capital||0).toLocaleString("es-AR")}</strong> ·
