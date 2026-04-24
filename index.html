@@ -1088,6 +1088,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="notif-row"><span class="notif-label">💰 Cobranzas pendientes</span><label class="toggle"><input type="checkbox" id="n-rs-cobr" checked><span class="tslider"></span></label></div>
       <div class="notif-row"><span class="notif-label">🏦 Cuotas de préstamos</span><label class="toggle"><input type="checkbox" id="n-rs-prest" checked><span class="tslider"></span></label></div>
       <div class="notif-row"><span class="notif-label">👷 Sueldos a pagar</span><label class="toggle"><input type="checkbox" id="n-rs-sue" checked><span class="tslider"></span></label></div>
+      <div class="notif-row"><span class="notif-label">✅ Tareas pendientes</span><label class="toggle"><input type="checkbox" id="n-rs-tareas" checked><span class="tslider"></span></label></div>
     </div>
     <div class="notif-card">
       <div class="notif-card-title">🚨 Alertas instantáneas</div>
@@ -1096,7 +1097,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="notif-row"><span class="notif-label">Curso sin responsable</span><label class="toggle"><input type="checkbox" id="n-curso" checked><span class="tslider"></span></label></div>
       <div class="notif-card-title" style="margin-top:14px">📧 Email</div>
       <div class="notif-row"><span class="notif-label">Dirección</span><input class="notif-input" type="email" id="n-email" placeholder="tu@email.com" style="width:180px"></div>
-      <div class="notif-info">💡 Las preferencias se guardan por usuario. Para envíos automáticos por email conectar con Make usando la API de Supabase.</div>
+      <div class="notif-info">✅ Envíos automáticos activos. Cada usuario recibe el resumen en el día y hora que configure acá.</div>
       <button class="save-btn" onclick="saveNotif()">Guardar preferencias</button>
     </div>
   </div>
@@ -2285,7 +2286,7 @@ async function chgTaskStatus(id,s){
   const c=document.getElementById("c-"+id);c.querySelectorAll(".sb").forEach(b=>b.classList.add("ld"));
   try{await sb(`tareas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({status:s,updated_at:new Date().toISOString()})});
     const t=tasks.find(t=>t.id===id);if(t)t.status=s;toast(`Estado → ${BC[s]?.label||s}`,"ok");renderTareas();
-    if(t)notifyAssignees(t,"modificacion",`${loggedUser?.nombre||"Alguien"} cambió el estado de "${t.nombre}" a ${BC[s]?.label||s}`,loggedUser?.id);}
+    if(t){if(s==="Bloqueado")notifyAssignees(t,"bloqueado",`🚧 "${t.nombre}" fue marcada como bloqueada por ${loggedUser?.nombre||"alguien"}`,loggedUser?.id);else notifyAssignees(t,"modificacion",`${loggedUser?.nombre||"Alguien"} cambió el estado de "${t.nombre}" a ${BC[s]?.label||s}`,loggedUser?.id);}}
   catch(e){toast("Error","err");c.querySelectorAll(".sb").forEach(b=>b.classList.remove("ld"))}
 }
 async function chgPrio(id,val){
@@ -2587,6 +2588,13 @@ async function updateCursoField(id,field,val){
     body[field]=val===""||val===null?null:(typeof val==="string"&&!isNaN(val)&&field!=="instructor_nombre"&&field!=="respaldo_institucional"&&field!=="descripcion"&&field!=="descripcion_after"?Number(val):val);
     await sb(`cursos?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(body)});
     const c=cursos.find(c=>c.id===id);if(c)c[field]=body[field];
+    // Alerta: curso sin instructor
+    if(field==="instructor_nombre"&&(!val||val==="")){
+      const nombre=c?.nombre||"un curso";
+      notifConfigs.filter(cfg=>cfg.alerta_curso!==false&&cfg.usuario_id).forEach(cfg=>{
+        createNotif(cfg.usuario_id,"curso_sin_resp",null,`⚠️ "${nombre}" quedó sin instructor asignado`);
+      });
+    }
     toast("Guardado","ok");
   }catch(e){toast("Error","err")}
 }
@@ -3088,17 +3096,19 @@ function selectNotifUser(id,btn){
   document.getElementById("n-hora").value=cfg.hora_envio||"09:00";
   document.getElementById("n-block").checked=cfg.alerta_bloqueado!==false;
   document.getElementById("n-asig").checked=cfg.alerta_asignacion!==false;
+  document.getElementById("n-curso").checked=cfg.alerta_curso!==false;
   document.getElementById("n-rs-comp").checked=cfg.rs_comprobantes!==false;
   document.getElementById("n-rs-venc").checked=cfg.rs_vencimientos!==false;
   document.getElementById("n-rs-cobr").checked=cfg.rs_cobranzas!==false;
   document.getElementById("n-rs-prest").checked=cfg.rs_prestamos!==false;
   document.getElementById("n-rs-sue").checked=cfg.rs_sueldos!==false;
+  document.getElementById("n-rs-tareas").checked=cfg.rs_tareas!==false;
   const u=users.find(u=>u.id===id);
   document.getElementById("n-email").value=cfg.email||u?.email||"";
 }
 async function saveNotif(){
   if(!curNotifUser){toast("Seleccioná un usuario","err");return}
-  const data={usuario_id:curNotifUser,email:document.getElementById("n-email").value,aviso_vencimiento:document.getElementById("n-venc").checked,dias_antes:parseInt(document.getElementById("n-dias").value)||3,resumen_semanal:document.getElementById("n-semanal").checked,dia_semana:parseInt(document.getElementById("n-dia").value)||1,hora_envio:document.getElementById("n-hora").value,alerta_bloqueado:document.getElementById("n-block").checked,alerta_asignacion:document.getElementById("n-asig").checked,rs_comprobantes:document.getElementById("n-rs-comp").checked,rs_vencimientos:document.getElementById("n-rs-venc").checked,rs_cobranzas:document.getElementById("n-rs-cobr").checked,rs_prestamos:document.getElementById("n-rs-prest").checked,rs_sueldos:document.getElementById("n-rs-sue").checked,updated_at:new Date().toISOString()};
+  const data={usuario_id:curNotifUser,email:document.getElementById("n-email").value,aviso_vencimiento:document.getElementById("n-venc").checked,dias_antes:parseInt(document.getElementById("n-dias").value)||3,resumen_semanal:document.getElementById("n-semanal").checked,dia_semana:parseInt(document.getElementById("n-dia").value)||1,hora_envio:document.getElementById("n-hora").value,alerta_bloqueado:document.getElementById("n-block").checked,alerta_asignacion:document.getElementById("n-asig").checked,alerta_curso:document.getElementById("n-curso").checked,rs_comprobantes:document.getElementById("n-rs-comp").checked,rs_vencimientos:document.getElementById("n-rs-venc").checked,rs_cobranzas:document.getElementById("n-rs-cobr").checked,rs_prestamos:document.getElementById("n-rs-prest").checked,rs_sueldos:document.getElementById("n-rs-sue").checked,rs_tareas:document.getElementById("n-rs-tareas").checked,updated_at:new Date().toISOString()};
   try{
     await sb(`notificaciones_config?usuario_id=eq.${curNotifUser}`,{method:"PATCH",body:JSON.stringify(data)});
     const idx=notifConfigs.findIndex(n=>n.usuario_id===curNotifUser);if(idx>=0)notifConfigs[idx]={...notifConfigs[idx],...data};else notifConfigs.push(data);
@@ -3215,6 +3225,10 @@ async function markAllNotifsLeidas(){
 
 async function createNotif(usuario_id,tipo,tarea_id,mensaje){
   if(!usuario_id)return;
+  // Respetar preferencias del usuario
+  const prefMap={bloqueado:"alerta_bloqueado",asignacion:"alerta_asignacion",curso_sin_resp:"alerta_curso"};
+  const prefKey=prefMap[tipo];
+  if(prefKey){const cfg=notifConfigs.find(n=>n.usuario_id===usuario_id);if(cfg&&cfg[prefKey]===false)return;}
   try{
     const[n]=await sb("notificaciones",{method:"POST",body:JSON.stringify({usuario_id,tipo,tarea_id:tarea_id||null,mensaje})});
     if(loggedUser&&usuario_id===loggedUser.id){
