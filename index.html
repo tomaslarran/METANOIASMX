@@ -1186,6 +1186,23 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="sc"><div class="sc-l">Activas</div><div class="sc-v vp" id="inv-count">—</div><div class="sc-s">en curso</div></div>
     </div>
 
+    <!-- SEGUIMIENTO DIARIO -->
+    <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:16px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);display:flex;align-items:center;gap:6px">📊 Seguimiento diario</div>
+        <button class="btn pri sm" onclick="openRegistrarRend()">+ Registrar hoy</button>
+      </div>
+      <div id="rend-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+        <div class="sc"><div class="sc-l">Hoy</div><div class="sc-v" id="rend-stat-hoy" style="font-size:20px">—</div><div class="sc-s">vs. ayer</div></div>
+        <div class="sc"><div class="sc-l">7 días</div><div class="sc-v" id="rend-stat-sem" style="font-size:20px">—</div><div class="sc-s">rendimiento</div></div>
+        <div class="sc"><div class="sc-l">30 días</div><div class="sc-v" id="rend-stat-mes" style="font-size:20px">—</div><div class="sc-s">rendimiento</div></div>
+      </div>
+      <div id="rend-chart-wrap" style="position:relative;height:200px">
+        <div id="rend-empty" style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12px;color:var(--tx3)">Sin datos aún — registrá el valor de hoy para empezar</div>
+        <canvas id="chartRendDiarios" style="display:none"></canvas>
+      </div>
+    </div>
+
     <div id="cf-inversiones-list"><div class="loading"><div class="loader"></div><div class="lt">Cargando inversiones...</div></div></div>
   </div>
 
@@ -1563,6 +1580,20 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- ══ MODAL INVERSIÓN ══ -->
+<!-- MODAL REGISTRAR RENDIMIENTO DIARIO -->
+<div class="mov" id="modal-rend-diario" onclick="if(event.target===this)closeModal('modal-rend-diario')">
+  <div class="modal" style="max-width:520px">
+    <div class="mt">📊 Registrar rendimiento <button class="mt-close" onclick="closeModal('modal-rend-diario')">✕</button></div>
+    <div style="font-size:12px;color:var(--tx3);margin-bottom:4px" id="rend-fecha-label"></div>
+    <div style="font-size:11px;color:var(--tx3);margin-bottom:14px;padding:8px 10px;background:var(--surf2);border-radius:var(--r)">Ingresá el <strong>valor actual</strong> de cada inversión. Dejá vacío si no cambió.</div>
+    <div id="rend-items-list" style="display:flex;flex-direction:column;gap:8px;max-height:55vh;overflow-y:auto;padding-right:4px"></div>
+    <div class="ma">
+      <button class="bc" onclick="closeModal('modal-rend-diario')">Cancelar</button>
+      <button class="bk" id="rend-save-btn" onclick="saveRendDiarios()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <div class="mov" id="modal-cf-inversion" onclick="if(event.target===this)closeModal('modal-cf-inversion')">
   <div class="modal">
     <div class="mt"><span id="mci-title">Nueva Inversión</span><button class="mt-close" onclick="closeModal('modal-cf-inversion')">✕</button></div>
@@ -3695,7 +3726,8 @@ async function doDelRutina(id){
 
 /* ── CASH FLOW ── */
 let cfConceptos=[],cfValores=[],cfPrestamos=[],cfCobranzas=[],cfInversiones=[],cfInvMovs=[],cfPrestCuotas=[];
-let cfEmpleados=[],cfPagosEmpleados=[];
+let cfEmpleados=[],cfPagosEmpleados=[],rendDiarios=[];
+let chartRend=null;
 let cfSueldosFiltro="all",cfSueldosMes=null;
 let editEmpId=null,_mpeEmpId=null,_mpePeriodo=null;
 let cfSociedad="SUDES",cfTab="resumen",cfPFilter="all",cfCobFilter="all",cfInvFilter="all";
@@ -3706,7 +3738,7 @@ const MESES_CF=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov
 
 async function loadCF(){
   try{
-    [cfConceptos,cfValores,cfPrestamos,cfCobranzas,cfInversiones,cfInvMovs,cfPrestCuotas,cfEmpleados,cfPagosEmpleados]=await Promise.all([
+    [cfConceptos,cfValores,cfPrestamos,cfCobranzas,cfInversiones,cfInvMovs,cfPrestCuotas,cfEmpleados,cfPagosEmpleados,rendDiarios]=await Promise.all([
       sb("cf_conceptos?select=*&order=tipo,nombre"),
       sb("cf_valores?select=*"),
       sb("cf_prestamos?select=*&order=sociedad,tipo"),
@@ -3715,7 +3747,8 @@ async function loadCF(){
       sb("cf_inversiones_movimientos?select=*&order=fecha.desc").catch(()=>[]),
       sb("cf_prestamos_cuotas?select=*&order=fecha").catch(()=>[]),
       sb("cf_empleados?select=*&order=categoria,nombre").catch(()=>[]),
-      sb("cf_pagos_empleados?select=*&order=periodo.desc").catch(()=>[])
+      sb("cf_pagos_empleados?select=*&order=periodo.desc").catch(()=>[]),
+      sb("rendimientos_diarios?select=*&order=fecha.asc").catch(()=>[])
     ]);
     // Badge: cobranzas vencidas + préstamos próximos
     const hoy=today();
@@ -4688,6 +4721,8 @@ function calcCapitalProm(inv,movs){
 }
 
 function renderCFInversiones(){
+  renderRendStats();
+  renderRendChart();
   const activas=cfInversiones.filter(i=>i.estado==="Activa");
   const totalCap=activas.reduce((s,i)=>s+(i.capital||0),0);
   const totalVal=activas.reduce((s,i)=>s+(i.valor_actual||i.capital||0),0);
@@ -5079,6 +5114,139 @@ function delCFInv(id){
     try{await sb(`cf_inversiones?id=eq.${id}`,{method:"DELETE"});cfInversiones=cfInversiones.filter(i=>i.id!==id);renderCFInversiones();toast("Eliminada","ok")}
     catch(e){toast("Error","err")}
   });
+}
+
+/* ── RENDIMIENTOS DIARIOS ── */
+function calcRendStats(){
+  const activas=cfInversiones.filter(i=>i.estado==="Activa");
+  function valorEn(fecha){
+    return activas.reduce((tot,inv)=>{
+      const reg=[...rendDiarios.filter(r=>r.inversion_id===inv.id&&r.fecha<=fecha)].pop();
+      return tot+(reg?reg.valor:(inv.capital||0));
+    },0);
+  }
+  const hoy=today();
+  const dAyer=new Date(Date.now()-864e5).toISOString().slice(0,10);
+  const dSem=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+  const dMes=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
+  const vHoy=valorEn(hoy),vAyer=valorEn(dAyer),vSem=valorEn(dSem),vMes=valorEn(dMes);
+  return{hoy:vHoy-vAyer,sem:vHoy-vSem,mes:vHoy-vMes,vHoy};
+}
+
+function renderRendStats(){
+  const s=calcRendStats();
+  const fmt=v=>(v>=0?"+":"")+"$"+Math.round(Math.abs(v)).toLocaleString("es-AR");
+  const col=v=>v>=0?"var(--gr)":"var(--re)";
+  ["hoy","sem","mes"].forEach(k=>{
+    const el=document.getElementById(`rend-stat-${k}`);
+    if(el){el.textContent=fmt(s[k]);el.style.color=col(s[k]);}
+  });
+}
+
+function renderRendChart(){
+  const activas=cfInversiones.filter(i=>i.estado==="Activa");
+  const fechas=[...new Set(rendDiarios.map(r=>r.fecha))].sort();
+  const canvas=document.getElementById("chartRendDiarios");
+  const empty=document.getElementById("rend-empty");
+  if(!fechas.length||!canvas){if(empty)empty.style.display="flex";if(canvas)canvas.style.display="none";return;}
+  if(empty)empty.style.display="none";
+  canvas.style.display="block";
+  const last=fechas.slice(-90);
+  const COLORS=["#7C3AED","#10B981","#3B82F6","#F59E0B","#EF4444","#EC4899","#14B8A6","#8B5CF6"];
+
+  function valorInvEn(inv,fecha){
+    const reg=[...rendDiarios.filter(r=>r.inversion_id===inv.id&&r.fecha<=fecha)].pop();
+    return reg?reg.valor:(inv.capital||0);
+  }
+
+  const totalData=last.map(f=>activas.reduce((s,inv)=>s+valorInvEn(inv,f),0));
+  const datasets=[{
+    label:"Portfolio total",
+    data:totalData,
+    borderColor:"#7C3AED",
+    backgroundColor:"rgba(124,58,237,.08)",
+    fill:true,borderWidth:2.5,tension:0.3,pointRadius:2,pointHoverRadius:4
+  }];
+  activas.forEach((inv,idx)=>{
+    datasets.push({
+      label:inv.nombre,
+      data:last.map(f=>valorInvEn(inv,f)),
+      borderColor:COLORS[(idx+1)%COLORS.length],
+      borderWidth:1.5,tension:0.3,pointRadius:1,hidden:true,spanGaps:true
+    });
+  });
+  if(chartRend){chartRend.destroy();chartRend=null;}
+  chartRend=new Chart(canvas,{
+    type:"line",
+    data:{labels:last.map(f=>f.slice(5)),datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{intersect:false,mode:"index"},
+      plugins:{
+        legend:{labels:{color:"#9899B0",font:{family:"Barlow",size:11},boxWidth:10}},
+        tooltip:{callbacks:{label:c=>` ${c.dataset.label}: $${Math.round(c.raw||0).toLocaleString("es-AR")}`}}
+      },
+      scales:{
+        x:{ticks:{color:"#5A5C72",font:{size:10},maxRotation:0,maxTicksLimit:10},grid:{color:"rgba(255,255,255,.05)"}},
+        y:{ticks:{color:"#5A5C72",font:{size:10},callback:v=>"$"+Math.round(v/1000)+"k"},grid:{color:"rgba(255,255,255,.05)"}}
+      }
+    }
+  });
+}
+
+function openRegistrarRend(){
+  const activas=cfInversiones.filter(i=>i.estado==="Activa");
+  if(!activas.length){toast("No hay inversiones activas","inf");return;}
+  const hoy=today();
+  document.getElementById("rend-fecha-label").textContent="Fecha: "+hoy.split("-").reverse().join("/");
+  const list=document.getElementById("rend-items-list");
+  list.innerHTML=activas.map(inv=>{
+    const ultimo=rendDiarios.filter(r=>r.inversion_id===inv.id).pop();
+    const ulVal=ultimo?ultimo.valor:(inv.capital||0);
+    const ulFecha=ultimo?` · último: ${ultimo.fecha.slice(5).split("-").reverse().join("/")}`:` · capital: $${Math.round(inv.capital||0).toLocaleString("es-AR")}`;
+    return`<div style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:10px 12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:4px">
+        <div>
+          <span style="font-size:13px;font-weight:600;color:var(--tx)">${inv.nombre}</span>
+          <span style="font-size:11px;color:var(--tx3);margin-left:6px">${inv.tipo||""}</span>
+        </div>
+        <span style="font-size:11px;color:var(--tx3)">${ulFecha}</span>
+      </div>
+      <input class="fi" type="number" id="rend-val-${inv.id}" placeholder="Valor actual (ej: ${Math.round(ulVal).toLocaleString("es-AR")})" style="width:100%;font-size:13px">
+    </div>`;
+  }).join("");
+  openModal("modal-rend-diario");
+}
+
+async function saveRendDiarios(){
+  const activas=cfInversiones.filter(i=>i.estado==="Activa");
+  const hoy=today();
+  const btn=document.getElementById("rend-save-btn");btn.disabled=true;
+  try{
+    const upserts=activas.map(inv=>{
+      const val=parseFloat(document.getElementById(`rend-val-${inv.id}`)?.value);
+      return isNaN(val)?null:{inversion_id:inv.id,fecha:hoy,valor:val};
+    }).filter(Boolean);
+    if(!upserts.length){toast("Ingresá al menos un valor","err");btn.disabled=false;return;}
+    await Promise.all(upserts.map(u=>
+      sb("rendimientos_diarios",{method:"POST",headers:{"Prefer":"resolution=merge-duplicates"},body:JSON.stringify(u)})
+    ));
+    // Actualizar valor_actual en cf_inversiones
+    await Promise.all(upserts.map(u=>
+      sb(`cf_inversiones?id=eq.${u.inversion_id}`,{method:"PATCH",body:JSON.stringify({valor_actual:u.valor})})
+    ));
+    upserts.forEach(u=>{
+      rendDiarios=rendDiarios.filter(r=>!(r.inversion_id===u.inversion_id&&r.fecha===u.fecha));
+      rendDiarios.push({inversion_id:u.inversion_id,fecha:hoy,valor:u.valor});
+      const idx=cfInversiones.findIndex(i=>i.id===u.inversion_id);
+      if(idx>=0)cfInversiones[idx].valor_actual=u.valor;
+    });
+    rendDiarios.sort((a,b)=>a.fecha.localeCompare(b.fecha));
+    closeModal("modal-rend-diario");
+    renderRendStats();renderRendChart();renderCFInversiones();
+    toast(`✓ ${upserts.length} valor${upserts.length!==1?"es":""} registrado${upserts.length!==1?"s":""}${upserts.length!==1?"":""}`,"ok");
+  }catch(e){toast("Error: "+e.message,"err")}
+  finally{btn.disabled=false;}
 }
 
 /* ── TOGGLE INCLUIR EN CF ── */
