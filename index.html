@@ -406,6 +406,34 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 .pin-error{color:#FCA5A5;font-size:12px;margin-top:10px;min-height:18px;text-align:center}
 .login-back{background:none;border:none;color:var(--tx3);font-size:12px;cursor:pointer;margin-top:14px;font-family:var(--f)}
 .login-back:hover{color:var(--tx2)}
+#portal-proveedor{display:flex;flex-direction:column;min-height:100vh;background:var(--bg)}
+.portal-header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:var(--surf);border-bottom:1px solid var(--b);position:sticky;top:0;z-index:10}
+.portal-header-logo{font-family:var(--fc);font-size:18px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--tx)}
+.portal-header-logo span{font-size:11px;color:var(--tx3);margin-left:4px;font-weight:400;letter-spacing:1px}
+.portal-body{max-width:600px;width:100%;margin:0 auto;padding:32px 20px}
+.portal-welcome{margin-bottom:24px}
+.portal-upload-btn{width:100%;padding:16px;font-size:15px;justify-content:center;gap:10px;border-radius:var(--rlg)}
+.portal-comp-card{display:flex;align-items:center;gap:12px;background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px;margin-bottom:8px}
+.cc-balance-card{border-radius:var(--r);padding:16px 20px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between}
+.cc-mov-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--b)}
+.cc-mov-row:last-child{border-bottom:none}
+.cc-mov-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.cc-mov-monto{font-size:14px;font-weight:700;flex-shrink:0}
+.portal-comp-estado{font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;white-space:nowrap}
+.login-input{width:100%;box-sizing:border-box;background:var(--surf2);border:1px solid var(--b2);border-radius:var(--r);padding:10px 12px;font-family:var(--f);font-size:14px;color:var(--tx);outline:none;transition:border-color .15s;margin-bottom:4px}
+.login-input:focus{border-color:var(--pu)}
+.urol-card{display:flex;align-items:center;gap:14px;background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;transition:border-color .15s}
+.urol-card:hover{border-color:var(--b2)}
+.urol-avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--fc);font-size:15px;font-weight:700;color:#fff;flex-shrink:0;transition:background .3s}
+.urol-info{flex:1;min-width:0}
+.urol-nombre{font-size:14px;font-weight:600;color:var(--tx)}
+.urol-email{font-size:12px;color:var(--tx3);margin-top:2px}
+.urol-sel{background:var(--surf2);border:1px solid var(--b2);border-radius:var(--r);padding:7px 10px;font-family:var(--f);font-size:13px;color:var(--tx);cursor:pointer;outline:none;transition:border-color .15s}
+.urol-sel:focus{border-color:var(--pu)}
+.urol-badge{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;padding:2px 7px;border-radius:20px;margin-top:4px;display:inline-block}
+.urol-badge.admin{background:var(--pl);color:var(--pu)}
+.urol-badge.instructor{background:#EFF6FF;color:#3B82F6}
+.urol-badge.logistica{background:#ECFDF5;color:#10B981}
 /* Avatar badge en topbar */
 .topbar-user{display:flex;align-items:center;gap:8px;padding:4px 10px;border-radius:var(--r);background:var(--surf);border:1px solid var(--b);cursor:pointer;transition:all .15s}
 .topbar-user:hover{border-color:var(--pu)}
@@ -420,42 +448,100 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="login-box">
     <div class="login-logo">Metanoia</div>
     <div class="login-sub">SMX · Panel de gestión</div>
+    <div class="login-label">Email</div>
+    <input class="login-input" type="email" id="login-email" placeholder="tu@metanoiasmx.com" autocomplete="email">
+    <div class="login-label" style="margin-top:14px">Contraseña</div>
+    <input class="login-input" type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    <div class="pin-error" id="login-error"></div>
+    <button class="btn pri" style="width:100%;margin-top:16px;padding:12px;font-size:14px" onclick="doLogin()" id="login-btn">Ingresar</button>
+    <button class="login-back" onclick="doResetPass()" style="margin-top:12px">¿Olvidaste tu contraseña?</button>
+  </div>
+</div>
 
-    <!-- Paso 1: elegir usuario -->
-    <div id="login-step1">
-      <div class="login-label">¿Quién sos?</div>
-      <div class="user-grid" id="login-user-grid">
-        <!-- Se genera dinámicamente -->
-        <div style="grid-column:1/-1;padding:20px;color:var(--tx3);font-size:13px">Cargando...</div>
+<!-- PORTAL PROVEEDOR -->
+<div id="portal-proveedor" style="display:none">
+  <div class="portal-header">
+    <div class="portal-header-logo">Metanoia <span>SMX</span></div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span id="portal-user-name" style="font-size:13px;color:var(--tx2)"></span>
+      <button class="btn sec" style="font-size:12px;padding:6px 12px" onclick="logout()">Salir</button>
+    </div>
+  </div>
+  <div class="portal-body">
+    <div class="portal-welcome">
+      <div style="font-size:22px;font-weight:700;color:var(--tx);margin-bottom:4px">Mis comprobantes</div>
+      <div style="font-size:13px;color:var(--tx3)">Subí una factura con foto y el equipo la procesa</div>
+    </div>
+    <button class="btn pri portal-upload-btn" onclick="openPortalFactura()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Nueva factura
+    </button>
+    <!-- Formulario inline portal (oculto hasta abrir) -->
+    <div id="portal-form-wrap" style="display:none;background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:20px;margin-top:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div id="pf-form-title" style="font-size:15px;font-weight:700;color:var(--tx)">Nueva factura</div>
+        <button onclick="closePortalFactura()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--tx3);line-height:1">✕</button>
+      </div>
+      <!-- Upload área -->
+      <div id="pf-upload-area" style="border:2px dashed var(--b2);border-radius:10px;padding:20px;text-align:center;cursor:pointer;margin-bottom:14px;background:var(--bg3)" onclick="document.getElementById('pf-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--pu)'" ondragleave="this.style.borderColor='var(--b2)'" ondrop="event.preventDefault();this.style.borderColor='var(--b2)';const fi=document.getElementById('pf-file-input');if(event.dataTransfer.files.length){fi.files=event.dataTransfer.files;handlePFFile(fi)}">
+        <div id="pf-upload-content">
+          <div style="font-size:28px;margin-bottom:6px">📄</div>
+          <div style="font-size:13px;color:var(--tx2);font-weight:600">Tocá para subir o arrastrá aquí</div>
+          <div style="font-size:11px;color:var(--tx3);margin-top:4px">Foto, JPG, PNG o PDF · desde cámara o galería</div>
+        </div>
+        <input type="file" id="pf-file-input" accept="image/*,application/pdf" capture="environment" style="display:none" onchange="handlePFFile(this)">
+      </div>
+      <!-- Botón IA (aparece solo después de subir archivo) -->
+      <button id="pf-ia-btn" style="display:none;width:100%;margin-bottom:14px;background:linear-gradient(135deg,#7C3AED,#4F46E5);color:#fff;border:none;border-radius:var(--r);padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;display:none;align-items:center;justify-content:center;gap:8px" onclick="analizarPFConIA()">
+        ✨ Analizar con IA
+      </button>
+      <!-- Campos esenciales -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div><label class="ml">Tipo</label>
+          <select class="mi" id="pf-tipo"><option value="A">Factura A</option><option value="B">Factura B</option><option value="C">Factura C</option><option value="E">Factura E</option></select>
+        </div>
+        <div><label class="ml">Fecha</label><input class="mi" type="date" id="pf-fecha"></div>
+      </div>
+      <div style="margin-bottom:10px"><label class="ml">Número de factura</label><input class="mi" type="text" id="pf-numero" placeholder="0001-00012345"></div>
+      <!-- Moneda y cotización -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div><label class="ml">Moneda</label>
+          <select class="mi" id="pf-moneda" onchange="onPFMonedaChange()">
+            <option value="ARS">$ Pesos (ARS)</option>
+            <option value="USD">USD Dólares</option>
+            <option value="EUR">EUR Euros</option>
+          </select>
+        </div>
+        <div id="pf-cotizacion-wrap" style="display:none">
+          <label class="ml">Cotización (1 <span id="pf-moneda-lbl">USD</span> = $)</label>
+          <input class="mi" type="number" id="pf-cotizacion" placeholder="Ej: 1200" oninput="calcPFTotal()">
+        </div>
+      </div>
+      <!-- Resumen conversión -->
+      <div id="pf-conversion-info" style="display:none;background:rgba(124,58,237,.08);border:1px solid rgba(124,58,237,.25);border-radius:var(--r);padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--tx2)"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div><label class="ml" id="pf-neto-lbl">Neto gravado</label><input class="mi" type="number" id="pf-neto" placeholder="0" oninput="calcPFTotal()"></div>
+        <div><label class="ml" id="pf-iva-lbl">IVA</label><input class="mi" type="number" id="pf-iva" placeholder="0" oninput="calcPFTotal()"></div>
+      </div>
+      <div style="margin-bottom:14px"><label class="ml" id="pf-total-lbl">Total</label><input class="mi" type="number" id="pf-total" placeholder="0" oninput="calcPFConversionInfo()"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div><label class="ml">Vencimiento (opcional)</label><input class="mi" type="date" id="pf-venc"></div>
+        <div><label class="ml">Notas (opcional)</label><input class="mi" type="text" id="pf-notas" placeholder="Ej: Factura material julio"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" style="flex:1" onclick="closePortalFactura()">Cancelar</button>
+        <button class="btn pri" id="pf-save-btn" style="flex:2" onclick="savePortalFactura()">Guardar factura</button>
       </div>
     </div>
-
-    <!-- Paso 2: ingresar PIN -->
-    <div id="login-step2" class="pin-section">
-      <div class="pin-label">Ingresá tu PIN de 4 dígitos</div>
-      <div class="pin-dots">
-        <div class="pin-dot" id="pd0"></div>
-        <div class="pin-dot" id="pd1"></div>
-        <div class="pin-dot" id="pd2"></div>
-        <div class="pin-dot" id="pd3"></div>
-      </div>
-      <div class="pin-keypad">
-        <button class="pin-key" onclick="pinKey('1')">1</button>
-        <button class="pin-key" onclick="pinKey('2')">2</button>
-        <button class="pin-key" onclick="pinKey('3')">3</button>
-        <button class="pin-key" onclick="pinKey('4')">4</button>
-        <button class="pin-key" onclick="pinKey('5')">5</button>
-        <button class="pin-key" onclick="pinKey('6')">6</button>
-        <button class="pin-key" onclick="pinKey('7')">7</button>
-        <button class="pin-key" onclick="pinKey('8')">8</button>
-        <button class="pin-key" onclick="pinKey('9')">9</button>
-        <button class="pin-key del" onclick="pinClear()">✕</button>
-        <button class="pin-key" onclick="pinKey('0')">0</button>
-        <button class="pin-key del" onclick="pinDel()">⌫</button>
-      </div>
-      <div class="pin-error" id="pin-error"></div>
-      <button class="login-back" onclick="loginBack()">← Volver</button>
+    <div id="portal-comp-list" style="margin-top:24px"></div>
+    <div style="margin-top:36px;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:12px;color:var(--tx3);font-weight:600;letter-spacing:.5px;text-transform:uppercase">Estado de cuenta</div>
+      <button onclick="loadPortalCuenta()" style="background:none;border:1px solid var(--b);border-radius:var(--r);color:var(--tx3);font-size:11px;padding:4px 10px;cursor:pointer">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Actualizar
+      </button>
     </div>
+    <div id="portal-cuenta-section" style="margin-top:8px"></div>
   </div>
 </div>
 
@@ -584,7 +670,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="sitem sub" onclick="goTo('rutinas',document.getElementById('nav-rutinas'));setRutinaFilter('Anual')">Anuales</div>
   </div>
   <div class="sdiv"></div>
-  <div class="sgroup">
+  <div class="sgroup" id="sgroup-finanzas">
     <div class="sgroup-label">Finanzas</div>
     <div class="sitem" onclick="goTo('cashflow',this)" id="nav-cashflow">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
@@ -605,7 +691,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="sitem sub" onclick="goPage('sueldos',document.getElementById('nav-sueldos'));setSueldosFiltro('POINTERS',document.querySelector('#sf-pointers'))">POINTERS</div>
   </div>
   <div class="sdiv"></div>
-  <div class="sgroup">
+  <div class="sgroup" id="sgroup-contabilidad">
     <div class="sgroup-label">Contabilidad</div>
     <div class="sitem" onclick="goPage('comprobantes',this)" id="nav-comprobantes">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
@@ -615,6 +701,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="sitem sub" onclick="goPage('comprobantes',document.getElementById('nav-comprobantes'));setCompFilter('pendiente')">Pendientes</div>
     <div class="sitem sub" onclick="goPage('comprobantes',document.getElementById('nav-comprobantes'));setCompFilter('revisado')">Revisados</div>
     <div class="sitem sub" onclick="goPage('comprobantes',document.getElementById('nav-comprobantes'));setCompFilter('enviado_finnegans')">En Finnegans</div>
+    <div class="sitem" onclick="goPage('cuentas',this)" id="nav-cuentas">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      Cuentas Corrientes
+    </div>
   </div>
   <div class="sdiv"></div>
   <div class="sgroup">
@@ -622,6 +712,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="sitem" onclick="goTo('notif',this)" id="nav-notif">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       Notificaciones
+    </div>
+    <div class="sitem" onclick="goPage('usuarios',this)" id="nav-usuarios">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Usuarios
     </div>
   </div>
 </nav>
@@ -1103,6 +1197,64 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 </div>
 
+<!-- ══ USUARIOS ══ -->
+<div id="pg-usuarios" style="display:none">
+  <div class="pg-header">
+    <div>
+      <div class="pg-title">Usuarios</div>
+      <div class="pg-title-sub">Gestión de roles del equipo</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn sec" onclick="loadUsuariosPage()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Actualizar
+      </button>
+      <button class="btn pri" onclick="openNuevoUsuario()">+ Agregar usuario</button>
+    </div>
+  </div>
+  <!-- Formulario nuevo usuario (inline) -->
+  <div id="nuevo-usuario-form" style="display:none;max-width:560px;background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:18px;margin-bottom:16px">
+    <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:12px">Nuevo usuario</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div><label class="ml">Nombre completo</label><input class="mi" id="nu-nombre" placeholder="Ej: Juan Pérez"></div>
+      <div><label class="ml">Email</label><input class="mi" id="nu-email" type="email" placeholder="juan@empresa.com"></div>
+    </div>
+    <div style="margin-bottom:12px"><label class="ml">Rol</label>
+      <select class="mi" id="nu-rol">
+        <option value="instructor">Instructor</option>
+        <option value="logistica">Logística</option>
+        <option value="admin">Admin</option>
+        <option value="proveedor">Proveedor externo</option>
+      </select>
+    </div>
+    <div style="font-size:11px;color:var(--tx3);margin-bottom:12px">⚠️ El usuario debe tener una cuenta creada en Supabase Auth. Al ingresar por primera vez, su perfil se vincula automáticamente.</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="closeNuevoUsuario()">Cancelar</button>
+      <button class="btn pri" id="nu-save-btn" onclick="saveNuevoUsuario()">Agregar</button>
+    </div>
+  </div>
+  <div id="usuarios-list" style="max-width:560px">
+    <div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>
+  </div>
+</div>
+
+<!-- ══ CUENTAS CORRIENTES ══ -->
+<div id="pg-cuentas" style="display:none">
+  <div class="pg-header">
+    <div>
+      <div class="pg-title">Cuentas Corrientes</div>
+      <div class="pg-title-sub">Estado de cuenta con proveedores externos</div>
+    </div>
+    <button class="btn sec" onclick="loadCuentasPage()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      Actualizar
+    </button>
+  </div>
+  <div id="cuentas-list" style="max-width:640px">
+    <div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>
+  </div>
+</div>
+
 <!-- ══ SUELDOS ══ -->
 <div id="pg-sueldos" style="display:none">
   <div class="pgh">
@@ -1170,12 +1322,16 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <button class="fb" onclick="setCompFilter('pendiente',this)">Pendientes</button>
       <button class="fb" onclick="setCompFilter('revisado',this)">Revisados</button>
       <button class="fb" onclick="setCompFilter('enviado_finnegans',this)">En Finnegans</button>
+      <button class="fb" id="fb-completar" onclick="setCompFilter('por_completar',this)" style="color:#FCD34D">⚠️ Por completar <span id="badge-completar"></span></button>
       <div class="fsep"></div>
       <button class="fb" onclick="setCompFilter('SUDES',this)">SUDES</button>
       <button class="fb" onclick="setCompFilter('POINTERS',this)">POINTERS</button>
     </div>
     <select id="comp-mes-sel" class="sel" onchange="compMesFilter=this.value;renderComprobantes();updateCompStats()" style="margin-left:auto">
       <option value="all">Todos los meses</option>
+    </select>
+    <select id="comp-cargado-sel" class="sel" onchange="compCargadoFilter=this.value;renderComprobantes()" title="Filtrar por quien subió">
+      <option value="all">Todos los usuarios</option>
     </select>
     <input id="comp-search" class="fi" type="search" placeholder="Buscar proveedor..." style="width:160px" oninput="renderComprobantes()">
   </div>
@@ -1923,8 +2079,10 @@ function fillGlobal(){
   plantillas.forEach(p=>{const o=document.createElement("option");o.value=p.id;o.textContent=p.nombre;cplt.appendChild(o)});
 
   const ns=document.getElementById("notifUserSel");
-  ns.innerHTML=users.map(u=>`<button class="nu-btn" onclick="selectNotifUser('${u.id}',this)">${u.nombre}</button>`).join("");
-  if(users.length>0){const first=ns.querySelector(".nu-btn");if(first){first.classList.add("on");selectNotifUser(users[0].id,first)}}
+  const isAdmin=loggedUser?.rol==="admin";
+  const notifUsers=isAdmin?users:users.filter(u=>u.id===loggedUser?.id);
+  ns.innerHTML=notifUsers.map(u=>`<button class="nu-btn" onclick="selectNotifUser('${u.id}',this)">${u.nombre}</button>`).join("");
+  if(notifUsers.length>0){const first=ns.querySelector(".nu-btn");if(first){first.classList.add("on");selectNotifUser(notifUsers[0].id,first)}}
 
   // Selector de responsable para rutinas
   const ra=document.getElementById("r-assignee");
@@ -2153,9 +2311,16 @@ function goPage(name,el){
   if(name==="inventario")loadInventario();
   if(name==="comprobantes")loadComprobantes();
   if(name==="notif")renderNotifPage();
+  if(name==="usuarios")loadUsuariosPage();
+  if(name==="cuentas")loadCuentasPage();
 }
 function goTo(name,el){goPage(name,el)}
-function renderNotifPage(){if(users.length>0&&document.querySelector(".nu-btn"))selectNotifUser(users[0].id,document.querySelector(".nu-btn"))}
+function renderNotifPage(){
+  const targetId=loggedUser?.rol==="admin"?users[0]?.id:loggedUser?.id;
+  if(!targetId)return;
+  const btn=document.querySelector(`.nu-btn[onclick*="${targetId}"]`);
+  if(btn)selectNotifUser(targetId,btn);
+}
 function setTareaFilter(s){curF=s;document.querySelectorAll("#pg-tareas .fb").forEach(b=>b.classList.remove("on"));goPage("tareas",document.getElementById("nav-tareas"));renderTareas();}
 function setCursoFilter(f){cursoFilter=f;goPage("cursos",document.getElementById("nav-cursos"));document.getElementById("curso-filter-label").textContent=f==="activos"?"Cursos activos":f==="borrador"?"Borradores":f==="completados"?"Completados":"Todos los cursos";renderCursos();}
 function openNewModal(){
@@ -2190,7 +2355,10 @@ function vis(){
     return byU&&byF&&byCat&&(!q||t.nombre.toLowerCase().includes(q.toLowerCase()));
   });
 }
-function base(){return!curUser?tasks:tasks.filter(t=>(t.assignees||[]).includes(curUser))}
+function base(){
+  const pool=(loggedUser?.rol==="logistica"||loggedUser?.rol==="instructor")?tasks.filter(t=>(t.assignees||[]).includes(loggedUser.id)):tasks;
+  return!curUser?pool:pool.filter(t=>(t.assignees||[]).includes(curUser));
+}
 function renderTareas(){updStats();updCounts();renderTaskList(vis())}
 
 function updStats(){
@@ -5530,140 +5698,455 @@ function renderDayPanel(fecha,evs){
   panel.style.display="block";
 }
 
-/* ── LOGIN ── */
-// PINs por usuario (4 dígitos). Tomás=1234, Mario=2345, Valentina=3456, Amparo=4567
-// CAMBIAR ESTOS PINES antes de compartir con el equipo
-const USER_PINS={
-  "tlarran@metanoiasmx.com":"1234",
-  "mlarran@metanoiasmx.com":"2345",
-  "vlarran@metanoiasmx.com":"3456",
-  "avirasoro@metanoiasmx.com":"4567"
-};
-const UC_AVATARS=["#7C3AED","#3B82F6","#10B981","#F59E0B"];
-const USER_ROLES={
-  "tlarran@metanoiasmx.com":"Finanzas · POINTERS",
-  "mlarran@metanoiasmx.com":"Coordinación General",
-  "vlarran@metanoiasmx.com":"Administración · SUDES",
-  "avirasoro@metanoiasmx.com":"Gestión Administrativa"
-};
+/* ── LOGIN (Supabase Auth) ── */
+const UC_AVATARS=["#7C3AED","#3B82F6","#10B981","#F59E0B","#EF4444"];
+let loggedUser=null;
+let authToken=null;
 
-let loginUsers=[]; // se carga de Supabase
-let selectedLoginUser=null;
-let pinBuffer="";
-let loggedUser=null; // usuario actualmente logueado
+function _showLoginScreen(){
+  document.getElementById("login-screen").style.display="flex";
+  setTimeout(()=>document.getElementById("login-email")?.focus(),120);
+}
 
 async function initLogin(){
-  // Cargar usuarios de Supabase para mostrar en la pantalla de login
-  try{
-    loginUsers=await sb("usuarios?select=*&order=nombre");
-  }catch(e){
-    // Fallback: usuarios hardcodeados
-    loginUsers=[
-      {id:"",nombre:"Tomás",email:"tlarran@metanoiasmx.com"},
-      {id:"",nombre:"Mario",email:"mlarran@metanoiasmx.com"},
-      {id:"",nombre:"Valentina",email:"vlarran@metanoiasmx.com"},
-      {id:"",nombre:"Amparo",email:"avirasoro@metanoiasmx.com"}
-    ];
-  }
-
-  // Verificar sesión guardada en sessionStorage
-  const savedSession=sessionStorage.getItem("smx_session");
-  if(savedSession){
+  const saved=sessionStorage.getItem("smx_session");
+  if(saved){
     try{
-      const session=JSON.parse(savedSession);
-      const user=loginUsers.find(u=>u.id===session.userId||u.email===session.email);
-      if(user){
-        loggedUser=user;
-        enterPanel(user,false);
+      const s=JSON.parse(saved);
+      const ageMs=Date.now()-s.loginTime;
+      if(ageMs<8*3600000&&s.token){
+        // Si el token tiene más de 55 min intentamos refrescarlo
+        if(ageMs>55*60*1000&&s.refreshToken){
+          const r=await fetch(`${SB}/auth/v1/token?grant_type=refresh_token`,{
+            method:"POST",
+            headers:{"apikey":KEY,"Content-Type":"application/json"},
+            body:JSON.stringify({refresh_token:s.refreshToken})
+          });
+          if(r.ok){
+            const d=await r.json();
+            s.token=d.access_token;
+            if(d.refresh_token)s.refreshToken=d.refresh_token;
+            sessionStorage.setItem("smx_session",JSON.stringify(s));
+          }else{
+            sessionStorage.removeItem("smx_session");
+            return _showLoginScreen();
+          }
+        }
+        authToken=s.token;
+        loggedUser={id:s.userId,nombre:s.nombre,email:s.email,rol:s.rol||"instructor"};
+        // Refrescar datos desde DB para tener siempre el rol actualizado
+        try{
+          const rows=await sb(`usuarios?id=eq.${s.userId}&select=*`);
+          if(rows&&rows[0]){
+            loggedUser={...loggedUser,...rows[0]};
+            s.rol=rows[0].rol||"instructor";
+            sessionStorage.setItem("smx_session",JSON.stringify(s));
+          }
+        }catch(e){}
+        enterPanel(loggedUser,false);
         return;
       }
     }catch(e){}
+    sessionStorage.removeItem("smx_session");
   }
-
-  renderLoginUsers();
+  _showLoginScreen();
 }
 
-function renderLoginUsers(){
-  const grid=document.getElementById("login-user-grid");
-  grid.innerHTML=loginUsers.map((u,i)=>{
-    const initials=(u.nombre||"?").split(" ").map(n=>n[0]).slice(0,2).join("").toUpperCase();
-    const color=UC_AVATARS[i%UC_AVATARS.length];
-    const role=USER_ROLES[u.email]||"Equipo Metanoia";
-    return`<button class="user-btn" onclick="loginSelectUser('${u.id||u.email}')">
-      <div class="user-btn-avatar" style="background:${color}">${initials}</div>
-      <div class="user-btn-name">${esc(u.nombre)}</div>
-      <div class="user-btn-role">${role}</div>
-    </button>`;
+async function doLogin(){
+  const email=document.getElementById("login-email").value.trim();
+  const pass=document.getElementById("login-pass").value;
+  const err=document.getElementById("login-error");
+  const btn=document.getElementById("login-btn");
+  if(!email||!pass){err.textContent="Completá todos los campos.";return;}
+  btn.disabled=true;btn.textContent="Ingresando...";err.textContent="";
+  try{
+    const res=await fetch(`${SB}/auth/v1/token?grant_type=password`,{
+      method:"POST",
+      headers:{"apikey":KEY,"Content-Type":"application/json"},
+      body:JSON.stringify({email,password:pass})
+    });
+    const data=await res.json();
+    if(!res.ok){
+      err.textContent=data.error_description||data.msg||"Email o contraseña incorrectos.";
+      const box=document.querySelector(".login-box");
+      box.style.animation="shake .3s ease";
+      setTimeout(()=>box.style.animation="",350);
+      return;
+    }
+    authToken=data.access_token;
+    // Buscar datos del usuario en la tabla usuarios
+    let u=null;
+    try{
+      const rows=await sb(`usuarios?email=eq.${encodeURIComponent(email)}&select=*`);
+      u=rows[0];
+    }catch(e){}
+    // Si no existe en la tabla usuarios, crearlo automáticamente
+    if(!u){
+      const nombre=email.split("@")[0].replace(/[._]/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+      try{
+        const[created]=await sb("usuarios",{method:"POST",body:JSON.stringify({
+          id:data.user.id,nombre,email,rol:"instructor"
+        })});
+        u=created;
+      }catch(e){
+        console.warn("No se pudo crear usuario en tabla:",e.message);
+        u={id:data.user.id,nombre,email,rol:"instructor"};
+      }
+    }else if(u.id!==data.user.id){
+      // El admin pre-creó el registro pero sin el auth id correcto → actualizarlo
+      try{
+        await sb(`usuarios?email=eq.${encodeURIComponent(email)}`,{method:"PATCH",body:JSON.stringify({id:data.user.id})});
+        u.id=data.user.id;
+      }catch(e){console.warn("No se pudo actualizar id del usuario:",e.message);}
+    }
+    loggedUser=u;
+    sessionStorage.setItem("smx_session",JSON.stringify({
+      userId:u.id,nombre:u.nombre,email:u.email,rol:u.rol||"instructor",
+      token:data.access_token,refreshToken:data.refresh_token||"",loginTime:Date.now()
+    }));
+    enterPanel(u,true);
+  }catch(e){
+    err.textContent="Error de conexión. Revisá tu red.";
+  }finally{
+    btn.disabled=false;btn.textContent="Ingresar";
+  }
+}
+
+async function doResetPass(){
+  const email=document.getElementById("login-email").value.trim();
+  const err=document.getElementById("login-error");
+  if(!email){err.textContent="Ingresá tu email primero.";return;}
+  try{
+    await fetch(`${SB}/auth/v1/recover`,{
+      method:"POST",
+      headers:{"apikey":KEY,"Content-Type":"application/json"},
+      body:JSON.stringify({email})
+    });
+    err.style.color="var(--gr)";
+    err.textContent="✓ Si el email existe, recibirás un link para restablecer tu contraseña.";
+    setTimeout(()=>{err.style.color="";err.textContent=""},6000);
+  }catch(e){
+    err.textContent="Error al enviar. Intentá de nuevo.";
+  }
+}
+
+function applyRoleUI(rol){
+  if(rol==="admin"){
+    document.getElementById("usel").style.display="";
+    return;
+  }
+  const hideEl=id=>{const el=document.getElementById(id);if(el)el.style.display="none";};
+  // Filtro de usuario del topbar solo para admin
+  hideEl("usel");
+  curUser=""; // sin filtro activo
+  // Usuarios y cuentas corrientes solo para admins
+  hideEl("nav-usuarios");
+  hideEl("nav-cuentas");
+  // Ocultar sección Finanzas para todos los no-admin
+  hideEl("sgroup-finanzas");
+  if(rol==="instructor"){
+    // Instructores tampoco ven Contabilidad
+    hideEl("sgroup-contabilidad");
+  }
+  if(rol==="logistica"){
+    // Logística no ve Gráficos, Rutinas, Cursos, Alumnos, Instructores, Inventario
+    ["nav-graficos","nav-rutinas","nav-cursos","nav-alumnos","nav-instructores","nav-inventario"].forEach(id=>{
+      const el=document.getElementById(id);
+      if(!el)return;
+      el.style.display="none";
+      // Ocultar sub-items adyacentes
+      let sib=el.nextElementSibling;
+      while(sib&&(sib.classList.contains("ssub")||sib.classList.contains("sub"))){
+        sib.style.display="none";
+        sib=sib.nextElementSibling;
+      }
+    });
+  }
+}
+
+async function enterPortalProveedor(user,isNewLogin){
+  document.getElementById("login-screen").style.display="none";
+  document.getElementById("portal-proveedor").style.display="flex";
+  document.getElementById("portal-user-name").textContent=user.nombre;
+  if(isNewLogin)toast(`Bienvenido, ${user.nombre} 👋`,"ok");
+  await loadPortalComprobantes();
+  await loadPortalCuenta();
+}
+
+let pfArchivoUrl=null;
+let pfEditId=null;
+
+function openPortalFactura(comp=null){
+  pfArchivoUrl=comp?.archivo_url||null;
+  pfEditId=comp?.id||null;
+  const elTitulo=document.getElementById("pf-form-title");
+  if(elTitulo)elTitulo.textContent=comp?"Editar factura":"Nueva factura";
+  const elSaveBtn=document.getElementById("pf-save-btn");
+  if(elSaveBtn)elSaveBtn.textContent=comp?"Guardar cambios":"Guardar factura";
+  const elFecha=document.getElementById("pf-fecha");if(elFecha)elFecha.value=comp?.fecha||today();
+  const elTipo=document.getElementById("pf-tipo");if(elTipo)elTipo.value=comp?.tipo||"A";
+  const elNum=document.getElementById("pf-numero");if(elNum)elNum.value=comp?.numero||"";
+  const elNeto=document.getElementById("pf-neto");if(elNeto)elNeto.value=comp?.monto_neto||"";
+  const elIva=document.getElementById("pf-iva");if(elIva)elIva.value=comp?.iva||"";
+  const elTotal=document.getElementById("pf-total");if(elTotal)elTotal.value=comp?.total||"";
+  const elVenc=document.getElementById("pf-venc");if(elVenc)elVenc.value=comp?.fecha_vencimiento||"";
+  const elNotas=document.getElementById("pf-notas");if(elNotas)elNotas.value=comp?.notas||"";
+  // Reset moneda a ARS al abrir (al editar los montos ya están convertidos en ARS)
+  const elMoneda=document.getElementById("pf-moneda");if(elMoneda)elMoneda.value="ARS";
+  const cotWrap=document.getElementById("pf-cotizacion-wrap");if(cotWrap)cotWrap.style.display="none";
+  const elCot=document.getElementById("pf-cotizacion");if(elCot)elCot.value="";
+  const convInfo=document.getElementById("pf-conversion-info");if(convInfo)convInfo.style.display="none";
+  const nl=document.getElementById("pf-neto-lbl");if(nl)nl.textContent="Neto gravado";
+  const il=document.getElementById("pf-iva-lbl");if(il)il.textContent="IVA";
+  const tl=document.getElementById("pf-total-lbl");if(tl)tl.textContent="Total";
+  const elUpload=document.getElementById("pf-upload-content");
+  if(elUpload){
+    if(pfArchivoUrl)elUpload.innerHTML=`<div style="font-size:28px;margin-bottom:6px">✅</div><div style="font-size:13px;color:#10B981;font-weight:600">Archivo cargado</div><div style="font-size:11px;color:var(--tx3);margin-top:4px">Tocá para reemplazar</div>`;
+    else elUpload.innerHTML=`<div style="font-size:28px;margin-bottom:6px">📄</div><div style="font-size:13px;color:var(--tx2);font-weight:600">Tocá para subir o arrastrá aquí</div><div style="font-size:11px;color:var(--tx3);margin-top:4px">Foto, JPG, PNG o PDF · desde cámara o galería</div>`;
+  }
+  const iaBtn=document.getElementById("pf-ia-btn");
+  if(iaBtn)iaBtn.style.display=pfArchivoUrl?"flex":"none";
+  document.getElementById("portal-form-wrap").style.display="block";
+  document.getElementById("portal-form-wrap").scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+function closePortalFactura(){
+  document.getElementById("portal-form-wrap").style.display="none";
+  pfArchivoUrl=null;pfEditId=null;
+  const iaBtn=document.getElementById("pf-ia-btn");if(iaBtn)iaBtn.style.display="none";
+}
+
+function onPFMonedaChange(){
+  const moneda=document.getElementById("pf-moneda").value;
+  const esExt=moneda!=="ARS";
+  const cotWrap=document.getElementById("pf-cotizacion-wrap");
+  const lbl=document.getElementById("pf-moneda-lbl");
+  const convInfo=document.getElementById("pf-conversion-info");
+  if(cotWrap)cotWrap.style.display=esExt?"block":"none";
+  if(lbl)lbl.textContent=moneda;
+  if(!esExt){
+    if(convInfo)convInfo.style.display="none";
+    // Restaurar labels
+    const nl=document.getElementById("pf-neto-lbl");if(nl)nl.textContent="Neto gravado";
+    const il=document.getElementById("pf-iva-lbl");if(il)il.textContent="IVA";
+    const tl=document.getElementById("pf-total-lbl");if(tl)tl.textContent="Total";
+  }else{
+    const nl=document.getElementById("pf-neto-lbl");if(nl)nl.textContent=`Neto gravado (${moneda})`;
+    const il=document.getElementById("pf-iva-lbl");if(il)il.textContent=`IVA (${moneda})`;
+    const tl=document.getElementById("pf-total-lbl");if(tl)tl.textContent=`Total (${moneda})`;
+    calcPFTotal();
+  }
+}
+
+function calcPFConversionInfo(){
+  const moneda=document.getElementById("pf-moneda").value;
+  if(moneda==="ARS")return;
+  const cot=parseFloat(document.getElementById("pf-cotizacion").value)||0;
+  const total=parseFloat(document.getElementById("pf-total").value)||0;
+  const info=document.getElementById("pf-conversion-info");
+  if(!info)return;
+  if(cot>0&&total>0){
+    const totalARS=total*cot;
+    info.style.display="block";
+    info.innerHTML=`<strong>${moneda} ${total.toLocaleString("es-AR",{minimumFractionDigits:2})}</strong> × $${cot.toLocaleString("es-AR")} = <strong style="color:var(--pu)">$${totalARS.toLocaleString("es-AR",{minimumFractionDigits:2})} ARS</strong>`;
+  }else{
+    info.style.display="none";
+  }
+}
+
+function calcPFTotal(){
+  const neto=parseFloat(document.getElementById("pf-neto").value)||0;
+  const iva=parseFloat(document.getElementById("pf-iva").value)||0;
+  if(neto||iva)document.getElementById("pf-total").value=(neto+iva).toFixed(2);
+  calcPFConversionInfo();
+}
+
+async function handlePFFile(input){
+  let file=input.files[0];if(!file)return;
+  const area=document.getElementById("pf-upload-content");
+  area.innerHTML=`<div style="font-size:28px;margin-bottom:6px">⏳</div><div style="font-size:13px;color:var(--tx2)">Subiendo archivo...</div>`;
+  try{
+    if(!file.type.includes("pdf"))file=await comprimirImagen(file);
+    const ext=file.type.includes("pdf")?"pdf":"jpg";
+    const fname=`${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const res=await fetch(`${SB}/storage/v1/object/Facturas/${fname}`,{
+      method:"POST",
+      headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":file.type,"x-upsert":"true"},
+      body:file
+    });
+    if(!res.ok){const t=await res.text();throw new Error(t);}
+    pfArchivoUrl=`${SB}/storage/v1/object/public/Facturas/${fname}`;
+    area.innerHTML=`<div style="font-size:28px;margin-bottom:6px">✅</div><div style="font-size:13px;color:#10B981;font-weight:600">${esc(file.name||"Archivo cargado")}</div><div style="font-size:11px;color:var(--tx3);margin-top:4px">Archivo listo · tocá para cambiar</div>`;
+    const iaBtn=document.getElementById("pf-ia-btn");
+    if(iaBtn){iaBtn.style.display="flex";iaBtn.textContent="✨ Analizar con IA";}
+    toast("Archivo subido — tocá Analizar con IA","ok");
+  }catch(e){
+    area.innerHTML=`<div style="font-size:28px;margin-bottom:6px">📄</div><div style="font-size:13px;color:var(--tx2);font-weight:600">Tocá para subir o arrastrá aquí</div><div style="font-size:11px;color:var(--re);margin-top:4px">Error al subir: ${e.message.slice(0,60)}</div>`;
+  }
+}
+
+async function analizarPFConIA(){
+  if(!pfArchivoUrl){toast("Primero subí un archivo","err");return;}
+  const btn=document.getElementById("pf-ia-btn");
+  btn.disabled=true;btn.textContent="✨ Analizando...";
+  try{
+    const res=await fetch(`${SB}/functions/v1/leer-factura`,{
+      method:"POST",
+      headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json"},
+      body:JSON.stringify({url:pfArchivoUrl})
+    });
+    if(!res.ok)throw new Error(await res.text());
+    const d=await res.json();
+    if(d.fecha){const el=document.getElementById("pf-fecha");if(el)el.value=d.fecha;}
+    if(d.tipo){const el=document.getElementById("pf-tipo");if(el)el.value=d.tipo;}
+    if(d.numero){const el=document.getElementById("pf-numero");if(el)el.value=d.numero;}
+    if(d.monto_neto!=null){const el=document.getElementById("pf-neto");if(el)el.value=d.monto_neto;}
+    if(d.iva!=null){const el=document.getElementById("pf-iva");if(el)el.value=d.iva;}
+    if(d.total!=null){const el=document.getElementById("pf-total");if(el)el.value=d.total;}
+    else calcPFTotal();
+    if(d.fecha_vencimiento){const el=document.getElementById("pf-venc");if(el)el.value=d.fecha_vencimiento;}
+    // Guardar desglose para cuenta corriente (en notas si hay)
+    if(d.concepto&&!document.getElementById("pf-notas").value){
+      document.getElementById("pf-notas").value=d.concepto;
+    }
+    toast("Datos extraídos — revisá y guardá ✓","ok");
+  }catch(e){
+    let msg=e.message;
+    try{const j=JSON.parse(msg);msg=j.error?.error?.message||j.error?.message||msg;}catch{}
+    if(msg.includes("exceeds 5 MB"))msg="Imagen muy grande. Usá un PDF o foto más chica.";
+    else if(msg.includes("credit"))msg="Sin créditos en la API de IA.";
+    toast("Error IA: "+msg.substring(0,100),"err");
+  }
+  finally{btn.disabled=false;btn.textContent="✨ Re-analizar con IA";}
+}
+
+async function savePortalFactura(){
+  const btn=document.getElementById("pf-save-btn");
+  const moneda=document.getElementById("pf-moneda").value;
+  const cot=parseFloat(document.getElementById("pf-cotizacion").value)||1;
+  const factor=moneda!=="ARS"?cot:1;
+  const netoOrig=parseFloat(document.getElementById("pf-neto").value)||null;
+  const ivaOrig=parseFloat(document.getElementById("pf-iva").value)||null;
+  const totalOrig=parseFloat(document.getElementById("pf-total").value)||null;
+  // Convertir a ARS
+  const netoARS=netoOrig!=null?Math.round(netoOrig*factor*100)/100:null;
+  const ivaARS=ivaOrig!=null?Math.round(ivaOrig*factor*100)/100:null;
+  const totalARS=totalOrig!=null?Math.round(totalOrig*factor*100)/100:null;
+  // Armar nota de conversión
+  const notaBase=document.getElementById("pf-notas").value.trim();
+  let notaMoneda="";
+  if(moneda!=="ARS"&&totalOrig&&cot>1){
+    notaMoneda=`${moneda} ${totalOrig.toLocaleString("es-AR",{minimumFractionDigits:2})} @ $${cot.toLocaleString("es-AR")}`;
+  }
+  const notaFinal=[notaMoneda,notaBase].filter(Boolean).join(" · ")||null;
+  const data={
+    proveedor:loggedUser.nombre,
+    fecha:document.getElementById("pf-fecha").value||today(),
+    fecha_imputacion:document.getElementById("pf-fecha").value||today(),
+    tipo:document.getElementById("pf-tipo").value,
+    numero:document.getElementById("pf-numero").value.trim()||null,
+    sociedad:"SUDES",
+    monto_neto:netoARS,
+    iva:ivaARS,
+    total:totalARS,
+    notas:notaFinal,
+    fecha_vencimiento:document.getElementById("pf-venc").value||null,
+    archivo_url:pfArchivoUrl||null,
+    updated_at:new Date().toISOString()
+  };
+  btn.disabled=true;btn.textContent="Guardando...";
+  try{
+    if(pfEditId){
+      await sb(`comprobantes_compra?id=eq.${pfEditId}`,{method:"PATCH",body:JSON.stringify(data)});
+      toast("Factura actualizada ✓","ok");
+    }else{
+      await sb("comprobantes_compra",{method:"POST",body:JSON.stringify({...data,estado:"pendiente",cargado_por:loggedUser.nombre,proveedor_id:loggedUser.id})});
+      toast("Factura cargada ✓","ok");
+    }
+    closePortalFactura();
+    await loadPortalComprobantes();
+  }catch(e){toast("Error al guardar: "+e.message,"err");}
+  finally{btn.disabled=false;btn.textContent=pfEditId?"Guardar cambios":"Guardar factura";}
+}
+
+async function deletePortalFactura(id){
+  if(!confirm("¿Eliminar esta factura? No se puede deshacer."))return;
+  try{
+    await sb(`comprobantes_compra?id=eq.${id}`,{method:"DELETE"});
+    toast("Factura eliminada","ok");
+    await loadPortalComprobantes();
+  }catch(e){toast("Error al eliminar: "+e.message,"err");}
+}
+
+async function loadPortalComprobantes(){
+  const wrap=document.getElementById("portal-comp-list");
+  if(!wrap)return;
+  wrap.innerHTML=`<div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>`;
+  try{
+    const data=await sb(`comprobantes_compra?cargado_por=eq.${encodeURIComponent(loggedUser.nombre)}&order=created_at.desc`);
+    renderPortalComprobantes(data);
+  }catch(e){
+    wrap.innerHTML=`<p style="color:var(--re);text-align:center;padding:20px">Error al cargar comprobantes.</p>`;
+  }
+}
+
+function renderPortalComprobantes(data){
+  const wrap=document.getElementById("portal-comp-list");
+  if(!data.length){
+    wrap.innerHTML=`<div style="text-align:center;padding:40px 20px;color:var(--tx3)">
+      <div style="font-size:36px;margin-bottom:12px">📄</div>
+      <div style="font-size:14px">Todavía no subiste ninguna factura</div>
+      <div style="font-size:12px;margin-top:6px">Tocá "Nueva factura" para empezar</div>
+    </div>`;
+    return;
+  }
+  const estadoStyle={
+    pendiente:"background:rgba(245,158,11,.15);color:#FCD34D",
+    revisado:"background:rgba(16,185,129,.15);color:#6EE7B7",
+    enviado_finnegans:"background:rgba(59,130,246,.15);color:#93C5FD"
+  };
+  const estadoLabel={pendiente:"⏳ Pendiente",revisado:"✅ Revisado",enviado_finnegans:"🔗 Procesado"};
+  wrap.innerHTML=`<div style="font-size:12px;color:var(--tx3);font-weight:600;letter-spacing:.5px;margin-bottom:10px">TUS FACTURAS</div>`+
+  data.map(c=>{
+    const fecha=c.fecha?new Date(c.fecha+"T00:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"}):"—";
+    const total=c.total?"$"+Number(c.total).toLocaleString("es-AR"):"—";
+    const canEdit=c.estado==="pendiente";
+    const compJSON=JSON.stringify(c).replace(/'/g,"\\'").replace(/"/g,"&quot;");
+    return`<div class="portal-comp-card">
+      <div style="font-size:22px;width:36px;text-align:center;flex-shrink:0">${c.tipo==="A"?"🟦":c.tipo==="B"?"🟩":c.tipo==="C"?"🟨":"📄"}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--tx)">Fact. ${c.tipo||"?"} ${c.numero?`Nº ${esc(c.numero)}`:""}</div>
+        <div style="font-size:11px;color:var(--tx3);margin-top:2px">${fecha}${c.notas?` · ${esc(c.notas)}`:""}</div>
+        <span class="portal-comp-estado" style="${estadoStyle[c.estado]||"background:var(--surf2);color:var(--tx3)"};margin-top:4px;display:inline-block">${estadoLabel[c.estado]||c.estado}</span>
+      </div>
+      <div style="text-align:right;flex-shrink:0;margin-right:4px">
+        <div style="font-size:14px;font-weight:700;color:var(--tx)">${total}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+        ${c.archivo_url?`<button onclick="window.open('${c.archivo_url}','_blank')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:11px;padding:4px 8px;cursor:pointer" title="Ver archivo">👁</button>`:""}
+        ${canEdit?`<button onclick='openPortalFactura(${JSON.stringify(c)})' style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:11px;padding:4px 8px;cursor:pointer" title="Editar">✎</button>`:""}
+        ${canEdit?`<button onclick="deletePortalFactura('${c.id}')" style="background:none;border:1px solid rgba(239,68,68,.4);border-radius:5px;color:#f87171;font-size:11px;padding:4px 8px;cursor:pointer" title="Eliminar">🗑</button>`:""}
+      </div>
+    </div>`;
   }).join("");
 }
 
-function loginSelectUser(idOrEmail){
-  selectedLoginUser=loginUsers.find(u=>u.id===idOrEmail||u.email===idOrEmail);
-  if(!selectedLoginUser)return;
-  pinBuffer="";
-  updatePinDots();
-  document.getElementById("pin-error").textContent="";
-  document.getElementById("login-step1").style.display="none";
-  document.getElementById("login-step2").classList.add("show");
-}
-
-function loginBack(){
-  selectedLoginUser=null;pinBuffer="";
-  document.getElementById("login-step2").classList.remove("show");
-  document.getElementById("login-step1").style.display="";
-}
-
-function pinKey(digit){
-  if(pinBuffer.length>=4)return;
-  pinBuffer+=digit;
-  updatePinDots();
-  if(pinBuffer.length===4)setTimeout(checkPin,120);
-}
-
-function pinDel(){pinBuffer=pinBuffer.slice(0,-1);updatePinDots()}
-function pinClear(){pinBuffer="";updatePinDots()}
-
-function updatePinDots(){
-  for(let i=0;i<4;i++){
-    const dot=document.getElementById("pd"+i);
-    if(dot)dot.classList.toggle("filled",i<pinBuffer.length);
-  }
-}
-
-function checkPin(){
-  const u=selectedLoginUser;
-  const pinCorrecto=USER_PINS[u.email];
-  if(pinCorrecto&&pinBuffer===pinCorrecto){
-    // Login exitoso
-    loggedUser=u;
-    sessionStorage.setItem("smx_session",JSON.stringify({userId:u.id,email:u.email,nombre:u.nombre}));
-    enterPanel(u,true);
-  }else{
-    document.getElementById("pin-error").textContent="PIN incorrecto. Intentá de nuevo.";
-    pinBuffer="";
-    updatePinDots();
-    // Shake animation
-    const box=document.querySelector(".login-box");
-    box.style.animation="shake .3s ease";
-    setTimeout(()=>box.style.animation="",350);
-  }
-}
-
 function enterPanel(user,isNewLogin){
-  // Ocultar login, mostrar panel
+  if(user.rol==="proveedor"){enterPortalProveedor(user,isNewLogin);return;}
   document.getElementById("login-screen").style.display="none";
   document.getElementById("main-topbar").style.display="";
   document.getElementById("main-layout").style.display="";
 
-  // Actualizar topbar con datos del usuario
-  const idx=loginUsers.findIndex(u=>u.id===user.id||u.email===user.email);
-  const color=UC_AVATARS[Math.max(0,idx)%UC_AVATARS.length];
+  const rol=user.rol||"instructor";
+  const rolColors={admin:"#7C3AED",instructor:"#3B82F6",logistica:"#10B981"};
+  const color=rolColors[rol]||"#7C3AED";
   const initials=(user.nombre||"?").split(" ").map(n=>n[0]).slice(0,2).join("").toUpperCase();
   document.getElementById("topbar-avatar").style.background=color;
   document.getElementById("topbar-avatar").textContent=initials;
   document.getElementById("topbar-username").textContent=user.nombre;
 
-  // Cargar el panel
+  applyRoleUI(rol);
+
   if(isNewLogin)toast(`Bienvenido, ${user.nombre} 👋`,"ok");
   goPage('alertas',document.getElementById('nav-alertas'));
   loadAll().then(()=>{if(curPage==="alertas")renderAlertas()});
@@ -5676,14 +6159,347 @@ function logout(){
   if(!confirm(`¿Cerrar sesión de ${loggedUser?.nombre||""}?`))return;
   sessionStorage.removeItem("smx_session");
   stopNotifPoll();bellNotifs=[];renderBell();
-  loggedUser=null;selectedLoginUser=null;pinBuffer="";
-  document.getElementById("login-screen").style.display="";
+  loggedUser=null;authToken=null;
+  curUser="";const usel=document.getElementById("usel");if(usel)usel.value="";
+  // Restaurar nav items ocultos por rol
+  document.querySelectorAll("[id^='nav-'],[id^='sgroup-']").forEach(el=>el.style.removeProperty("display"));
+  document.getElementById("portal-proveedor").style.display="none";
   document.getElementById("main-topbar").style.display="none";
   document.getElementById("main-layout").style.display="none";
-  document.getElementById("login-step2").classList.remove("show");
-  document.getElementById("login-step1").style.display="";
-  updatePinDots();
-  document.getElementById("pin-error").textContent="";
+  document.getElementById("login-pass").value="";
+  document.getElementById("login-error").textContent="";
+  _showLoginScreen();
+}
+
+/* ── CUENTA CORRIENTE PROVEEDOR ── */
+const CC_TIPOS={
+  factura_proveedor:{label:"Factura proveedor",icon:"🧾",color:"#10B981",signo:+1},
+  cheque_emitido:   {label:"ECheq emitido",    icon:"💳",color:"#3B82F6",signo:-1},
+  efectivo_recibido:{label:"Efectivo recibido", icon:"💵",color:"#F59E0B",signo:-1},
+  factura_tomas:    {label:"Factura de servicio",icon:"📋",color:"#7C3AED",signo:-1}
+};
+
+function calcBalance(movs){
+  return movs.reduce((s,m)=>{
+    const t=CC_TIPOS[m.tipo];
+    return s+(t?t.signo*Number(m.monto):0);
+  },0);
+}
+
+async function openCuentaCorriente(userId,nombre){
+  cuentaProveedorId=userId;
+  document.getElementById("modal-cuenta-title").textContent=`Cuenta corriente · ${nombre}`;
+  document.getElementById("cc-fecha").value=today();
+  document.getElementById("cc-tipo").value="factura_proveedor";
+  onCCTipoChange();
+  document.getElementById("modal-cuenta").style.display="flex";
+  await loadCuentaCorrienteAdmin();
+}
+
+async function loadCuentaCorrienteAdmin(){
+  const listEl=document.getElementById("cuenta-movs-list");
+  listEl.innerHTML=`<div class="loading"><div class="loader"></div></div>`;
+  try{
+    const data=await sb(`cuenta_corriente?proveedor_id=eq.${cuentaProveedorId}&order=fecha.desc,created_at.desc`);
+    cuentaCorriente=data;
+    renderBalanceCard(data,"cuenta-balance-wrap");
+    renderMovsList(data,"cuenta-movs-list",true);
+  }catch(e){listEl.innerHTML=`<p style="color:var(--re);padding:12px">Error al cargar.</p>`;}
+}
+
+function renderBalanceCard(movs,wrapId){
+  const wrap=document.getElementById(wrapId);
+  if(!wrap)return;
+  const bal=calcBalance(movs);
+  const pos=bal>=0;
+  const color=pos?"#10B981":"#EF4444";
+  const label=pos?"Tomás le debe al proveedor":"El proveedor le debe a Tomás";
+  wrap.innerHTML=`<div class="cc-balance-card" style="background:${pos?"rgba(16,185,129,.1)":"rgba(239,68,68,.1)"};border:1px solid ${pos?"rgba(16,185,129,.3)":"rgba(239,68,68,.3)"}">
+    <div>
+      <div style="font-size:11px;font-weight:600;color:${color};text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px">Saldo actual</div>
+      <div style="font-size:13px;color:var(--tx2)">${label}</div>
+    </div>
+    <div style="font-size:24px;font-weight:700;color:${color}">$${Math.abs(bal).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+  </div>`;
+}
+
+function renderMovsList(movs,elId,canDel){
+  const el=document.getElementById(elId);
+  if(!movs.length){el.innerHTML=`<p style="text-align:center;color:var(--tx3);padding:20px;font-size:13px">Sin movimientos aún</p>`;return;}
+  el.innerHTML=movs.map(m=>{
+    const t=CC_TIPOS[m.tipo]||{label:m.tipo,icon:"•",color:"var(--tx3)",signo:1};
+    const fechaFmt=m.fecha?new Date(m.fecha+"T00:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"2-digit"}):"—";
+    const montoFmt="$"+Number(m.monto).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
+    const signoColor=t.signo>0?"#10B981":"#EF4444";
+    const signoLabel=t.signo>0?"+":"-";
+    return`<div class="cc-mov-row">
+      <div class="cc-mov-icon" style="background:${t.color}22">${t.icon}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--tx)">${t.label}</div>
+        <div style="font-size:11px;color:var(--tx3)">${fechaFmt}${m.descripcion?` · ${esc(m.descripcion)}`:""}</div>
+      </div>
+      <div class="cc-mov-monto" style="color:${signoColor}">${signoLabel} ${montoFmt}</div>
+      ${canDel?`<button onclick="delMovimiento('${m.id}')" style="background:none;border:none;cursor:pointer;color:var(--re);font-size:14px;padding:4px;opacity:.6" title="Eliminar">✕</button>`:""}
+    </div>`;
+  }).join("");
+}
+
+function onCCTipoChange(){
+  const tipo=document.getElementById("cc-tipo").value;
+  const calcSec=document.getElementById("cc-calc-section");
+  const campo2=document.getElementById("cc-campo2-wrap");
+  const lbl1=document.getElementById("cc-campo1-lbl");
+  const formulaLbl=document.getElementById("cc-formula-label");
+  document.getElementById("cc-campo1").value="";
+  document.getElementById("cc-campo2").value="";
+  document.getElementById("cc-monto").value="";
+  if(tipo==="factura_proveedor"){
+    calcSec.style.display="";campo2.style.display="none";
+    lbl1.textContent="IVA de la factura";formulaLbl.textContent="Monto = IVA × 0.40";
+  }else if(tipo==="factura_tomas"){
+    calcSec.style.display="";campo2.style.display="";
+    lbl1.textContent="IVA de la factura";formulaLbl.textContent="Monto = (IVA × 0.40) + (Total × 0.05)";
+  }else{
+    calcSec.style.display="none";
+  }
+}
+
+function calcCCMonto(){
+  const tipo=document.getElementById("cc-tipo").value;
+  const v1=parseFloat(document.getElementById("cc-campo1").value)||0;
+  const v2=parseFloat(document.getElementById("cc-campo2").value)||0;
+  let monto=0;
+  if(tipo==="factura_proveedor") monto=v1*0.40;
+  else if(tipo==="factura_tomas") monto=(v1*0.40)+(v2*0.05);
+  if(monto>0)document.getElementById("cc-monto").value=monto.toFixed(2);
+  const lbl=document.getElementById("cc-formula-label");
+  if(tipo==="factura_proveedor"&&v1>0)
+    lbl.textContent=`Monto = $${v1.toLocaleString("es-AR")} × 0.40 = $${monto.toLocaleString("es-AR",{minimumFractionDigits:2})}`;
+  else if(tipo==="factura_tomas"&&(v1>0||v2>0))
+    lbl.textContent=`($${v1.toLocaleString("es-AR")} × 0.40) + ($${v2.toLocaleString("es-AR")} × 0.05) = $${monto.toLocaleString("es-AR",{minimumFractionDigits:2})}`;
+}
+
+async function saveMovimiento(){
+  const monto=parseFloat(document.getElementById("cc-monto").value);
+  const fecha=document.getElementById("cc-fecha").value;
+  const tipo=document.getElementById("cc-tipo").value;
+  if(!monto||monto<=0){toast("Ingresá el monto","err");return;}
+  if(!fecha){toast("Ingresá la fecha","err");return;}
+  const body={proveedor_id:cuentaProveedorId,fecha,tipo,monto,descripcion:document.getElementById("cc-desc").value.trim()||null};
+  try{
+    await sb("cuenta_corriente",{method:"POST",body:JSON.stringify(body)});
+    document.getElementById("cc-monto").value="";
+    document.getElementById("cc-desc").value="";
+    document.getElementById("cc-campo1").value="";
+    document.getElementById("cc-campo2").value="";
+    toast("Movimiento agregado","ok");
+    await loadCuentaCorrienteAdmin();
+    if(curPage==="cuentas")loadCuentasPage();
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function delMovimiento(id){
+  if(!confirm("¿Eliminar este movimiento?"))return;
+  try{
+    await sb(`cuenta_corriente?id=eq.${id}`,{method:"DELETE"});
+    toast("Eliminado","ok");
+    await loadCuentaCorrienteAdmin();
+    if(curPage==="cuentas")loadCuentasPage();
+  }catch(e){toast("Error","err");}
+}
+
+// Para el portal del proveedor
+async function loadPortalCuenta(){
+  const wrap=document.getElementById("portal-cuenta-section");
+  if(!wrap||!loggedUser)return;
+  try{
+    const data=await sb(`cuenta_corriente?proveedor_id=eq.${loggedUser.id}&order=fecha.desc,created_at.desc`);
+    renderPortalCuenta(data,wrap);
+  }catch(e){}
+}
+
+function renderPortalCuenta(movs,wrap){
+  const bal=calcBalance(movs);
+  const pos=bal>=0;
+  const color=pos?"#10B981":"#EF4444";
+  const labelSaldo=pos?"Tomás te debe":"Le debés a Tomás";
+  wrap.innerHTML=`
+    <div class="cc-balance-card" style="background:${bal===0?"var(--surf2)":pos?"rgba(16,185,129,.1)":"rgba(239,68,68,.1)"};border:1px solid ${bal===0?"var(--b)":pos?"rgba(16,185,129,.3)":"rgba(239,68,68,.3)"};margin-bottom:12px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:${bal===0?"var(--tx3)":color};text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px">Saldo actual</div>
+        <div style="font-size:13px;color:var(--tx2)">${bal===0?"Sin movimientos aún":labelSaldo}</div>
+      </div>
+      <div style="font-size:24px;font-weight:700;color:${bal===0?"var(--tx3)":color}">
+        ${bal===0?"$0,00":"$"+Math.abs(bal).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}
+      </div>
+    </div>
+    ${movs.length?`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px"><div id="portal-cuenta-movs"></div></div>`
+    :`<div style="text-align:center;padding:20px;color:var(--tx3);font-size:13px">Los movimientos aparecerán aquí cuando el equipo procese tus facturas</div>`}`;
+  if(movs.length)renderMovsList(movs,"portal-cuenta-movs",false);
+}
+
+/* ── GESTIÓN DE USUARIOS ── */
+function openNuevoUsuario(){
+  ["nu-nombre","nu-email"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  const elRol=document.getElementById("nu-rol");if(elRol)elRol.value="instructor";
+  document.getElementById("nuevo-usuario-form").style.display="block";
+  document.getElementById("nu-nombre").focus();
+}
+function closeNuevoUsuario(){
+  document.getElementById("nuevo-usuario-form").style.display="none";
+}
+async function saveNuevoUsuario(){
+  const nombre=document.getElementById("nu-nombre").value.trim();
+  const email=document.getElementById("nu-email").value.trim().toLowerCase();
+  const rol=document.getElementById("nu-rol").value;
+  if(!nombre){toast("Escribí el nombre","err");return;}
+  if(!email||!email.includes("@")){toast("Email inválido","err");return;}
+  const btn=document.getElementById("nu-save-btn");
+  btn.disabled=true;btn.textContent="Guardando...";
+  try{
+    // Verificar si ya existe
+    const existe=await sb(`usuarios?email=eq.${encodeURIComponent(email)}&select=id`);
+    if(existe&&existe.length){toast("Ya existe un usuario con ese email","err");return;}
+    await sb("usuarios",{method:"POST",body:JSON.stringify({nombre,email,rol})});
+    toast("Usuario agregado ✓","ok");
+    closeNuevoUsuario();
+    loadUsuariosPage();
+  }catch(e){toast("Error: "+e.message,"err");}
+  finally{btn.disabled=false;btn.textContent="Agregar";}
+}
+
+async function loadUsuariosPage(){
+  const wrap=document.getElementById("usuarios-list");
+  if(!wrap)return;
+  wrap.innerHTML=`<div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>`;
+  try{
+    const users=await sb("usuarios?select=id,nombre,email,rol&order=nombre");
+    renderUsuariosPage(users);
+  }catch(e){
+    wrap.innerHTML=`<p style="color:var(--re);padding:20px">Error al cargar usuarios.</p>`;
+  }
+}
+
+function renderUsuariosPage(users){
+  const wrap=document.getElementById("usuarios-list");
+  const rolColors={admin:"#7C3AED",instructor:"#3B82F6",logistica:"#10B981"};
+  const rolLabels={admin:"Admin",instructor:"Instructor",logistica:"Logística"};
+  wrap.innerHTML=users.map(u=>{
+    const initials=(u.nombre||"?").split(" ").map(n=>n[0]).slice(0,2).join("").toUpperCase();
+    const rol=u.rol||"instructor";
+    const color=rolColors[rol]||"#7C3AED";
+    const isSelf=u.id===loggedUser?.id;
+    return`<div class="urol-card" id="ucard-${u.id}">
+      <div class="urol-avatar" style="background:${color}">${initials}</div>
+      <div class="urol-info">
+        <div class="urol-nombre">${esc(u.nombre)}${isSelf?` <span style="font-size:11px;color:var(--tx3)">(vos)</span>`:""}</div>
+        <div class="urol-email">${esc(u.email||"")}</div>
+        <span class="urol-badge ${rol}">${rolLabels[rol]||rol}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;align-items:flex-end">
+        <select class="urol-sel" data-uid="${u.id}" onchange="saveUsuarioRol('${u.id}',this.value,this)">
+          <option value="admin"${rol==="admin"?" selected":""}>Admin</option>
+          <option value="instructor"${rol==="instructor"?" selected":""}>Instructor</option>
+          <option value="logistica"${rol==="logistica"?" selected":""}>Logística</option>
+          <option value="proveedor"${rol==="proveedor"?" selected":""}>Proveedor externo</option>
+        </select>
+        ${rol==="proveedor"?`<button class="btn sec" style="font-size:11px;padding:4px 10px" onclick="openCuentaCorriente('${u.id}','${esc(u.nombre)}')">📊 Cuenta corriente</button>`:""}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+async function saveUsuarioRol(id,newRol,selectEl){
+  // Advertencia si el admin se quita su propio rol
+  if(id===loggedUser?.id&&newRol!=="admin"){
+    if(!confirm("¿Seguro que querés quitarte el rol de admin? Perderías acceso a ciertas secciones.")){
+      selectEl.value="admin";
+      return;
+    }
+  }
+  const prevVal=selectEl.dataset.prev||selectEl.value;
+  selectEl.disabled=true;
+  try{
+    await sb(`usuarios?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({rol:newRol})});
+    const rolColors={admin:"#7C3AED",instructor:"#3B82F6",logistica:"#10B981"};
+    const rolLabels={admin:"Admin",instructor:"Instructor",logistica:"Logística"};
+    const card=document.getElementById("ucard-"+id);
+    if(card){
+      card.querySelector(".urol-avatar").style.background=rolColors[newRol]||"#7C3AED";
+      const badge=card.querySelector(".urol-badge");
+      badge.className="urol-badge "+newRol;
+      badge.textContent=rolLabels[newRol]||newRol;
+    }
+    // Si es el usuario actual, actualizar en memoria y sesión sin necesidad de re-login
+    if(id===loggedUser?.id){
+      loggedUser.rol=newRol;
+      const s=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
+      s.rol=newRol;
+      sessionStorage.setItem("smx_session",JSON.stringify(s));
+      applyRoleUI(newRol);
+      renderTareas();
+    }
+    toast("Rol actualizado","ok");
+  }catch(e){
+    toast("Error al guardar","err");
+    selectEl.value=prevVal;
+  }finally{
+    selectEl.disabled=false;
+    selectEl.dataset.prev=selectEl.value;
+  }
+}
+
+/* ── CUENTAS CORRIENTES PAGE ── */
+async function loadCuentasPage(){
+  const wrap=document.getElementById("cuentas-list");
+  if(!wrap)return;
+  wrap.innerHTML=`<div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>`;
+  try{
+    const[provs,movs]=await Promise.all([
+      sb("usuarios?rol=eq.proveedor&select=id,nombre,email&order=nombre"),
+      sb("cuenta_corriente?select=proveedor_id,monto,tipo")
+    ]);
+    renderCuentasPage(provs,movs);
+  }catch(e){
+    wrap.innerHTML=`<p style="color:var(--re);padding:20px">Error al cargar.</p>`;
+  }
+}
+
+function renderCuentasPage(provs,movs){
+  const wrap=document.getElementById("cuentas-list");
+  if(!provs.length){
+    wrap.innerHTML=`<div style="text-align:center;padding:60px 20px;color:var(--tx3)">
+      <div style="font-size:36px;margin-bottom:12px">🤝</div>
+      <div style="font-size:15px;font-weight:600;color:var(--tx)">Sin proveedores externos</div>
+      <div style="font-size:13px;margin-top:6px">Asigná el rol "Proveedor externo" a un usuario en la página de Usuarios para empezar.</div>
+    </div>`;
+    return;
+  }
+  // Agrupar movimientos por proveedor_id
+  const movsByProv={};
+  movs.forEach(m=>{
+    if(!movsByProv[m.proveedor_id])movsByProv[m.proveedor_id]=[];
+    movsByProv[m.proveedor_id].push(m);
+  });
+  wrap.innerHTML=`<div style="display:flex;flex-direction:column;gap:12px">`+
+  provs.map(p=>{
+    const pm=movsByProv[p.id]||[];
+    const bal=calcBalance(pm);
+    const pos=bal>=0;
+    const color=pos?"#10B981":"#EF4444";
+    const balLabel=pos?"Tomás le debe":"El proveedor le debe";
+    const initials=(p.nombre||"?").split(" ").map(n=>n[0]).slice(0,2).join("").toUpperCase();
+    const cant=pm.length;
+    return`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:16px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <div style="width:42px;height:42px;border-radius:50%;background:#10B981;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;flex-shrink:0">${initials}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:15px;font-weight:600;color:var(--tx)">${esc(p.nombre)}</div>
+        <div style="font-size:12px;color:var(--tx3);margin-top:2px">${esc(p.email||"")} · ${cant} movimiento${cant===1?"":"s"}</div>
+        ${cant?`<div style="font-size:12px;margin-top:4px;color:${color};font-weight:600">${balLabel}: $${Math.abs(bal).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}</div>`:`<div style="font-size:12px;margin-top:4px;color:var(--tx3)">Sin movimientos</div>`}
+      </div>
+      <button class="btn pri" style="font-size:12px;flex-shrink:0" onclick="openCuentaCorriente('${p.id}','${esc(p.nombre)}')">📊 Ver cuenta</button>
+    </div>`;
+  }).join("")+`</div>`;
 }
 
 // Shake keyframe
@@ -5694,6 +6510,57 @@ document.head.appendChild(shakeStyle);
 // Iniciar con login
 initLogin();
 </script>
+<!-- MODAL CUENTA CORRIENTE -->
+<div class="mov" id="modal-cuenta" onclick="if(event.target===this)closeModal('modal-cuenta')">
+  <div class="modal" style="max-width:580px">
+    <div class="mt">
+      <span id="modal-cuenta-title">Cuenta corriente</span>
+      <button class="mt-close" onclick="closeModal('modal-cuenta')">✕</button>
+    </div>
+    <!-- Balance -->
+    <div id="cuenta-balance-wrap" style="margin-bottom:16px"></div>
+    <!-- Formulario nuevo movimiento -->
+    <div style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:14px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">Agregar movimiento</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label class="ml">Tipo</label>
+          <select class="mi" id="cc-tipo" onchange="onCCTipoChange()">
+            <option value="factura_proveedor">Factura proveedor (IVA)</option>
+            <option value="cheque_emitido">ECheq emitido</option>
+            <option value="efectivo_recibido">Efectivo recibido</option>
+            <option value="factura_tomas">Factura de servicio emitida</option>
+          </select>
+        </div>
+        <div>
+          <label class="ml">Fecha</label>
+          <input class="mi" type="date" id="cc-fecha">
+        </div>
+      </div>
+      <div id="cc-calc-section" style="display:none;background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:10px;margin-bottom:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><label class="ml" id="cc-campo1-lbl">IVA de la factura</label><input class="mi" type="number" id="cc-campo1" placeholder="0.00" oninput="calcCCMonto()"></div>
+          <div id="cc-campo2-wrap"><label class="ml">Total de la factura</label><input class="mi" type="number" id="cc-campo2" placeholder="0.00" oninput="calcCCMonto()"></div>
+        </div>
+        <div style="font-size:12px;color:var(--pu);margin-top:8px;font-weight:600" id="cc-formula-label"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label class="ml">Monto</label>
+          <input class="mi" type="number" id="cc-monto" placeholder="0.00" step="0.01">
+        </div>
+        <div>
+          <label class="ml">Descripción (opcional)</label>
+          <input class="mi" type="text" id="cc-desc" placeholder="Ej: Factura A-0001">
+        </div>
+      </div>
+      <button class="btn pri" style="width:100%" onclick="saveMovimiento()">Agregar</button>
+    </div>
+    <!-- Lista movimientos -->
+    <div id="cuenta-movs-list" style="max-height:320px;overflow-y:auto"></div>
+  </div>
+</div>
+
 <!-- MODAL INVENTARIO -->
 <div class="mov" id="modal-inventario" onclick="closeMovOuter(event,'modal-inventario')">
   <div class="mob" style="max-width:520px">
@@ -5730,8 +6597,11 @@ initLogin();
 <script>
 /* ── COMPROBANTES DE COMPRA ── */
 let comprobantes=[];
+let cuentaCorriente=[];
+let cuentaProveedorId=null;
 let compFilter="all";
 let compMesFilter="all";
+let compCargadoFilter="all";
 let compArchivoUrl=null;
 let editCompId=null;
 
@@ -5740,6 +6610,7 @@ async function loadComprobantes(){
     const data=await sb("comprobantes_compra?select=*&order=fecha.desc,created_at.desc");
     comprobantes=data;
     buildCompMesSelect();
+    buildCompCargadoSelect();
     renderComprobantes();
     updateCompStats();
     updateSideBadges();
@@ -5776,15 +6647,47 @@ function setCompFilter(f,btn){
   renderComprobantes();
 }
 
+function buildCompCargadoSelect(){
+  const sel=document.getElementById("comp-cargado-sel");
+  if(!sel)return;
+  // Solo admin ve el selector de usuario
+  if(loggedUser?.rol!=="admin"){sel.style.display="none";return;}
+  sel.style.display="";
+  const prev=sel.value;
+  const nombres=[...new Set(comprobantes.map(c=>c.cargado_por).filter(Boolean))].sort();
+  sel.innerHTML=`<option value="all">Todos los usuarios</option>`+
+    nombres.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("");
+  if(nombres.includes(prev))sel.value=prev;
+  else{sel.value="all";compCargadoFilter="all";}
+}
+
 function renderComprobantes(){
   const el=document.getElementById("comp-lista");
   if(!el)return;
   const q=(document.getElementById("comp-search")?.value||"").toLowerCase();
   let list=comprobantes;
+  // Solo admin ve todos los comprobantes
+  if(loggedUser?.rol!=="admin")list=list.filter(c=>c.cargado_por===loggedUser.nombre);
   if(compMesFilter!=="all")list=list.filter(c=>{const fi=c.fecha_imputacion||c.fecha;return fi&&fi.startsWith(compMesFilter);});
   if(compFilter==="SUDES")list=list.filter(c=>c.sociedad==="SUDES");
   else if(compFilter==="POINTERS")list=list.filter(c=>c.sociedad==="POINTERS");
+  else if(compFilter==="por_completar")list=list.filter(c=>{
+    const esDeProveedor=!!(c.cargado_por&&c.cargado_por!==loggedUser?.nombre);
+    const desglose=(c.neto_21||0)+(c.neto_105||0)+(c.neto_27||0)+(c.neto_exento||0);
+    return esDeProveedor&&(c.monto_neto||0)>0&&desglose===0&&c.estado!=="enviado_finnegans";
+  });
   else if(compFilter!=="all")list=list.filter(c=>c.estado===compFilter);
+  // Actualizar badge "por completar"
+  const totalPorCompletar=comprobantes.filter(c=>{
+    const esDeProveedor=!!(c.cargado_por&&c.cargado_por!==loggedUser?.nombre);
+    const desglose=(c.neto_21||0)+(c.neto_105||0)+(c.neto_27||0)+(c.neto_exento||0);
+    return esDeProveedor&&(c.monto_neto||0)>0&&desglose===0&&c.estado!=="enviado_finnegans";
+  }).length;
+  const badgeCompletar=document.getElementById("badge-completar");
+  if(badgeCompletar)badgeCompletar.textContent=totalPorCompletar>0?`(${totalPorCompletar})`:"";
+  const fbCompletar=document.getElementById("fb-completar");
+  if(fbCompletar)fbCompletar.style.display=loggedUser?.rol==="admin"?"":"none";
+  if(compCargadoFilter!=="all")list=list.filter(c=>c.cargado_por===compCargadoFilter);
   if(q)list=list.filter(c=>(c.proveedor||"").toLowerCase().includes(q)||(c.numero||"").includes(q)||(c.concepto||"").toLowerCase().includes(q));
   if(!list.length){el.innerHTML=`<div class="empty"><div class="ei">📄</div><div class="et">Sin comprobantes</div><div class="es">Cargá una factura con el botón "Nueva factura"</div></div>`;return;}
 
@@ -5798,7 +6701,10 @@ function renderComprobantes(){
     const fecha=c.fecha?new Date(c.fecha+"T00:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"2-digit"}):"—";
     const total=c.total?("$"+Number(c.total).toLocaleString("es-AR")):"—";
     const iva=c.iva?("$"+Number(c.iva).toLocaleString("es-AR")):"";
-    return`<div class="item-row" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surf);border:1px solid var(--b);border-radius:var(--r);margin-bottom:6px">
+    const esDeProveedor=!!(c.cargado_por&&c.cargado_por!==loggedUser?.nombre);
+    const desglose=(c.neto_21||0)+(c.neto_105||0)+(c.neto_27||0)+(c.neto_exento||0);
+    const faltaDesglose=esDeProveedor&&(c.monto_neto||0)>0&&desglose===0&&c.estado!=="enviado_finnegans";
+    return`<div class="item-row" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surf);border:1px solid ${faltaDesglose?"rgba(245,158,11,.5)":c.estado==="pendiente"&&esDeProveedor?"rgba(124,58,237,.3)":"var(--b)"};border-radius:var(--r);margin-bottom:6px">
       <div style="font-size:20px;width:36px;text-align:center;flex-shrink:0">${c.tipo==="A"?"🟦":c.tipo==="B"?"🟩":c.tipo==="C"?"🟨":"📄"}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.proveedor||"Sin proveedor")}</div>
@@ -5807,6 +6713,10 @@ function renderComprobantes(){
           ${c.sociedad?`<span style="margin-left:6px;font-size:9px;font-weight:700;color:var(--pu)">${c.sociedad}</span>`:""}
         </div>
         ${c.concepto?`<div style="font-size:11px;color:var(--tx3);margin-top:1px">${esc(c.concepto)}</div>`:""}
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:3px">
+          ${esDeProveedor?`<span style="font-size:10px;background:rgba(124,58,237,.12);color:#A78BFA;padding:1px 6px;border-radius:6px">📤 ${esc(c.cargado_por)}</span>`:""}
+          ${faltaDesglose?`<span style="font-size:10px;background:rgba(245,158,11,.15);color:#FCD34D;padding:1px 6px;border-radius:6px">⚠️ Completar desglose</span>`:""}
+        </div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-size:14px;font-weight:700;color:var(--tx)">${total}</div>
@@ -5815,7 +6725,7 @@ function renderComprobantes(){
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
         ${c.archivo_url?`<button onclick="window.open('${c.archivo_url}','_blank')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Ver archivo">👁</button>`:""}
-        <button onclick="editComprobante('${c.id}')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer">✎</button>
+        <button onclick="editComprobante('${c.id}')" style="background:none;border:1px solid ${faltaDesglose?"rgba(245,158,11,.6)":"var(--b)"};border-radius:5px;color:${faltaDesglose?"#FCD34D":"var(--tx3)"};font-size:10px;padding:3px 7px;cursor:pointer" title="${faltaDesglose?"Completar para Finnegans":"Editar"}">${faltaDesglose?"✏️":"✎"}</button>
         ${c.estado!=="enviado_finnegans"
           ?`<button onclick="marcarEstadoComp('${c.id}','${c.estado==="pendiente"?"revisado":"enviado_finnegans"}')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="${c.estado==="pendiente"?"Marcar revisado":"Enviar a Finnegans"}">${c.estado==="pendiente"?"✓":"→F"}</button>`
           :`<button onclick="marcarEstadoComp('${c.id}','revisado')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Revertir a Revisado">↩</button>`}
@@ -5854,6 +6764,29 @@ async function marcarEstadoComp(id,estado){
     const c=comprobantes.find(c=>c.id===id);if(c)c.estado=estado;
     renderComprobantes();updateCompStats();
     toast(estado==="revisado"?"Marcado como revisado":"Enviado a Finnegans","ok");
+    // Auto-crear movimiento en cuenta corriente si es factura de proveedor externo
+    if(estado==="revisado"&&c){
+      const provId=c.proveedor_id;
+      const ivaVal=parseFloat(c.iva)||0;
+      if(provId&&ivaVal>0){
+        try{
+          const monto=Math.round(ivaVal*0.40*100)/100;
+          const desc=`Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""} — auto`;
+          await sb("cuenta_corriente",{method:"POST",body:JSON.stringify({
+            proveedor_id:provId,
+            fecha:c.fecha||today(),
+            tipo:"factura_proveedor",
+            monto,
+            descripcion:desc
+          })});
+          toast(`✓ CTA CTE: +$${monto.toLocaleString("es-AR",{minimumFractionDigits:2})} (IVA×0.40)`,"ok");
+        }catch(e){
+          toast(`Error al registrar en CTA CTE: ${e.message.slice(0,60)}`,"err");
+        }
+      }else if(c.proveedor_id&&ivaVal===0){
+        toast("Factura sin IVA — registrá el movimiento manualmente en Cuentas Corrientes","warn");
+      }
+    }
   }catch(e){toast("Error","err")}
 }
 
@@ -5870,23 +6803,33 @@ function delComprobante(id,proveedor,numero){
 }
 
 function openNuevoComprobante(){
-  editCompId=null;compArchivoUrl=null;
-  document.getElementById("mcomp-title").textContent="Nueva Factura de Compra";
-  document.getElementById("comp-save-btn").textContent="Guardar";
-  ["comp-fecha","comp-numero","comp-prov","comp-cuit","comp-concepto","comp-neto","comp-iva-monto","comp-neto21","comp-neto105","comp-neto27","comp-neto-exento","comp-perc-iva","comp-perc-iva-15","comp-perc-iibb","comp-imp-int","comp-otros","comp-total","comp-venc","comp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
-  document.getElementById("comp-fecha-imp").value=today();
-  ["comp-prod21","comp-prod105","comp-prod27"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
-  const elEx=document.getElementById("comp-prod-exento");if(elEx)elEx.value="varios almacen consumidor final";
-  const elNG=document.getElementById("comp-prod-nograv");if(elNG)elNG.value="impuestos internos o no gravado";
-  const elPIva=document.getElementById("comp-prod-perc-iva");if(elPIva)elPIva.value="";
-  const elPIibb=document.getElementById("comp-prod-perc-iibb");if(elPIibb)elPIibb.value="iibb salta";
-  document.getElementById("comp-calendario").checked=false;
-  document.getElementById("comp-tipo").value="A";
-  document.getElementById("comp-sociedad").value="SUDES";
-  document.getElementById("comp-fecha").value=today();
-  document.getElementById("comp-upload-content").innerHTML=`<div style="font-size:28px;margin-bottom:6px">📄</div><div style="font-size:13px;color:var(--tx2);font-weight:600">Tocá para subir o arrastrá aquí</div><div style="font-size:11px;color:var(--tx3);margin-top:4px">Foto, JPG, PNG o PDF · desde cámara o galería</div>`;
-  document.getElementById("comp-ia-btn").style.display="none";
-  openM("modal-comprobante");
+  try{
+    editCompId=null;compArchivoUrl=null;
+    const esProveedor=loggedUser?.rol==="proveedor";
+    const elTitle=document.getElementById("mcomp-title");if(elTitle)elTitle.textContent="Nueva Factura de Compra";
+    const elSaveBtn=document.getElementById("comp-save-btn");if(elSaveBtn)elSaveBtn.textContent="Guardar";
+    ["comp-fecha","comp-numero","comp-prov","comp-cuit","comp-concepto","comp-neto","comp-iva-monto","comp-neto21","comp-neto105","comp-neto27","comp-neto-exento","comp-perc-iva","comp-perc-iva-15","comp-perc-iibb","comp-imp-int","comp-otros","comp-total","comp-venc","comp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+    const elFechaImp=document.getElementById("comp-fecha-imp");if(elFechaImp)elFechaImp.value=today();
+    ["comp-prod21","comp-prod105","comp-prod27"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+    const elEx=document.getElementById("comp-prod-exento");if(elEx)elEx.value="varios almacen consumidor final";
+    const elNG=document.getElementById("comp-prod-nograv");if(elNG)elNG.value="impuestos internos o no gravado";
+    const elPIva=document.getElementById("comp-prod-perc-iva");if(elPIva)elPIva.value="";
+    const elPIibb=document.getElementById("comp-prod-perc-iibb");if(elPIibb)elPIibb.value="iibb salta";
+    const elCal=document.getElementById("comp-calendario");if(elCal)elCal.checked=false;
+    const elTipo=document.getElementById("comp-tipo");if(elTipo)elTipo.value="A";
+    const elSoc=document.getElementById("comp-sociedad");if(elSoc)elSoc.value="SUDES";
+    const elFecha=document.getElementById("comp-fecha");if(elFecha)elFecha.value=today();
+    const elUpload=document.getElementById("comp-upload-content");if(elUpload)elUpload.innerHTML=`<div style="font-size:28px;margin-bottom:6px">📄</div><div style="font-size:13px;color:var(--tx2);font-weight:600">Tocá para subir o arrastrá aquí</div><div style="font-size:11px;color:var(--tx3);margin-top:4px">Foto, JPG, PNG o PDF · desde cámara o galería</div>`;
+    const iaBtn=document.getElementById("comp-ia-btn");if(iaBtn)iaBtn.style.display="none";
+    // Pre-rellenar proveedor si el usuario es proveedor externo
+    if(esProveedor){
+      const elProv=document.getElementById("comp-prov");if(elProv)elProv.value=loggedUser.nombre||"";
+    }
+    openM("modal-comprobante");
+  }catch(err){
+    console.error("openNuevoComprobante error:",err);
+    toast("Error al abrir el formulario: "+err.message,"err");
+  }
 }
 
 function editComprobante(id){
@@ -5928,6 +6871,34 @@ function editComprobante(id){
   if(c.archivo_url){
     document.getElementById("comp-upload-content").innerHTML=`<div style="font-size:24px">✅</div><div style="font-size:12px;color:var(--gr);margin-top:4px">Archivo cargado</div><div style="font-size:10px;color:var(--tx3)">Tocá para reemplazar</div>`;
     document.getElementById("comp-ia-btn").style.display="block";
+  }
+  // Banner Finnegans: mostrar qué falta
+  const esDeProveedor=!!(c.cargado_por&&c.cargado_por!==loggedUser?.nombre);
+  const desglose=(c.neto_21||0)+(c.neto_105||0)+(c.neto_27||0)+(c.neto_exento||0);
+  const faltaDesglose=(c.monto_neto||0)>0&&desglose===0;
+  const faltaCuit=!c.cuit;
+  let finnBanner=document.getElementById("finn-banner");
+  if(!finnBanner){
+    finnBanner=document.createElement("div");finnBanner.id="finn-banner";
+    const modal=document.querySelector("#modal-comprobante .modal");
+    if(modal)modal.insertBefore(finnBanner,modal.firstChild);
+  }
+  if(esDeProveedor&&(faltaDesglose||faltaCuit)){
+    const items=[];
+    if(faltaCuit)items.push("CUIT del proveedor");
+    if(faltaDesglose)items.push("desglose por alícuota (21%, 10,5%, etc.)");
+    finnBanner.innerHTML=`<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:var(--r);padding:10px 14px;margin-bottom:14px;font-size:12px">
+      <div style="font-weight:700;color:#FCD34D;margin-bottom:4px">⚠️ Factura de proveedor — completar para Finnegans</div>
+      <div style="color:var(--tx2)">Faltan: ${items.join(" · ")}</div>
+      ${faltaDesglose&&c.archivo_url?`<button onclick="analizarConIA()" style="margin-top:8px;background:linear-gradient(135deg,#7C3AED,#4F46E5);color:#fff;border:none;border-radius:var(--r);padding:6px 14px;font-size:11px;font-weight:600;cursor:pointer">✨ Completar con IA</button>`:""}
+    </div>`;
+    finnBanner.style.display="block";
+    // Auto-run IA si hay archivo y falta desglose
+    if(faltaDesglose&&c.archivo_url){
+      setTimeout(()=>analizarConIA(),400);
+    }
+  }else{
+    finnBanner.style.display="none";
   }
   openM("modal-comprobante");
 }
@@ -6336,9 +7307,11 @@ async function saveComprobante(){
     archivo_url:compArchivoUrl||null,
     fecha_vencimiento:document.getElementById("comp-venc").value||null,
     en_calendario:document.getElementById("comp-calendario").checked,
-    cargado_por:loggedUser?.nombre||null,
     updated_at:new Date().toISOString()
   };
+  // Al editar, preservar cargado_por y proveedor_id originales; al crear, asignar usuario actual
+  if(!editCompId){data.cargado_por=loggedUser?.nombre||null;}
+  if(!editCompId&&loggedUser?.rol==="proveedor") data.proveedor_id=loggedUser.id;
   const btn=document.getElementById("comp-save-btn");btn.disabled=true;btn.textContent="Guardando...";
   try{
     if(editCompId){
@@ -6352,7 +7325,8 @@ async function saveComprobante(){
       toast("Factura cargada","ok");
     }
     closeM("modal-comprobante");
-    renderComprobantes();updateCompStats();updateSideBadges();
+    if(loggedUser?.rol==="proveedor"){loadPortalComprobantes();return;}
+    buildCompCargadoSelect();renderComprobantes();updateCompStats();updateSideBadges();
   }catch(e){toast("Error: "+e.message,"err")}
   finally{btn.disabled=false;btn.textContent=editCompId?"Guardar cambios":"Guardar";}
 }
