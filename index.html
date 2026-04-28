@@ -1452,7 +1452,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         </select>
       </div>
     </div>
-    <div class="fg"><label class="fl">Proveedor *</label><input class="fi" id="comp-prov" type="text" placeholder="Razón social del proveedor" oninput="sugerirProductosFinn()"></div>
+    <div class="fg" style="position:relative">
+      <label class="fl">Proveedor *</label>
+      <input class="fi" id="comp-prov" type="text" placeholder="Razón social del proveedor" oninput="onCompProvInput()" autocomplete="off">
+      <div id="comp-prov-dd" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surf);border:1px solid var(--b2);border-radius:var(--r);z-index:999;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div>
+    </div>
     <div class="fgrid">
       <div class="fg"><label class="fl">CUIT</label><input class="fi" id="comp-cuit" type="text" placeholder="20-12345678-9"></div>
       <div class="fg"><label class="fl">Concepto</label><input class="fi" id="comp-concepto" type="text" placeholder="Ej: Material quirúrgico" oninput="sugerirProductosFinn()"></div>
@@ -6829,6 +6833,7 @@ initLogin();
 <script>
 /* ── COMPROBANTES DE COMPRA ── */
 let comprobantes=[];
+let proveedoresFinn=[];
 let cuentaCorriente=[];
 let cuentaProveedorId=null;
 let compFilter="all";
@@ -6839,8 +6844,12 @@ let editCompId=null;
 
 async function loadComprobantes(){
   try{
-    const data=await sb("comprobantes_compra?select=*&order=fecha.desc,created_at.desc");
+    const [data,provsFinn]=await Promise.all([
+      sb("comprobantes_compra?select=*&order=fecha.desc,created_at.desc"),
+      proveedoresFinn.length?Promise.resolve(proveedoresFinn):sb("proveedores_finnegans?select=nombre,cuit,codigo&order=nombre.asc").catch(()=>[])
+    ]);
     comprobantes=data;
+    if(!proveedoresFinn.length)proveedoresFinn=provsFinn;
     buildCompMesSelect();
     buildCompCargadoSelect();
     renderComprobantes();
@@ -7253,6 +7262,44 @@ function recalcTotal(){
   if(n||v||piva||piva15||piibb||imp||o)document.getElementById("comp-total").value=(n+v+piva+piva15+piibb+imp+o).toFixed(2);
 }
 // Auto-sugerencia de productos Finnegans según proveedor/concepto
+// ── Autocomplete proveedor desde proveedores_finnegans ────────────────────────
+function onCompProvInput(){
+  sugerirProductosFinn();
+  const q=(document.getElementById("comp-prov")?.value||"").trim();
+  const dd=document.getElementById("comp-prov-dd");
+  if(!dd)return;
+  if(q.length<2||!proveedoresFinn.length){dd.style.display="none";return;}
+  const ql=q.toLowerCase();
+  const matches=proveedoresFinn.filter(p=>p.nombre&&p.nombre.toLowerCase().includes(ql)).slice(0,10);
+  if(!matches.length){dd.style.display="none";return;}
+  dd.innerHTML=matches.map(p=>`
+    <div onclick="selectProvFinn(${JSON.stringify(p.nombre)},${JSON.stringify(p.cuit||"")})"
+      style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--b);font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px;transition:background .1s"
+      onmouseenter="this.style.background='var(--surf2)'" onmouseleave="this.style.background=''">
+      <span style="font-weight:500">${p.nombre}</span>
+      <span style="font-size:11px;color:var(--tx3);white-space:nowrap">${p.cuit||""}</span>
+    </div>`).join("");
+  dd.style.display="block";
+}
+function selectProvFinn(nombre,cuit){
+  const elProv=document.getElementById("comp-prov");
+  const elCuit=document.getElementById("comp-cuit");
+  if(elProv)elProv.value=nombre;
+  if(elCuit&&cuit)elCuit.value=cuit;
+  const dd=document.getElementById("comp-prov-dd");
+  if(dd)dd.style.display="none";
+  sugerirProductosFinn();
+}
+function closeProvDd(){
+  const dd=document.getElementById("comp-prov-dd");
+  if(dd)dd.style.display="none";
+}
+// Cerrar dropdown al hacer click fuera
+document.addEventListener("click",e=>{
+  const wrap=document.querySelector("#modal-comprobante .fg[style*='position:relative']");
+  if(wrap&&!wrap.contains(e.target))closeProvDd();
+});
+
 function sugerirProductosFinn(){
   const prov=(document.getElementById("comp-prov")?.value||"").toLowerCase();
   const conc=(document.getElementById("comp-concepto")?.value||"").toLowerCase();
