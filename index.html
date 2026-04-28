@@ -5198,21 +5198,37 @@ function openRegistrarRend(){
   const activas=cfInversiones.filter(i=>i.estado==="Activa");
   if(!activas.length){toast("No hay inversiones activas","inf");return;}
   const hoy=today();
+  const ayer=new Date(Date.now()-864e5).toISOString().slice(0,10);
   document.getElementById("rend-fecha-label").textContent="Fecha: "+hoy.split("-").reverse().join("/");
   const list=document.getElementById("rend-items-list");
+  const SOC_COLOR={"POINTERS":"#3B82F6","SUDES":"#10B981","AMPARO":"#F59E0B","MARIO":"#EC4899","Personal":"#8B5CF6"};
   list.innerHTML=activas.map(inv=>{
-    const ultimo=rendDiarios.filter(r=>r.inversion_id===inv.id).pop();
-    const ulVal=ultimo?ultimo.valor:(inv.capital||0);
-    const ulFecha=ultimo?` · último: ${ultimo.fecha.slice(5).split("-").reverse().join("/")}`:` · capital: $${Math.round(inv.capital||0).toLocaleString("es-AR")}`;
+    const regsInv=rendDiarios.filter(r=>r.inversion_id===inv.id);
+    const ultimo=regsInv[regsInv.length-1];
+    const regAyer=regsInv.filter(r=>r.fecha<=ayer).pop();
+    const valActual=ultimo?ultimo.valor:(inv.valor_actual||inv.capital||0);
+    const valAyer=regAyer?regAyer.valor:(inv.capital||0);
+    const diff=valActual-valAyer;
+    const diffPct=valAyer?((diff/valAyer)*100).toFixed(2):"0.00";
+    const diffColor=diff>0?"var(--gr)":diff<0?"var(--re)":"var(--tx3)";
+    const socColor=SOC_COLOR[inv.sociedad||"Personal"]||"#64748B";
+    const ulFecha=ultimo?`Últ. registro: ${ultimo.fecha.slice(5).split("-").reverse().join("/")}`:`Sin registros aún`;
     return`<div style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:10px 12px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:4px">
-        <div>
-          <span style="font-size:13px;font-weight:600;color:var(--tx)">${inv.nombre}</span>
-          <span style="font-size:11px;color:var(--tx3);margin-left:6px">${inv.tipo||""}</span>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
+            <span style="font-size:13px;font-weight:700;color:var(--tx)">${inv.nombre}</span>
+            <span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;background:${socColor}22;color:${socColor};border:1px solid ${socColor}44">${inv.sociedad||"Personal"}</span>
+            <span style="font-size:11px;color:var(--tx3)">${inv.tipo||""}</span>
+          </div>
+          <div style="font-size:11px;color:var(--tx3)">${ulFecha}</div>
         </div>
-        <span style="font-size:11px;color:var(--tx3)">${ulFecha}</span>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:13px;font-weight:700;color:var(--tx)">$${Math.round(valActual).toLocaleString("es-AR")}</div>
+          <div style="font-size:11px;color:${diffColor};font-weight:600">${diff>=0?"+":""}$${Math.round(diff).toLocaleString("es-AR")} (${diff>=0?"+":""}${diffPct}%) vs ayer</div>
+        </div>
       </div>
-      <input class="fi" type="number" id="rend-val-${inv.id}" placeholder="Valor actual (ej: ${Math.round(ulVal).toLocaleString("es-AR")})" style="width:100%;font-size:13px">
+      <input class="fi" type="number" id="rend-val-${inv.id}" placeholder="Nuevo valor de hoy (actual: $${Math.round(valActual).toLocaleString("es-AR")})" style="width:100%;font-size:13px">
     </div>`;
   }).join("");
   openModal("modal-rend-diario");
