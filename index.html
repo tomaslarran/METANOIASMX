@@ -348,10 +348,38 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   .sidebar.open{transform:translateX(0)}
   #hamburger-btn{display:flex!important}
   #sidebar-close-btn{display:flex!important}
-  .content{margin-left:0;padding:16px 14px 80px}
+  .content{margin-left:0;padding:16px 12px 80px}
   .stats{grid-template-columns:repeat(2,1fr)}
   .charts-grid,.notif-grid{grid-template-columns:1fr}
-  .form-grid{grid-template-columns:1fr 1fr}
+  /* Formularios: 1 columna en mobile */
+  .form-grid{grid-template-columns:1fr}
+  .form-grid-2{grid-template-columns:1fr}
+  /* Portal form grids inline */
+  .pf-2col{grid-template-columns:1fr !important}
+  /* Topbar: ocultar nombre y separador para ganar espacio */
+  .topbar-user-name,.logo-sep,.logo-sub{display:none}
+  .topbar{padding-left:12px;padding-right:12px;gap:8px}
+  /* Notif panel: ancho completo */
+  .np{width:calc(100vw - 16px);right:8px;left:8px}
+  /* Toast: centrado abajo */
+  .toast{right:12px;left:12px;max-width:none;bottom:16px;text-align:center}
+  /* Modal como bottom sheet */
+  .mov{align-items:flex-end;padding:0}
+  .modal{border-radius:var(--rlg) var(--rlg) 0 0;padding:20px 16px;max-height:92vh;max-width:100%}
+  /* Títulos */
+  .pg-title{font-size:18px}
+  .sc-v{font-size:24px}
+  /* Portal body */
+  .portal-body{padding:20px 14px}
+  /* Toolbar: botones más grandes para touch */
+  .fb{padding:6px 12px;font-size:12px}
+  .btn{padding:7px 12px}
+  /* Page header en mobile */
+  .pg-header{flex-wrap:wrap;gap:8px}
+}
+@media(max-width:400px){
+  .stats{grid-template-columns:1fr}
+  .sc-v{font-size:20px}
 }
 /* ── CALENDARIO ── */
 .cal-cell{min-height:90px;border-right:1px solid var(--b);border-bottom:1px solid var(--b);padding:4px;cursor:pointer;transition:background .15s;position:relative;vertical-align:top}
@@ -413,7 +441,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 .portal-body{max-width:600px;width:100%;margin:0 auto;padding:32px 20px}
 .portal-welcome{margin-bottom:24px}
 .portal-upload-btn{width:100%;padding:16px;font-size:15px;justify-content:center;gap:10px;border-radius:var(--rlg)}
-.portal-comp-card{display:flex;align-items:center;gap:12px;background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px;margin-bottom:8px}
+.portal-comp-card{display:flex;align-items:center;gap:12px;background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px;margin-bottom:8px;flex-wrap:wrap}
 .cc-balance-card{border-radius:var(--r);padding:16px 20px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between}
 .cc-mov-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--b)}
 .cc-mov-row:last-child{border-bottom:none}
@@ -496,7 +524,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         ✨ Analizar con IA
       </button>
       <!-- Campos esenciales -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div class="pf-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
         <div><label class="ml">Tipo</label>
           <select class="mi" id="pf-tipo"><option value="A">Factura A</option><option value="B">Factura B</option><option value="C">Factura C</option><option value="E">Factura E</option></select>
         </div>
@@ -504,7 +532,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       </div>
       <div style="margin-bottom:10px"><label class="ml">Número de factura</label><input class="mi" type="text" id="pf-numero" placeholder="0001-00012345"></div>
       <!-- Moneda y cotización -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div class="pf-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
         <div><label class="ml">Moneda</label>
           <select class="mi" id="pf-moneda" onchange="onPFMonedaChange()">
             <option value="ARS">$ Pesos (ARS)</option>
@@ -519,12 +547,12 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       </div>
       <!-- Resumen conversión -->
       <div id="pf-conversion-info" style="display:none;background:rgba(124,58,237,.08);border:1px solid rgba(124,58,237,.25);border-radius:var(--r);padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--tx2)"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div class="pf-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
         <div><label class="ml" id="pf-neto-lbl">Neto gravado</label><input class="mi" type="number" id="pf-neto" placeholder="0" oninput="calcPFTotal()"></div>
         <div><label class="ml" id="pf-iva-lbl">IVA</label><input class="mi" type="number" id="pf-iva" placeholder="0" oninput="calcPFTotal()"></div>
       </div>
       <div style="margin-bottom:14px"><label class="ml" id="pf-total-lbl">Total</label><input class="mi" type="number" id="pf-total" placeholder="0" oninput="calcPFConversionInfo()"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="pf-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
         <div><label class="ml">Vencimiento (opcional)</label><input class="mi" type="date" id="pf-venc"></div>
         <div><label class="ml">Notas (opcional)</label><input class="mi" type="text" id="pf-notas" placeholder="Ej: Factura material julio"></div>
       </div>
