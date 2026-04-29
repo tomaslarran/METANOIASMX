@@ -5211,11 +5211,14 @@ function openRegistrarRend(){
     const regsInv=rendDiarios.filter(r=>r.inversion_id===inv.id);
     const ultimo=regsInv[regsInv.length-1];
     const regAyer=regsInv.filter(r=>r.fecha<=ayer).pop();
-    const valActual=ultimo?ultimo.valor:(inv.valor_actual||inv.capital||0);
-    const valAyer=regAyer?regAyer.valor:(inv.capital||0);
-    const diff=valActual-valAyer;
-    const diffPct=valAyer?((diff/valAyer)*100).toFixed(2):"0.00";
+    const valActual=ultimo?ultimo.valor:(inv.valor_actual||inv.monto_actual||0);
+    const valAyer=regAyer?regAyer.valor:null;
+    const diff=valAyer!==null?valActual-valAyer:null;
+    const diffPct=diff!==null&&valAyer?((diff/valAyer)*100).toFixed(2):null;
     const diffColor=diff>0?"var(--gr)":diff<0?"var(--re)":"var(--tx3)";
+    const diffHtml=diff!==null
+      ?`<span style="color:${diffColor};font-weight:600">${diff>=0?"+":""}$${Math.round(diff).toLocaleString("es-AR")} (${diff>=0?"+":""}${diffPct}%) vs ayer</span>`
+      :`<span style="color:var(--tx3)">Sin datos de ayer</span>`;
     const socColor=SOC_COLOR[inv.sociedad||"Personal"]||"#64748B";
     const ulFecha=ultimo?`Últ. registro: ${ultimo.fecha.slice(5).split("-").reverse().join("/")}`:`Sin registros aún`;
     return`<div style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:10px 12px">
@@ -5230,7 +5233,7 @@ function openRegistrarRend(){
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-size:13px;font-weight:700;color:var(--tx)">$${Math.round(valActual).toLocaleString("es-AR")}</div>
-          <div style="font-size:11px;color:${diffColor};font-weight:600">${diff>=0?"+":""}$${Math.round(diff).toLocaleString("es-AR")} (${diff>=0?"+":""}${diffPct}%) vs ayer</div>
+          <div style="font-size:11px">${diffHtml}</div>
         </div>
       </div>
       <input class="fi" type="number" id="rend-val-${inv.id}" placeholder="Nuevo valor de hoy (actual: $${Math.round(valActual).toLocaleString("es-AR")})" style="width:100%;font-size:13px">
