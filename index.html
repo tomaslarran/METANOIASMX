@@ -7180,10 +7180,7 @@ function updateCompStats(){
     const [anio,mes]=compMesFilter.split("-");
     mesLabel=meses[parseInt(mes,10)-1]+" "+anio;
   }else{
-    const now=new Date();
-    const nowKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
-    base=base.filter(c=>{const fi=c.fecha_imputacion||c.fecha;return fi&&fi.startsWith(nowKey);});
-    mesLabel=meses[now.getMonth()]+" "+now.getFullYear();
+    mesLabel="Total general";
   }
   const totalMes=base.reduce((s,c)=>s+(Number(c.total)||0),0);
   const ivaMes=base.reduce((s,c)=>s+(Number(c.iva)||0),0);
