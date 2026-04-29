@@ -2733,6 +2733,7 @@ async function selectCurso(id){
         ${estadoBadge(curso.estado)}
         <div class="cd-title">${esc(curso.nombre)}</div>
         <div style="font-size:12px;color:var(--tx2);margin-top:4px">${curso.tipo||""} · ${curso.modalidad||""}${curso.duracion_horas?` · ${curso.duracion_horas}hs`:""}${curso.instructor_nombre?` · Instructor: ${esc(curso.instructor_nombre)}`:""}</div>
+        <div style="font-size:11px;color:var(--tx3);margin-top:3px">${curso.creado_por?`👤 Cargado por <strong style="color:var(--tx2)">${esc(curso.creado_por)}</strong>`:"👤 Sin registro de autor"}${curso.created_at?` · ${new Date(curso.created_at).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"})}`:""}</div>
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn" onclick="editCursoEstado('${id}')">Cambiar estado</button>
@@ -2882,6 +2883,7 @@ async function createCurso(){
     tiene_after:afterChecked,
     descripcion_after:afterChecked?document.getElementById("c-after-desc").value||null:null,
     plantilla_usada:plantillaId||null,progreso:0,
+    creado_por:loggedUser?.nombre||null,
     updated_at:new Date().toISOString()
   };
   try{
