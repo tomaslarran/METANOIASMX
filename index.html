@@ -5250,11 +5250,11 @@ async function saveRendDiarios(){
     }).filter(Boolean);
     if(!upserts.length){toast("Ingresá al menos un valor","err");btn.disabled=false;return;}
     await Promise.all(upserts.map(u=>
-      sb("rendimientos_diarios",{method:"POST",headers:{"Prefer":"resolution=merge-duplicates"},body:JSON.stringify(u)})
+      sb("rendimientos_diarios",{method:"POST",headers:{"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(u)})
     ));
     // Actualizar valor_actual en cf_inversiones
     await Promise.all(upserts.map(u=>
-      sb(`cf_inversiones?id=eq.${u.inversion_id}`,{method:"PATCH",body:JSON.stringify({valor_actual:u.valor})})
+      sb(`cf_inversiones?id=eq.${u.inversion_id}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({valor_actual:u.valor})})
     ));
     upserts.forEach(u=>{
       rendDiarios=rendDiarios.filter(r=>!(r.inversion_id===u.inversion_id&&r.fecha===u.fecha));
