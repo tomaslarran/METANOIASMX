@@ -34,44 +34,37 @@ Deno.serve(async (req) => {
     const base64 = toBase64(await fileRes.arrayBuffer());
     const isPdf = ct.includes("pdf") || url.toLowerCase().endsWith(".pdf");
 
-    const promptText = `Sos un experto en facturación argentina. Analizá esta factura y devolvé ÚNICAMENTE un JSON (sin markdown):
-{
-  "tipo": "A|B|C|M|X",
-  "numero": "XXXX-XXXXXXXX",
-  "fecha": "YYYY-MM-DD",
-  "fecha_vencimiento": "YYYY-MM-DD o null",
-  "proveedor": "razón social del EMISOR (quien vende)",
-  "cuit": "XX-XXXXXXXX-X del EMISOR",
-  "concepto": "descripción del bien/servicio",
-  "monto_neto": número,
-  "iva": número,
-  "neto_21": número o 0,
-  "neto_105": número o 0,
-  "neto_exento": número o 0,
-  "percepcion_iva": número o 0,
-  "percepcion_iibb": número o 0,
-  "impuesto_interno": número o 0,
-  "otros_impuestos": número o 0,
-  "total": número,
-  "sociedad": "SUDES o POINTERS"
-}
-Para "fecha_vencimiento": buscá la fecha de vencimiento/pago de la factura. Si no aparece, devolvé null.
-Para el desglose de neto por alícuota:
-- neto_21: suma de bases imponibles gravadas al 21%
-- neto_105: suma de bases imponibles gravadas al 10.5%
-- neto_exento: monto exento o no gravado (excluye percepciones IIBB e impuestos internos)
-Si no podés distinguir las alícuotas, dejá los tres en 0 y completá solo monto_neto.
-Diferenciá con precisión:
-- iva: IVA discriminado (21%, 10.5%, etc.)
-- percepcion_iva: percepciones de IVA (Ret/Perc IVA, Percepción AFIP IVA)
-- percepcion_iibb: percepciones/retenciones de Ingresos Brutos (IIBB, RIB, cualquier provincia)
-- impuesto_interno: impuestos internos (combustibles, tabaco, seguros, etc.)
-- otros_impuestos: cualquier otro impuesto no clasificado arriba
-Para el campo "sociedad": mirá a quién está dirigida la factura (el RECEPTOR/COMPRADOR):
-- Si el receptor es "SUDES SAS" o CUIT 30-71699117-9 → "SUDES"
-- Si el receptor es "POINTERS SAS" o CUIT 30-71696585-2 → "POINTERS"
-- Si no podés determinarlo → "SUDES" por defecto
-Usá null si no encontrás un campo. Números sin puntos de miles (solo dígitos y punto decimal).`;
+    const promptText = "Sos un experto en facturacion argentina. Analiza esta factura y devuelve UNICAMENTE un JSON (sin markdown, sin texto extra):\n" +
+      "{\n" +
+      "  \"tipo\": \"A|B|C|M|X\",\n" +
+      "  \"numero\": \"XXXX-XXXXXXXX\",\n" +
+      "  \"fecha\": \"YYYY-MM-DD\",\n" +
+      "  \"fecha_vencimiento\": \"YYYY-MM-DD o null\",\n" +
+      "  \"proveedor\": \"razon social del EMISOR (quien vende/emite)\",\n" +
+      "  \"cuit\": \"XX-XXXXXXXX-X del EMISOR\",\n" +
+      "  \"concepto\": \"descripcion breve del bien/servicio\",\n" +
+      "  \"monto_neto\": numero,\n" +
+      "  \"iva\": numero,\n" +
+      "  \"neto_21\": numero o 0,\n" +
+      "  \"neto_105\": numero o 0,\n" +
+      "  \"neto_27\": numero o 0,\n" +
+      "  \"neto_exento\": numero o 0,\n" +
+      "  \"percepcion_iva\": numero o 0,\n" +
+      "  \"percepcion_iva_15\": numero o 0,\n" +
+      "  \"percepcion_iibb\": numero o 0,\n" +
+      "  \"impuesto_interno\": numero o 0,\n" +
+      "  \"otros_impuestos\": numero o 0,\n" +
+      "  \"total\": numero,\n" +
+      "  \"sociedad\": \"SUDES o POINTERS\",\n" +
+      "  \"cuit_receptor\": \"CUIT de quien RECIBE la factura\"\n" +
+      "}\n\n" +
+      "REGLAS:\n" +
+      "1. proveedor y cuit: siempre del EMISOR (quien vende, datos de arriba).\n" +
+      "2. cuit_receptor: CUIT de quien compra/recibe (datos del cliente).\n" +
+      "3. sociedad: mira el RECEPTOR. Si es SUDES o CUIT 30-71699117-9 -> SUDES. Si es POINTERS o CUIT 30-71696585-2 -> POINTERS. Si no se puede determinar -> SUDES por defecto.\n" +
+      "4. Desglose neto: neto_21 (21%), neto_105 (10.5%), neto_27 (27% gas/luz/telefonia entre empresas), neto_exento. Si no podes distinguir pon 0 en todos y usa solo monto_neto.\n" +
+      "5. iva: IVA discriminado total. percepcion_iva: percepcion IVA 3%. percepcion_iva_15: percepcion IVA 1.5%. percepcion_iibb: retenciones/percepciones IIBB. impuesto_interno: imp. internos. otros_impuestos: otros cargos.\n" +
+      "6. null si no encontras el campo. Numeros sin puntos de miles (1234.56 no 1.234,56).";
 
     const content = isPdf
       ? [{ type:"document", source:{type:"base64", media_type:"application/pdf", data:base64} }, { type:"text", text:promptText }]
