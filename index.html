@@ -2833,15 +2833,26 @@ function renderChecklist(tareas,cursoId){
 }
 
 async function toggleCursoTarea(tareaId,cursoId,val){
+  // Actualizar visualmente sin re-renderizar (evita scroll al inicio)
+  const box=document.querySelector(`.chk-box[onclick*="'${tareaId}'"]`);
+  const item=box?.closest(".chk-item");
+  if(box){box.classList.toggle("checked",val);if(item)item.classList.toggle("done",val);}
   try{
-    await sb(`curso_tareas?id=eq.${tareaId}`,{method:"PATCH",body:JSON.stringify({completada:val,updated_at:new Date().toISOString()})});
+    await sb(`curso_tareas?id=eq.${tareaId}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({completada:val,updated_at:new Date().toISOString()})});
     const tareas=await sb(`curso_tareas?curso_id=eq.${cursoId}&select=*&order=orden`);
     const total=tareas.length,done=tareas.filter(t=>t.completada).length;
     const pct=total?Math.round(done/total*100):0;
-    await sb(`cursos?id=eq.${cursoId}`,{method:"PATCH",body:JSON.stringify({progreso:pct})});
+    await sb(`cursos?id=eq.${cursoId}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({progreso:pct})});
     const c=cursos.find(c=>c.id===cursoId);if(c)c.progreso=pct;
-    selectCurso(cursoId);toast(val?"Completada ✓":"Desmarcada","ok");
-  }catch(e){toast("Error","err")}
+    // Actualizar solo el contador de progreso
+    const progEl=document.querySelector(`#cd-tareas-${cursoId} div[style*="margin-bottom:12px"]`);
+    if(progEl)progEl.innerHTML=`Progreso: <strong>${done}/${total}</strong> tareas completadas (${pct}%)`;
+    toast(val?"Completada ✓":"Desmarcada","ok");
+  }catch(e){
+    // Revertir visual si falla
+    if(box){box.classList.toggle("checked",!val);if(item)item.classList.toggle("done",!val);}
+    toast("Error","err");
+  }
 }
 
 async function aplicarPlantillaCurso(cursoId, soloAgregar=false){
