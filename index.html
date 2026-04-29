@@ -4110,7 +4110,9 @@ function renderCFResumen(){
     .reduce((s,e)=>s+getEmpValMes(e,mkey),0);
   // Cursos: se muestran siempre (pertenecen a SUDES/Metanoia)
   const getCursosDelMes=(mkey)=>{if(cfSociedad==="POINTERS")return[];return cursos.filter(c=>c.fecha_inicio&&c.fecha_inicio.startsWith(mkey)&&c.estado!=="Cancelado");};
-  const getCursoIngMes=(mkey)=>getCursosDelMes(mkey).reduce((s,c)=>s+(c.ingreso_estimado||0),0);
+  // ingreso efectivo: usa ingreso_estimado guardado; si es 0, usa arancel×cupos como fallback (igual que el formulario)
+  const getCursoIngEfectivo=(c)=>c.ingreso_estimado||((c.arancel||0)*(c.cupos_inscriptos||c.cupos_max||0))||0;
+  const getCursoIngMes=(mkey)=>getCursosDelMes(mkey).reduce((s,c)=>s+getCursoIngEfectivo(c),0);
   // Costo pendiente = costo_estimado × (1 - progreso%) — disminuye a medida que se tilda el checklist
   const getCursoCostMes=(mkey)=>getCursosDelMes(mkey).reduce((s,c)=>s+((c.costo_estimado||0)*(1-(c.progreso||0)/100)),0);
   const getTotalTipo=(tipo,mkey)=>{
@@ -4196,7 +4198,7 @@ function renderCFResumen(){
     });
     // Ingresos de cursos integrados en ingresos
     if(tipo==="Ingreso"){
-      const cursosCFIng=[...new Map(meses.flatMap(m=>getCursosDelMes(m.key)).map(c=>[c.id,c])).values()].filter(c=>(c.ingreso_estimado||0)>0);
+      const cursosCFIng=[...new Map(meses.flatMap(m=>getCursosDelMes(m.key)).map(c=>[c.id,c])).values()].filter(c=>getCursoIngEfectivo(c)>0);
       if(cursosCFIng.length){
         rows+=`<tr style="background:rgba(16,185,129,.05)">
           <td colspan="${meses.length+2}" style="padding:3px 12px 3px 22px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6EE7B7">↳ Ingresos cursos</td>
@@ -4204,7 +4206,7 @@ function renderCFResumen(){
         cursosCFIng.forEach(c=>{
           const celdas=meses.map(m=>{
             const enEsteMes=getCursosDelMes(m.key).some(x=>x.id===c.id);
-            const monto=enEsteMes?(c.ingreso_estimado||0):0;
+            const monto=enEsteMes?getCursoIngEfectivo(c):0;
             const bgActual=m.actual?"background:rgba(124,58,237,.06)":"";
             return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${monto?"var(--gr)":"var(--tx3)"};border-right:1px solid var(--b);${bgActual}">${monto?"$"+Math.round(monto).toLocaleString("es-AR"):"—"}</td>`;
           }).join("");
