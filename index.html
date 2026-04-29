@@ -2766,6 +2766,28 @@ async function selectCurso(id){
       </div>
       <div id="cd-tareas-${id}" style="display:none">
         ${renderChecklist(tareasCurso,id)}
+        ${tareasCurso.length===0?`
+        <div style="background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:2px">📋 Este curso no tiene checklist</div>
+            <div style="font-size:11px;color:var(--tx3)">Aplicá una plantilla para agregar las tareas automáticamente</div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select id="plt-sel-${id}" class="sel" style="font-size:12px">
+              <option value="">— Elegir plantilla —</option>
+              ${plantillas.map(p=>`<option value="${p.id}">${esc(p.nombre)}</option>`).join("")}
+            </select>
+            <button class="btn pri" style="font-size:12px" onclick="aplicarPlantillaCurso('${id}',false)">Aplicar</button>
+          </div>
+        </div>`:`
+        <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--tx3)">📋 ${curso.plantilla_usada?(()=>{const pn=plantillas.find(p=>p.id===curso.plantilla_usada);return`Plantilla: <strong style="color:var(--tx2)">${esc(pn?pn.nombre:"Personalizada")}</strong>`;})():"Checklist personalizado"}</span>
+          <select id="plt-sel-${id}" class="sel" style="font-size:11px">
+            <option value="">+ Agregar desde plantilla</option>
+            ${plantillas.map(p=>`<option value="${p.id}">${esc(p.nombre)}</option>`).join("")}
+          </select>
+          <button class="btn" style="font-size:11px" onclick="aplicarPlantillaCurso('${id}',true)">Agregar tareas</button>
+        </div>`}
         <div class="chk-add">
           <input type="text" id="chk-new-${id}" placeholder="Nueva tarea del curso..." onkeydown="if(event.key==='Enter')addCursoTarea('${id}')">
           <select class="mini-sel" id="chk-etapa-${id}"><option value="Diseño">Diseño</option><option value="Convocatoria">Convocatoria</option><option value="Inscripciones">Inscripciones</option><option value="Ejecución">Ejecución</option><option value="Certificación">Certificación</option><option value="Cierre">Cierre</option></select>
@@ -2820,6 +2842,27 @@ async function toggleCursoTarea(tareaId,cursoId,val){
     const c=cursos.find(c=>c.id===cursoId);if(c)c.progreso=pct;
     selectCurso(cursoId);toast(val?"Completada ✓":"Desmarcada","ok");
   }catch(e){toast("Error","err")}
+}
+
+async function aplicarPlantillaCurso(cursoId, soloAgregar=false){
+  const sel=document.getElementById("plt-sel-"+cursoId);
+  const pltId=sel?.value;
+  if(!pltId){toast("Elegí una plantilla primero","err");return;}
+  const plt=plantillas.find(p=>p.id===pltId);
+  if(!plt||!plt.pasos){toast("La plantilla no tiene tareas","err");return;}
+  const pasos=Array.isArray(plt.pasos)?plt.pasos:JSON.parse(plt.pasos||"[]");
+  if(!pasos.length){toast("La plantilla está vacía","err");return;}
+  const btn=sel.nextElementSibling;btn.disabled=true;btn.textContent="Aplicando...";
+  try{
+    await Promise.all(pasos.map((p,i)=>
+      sb("curso_tareas",{method:"POST",body:JSON.stringify({curso_id:cursoId,nombre:p.nombre,etapa:p.etapa||"Diseño",orden:p.orden??i,updated_at:new Date().toISOString()})})
+    ));
+    if(!soloAgregar) await sb(`cursos?id=eq.${cursoId}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({plantilla_usada:pltId})});
+    const curso=cursos.find(c=>c.id===cursoId);
+    if(curso&&!soloAgregar)curso.plantilla_usada=pltId;
+    selectCurso(cursoId);
+    toast(`✓ ${pasos.length} tareas agregadas desde "${plt.nombre}"`,"ok");
+  }catch(e){toast("Error: "+e.message,"err");btn.disabled=false;btn.textContent=soloAgregar?"Agregar tareas":"Aplicar";}
 }
 
 async function addCursoTarea(cursoId){
