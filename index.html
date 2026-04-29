@@ -2809,7 +2809,11 @@ async function toggleCursoTarea(tareaId,cursoId,val){
   // Actualizar visualmente sin re-renderizar (evita scroll al inicio)
   const box=document.querySelector(`.chk-box[onclick*="'${tareaId}'"]`);
   const item=box?.closest(".chk-item");
-  if(box){box.classList.toggle("checked",val);if(item)item.classList.toggle("done",val);}
+  if(box){
+    box.classList.toggle("checked",val);
+    if(item)item.classList.toggle("done",val);
+    box.setAttribute("onclick",`toggleCursoTarea('${tareaId}','${cursoId}',${!val})`);
+  }
   try{
     await sb(`curso_tareas?id=eq.${tareaId}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({completada:val,updated_at:new Date().toISOString()})});
     const tareas=await sb(`curso_tareas?curso_id=eq.${cursoId}&select=*&order=orden`);
