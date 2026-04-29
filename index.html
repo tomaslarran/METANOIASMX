@@ -3231,7 +3231,7 @@ function renderFinanciero(CDEFS){
   const activas=cfInversiones.filter(i=>i.estado==="Activa");
   const rescatadas=cfInversiones.filter(i=>i.estado==="Rescatada");
   const rendActivas=activas.reduce((s,i)=>{
-    const movs=cfInvMovs.filter(m=>m.inversion_id===i.id);
+    const movs=cfInvMovs.filter(m=>m.inversion_id===i.id&&m.tipo!=="Aporte de capital");
     const rescatado=movs.reduce((a,m)=>a+(m.monto||0),0);
     return s+(i.valor_actual||i.capital||0)+rescatado-(i.capital||0);
   },0);
@@ -4808,10 +4808,11 @@ function renderCFInversiones(){
   const activas=cfInversiones.filter(i=>i.estado==="Activa");
   const totalCap=activas.reduce((s,i)=>s+(i.capital||0),0);
   const totalVal=activas.reduce((s,i)=>s+(i.valor_actual||i.capital||0),0);
-  // Rendimiento total: valor actual de activas + todo lo rescatado históricamente - capital total activas
+  // Rendimiento total: valor actual de activas + rescates parciales - capital total activas
+  // Excluir "Aporte de capital" — ya está reflejado en inv.capital e inv.valor_actual
   const totalRescatadoGlobal=cfInvMovs.filter(m=>{
     const inv=cfInversiones.find(i=>i.id===m.inversion_id);
-    return inv&&inv.estado==="Activa";
+    return inv&&inv.estado==="Activa"&&m.tipo!=="Aporte de capital";
   }).reduce((s,m)=>s+(m.monto||0),0);
   const rend=(totalVal+totalRescatadoGlobal)-totalCap;
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
