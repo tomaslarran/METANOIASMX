@@ -2777,12 +2777,12 @@ async function selectCurso(id){
             <div class="form-grid">
               <div class="fg">
                 <label class="fl">Ingreso estimado ($)</label>
-                <input class="fi" type="number" id="curso-ing-${id}" value="${ing||arancelCalc||""}" placeholder="${arancelCalc?arancelCalc:0}" onchange="updateCursoField('${id}','ingreso_estimado',this.value);recalcCursoMargen('${id}')">
+                <input class="fi" type="number" id="curso-ing-${id}" value="${ing||arancelCalc||""}" placeholder="${arancelCalc?arancelCalc:0}" oninput="recalcCursoMargen('${id}')" onchange="updateCursoField('${id}','ingreso_estimado',this.value);recalcCursoMargen('${id}')">
                 ${arancelCalc&&!ing?`<div style="font-size:10px;color:var(--tx3);margin-top:3px">Sugerido: $${Math.round(arancelCalc).toLocaleString("es-AR")} (arancel × inscriptos)</div>`:""}
               </div>
               <div class="fg">
                 <label class="fl">Costo estimado ($)</label>
-                <input class="fi" type="number" id="curso-cos-${id}" value="${cos||""}" placeholder="0" onchange="updateCursoField('${id}','costo_estimado',this.value);recalcCursoMargen('${id}')">
+                <input class="fi" type="number" id="curso-cos-${id}" value="${cos||""}" placeholder="0" oninput="recalcCursoMargen('${id}')" onchange="updateCursoField('${id}','costo_estimado',this.value);recalcCursoMargen('${id}')">
               </div>
             </div>
             <div id="curso-margen-${id}" style="display:flex;gap:16px;margin-top:8px;font-size:12px;flex-wrap:wrap">
