@@ -2763,6 +2763,35 @@ async function selectCurso(id){
           <span class="toggle-label">Tiene catering</span>
         </div>
         ${curso.tiene_after?`<div class="fg" style="margin-top:8px"><label class="fl">Descripción del catering</label><input class="fi" value="${esc(curso.descripcion_after||"")}" onchange="updateCursoField('${id}','descripcion_after',this.value)" placeholder="Ej: Cena en Restaurante El Portal, 21hs"></div>`:""}
+
+        <!-- ── Presupuesto estimado ── -->
+        ${(()=>{
+          const ing=curso.ingreso_estimado||0;
+          const cos=curso.costo_estimado||0;
+          const arancelCalc=(curso.arancel||0)*(curso.cupos_inscriptos||curso.cupos_max||0);
+          const margen=ing-cos;
+          const margenPct=ing?((margen/ing)*100).toFixed(1):"0.0";
+          const margenColor=margen>=0?"var(--gr)":"var(--re)";
+          return`<div style="background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:12px 14px;margin-top:12px">
+            <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">💰 Presupuesto estimado</div>
+            <div class="form-grid">
+              <div class="fg">
+                <label class="fl">Ingreso estimado ($)</label>
+                <input class="fi" type="number" id="curso-ing-${id}" value="${ing||arancelCalc||""}" placeholder="${arancelCalc?arancelCalc:0}" onchange="updateCursoField('${id}','ingreso_estimado',this.value);recalcCursoMargen('${id}')">
+                ${arancelCalc&&!ing?`<div style="font-size:10px;color:var(--tx3);margin-top:3px">Sugerido: $${Math.round(arancelCalc).toLocaleString("es-AR")} (arancel × inscriptos)</div>`:""}
+              </div>
+              <div class="fg">
+                <label class="fl">Costo estimado ($)</label>
+                <input class="fi" type="number" id="curso-cos-${id}" value="${cos||""}" placeholder="0" onchange="updateCursoField('${id}','costo_estimado',this.value);recalcCursoMargen('${id}')">
+              </div>
+            </div>
+            <div id="curso-margen-${id}" style="display:flex;gap:16px;margin-top:8px;font-size:12px;flex-wrap:wrap">
+              <span style="color:var(--tx3)">Margen: <strong style="color:${margenColor}">${margen>=0?"+":""}$${Math.round(Math.abs(margen)).toLocaleString("es-AR")} (${margen>=0?"+":""}${margenPct}%)</strong></span>
+              ${curso.fecha_inicio?`<span style="color:var(--tx3)">📅 Período: <strong style="color:var(--tx2)">${curso.fecha_inicio.slice(0,7)}</strong></span>`:""}
+              <span style="font-size:10px;color:var(--tx3);font-style:italic">Se refleja en Cash Flow automáticamente</span>
+            </div>
+          </div>`;
+        })()}
       </div>
       <div id="cd-tareas-${id}" style="display:none">
         ${buildChecklistTabHtml(id,tareasCurso,curso)}
@@ -2905,6 +2934,19 @@ async function addCursoTarea(cursoId){
 
 async function delCursoTarea(tareaId,cursoId){
   try{await sb(`curso_tareas?id=eq.${tareaId}`,{method:"DELETE"});await refreshChecklist(cursoId);toast("Tarea eliminada","ok");}catch(e){toast("Error","err")}
+}
+
+function recalcCursoMargen(id){
+  const ing=parseFloat(document.getElementById("curso-ing-"+id)?.value)||0;
+  const cos=parseFloat(document.getElementById("curso-cos-"+id)?.value)||0;
+  const margen=ing-cos;
+  const margenPct=ing?((margen/ing)*100).toFixed(1):"0.0";
+  const color=margen>=0?"var(--gr)":"var(--re)";
+  const el=document.getElementById("curso-margen-"+id);
+  if(el){
+    const span=el.querySelector("span:first-child");
+    if(span)span.innerHTML=`Margen: <strong style="color:${color}">${margen>=0?"+":""}$${Math.round(Math.abs(margen)).toLocaleString("es-AR")} (${margen>=0?"+":""}${margenPct}%)</strong>`;
+  }
 }
 
 async function updateCursoField(id,field,val){
@@ -4064,10 +4106,21 @@ function renderCFResumen(){
   const getSueldosTotalMes=(mkey)=>cfEmpleados
     .filter(e=>e.activo&&(e.sociedad===cfSociedad||cfSociedad==="Ambas"))
     .reduce((s,e)=>s+getEmpValMes(e,mkey),0);
+  // Cursos: se muestran siempre (pertenecen a SUDES/Metanoia)
+  const getCursosDelMes=(mkey)=>{if(cfSociedad==="POINTERS")return[];return cursos.filter(c=>c.fecha_inicio&&c.fecha_inicio.startsWith(mkey)&&c.estado!=="Cancelado");};
+  const getCursoIngMes=(mkey)=>getCursosDelMes(mkey).reduce((s,c)=>s+(c.ingreso_estimado||0),0);
+  // Costo pendiente = costo_estimado × (1 - progreso%) — disminuye a medida que se tilda el checklist
+  const getCursoCostMes=(mkey)=>getCursosDelMes(mkey).reduce((s,c)=>s+((c.costo_estimado||0)*(1-(c.progreso||0)/100)),0);
   const getTotalTipo=(tipo,mkey)=>{
     const base=conceptos.filter(c=>c.tipo===tipo).reduce((s,c)=>s+getVal(c,mkey),0);
-    return tipo==="Egreso"?base+getCuotasTotalMes(mkey)+getSueldosTotalMes(mkey):base;
+    if(tipo==="Egreso")return base+getCuotasTotalMes(mkey)+getSueldosTotalMes(mkey)+getCursoCostMes(mkey);
+    return base+getCursoIngMes(mkey);
   };
+  // Filtrar meses pasados sin ningún dato
+  const mesesFiltrados=meses.filter(m=>{
+    if(!m.pasado)return true;
+    return getTotalTipo("Ingreso",m.key)>0||getTotalTipo("Egreso",m.key)>0;
+  });
 
   // Stats del mes actual
   const mesActual=meses.find(m=>m.actual)||meses[3];
@@ -4102,7 +4155,7 @@ function renderCFResumen(){
   }
 
   // Cabeceras de mes — resaltar mes actual
-  const thMeses=meses.map(m=>{
+  const thMeses=mesesFiltrados.map(m=>{
     const estilo=m.actual
       ?"min-width:90px;text-align:right;padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--ac);border-right:1px solid var(--b);white-space:nowrap;background:rgba(124,58,237,.1);border-bottom:2px solid var(--ac)"
       :"min-width:90px;text-align:right;padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:"+(m.pasado?"var(--tx4)":"var(--tx3)")+";border-right:1px solid var(--b);white-space:nowrap";
@@ -4110,6 +4163,7 @@ function renderCFResumen(){
   }).join("");
 
   const buildRows=(list,tipo)=>{
+    const meses=mesesFiltrados;
     const colorH=tipo==="Ingreso"?"rgba(16,185,129,.12)":"rgba(239,68,68,.10)";
     const colorT=tipo==="Ingreso"?"#6EE7B7":"#FCA5A5";
     const icon=tipo==="Ingreso"?"▲ INGRESOS":"▼ EGRESOS";
@@ -4138,6 +4192,32 @@ function renderCFResumen(){
         </td>${celdas}
       </tr>`;
     });
+    // Ingresos de cursos integrados en ingresos
+    if(tipo==="Ingreso"){
+      const cursosCFIng=[...new Map(meses.flatMap(m=>getCursosDelMes(m.key)).map(c=>[c.id,c])).values()].filter(c=>(c.ingreso_estimado||0)>0);
+      if(cursosCFIng.length){
+        rows+=`<tr style="background:rgba(16,185,129,.05)">
+          <td colspan="${meses.length+2}" style="padding:3px 12px 3px 22px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6EE7B7">↳ Ingresos cursos</td>
+        </tr>`;
+        cursosCFIng.forEach(c=>{
+          const celdas=meses.map(m=>{
+            const enEsteMes=getCursosDelMes(m.key).some(x=>x.id===c.id);
+            const monto=enEsteMes?(c.ingreso_estimado||0):0;
+            const bgActual=m.actual?"background:rgba(124,58,237,.06)":"";
+            return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${monto?"var(--gr)":"var(--tx3)"};border-right:1px solid var(--b);${bgActual}">${monto?"$"+Math.round(monto).toLocaleString("es-AR"):"—"}</td>`;
+          }).join("");
+          rows+=`<tr style="border-bottom:1px solid var(--b)">
+            <td style="padding:6px 12px 6px 22px;font-size:12px;color:var(--tx2);min-width:240px">
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:10px;color:var(--tx4)">📚</span>
+                <span style="flex:1">${esc(c.nombre)}</span>
+                <span style="font-size:9px;color:var(--tx4)">${c.estado||""}</span>
+              </div>
+            </td>${celdas}
+          </tr>`;
+        });
+      }
+    }
     // Cuotas de préstamos integradas dentro de egresos
     if(tipo==="Egreso"){
       const prestCF=cfPrestamos.filter(p=>p.activo&&p.incluir_en_cf!==false&&
@@ -4219,6 +4299,33 @@ function renderCFResumen(){
         });
       }
     }
+    // Costo de cursos integrado en egresos
+    if(tipo==="Egreso"){
+      const cursosCFEgr=[...new Map(meses.flatMap(m=>getCursosDelMes(m.key)).map(c=>[c.id,c])).values()].filter(c=>(c.costo_estimado||0)>0);
+      if(cursosCFEgr.length){
+        rows+=`<tr style="background:rgba(239,68,68,.05)">
+          <td colspan="${meses.length+2}" style="padding:3px 12px 3px 22px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#FCA5A5">↳ Costo cursos</td>
+        </tr>`;
+        cursosCFEgr.forEach(c=>{
+          const celdas=meses.map(m=>{
+            const enEsteMes=getCursosDelMes(m.key).some(x=>x.id===c.id);
+            const costoPend=enEsteMes?Math.round((c.costo_estimado||0)*(1-(c.progreso||0)/100)):0;
+            const bgActual=m.actual?"background:rgba(124,58,237,.06)":"";
+            const tooltip=enEsteMes&&costoPend?`Progreso: ${c.progreso||0}% — Costo pendiente`:"";
+            return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${costoPend?"var(--re)":"var(--tx3)"};border-right:1px solid var(--b);${bgActual}" title="${tooltip}">${costoPend?"$"+costoPend.toLocaleString("es-AR"):"—"}</td>`;
+          }).join("");
+          rows+=`<tr style="border-bottom:1px solid var(--b)">
+            <td style="padding:6px 12px 6px 32px;font-size:12px;color:var(--tx2);min-width:240px">
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:10px;color:var(--tx4)">📚</span>
+                <span style="flex:1">${esc(c.nombre)}</span>
+                <span style="font-size:9px;color:var(--tx4)">${c.progreso||0}%</span>
+              </div>
+            </td>${celdas}
+          </tr>`;
+        });
+      }
+    }
     // Fila total del bloque (incluye cuotas para Egreso via getTotalTipo)
     const totales=meses.map(m=>{
       const total=getTotalTipo(tipo,m.key);
@@ -4230,7 +4337,7 @@ function renderCFResumen(){
   };
 
   // Fila resultado financiero del mes
-  const filaResultado=meses.map(m=>{
+  const filaResultado=mesesFiltrados.map(m=>{
     const ing=getTotalTipo("Ingreso",m.key);
     const egr=getTotalTipo("Egreso",m.key);
     const r=ing-egr;
@@ -4239,7 +4346,7 @@ function renderCFResumen(){
   }).join("");
 
   // Fila saldo acumulado
-  const filaSaldo=meses.map(m=>{
+  const filaSaldo=mesesFiltrados.map(m=>{
     const sa=acumPorMes[m.key]||0;
     const bgActual=m.actual?"background:rgba(124,58,237,.13)":"background:var(--surf2)";
     return`<td style="text-align:right;padding:7px 10px;font-size:12px;font-weight:700;color:${sa>=0?"var(--bl)":"var(--re)"};border-right:1px solid var(--b);${bgActual}">${"$"+Math.round(sa).toLocaleString("es-AR")}</td>`;
@@ -4252,7 +4359,7 @@ function renderCFResumen(){
     </tr></thead>
     <tbody>
       ${buildRows(egresos,"Egreso")}
-      <tr style="height:6px;background:var(--bg)"><td colspan="${meses.length+2}"></td></tr>
+      <tr style="height:6px;background:var(--bg)"><td colspan="${mesesFiltrados.length+2}"></td></tr>
       ${buildRows(ingresos,"Ingreso")}
       <tr style="border-top:2px solid var(--b2)">
         <td style="padding:7px 12px;font-size:11px;font-weight:700;color:var(--tx);background:var(--surf2);position:sticky;left:0">RESULTADO FINANCIERO MES</td>
