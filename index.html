@@ -7172,13 +7172,17 @@ function renderComprobantes(){
 function updateCompStats(){
   const meses=["Enero","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
   let base=comprobantes;
+  if(compFilter==="SUDES")base=base.filter(c=>c.sociedad==="SUDES");
+  else if(compFilter==="POINTERS")base=base.filter(c=>c.sociedad==="POINTERS");
   let mesLabel="";
   if(compMesFilter&&compMesFilter!=="all"){
-    base=comprobantes.filter(c=>{const fi=c.fecha_imputacion||c.fecha;return fi&&fi.startsWith(compMesFilter);});
+    base=base.filter(c=>{const fi=c.fecha_imputacion||c.fecha;return fi&&fi.startsWith(compMesFilter);});
     const [anio,mes]=compMesFilter.split("-");
     mesLabel=meses[parseInt(mes,10)-1]+" "+anio;
   }else{
     const now=new Date();
+    const nowKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+    base=base.filter(c=>{const fi=c.fecha_imputacion||c.fecha;return fi&&fi.startsWith(nowKey);});
     mesLabel=meses[now.getMonth()]+" "+now.getFullYear();
   }
   const totalMes=base.reduce((s,c)=>s+(Number(c.total)||0),0);
