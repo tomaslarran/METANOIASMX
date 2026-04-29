@@ -7079,6 +7079,7 @@ function setCompFilter(f,btn){
   document.querySelectorAll("#pg-comprobantes .fb").forEach(b=>b.classList.remove("on"));
   if(btn)btn.classList.add("on");
   renderComprobantes();
+  updateCompStats();
 }
 
 function buildCompCargadoSelect(){
