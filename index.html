@@ -2765,34 +2765,7 @@ async function selectCurso(id){
         ${curso.tiene_after?`<div class="fg" style="margin-top:8px"><label class="fl">Descripción del catering</label><input class="fi" value="${esc(curso.descripcion_after||"")}" onchange="updateCursoField('${id}','descripcion_after',this.value)" placeholder="Ej: Cena en Restaurante El Portal, 21hs"></div>`:""}
       </div>
       <div id="cd-tareas-${id}" style="display:none">
-        ${renderChecklist(tareasCurso,id)}
-        ${tareasCurso.length===0?`
-        <div style="background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:2px">📋 Este curso no tiene checklist</div>
-            <div style="font-size:11px;color:var(--tx3)">Aplicá una plantilla para agregar las tareas automáticamente</div>
-          </div>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-            <select id="plt-sel-${id}" class="sel" style="font-size:12px">
-              <option value="">— Elegir plantilla —</option>
-              ${plantillas.map(p=>`<option value="${p.id}">${esc(p.nombre)}</option>`).join("")}
-            </select>
-            <button class="btn pri" style="font-size:12px" onclick="aplicarPlantillaCurso('${id}',false)">Aplicar</button>
-          </div>
-        </div>`:`
-        <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-size:11px;color:var(--tx3)">📋 ${curso.plantilla_usada?(()=>{const pn=plantillas.find(p=>p.id===curso.plantilla_usada);return`Plantilla: <strong style="color:var(--tx2)">${esc(pn?pn.nombre:"Personalizada")}</strong>`;})():"Checklist personalizado"}</span>
-          <select id="plt-sel-${id}" class="sel" style="font-size:11px">
-            <option value="">+ Agregar desde plantilla</option>
-            ${plantillas.map(p=>`<option value="${p.id}">${esc(p.nombre)}</option>`).join("")}
-          </select>
-          <button class="btn" style="font-size:11px" onclick="aplicarPlantillaCurso('${id}',true)">Agregar tareas</button>
-        </div>`}
-        <div class="chk-add">
-          <input type="text" id="chk-new-${id}" placeholder="Nueva tarea del curso..." onkeydown="if(event.key==='Enter')addCursoTarea('${id}')">
-          <select class="mini-sel" id="chk-etapa-${id}"><option value="Diseño">Diseño</option><option value="Convocatoria">Convocatoria</option><option value="Inscripciones">Inscripciones</option><option value="Ejecución">Ejecución</option><option value="Certificación">Certificación</option><option value="Cierre">Cierre</option></select>
-          <button class="sdb" onclick="addCursoTarea('${id}')">+ Agregar</button>
-        </div>
+        ${buildChecklistTabHtml(id,tareasCurso,curso)}
       </div>
     </div>
   </div>`;
@@ -2855,6 +2828,47 @@ async function toggleCursoTarea(tareaId,cursoId,val){
   }
 }
 
+function buildChecklistTabHtml(cursoId, tareasCurso, curso){
+  return`${renderChecklist(tareasCurso,cursoId)}
+    ${tareasCurso.length===0?`
+    <div style="background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:2px">📋 Este curso no tiene checklist</div>
+        <div style="font-size:11px;color:var(--tx3)">Aplicá una plantilla para agregar las tareas automáticamente</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <select id="plt-sel-${cursoId}" class="sel" style="font-size:12px">
+          <option value="">— Elegir plantilla —</option>
+          ${plantillas.map(p=>`<option value="${p.id}">${esc(p.nombre)}</option>`).join("")}
+        </select>
+        <button class="btn pri" style="font-size:12px" onclick="aplicarPlantillaCurso('${cursoId}',false)">Aplicar</button>
+      </div>
+    </div>`:`
+    <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--tx3)">📋 ${curso.plantilla_usada?(()=>{const pn=plantillas.find(p=>p.id===curso.plantilla_usada);return`Plantilla: <strong style="color:var(--tx2)">${esc(pn?pn.nombre:"Personalizada")}</strong>`;})():"Checklist personalizado"}</span>
+      <select id="plt-sel-${cursoId}" class="sel" style="font-size:11px">
+        <option value="">+ Agregar desde plantilla</option>
+        ${plantillas.map(p=>`<option value="${p.id}">${esc(p.nombre)}</option>`).join("")}
+      </select>
+      <button class="btn" style="font-size:11px" onclick="aplicarPlantillaCurso('${cursoId}',true)">Agregar tareas</button>
+    </div>`}
+    <div class="chk-add">
+      <input type="text" id="chk-new-${cursoId}" placeholder="Nueva tarea del curso..." onkeydown="if(event.key==='Enter')addCursoTarea('${cursoId}')">
+      <select class="mini-sel" id="chk-etapa-${cursoId}"><option value="Diseño">Diseño</option><option value="Convocatoria">Convocatoria</option><option value="Inscripciones">Inscripciones</option><option value="Ejecución">Ejecución</option><option value="Certificación">Certificación</option><option value="Cierre">Cierre</option></select>
+      <button class="sdb" onclick="addCursoTarea('${cursoId}')">+ Agregar</button>
+    </div>`;
+}
+
+async function refreshChecklist(cursoId){
+  const curso=cursos.find(c=>c.id===cursoId);if(!curso)return;
+  const tareas=await sb(`curso_tareas?curso_id=eq.${cursoId}&select=*&order=orden`);
+  const el=document.getElementById(`cd-tareas-${cursoId}`);
+  if(el)el.innerHTML=buildChecklistTabHtml(cursoId,tareas,curso);
+  // Actualizar badge del tab
+  const tabs=document.querySelectorAll(`#curso-detail-container .cd-tab`);
+  if(tabs[1])tabs[1].textContent=`Checklist (${tareas.length})`;
+}
+
 async function aplicarPlantillaCurso(cursoId, soloAgregar=false){
   const sel=document.getElementById("plt-sel-"+cursoId);
   const pltId=sel?.value;
@@ -2871,7 +2885,7 @@ async function aplicarPlantillaCurso(cursoId, soloAgregar=false){
     if(!soloAgregar) await sb(`cursos?id=eq.${cursoId}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({plantilla_usada:pltId})});
     const curso=cursos.find(c=>c.id===cursoId);
     if(curso&&!soloAgregar)curso.plantilla_usada=pltId;
-    selectCurso(cursoId);
+    await refreshChecklist(cursoId);
     toast(`✓ ${pasos.length} tareas agregadas desde "${plt.nombre}"`,"ok");
   }catch(e){toast("Error: "+e.message,"err");btn.disabled=false;btn.textContent=soloAgregar?"Agregar tareas":"Aplicar";}
 }
@@ -2881,12 +2895,12 @@ async function addCursoTarea(cursoId){
   const etapa=document.getElementById("chk-etapa-"+cursoId)?.value||"Diseño";
   try{
     await sb("curso_tareas",{method:"POST",body:JSON.stringify({curso_id:cursoId,nombre,etapa,orden:999,updated_at:new Date().toISOString()})});
-    inp.value="";selectCurso(cursoId);toast("Tarea agregada","ok");
+    inp.value="";await refreshChecklist(cursoId);toast("Tarea agregada","ok");
   }catch(e){toast("Error","err")}
 }
 
 async function delCursoTarea(tareaId,cursoId){
-  try{await sb(`curso_tareas?id=eq.${tareaId}`,{method:"DELETE"});selectCurso(cursoId);toast("Tarea eliminada","ok");}catch(e){toast("Error","err")}
+  try{await sb(`curso_tareas?id=eq.${tareaId}`,{method:"DELETE"});await refreshChecklist(cursoId);toast("Tarea eliminada","ok");}catch(e){toast("Error","err")}
 }
 
 async function updateCursoField(id,field,val){
@@ -2910,7 +2924,10 @@ async function editCursoEstado(id){
   const c=cursos.find(c=>c.id===id);if(!c)return;
   const estados=["Borrador","Convocatoria","Inscripciones","En curso","Completado","Cancelado"];
   const nuevo=estados[(estados.indexOf(c.estado)+1)%estados.length];
-  await updateCursoField(id,"estado",nuevo);renderCursos();selectCurso(id);
+  await updateCursoField(id,"estado",nuevo);renderCursos();
+  // Actualizar badge sin scroll
+  const badgeEl=document.querySelector("#curso-detail-container .cd-header .estado-badge");
+  if(badgeEl)badgeEl.outerHTML=estadoBadge(nuevo);
 }
 
 async function delCurso(id){
