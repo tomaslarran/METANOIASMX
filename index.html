@@ -2018,8 +2018,9 @@ const KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6
 const H={"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=representation"};
 
 async function sb(path,opts={},retry=2){
+  const {headers:extraH,...restOpts}=opts;
   try{
-    const r=await fetch(SB+"/rest/v1/"+path,{mode:"cors",headers:H,...opts});
+    const r=await fetch(SB+"/rest/v1/"+path,{mode:"cors",headers:{...H,...(extraH||{})}, ...restOpts});
     if(!r.ok){const e=await r.text();throw new Error(e)}
     return r.status===204?null:r.json();
   }catch(e){
