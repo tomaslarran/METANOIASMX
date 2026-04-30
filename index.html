@@ -2022,7 +2022,8 @@ async function sb(path,opts={},retry=2){
   try{
     const r=await fetch(SB+"/rest/v1/"+path,{mode:"cors",headers:{...H,...(extraH||{})}, ...restOpts});
     if(!r.ok){const e=await r.text();throw new Error(e)}
-    return r.status===204?null:r.json();
+    const txt=await r.text();
+    return txt?JSON.parse(txt):null;
   }catch(e){
     if(retry>0&&(e.name==="TypeError"||e.message.includes("fetch"))){
       await new Promise(res=>setTimeout(res,1500));
