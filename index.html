@@ -4927,8 +4927,10 @@ function renderCFInversiones(){
     return inv&&inv.estado==="Activa"&&m.tipo!=="Aporte de capital";
   }).reduce((s,m)=>s+(m.monto||0),0);
   const rend=(totalVal+totalRescatadoGlobal)-totalCap;
+  // Capital neto = total invertido menos lo ya rescatado (lo que sigue puesto)
+  const totalCapNeto=totalCap-totalRescatadoGlobal;
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
-  set("inv-capital","$"+Math.round(totalCap).toLocaleString("es-AR"));
+  set("inv-capital","$"+Math.round(totalCapNeto).toLocaleString("es-AR"));
   set("inv-valor","$"+Math.round(totalVal).toLocaleString("es-AR"));
   const rendEl=document.getElementById("inv-rend");
   if(rendEl){rendEl.textContent=(rend>=0?"+":"")+"$"+Math.round(Math.abs(rend)).toLocaleString("es-AR");rendEl.style.color=rend>=0?"var(--gr)":"var(--re)"}
