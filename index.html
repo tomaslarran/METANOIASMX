@@ -5334,18 +5334,29 @@ function delCFInv(id){
 /* ── RENDIMIENTOS DIARIOS ── */
 function calcRendStats(){
   const activas=cfInversiones.filter(i=>i.estado==="Activa");
-  function valorEn(fecha){
-    return activas.reduce((tot,inv)=>{
-      const reg=[...rendDiarios.filter(r=>r.inversion_id===inv.id&&r.fecha<=fecha)].pop();
-      return tot+(reg?reg.valor:(inv.capital||0));
-    },0);
+  // Valor de una inversión en una fecha dada (null si no hay datos)
+  function valInvEn(inv,fecha){
+    const reg=[...rendDiarios.filter(r=>r.inversion_id===inv.id&&r.fecha<=fecha)].pop();
+    return reg?reg.valor:null;
+  }
+  // Diferencia de portfolio entre hoy y una fecha base, solo con inversiones con datos en ambos extremos
+  function diffPortfolio(fechaBase){
+    const hoy=today();
+    let dHoy=0,dBase=0,tieneComparacion=false;
+    activas.forEach(inv=>{
+      const vH=valInvEn(inv,hoy);
+      const vB=valInvEn(inv,fechaBase);
+      if(vH!==null&&vB!==null){dHoy+=vH;dBase+=vB;tieneComparacion=true;}
+    });
+    return tieneComparacion?dHoy-dBase:null;
   }
   const hoy=today();
   const dAyer=new Date(Date.now()-864e5).toISOString().slice(0,10);
   const dSem=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
   const dMes=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
-  const vHoy=valorEn(hoy),vAyer=valorEn(dAyer),vSem=valorEn(dSem),vMes=valorEn(dMes);
-  return{hoy:vHoy-vAyer,sem:vHoy-vSem,mes:vHoy-vMes,vHoy};
+  // Para "hoy" usamos valor_actual como fallback si no hay registro
+  const vHoy=activas.reduce((s,inv)=>{const r=valInvEn(inv,hoy);return s+(r!==null?r:(inv.valor_actual||inv.capital||0));},0);
+  return{hoy:diffPortfolio(dAyer),sem:diffPortfolio(dSem),mes:diffPortfolio(dMes),vHoy};
 }
 
 function renderRendStats(){
@@ -5354,7 +5365,10 @@ function renderRendStats(){
   const col=v=>v>=0?"var(--gr)":"var(--re)";
   ["hoy","sem","mes"].forEach(k=>{
     const el=document.getElementById(`rend-stat-${k}`);
-    if(el){el.textContent=fmt(s[k]);el.style.color=col(s[k]);}
+    if(!el)return;
+    const v=s[k];
+    if(v===null){el.textContent="—";el.style.color="var(--tx3)";}
+    else{el.textContent=fmt(v);el.style.color=col(v);}
   });
 }
 
