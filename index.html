@@ -5039,15 +5039,35 @@ function renderCFInversiones(){
                   <span style="color:${esAporte?"var(--gr)":"var(--am)"};font-weight:600">${esAporte?"+":""}$${Math.round(m.monto||0).toLocaleString("es-AR")}</span>
                   ${m.notas?`<span style="color:var(--tx3);font-style:italic">${esc(m.notas)}</span>`:""}
                 </div>`}).join("")}
-                ${movs.filter(m=>m.tipo==="Aporte de capital").length?`<div style="display:flex;justify-content:space-between;padding-top:8px;font-size:12px;font-weight:600">
-                  <span style="color:var(--tx3)">Total aportes:</span>
-                  <span style="color:var(--gr)">+$${Math.round(movs.filter(m=>m.tipo==="Aporte de capital").reduce((s,m)=>s+(m.monto||0),0)).toLocaleString("es-AR")}</span>
-                </div>`:""}
-                ${totalRescatado>0?`<div style="display:flex;justify-content:space-between;padding-top:4px;font-size:12px;font-weight:600">
-                  <span style="color:var(--tx3)">Total rescatado:</span>
-                  <span style="color:var(--am)">$${Math.round(totalRescatado).toLocaleString("es-AR")}</span>
-                </div>`:""}
-                <div style="display:flex;justify-content:space-between;padding-top:4px;font-size:12px;font-weight:600;border-top:1px solid var(--b);margin-top:4px">
+                ${(()=>{
+                  const aportesMovs=movs.filter(m=>m.tipo==="Aporte de capital").reduce((s,m)=>s+(m.monto||0),0);
+                  const capitalInicial=icap-aportesMovs;
+                  let rows="";
+                  if(capitalInicial>0){
+                    rows+=`<div style="display:flex;justify-content:space-between;padding-top:8px;font-size:12px">
+                      <span style="color:var(--tx3)">Capital inicial:</span>
+                      <span style="color:var(--gr)">+$${Math.round(capitalInicial).toLocaleString("es-AR")}</span>
+                    </div>`;
+                  }
+                  if(aportesMovs>0){
+                    rows+=`<div style="display:flex;justify-content:space-between;padding-top:4px;font-size:12px">
+                      <span style="color:var(--tx3)">Aportes adicionales:</span>
+                      <span style="color:var(--gr)">+$${Math.round(aportesMovs).toLocaleString("es-AR")}</span>
+                    </div>`;
+                  }
+                  rows+=`<div style="display:flex;justify-content:space-between;padding-top:4px;font-size:12px;font-weight:700">
+                    <span style="color:var(--tx3)">Total invertido:</span>
+                    <span style="color:var(--gr)">+$${Math.round(icap).toLocaleString("es-AR")}</span>
+                  </div>`;
+                  if(totalRescatado>0){
+                    rows+=`<div style="display:flex;justify-content:space-between;padding-top:4px;font-size:12px;font-weight:700">
+                      <span style="color:var(--tx3)">Total rescatado:</span>
+                      <span style="color:var(--am)">$${Math.round(totalRescatado).toLocaleString("es-AR")}</span>
+                    </div>`;
+                  }
+                  return rows;
+                })()}
+                <div style="display:flex;justify-content:space-between;padding-top:4px;font-size:12px;font-weight:700;border-top:1px solid var(--b);margin-top:4px">
                   <span style="color:var(--tx3)">Rendimiento neto:</span>
                   <span style="color:${rendReal>=0?"var(--gr)":"var(--re)"}">${rendReal>=0?"+":""}$${Math.round(Math.abs(rendReal)).toLocaleString("es-AR")}</span>
                 </div>
