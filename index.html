@@ -4145,6 +4145,7 @@ function renderCFResumen(){
   // Costo pendiente = costo_estimado × (1 - progreso%) — disminuye a medida que se tilda el checklist
   const getCursoCostMes=(mkey)=>getCursosDelMes(mkey).reduce((s,c)=>s+((c.costo_estimado||0)*(1-(c.progreso||0)/100)),0);
   // Helpers impuestos para el resumen — respeta cfSociedad
+  const AUTO_SOC={SUDES:["Mario","Valentina"],POINTERS:["Tomás","Amparo"]};
   const getImpTax=(mkey)=>{
     const socs=cfSociedad==="SUDES"?["SUDES"]:cfSociedad==="POINTERS"?["POINTERS"]:["SUDES","POINTERS"];
     let iva=0;
@@ -4160,10 +4161,9 @@ function renderCFResumen(){
       const ing=getIngreso(mkey,soc);
       iibb+=((ing.ingresos_gravados||0)+(ing.ingresos_exentos||0))*IIBB_TASA;
     });
-    // Autónomos: personales, se muestran solo en SUDES (no aplican a POINTERS)
-    const auto=cfSociedad!=="POINTERS"
-      ?autonomosCuotas.filter(c=>c.periodo===mkey).reduce((s,c)=>s+(c.monto||0),0)
-      :0;
+    // Autónomos: filtrados por sociedad activa
+    const nombresAuto=cfSociedad==="SUDES"?AUTO_SOC.SUDES:cfSociedad==="POINTERS"?AUTO_SOC.POINTERS:[...AUTO_SOC.SUDES,...AUTO_SOC.POINTERS];
+    const auto=autonomosCuotas.filter(c=>c.periodo===mkey&&nombresAuto.includes(c.nombre)).reduce((s,c)=>s+(c.monto||0),0);
     return{iva:Math.round(iva),iibb:Math.round(iibb),auto:Math.round(auto)};
   };
   const getImpTotal=(mkey)=>{const t=getImpTax(mkey);return t.iva+t.iibb+t.auto;};
@@ -4412,17 +4412,33 @@ function renderCFResumen(){
             <div style="display:flex;align-items:center;gap:6px"><span style="font-size:10px;color:var(--tx4)">🏛</span><span style="flex:1">IIBB Salta 6%</span>
             <span onclick="goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('iibb')" style="font-size:9px;color:var(--ac);cursor:pointer">ver →</span></div>
           </td>${iibbRow}</tr>`;
-        // Autónomos
-        const autoRow=meses.map(m=>{
-          const v=getImpTax(m.key).auto;
-          const bgActual=m.actual?"background:rgba(124,58,237,.06)":"";
-          return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${v?"var(--re)":"var(--tx3)"};border-right:1px solid var(--b);${bgActual}">${v?"$"+Math.round(v).toLocaleString("es-AR"):"—"}</td>`;
-        }).join("");
-        rows+=`<tr style="border-bottom:1px solid var(--b)">
-          <td style="padding:6px 12px 6px 32px;font-size:12px;color:var(--tx2);min-width:240px">
-            <div style="display:flex;align-items:center;gap:6px"><span style="font-size:10px;color:var(--tx4)">👤</span><span style="flex:1">Autónomos</span>
-            <span onclick="goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('autonomos')" style="font-size:9px;color:var(--ac);cursor:pointer">ver →</span></div>
-          </td>${autoRow}</tr>`;
+        // Autónomos — fila por persona según sociedad
+        const nombresAuto=cfSociedad==="SUDES"?AUTO_SOC.SUDES:cfSociedad==="POINTERS"?AUTO_SOC.POINTERS:[...AUTO_SOC.SUDES,...AUTO_SOC.POINTERS];
+        const hayAuto=meses.some(m=>autonomosCuotas.some(c=>c.periodo===m.key&&nombresAuto.includes(c.nombre)&&(c.monto||0)>0));
+        if(hayAuto){
+          rows+=`<tr style="background:rgba(239,68,68,.03)">
+            <td colspan="${meses.length+2}" style="padding:2px 12px 2px 32px;font-size:9px;color:var(--tx4);font-style:italic">
+              Autónomos <span onclick="goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('autonomos')" style="color:var(--ac);cursor:pointer">ver →</span>
+            </td>
+          </tr>`;
+          nombresAuto.forEach(nombre=>{
+            const personaRow=meses.map(m=>{
+              const c=autonomosCuotas.find(c=>c.periodo===m.key&&c.nombre===nombre);
+              const v=c?.monto||0;
+              const pagado=c?.pagado;
+              const bgActual=m.actual?"background:rgba(124,58,237,.06)":"";
+              let display,color;
+              if(pagado){display=`<span style="font-size:10px">✓</span>`;color="var(--gr)";}
+              else if(v){display="$"+Math.round(v).toLocaleString("es-AR");color="var(--re)";}
+              else{display="—";color="var(--tx3)";}
+              return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${color};border-right:1px solid var(--b);${bgActual}" title="${pagado?"Pagado":"Pendiente"}">${display}</td>`;
+            }).join("");
+            rows+=`<tr style="border-bottom:1px solid var(--b)">
+              <td style="padding:6px 12px 6px 42px;font-size:12px;color:var(--tx2);min-width:240px">
+                <div style="display:flex;align-items:center;gap:6px"><span style="font-size:10px;color:var(--tx4)">👤</span><span>${nombre}</span></div>
+              </td>${personaRow}</tr>`;
+          });
+        }
       }
     }
     // Fila total del bloque (incluye cuotas para Egreso via getTotalTipo)
