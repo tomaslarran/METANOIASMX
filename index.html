@@ -1589,7 +1589,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="modal" style="max-width:520px">
     <div class="mt">📊 Registrar rendimiento <button class="mt-close" onclick="closeModal('modal-rend-diario')">✕</button></div>
     <div style="font-size:12px;color:var(--tx3);margin-bottom:4px" id="rend-fecha-label"></div>
-    <div style="font-size:11px;color:var(--tx3);margin-bottom:14px;padding:8px 10px;background:var(--surf2);border-radius:var(--r)">Ingresá el <strong>valor actual</strong> de cada inversión. Dejá vacío si no cambió.</div>
+    <div style="font-size:11px;color:var(--tx3);margin-bottom:14px;padding:8px 10px;background:var(--surf2);border-radius:var(--r)">Ingresá el <strong>valor de mercado actual</strong> de cada inversión — lo que vale el fondo <em>hoy</em>, sin contar rescates ya retirados. Dejá vacío si no cambió.</div>
     <div id="rend-items-list" style="display:flex;flex-direction:column;gap:8px;max-height:55vh;overflow-y:auto;padding-right:4px"></div>
     <div class="ma">
       <button class="bc" onclick="closeModal('modal-rend-diario')">Cancelar</button>
@@ -5447,6 +5447,7 @@ function openRegistrarRend(){
         </div>
       </div>
       <input class="fi" type="number" id="rend-val-${inv.id}" placeholder="Nuevo valor de hoy (actual: $${Math.round(valActual).toLocaleString("es-AR")})" style="width:100%;font-size:13px">
+      ${(()=>{const rescParciales=cfInvMovs.filter(m=>m.inversion_id===inv.id&&m.tipo==="Rescate Parcial").reduce((s,m)=>s+(m.monto||0),0);return rescParciales>0?`<div style="font-size:10px;color:var(--am);margin-top:4px">⚠ Esta inversión tuvo rescates parciales por $${Math.round(rescParciales).toLocaleString("es-AR")} — ingresá solo el valor que queda en el fondo.</div>`:""})()}
     </div>`;
   }).join("");
   openModal("modal-rend-diario");
