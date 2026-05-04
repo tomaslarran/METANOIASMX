@@ -4144,10 +4144,11 @@ function renderCFResumen(){
   const getCursoIngMes=(mkey)=>getCursosDelMes(mkey).reduce((s,c)=>s+getCursoIngEfectivo(c),0);
   // Costo pendiente = costo_estimado × (1 - progreso%) — disminuye a medida que se tilda el checklist
   const getCursoCostMes=(mkey)=>getCursosDelMes(mkey).reduce((s,c)=>s+((c.costo_estimado||0)*(1-(c.progreso||0)/100)),0);
-  // Helpers impuestos para el resumen
+  // Helpers impuestos para el resumen — respeta cfSociedad
   const getImpTax=(mkey)=>{
+    const socs=cfSociedad==="SUDES"?["SUDES"]:cfSociedad==="POINTERS"?["POINTERS"]:["SUDES","POINTERS"];
     let iva=0;
-    ["SUDES","POINTERS"].forEach(soc=>{
+    socs.forEach(soc=>{
       const ing=getIngreso(mkey,soc);
       const deb=(ing.ingresos_gravados||0)*IVA_TASA;
       const cr=getCreditoFiscal(mkey,soc);
@@ -4155,11 +4156,14 @@ function renderCFResumen(){
       if(s>0)iva+=s;
     });
     let iibb=0;
-    ["SUDES","POINTERS"].forEach(soc=>{
+    socs.forEach(soc=>{
       const ing=getIngreso(mkey,soc);
       iibb+=((ing.ingresos_gravados||0)+(ing.ingresos_exentos||0))*IIBB_TASA;
     });
-    const auto=autonomosCuotas.filter(c=>c.periodo===mkey).reduce((s,c)=>s+(c.monto||0),0);
+    // Autónomos: personales, se muestran solo en SUDES (no aplican a POINTERS)
+    const auto=cfSociedad!=="POINTERS"
+      ?autonomosCuotas.filter(c=>c.periodo===mkey).reduce((s,c)=>s+(c.monto||0),0)
+      :0;
     return{iva:Math.round(iva),iibb:Math.round(iibb),auto:Math.round(auto)};
   };
   const getImpTotal=(mkey)=>{const t=getImpTax(mkey);return t.iva+t.iibb+t.auto;};
