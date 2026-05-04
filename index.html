@@ -3891,7 +3891,7 @@ const MESES_CF=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov
 
 async function loadCF(){
   try{
-    [cfConceptos,cfValores,cfPrestamos,cfCobranzas,cfInversiones,cfInvMovs,cfPrestCuotas,cfEmpleados,cfPagosEmpleados,rendDiarios]=await Promise.all([
+    [cfConceptos,cfValores,cfPrestamos,cfCobranzas,cfInversiones,cfInvMovs,cfPrestCuotas,cfEmpleados,cfPagosEmpleados,rendDiarios,impuestosIngresos,autonomosCuotas]=await Promise.all([
       sb("cf_conceptos?select=*&order=tipo,nombre"),
       sb("cf_valores?select=*"),
       sb("cf_prestamos?select=*&order=sociedad,tipo"),
@@ -3901,7 +3901,9 @@ async function loadCF(){
       sb("cf_prestamos_cuotas?select=*&order=fecha").catch(()=>[]),
       sb("cf_empleados?select=*&order=categoria,nombre").catch(()=>[]),
       sb("cf_pagos_empleados?select=*&order=periodo.desc").catch(()=>[]),
-      sb("rendimientos_diarios?select=*&order=fecha.asc").catch(()=>[])
+      sb("rendimientos_diarios?select=*&order=fecha.asc").catch(()=>[]),
+      sb("impuestos_ingresos?select=*&order=periodo.desc").catch(()=>[]),
+      sb("autonomos_cuotas?select=*&order=periodo.desc").catch(()=>[])
     ]);
     // Badge: cobranzas vencidas + préstamos próximos
     const hoy=today();
@@ -4142,9 +4144,29 @@ function renderCFResumen(){
   const getCursoIngMes=(mkey)=>getCursosDelMes(mkey).reduce((s,c)=>s+getCursoIngEfectivo(c),0);
   // Costo pendiente = costo_estimado × (1 - progreso%) — disminuye a medida que se tilda el checklist
   const getCursoCostMes=(mkey)=>getCursosDelMes(mkey).reduce((s,c)=>s+((c.costo_estimado||0)*(1-(c.progreso||0)/100)),0);
+  // Helpers impuestos para el resumen
+  const getImpTax=(mkey)=>{
+    let iva=0;
+    ["SUDES","POINTERS"].forEach(soc=>{
+      const ing=getIngreso(mkey,soc);
+      const deb=(ing.ingresos_gravados||0)*IVA_TASA;
+      const cr=getCreditoFiscal(mkey,soc);
+      const s=deb-cr;
+      if(s>0)iva+=s;
+    });
+    let iibb=0;
+    ["SUDES","POINTERS"].forEach(soc=>{
+      const ing=getIngreso(mkey,soc);
+      iibb+=((ing.ingresos_gravados||0)+(ing.ingresos_exentos||0))*IIBB_TASA;
+    });
+    const auto=autonomosCuotas.filter(c=>c.periodo===mkey).reduce((s,c)=>s+(c.monto||0),0);
+    return{iva:Math.round(iva),iibb:Math.round(iibb),auto:Math.round(auto)};
+  };
+  const getImpTotal=(mkey)=>{const t=getImpTax(mkey);return t.iva+t.iibb+t.auto;};
+
   const getTotalTipo=(tipo,mkey)=>{
     const base=conceptos.filter(c=>c.tipo===tipo).reduce((s,c)=>s+getVal(c,mkey),0);
-    if(tipo==="Egreso")return base+getCuotasTotalMes(mkey)+getSueldosTotalMes(mkey)+getCursoCostMes(mkey);
+    if(tipo==="Egreso")return base+getCuotasTotalMes(mkey)+getSueldosTotalMes(mkey)+getCursoCostMes(mkey)+getImpTotal(mkey);
     return base+getCursoIngMes(mkey);
   };
   // Filtrar meses pasados sin ningún dato
@@ -4355,6 +4377,48 @@ function renderCFResumen(){
             </td>${celdas}
           </tr>`;
         });
+      }
+    }
+    // Impuestos estimados integrados en egresos
+    if(tipo==="Egreso"){
+      const hayImp=meses.some(m=>{const t=getImpTax(m.key);return t.iva>0||t.iibb>0||t.auto>0;});
+      if(hayImp){
+        rows+=`<tr style="background:rgba(239,68,68,.05)">
+          <td colspan="${meses.length+2}" style="padding:3px 12px 3px 22px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#FCA5A5">↳ Impuestos estimados</td>
+        </tr>`;
+        // IVA
+        const ivaRow=meses.map(m=>{
+          const v=getImpTax(m.key).iva;
+          const bgActual=m.actual?"background:rgba(124,58,237,.06)":"";
+          return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${v?"var(--re)":"var(--tx3)"};border-right:1px solid var(--b);${bgActual}" title="IVA: débito − crédito fiscal">${v?"$"+v.toLocaleString("es-AR"):"—"}</td>`;
+        }).join("");
+        rows+=`<tr style="border-bottom:1px solid var(--b)">
+          <td style="padding:6px 12px 6px 32px;font-size:12px;color:var(--tx2);min-width:240px">
+            <div style="display:flex;align-items:center;gap:6px"><span style="font-size:10px;color:var(--tx4)">🏛</span><span style="flex:1">IVA a pagar</span>
+            <span onclick="goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('iva')" style="font-size:9px;color:var(--ac);cursor:pointer">ver →</span></div>
+          </td>${ivaRow}</tr>`;
+        // IIBB
+        const iibbRow=meses.map(m=>{
+          const v=getImpTax(m.key).iibb;
+          const bgActual=m.actual?"background:rgba(124,58,237,.06)":"";
+          return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${v?"var(--re)":"var(--tx3)"};border-right:1px solid var(--b);${bgActual}">${v?"$"+Math.round(v).toLocaleString("es-AR"):"—"}</td>`;
+        }).join("");
+        rows+=`<tr style="border-bottom:1px solid var(--b)">
+          <td style="padding:6px 12px 6px 32px;font-size:12px;color:var(--tx2);min-width:240px">
+            <div style="display:flex;align-items:center;gap:6px"><span style="font-size:10px;color:var(--tx4)">🏛</span><span style="flex:1">IIBB Salta 6%</span>
+            <span onclick="goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('iibb')" style="font-size:9px;color:var(--ac);cursor:pointer">ver →</span></div>
+          </td>${iibbRow}</tr>`;
+        // Autónomos
+        const autoRow=meses.map(m=>{
+          const v=getImpTax(m.key).auto;
+          const bgActual=m.actual?"background:rgba(124,58,237,.06)":"";
+          return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${v?"var(--re)":"var(--tx3)"};border-right:1px solid var(--b);${bgActual}">${v?"$"+Math.round(v).toLocaleString("es-AR"):"—"}</td>`;
+        }).join("");
+        rows+=`<tr style="border-bottom:1px solid var(--b)">
+          <td style="padding:6px 12px 6px 32px;font-size:12px;color:var(--tx2);min-width:240px">
+            <div style="display:flex;align-items:center;gap:6px"><span style="font-size:10px;color:var(--tx4)">👤</span><span style="flex:1">Autónomos</span>
+            <span onclick="goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('autonomos')" style="font-size:9px;color:var(--ac);cursor:pointer">ver →</span></div>
+          </td>${autoRow}</tr>`;
       }
     }
     // Fila total del bloque (incluye cuotas para Egreso via getTotalTipo)
