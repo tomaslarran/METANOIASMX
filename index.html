@@ -1419,10 +1419,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 
   <!-- Stats -->
-  <div class="stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px" id="comp-stats">
+  <div class="stats" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px" id="comp-stats">
     <div class="sc"><div class="sc-l">Total del mes</div><div class="sc-v vb" id="comp-stat-total">—</div><div class="sc-s" id="comp-stat-mes">cargando...</div></div>
     <div class="sc"><div class="sc-l">IVA del mes</div><div class="sc-v va" id="comp-stat-iva">—</div><div class="sc-s">crédito fiscal</div></div>
     <div class="sc"><div class="sc-l">Pendientes</div><div class="sc-v" id="comp-stat-pend" style="color:var(--am)">—</div><div class="sc-s">a revisar</div></div>
+    <div class="sc" style="cursor:pointer" onclick="setCompFilter('vencida',document.getElementById('fb-vencida'))"><div class="sc-l">Vencidas</div><div class="sc-v" id="comp-stat-venc" style="color:var(--re)">—</div><div class="sc-s">sin pagar ⚠</div></div>
     <div class="sc"><div class="sc-l">En Finnegans</div><div class="sc-v vg" id="comp-stat-finn">—</div><div class="sc-s">sincronizados</div></div>
   </div>
 
@@ -1434,6 +1435,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <button class="fb" onclick="setCompFilter('revisado',this)">Revisados</button>
       <button class="fb" onclick="setCompFilter('enviado_finnegans',this)">En Finnegans</button>
       <button class="fb" id="fb-completar" onclick="setCompFilter('por_completar',this)" style="color:#FCD34D">⚠️ Por completar <span id="badge-completar"></span></button>
+      <div class="fsep"></div>
+      <button class="fb" id="fb-vencida" onclick="setCompFilter('vencida',this)" style="color:var(--re)">⚠ Vencidas</button>
       <div class="fsep"></div>
       <button class="fb" onclick="setCompFilter('SUDES',this)">SUDES</button>
       <button class="fb" onclick="setCompFilter('POINTERS',this)">POINTERS</button>
@@ -2339,6 +2342,17 @@ async function renderAlertas(){
       titulo:e.nombre,sub:`${fmtNum(e.monto_mensual,true)} · ${e.categoria} · ${e.sociedad}`,fecha:fechaPago,
       empId:e.id,periodo:mesPago,
       onclick:`goPage('sueldos',document.getElementById('nav-sueldos'))`});
+  });
+
+  // Comprobantes vencidos o por vencer
+  comprobantes.filter(c=>c.fecha_vencimiento&&c.estado!=="enviado_finnegans").forEach(c=>{
+    const d=days(c.fecha_vencimiento);
+    if(d===null||d>30)return;
+    alertas.push({tipo:"comp",icon:"🧾",urgencia:d<0?"critica":d===0?"hoy":d<=7?"semana":"mes",d,
+      titulo:c.proveedor||"Factura sin proveedor",
+      sub:`$${Math.round(c.total||0).toLocaleString("es-AR")} · ${c.sociedad} · ${c.tipo||"Comprobante"}`,
+      fecha:c.fecha_vencimiento,
+      onclick:`goPage('comprobantes',document.getElementById('nav-comprobantes'));setCompFilter('vencida',document.getElementById('fb-vencida'))`});
   });
 
   cfInversiones.filter(i=>i.estado==="activa"&&i.fecha_vencimiento).forEach(i=>{
@@ -7999,6 +8013,7 @@ function renderComprobantes(){
     const desglose=(c.neto_21||0)+(c.neto_105||0)+(c.neto_27||0)+(c.neto_exento||0);
     return esDeProveedor&&(c.monto_neto||0)>0&&desglose===0&&c.estado!=="enviado_finnegans";
   });
+  else if(compFilter==="vencida")list=list.filter(c=>c.fecha_vencimiento&&c.estado!=="enviado_finnegans"&&days(c.fecha_vencimiento)<0);
   else if(compFilter!=="all")list=list.filter(c=>c.estado===compFilter);
   // Actualizar badge "por completar"
   const totalPorCompletar=comprobantes.filter(c=>{
@@ -8075,11 +8090,14 @@ function updateCompStats(){
   const ivaMes=base.reduce((s,c)=>s+(Number(c.iva)||0),0);
   const pend=base.filter(c=>c.estado==="pendiente").length;
   const finn=base.filter(c=>c.estado==="enviado_finnegans").length;
+  const venc=comprobantes.filter(c=>c.fecha_vencimiento&&c.estado!=="enviado_finnegans"&&days(c.fecha_vencimiento)<0).length;
   document.getElementById("comp-stat-total").textContent="$"+Math.round(totalMes).toLocaleString("es-AR");
   document.getElementById("comp-stat-iva").textContent="$"+Math.round(ivaMes).toLocaleString("es-AR");
   document.getElementById("comp-stat-pend").textContent=pend;
   document.getElementById("comp-stat-finn").textContent=finn;
   document.getElementById("comp-stat-mes").textContent=mesLabel;
+  const vEl=document.getElementById("comp-stat-venc");
+  if(vEl){vEl.textContent=venc||"✓";vEl.style.color=venc?"var(--re)":"var(--gr)";}
 }
 
 async function marcarEstadoComp(id,estado){
