@@ -219,6 +219,11 @@ body{font-family:var(--f);background:var(--bg);color:var(--tx);min-height:100vh;
 .toggle input:checked+.tslider::before{transform:translateX(16px);background:#fff}
 .toggle-label{font-size:13px;color:var(--tx2)}
 
+/* ── COSTOS CURSO ── */
+.costo-item{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);margin-bottom:4px;transition:all .15s}
+.costo-item:hover{border-color:var(--b2)}
+.costo-item.off{opacity:.55}
+.costo-total-bar{background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 /* ── CHECKLIST CURSO ── */
 .checklist-etapa{margin-bottom:16px}
 .etapa-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tx3);margin-bottom:6px;display:flex;align-items:center;gap:8px}
@@ -2860,7 +2865,15 @@ function renderCursos(){
 async function selectCurso(id){
   const curso=cursos.find(c=>c.id===id);if(!curso)return;
   document.querySelectorAll(".curso-card").forEach(c=>c.classList.toggle("selected",c.onclick?.toString().includes(id)));
-  const tareasCurso=await sb(`curso_tareas?curso_id=eq.${id}&select=*&order=orden`);
+  const [tareasCurso,costosCurso0]=await Promise.all([
+    sb(`curso_tareas?curso_id=eq.${id}&select=*&order=orden`),
+    sb(`curso_costos?curso_id=eq.${id}&select=*&order=orden`)
+  ]);
+  let costosCurso=costosCurso0;
+  if(!costosCurso.length){
+    await Promise.all(COSTO_TMPL.map(t=>sb("curso_costos",{method:"POST",body:JSON.stringify({curso_id:id,...t,aplica:false,monto_estimado:0,updated_at:new Date().toISOString()})})));
+    costosCurso=await sb(`curso_costos?curso_id=eq.${id}&select=*&order=orden`);
+  }
   const prov=proveedores.find(p=>p.id===curso.proveedor_id);
   const det=document.getElementById("curso-detail-container");
   det.innerHTML=`<div class="curso-detail">
@@ -2879,6 +2892,7 @@ async function selectCurso(id){
     <div class="cd-tabs">
       <div class="cd-tab on" onclick="showCdTab(this,'cd-info-${id}')">Información</div>
       <div class="cd-tab" onclick="showCdTab(this,'cd-tareas-${id}')">Checklist (${tareasCurso.length})</div>
+      <div class="cd-tab" onclick="showCdTab(this,'cd-costos-${id}')">💰 Costos (${costosCurso.filter(c=>c.aplica).length})</div>
     </div>
     <div class="cd-body">
       <div id="cd-info-${id}">
@@ -2933,6 +2947,9 @@ async function selectCurso(id){
       </div>
       <div id="cd-tareas-${id}" style="display:none">
         ${buildChecklistTabHtml(id,tareasCurso,curso)}
+      </div>
+      <div id="cd-costos-${id}" style="display:none">
+        ${buildCostosTabHtml(id,costosCurso)}
       </div>
     </div>
   </div>`;
@@ -3028,6 +3045,138 @@ function buildChecklistTabHtml(cursoId, tareasCurso, curso){
       <select class="mini-sel" id="chk-etapa-${cursoId}"><option value="Diseño">Diseño</option><option value="Convocatoria">Convocatoria</option><option value="Inscripciones">Inscripciones</option><option value="Ejecución">Ejecución</option><option value="Certificación">Certificación</option><option value="Cierre">Cierre</option></select>
       <button class="sdb" onclick="addCursoTarea('${cursoId}')">+ Agregar</button>
     </div>`;
+}
+
+const COSTO_TMPL=[
+  {categoria:"Materiales",nombre:"Carpetas",orden:1},
+  {categoria:"Materiales",nombre:"Lapiceras",orden:2},
+  {categoria:"Materiales",nombre:"Blocs / anotadores",orden:3},
+  {categoria:"Materiales",nombre:"Material de estudio (impresiones)",orden:4},
+  {categoria:"Materiales",nombre:"Certificados / diplomas",orden:5},
+  {categoria:"Merchandising",nombre:"Bolsas corporativas",orden:6},
+  {categoria:"Merchandising",nombre:"Remeras / indumentaria",orden:7},
+  {categoria:"Merchandising",nombre:"Tazas / vasos",orden:8},
+  {categoria:"Merchandising",nombre:"Pen drives / USB",orden:9},
+  {categoria:"Gastronomía",nombre:"Coffee break",orden:10},
+  {categoria:"Gastronomía",nombre:"Almuerzo / lunch",orden:11},
+  {categoria:"Gastronomía",nombre:"Cena / after event",orden:12},
+  {categoria:"Gastronomía",nombre:"Agua y bebidas",orden:13},
+  {categoria:"Logística",nombre:"Alquiler de sala",orden:14},
+  {categoria:"Logística",nombre:"Equipamiento AV (proyector / sonido)",orden:15},
+  {categoria:"Logística",nombre:"Traslados / viáticos",orden:16},
+  {categoria:"Logística",nombre:"Decoración / ambientación",orden:17},
+  {categoria:"Marketing",nombre:"Diseño gráfico (flyer / banner)",orden:18},
+  {categoria:"Marketing",nombre:"Impresión de folletería",orden:19},
+  {categoria:"Marketing",nombre:"Pauta publicitaria",orden:20},
+  {categoria:"Producción",nombre:"Fotógrafo / videógrafo",orden:21},
+  {categoria:"Producción",nombre:"Edición de video",orden:22},
+  {categoria:"Tecnología",nombre:"Plataforma virtual",orden:23},
+  {categoria:"Tecnología",nombre:"Streaming / grabación",orden:24},
+  {categoria:"Honorarios",nombre:"Instructor / disertante",orden:25},
+  {categoria:"Honorarios",nombre:"Coordinación / staff",orden:26},
+  {categoria:"Otros",nombre:"Seguro de asistentes",orden:27},
+  {categoria:"Otros",nombre:"Imprevistos / contingencias",orden:28},
+];
+
+function buildCostosTabHtml(cursoId,costos){
+  const cats=[...new Set(costos.map(c=>c.categoria))];
+  const activos=costos.filter(c=>c.aplica);
+  const total=activos.reduce((s,c)=>s+(c.monto_estimado||0),0);
+  const sinMonto=activos.filter(c=>!c.monto_estimado).length;
+  const sinPres=activos.filter(c=>!c.presupuesto_solicitado&&!c.monto_estimado).length;
+  let html=`<div class="costo-total-bar">
+    <span style="font-size:12px;color:var(--tx3)">Ítems incluidos: <strong style="color:var(--tx)">${activos.length}</strong></span>
+    <span style="font-size:13px;font-weight:700;color:var(--gr)">Total estimado: $${Math.round(total).toLocaleString("es-AR")}</span>
+    ${sinMonto?`<span style="font-size:11px;color:var(--am)">⚠ ${sinMonto} ítem${sinMonto>1?"s":""} sin monto</span>`:""}
+    ${sinPres?`<span style="font-size:11px;color:var(--tx3)">${sinPres} pres. pendiente${sinPres>1?"s":""}</span>`:""}
+  </div>`;
+  cats.forEach(cat=>{
+    const items=costos.filter(c=>c.categoria===cat);
+    html+=`<div class="checklist-etapa"><div class="etapa-label">${cat}</div>`;
+    items.forEach(item=>{
+      const aplica=item.aplica,pres=item.presupuesto_solicitado;
+      html+=`<div class="costo-item${aplica?"":" off"}" id="ci-${item.id}">
+        <div class="chk-box${aplica?" checked":""}" onclick="toggleCursoCosto('${item.id}','${cursoId}',${!aplica})">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <span style="flex:1;font-size:13px;color:${aplica?"var(--tx)":"var(--tx3)"}">${esc(item.nombre)}</span>
+        ${aplica?`<div style="display:flex;align-items:center;gap:6px">
+          <button onclick="togglePresupuestoCosto('${item.id}','${cursoId}',${!pres})" style="font-size:10px;padding:2px 7px;border-radius:4px;cursor:pointer;border:1px solid ${pres?"var(--gr)":"var(--b2)"};background:${pres?"rgba(16,185,129,.1)":"transparent"};color:${pres?"var(--gr)":"var(--tx3)"};white-space:nowrap;font-family:var(--f)">${pres?"✓ Pres. pedido":"Pedir pres."}</button>
+          <span style="font-size:12px;color:var(--tx3)">$</span>
+          <input type="number" class="fi" style="width:110px;font-size:12px;padding:4px 8px" value="${item.monto_estimado||""}" placeholder="0" onchange="updateCursoCosto('${item.id}','${cursoId}',this.value)">
+        </div>`:""}
+        <button class="del-btn" onclick="delCursoCosto('${item.id}','${cursoId}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+      </div>`;
+    });
+    html+=`</div>`;
+  });
+  html+=`<div style="margin-top:12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+    <input type="text" id="costo-new-${cursoId}" class="fi" style="flex:1;min-width:140px;font-size:12px" placeholder="Nuevo ítem personalizado...">
+    <select id="costo-cat-${cursoId}" class="sel" style="font-size:12px">
+      <option>Materiales</option><option>Merchandising</option><option>Gastronomía</option>
+      <option>Logística</option><option>Marketing</option><option>Producción</option>
+      <option>Tecnología</option><option>Honorarios</option><option>Otros</option>
+    </select>
+    <button class="sdb" onclick="addCursoCosto('${cursoId}')">+ Agregar</button>
+  </div>`;
+  return html;
+}
+
+async function toggleCursoCosto(id,cursoId,val){
+  try{
+    await sb(`curso_costos?id=eq.${id}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({aplica:val,updated_at:new Date().toISOString()})});
+    const costos=await sb(`curso_costos?curso_id=eq.${cursoId}&select=*&order=orden`);
+    document.getElementById(`cd-costos-${cursoId}`).innerHTML=buildCostosTabHtml(cursoId,costos);
+  }catch(e){toast("Error","err");}
+}
+
+async function togglePresupuestoCosto(id,cursoId,val){
+  try{
+    await sb(`curso_costos?id=eq.${id}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({presupuesto_solicitado:val,updated_at:new Date().toISOString()})});
+    const costos=await sb(`curso_costos?curso_id=eq.${cursoId}&select=*&order=orden`);
+    document.getElementById(`cd-costos-${cursoId}`).innerHTML=buildCostosTabHtml(cursoId,costos);
+    toast(val?"Presupuesto marcado como solicitado ✓":"Desmarcado","ok");
+  }catch(e){toast("Error","err");}
+}
+
+async function updateCursoCosto(id,cursoId,value){
+  try{
+    await sb(`curso_costos?id=eq.${id}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({monto_estimado:value?Number(value):0,updated_at:new Date().toISOString()})});
+    const costos=await sb(`curso_costos?curso_id=eq.${cursoId}&select=*&order=orden`);
+    const activos=costos.filter(c=>c.aplica);
+    const total=activos.reduce((s,c)=>s+(c.monto_estimado||0),0);
+    const sinMonto=activos.filter(c=>!c.monto_estimado).length;
+    const sinPres=activos.filter(c=>!c.presupuesto_solicitado&&!c.monto_estimado).length;
+    const bar=document.querySelector(`#cd-costos-${cursoId} .costo-total-bar`);
+    if(bar)bar.innerHTML=`<span style="font-size:12px;color:var(--tx3)">Ítems incluidos: <strong style="color:var(--tx)">${activos.length}</strong></span>
+      <span style="font-size:13px;font-weight:700;color:var(--gr)">Total estimado: $${Math.round(total).toLocaleString("es-AR")}</span>
+      ${sinMonto?`<span style="font-size:11px;color:var(--am)">⚠ ${sinMonto} ítem${sinMonto>1?"s":""} sin monto</span>`:""}
+      ${sinPres?`<span style="font-size:11px;color:var(--tx3)">${sinPres} pres. pendiente${sinPres>1?"s":""}</span>`:""}`;
+  }catch(e){toast("Error","err");}
+}
+
+async function delCursoCosto(id,cursoId){
+  try{
+    await sb(`curso_costos?id=eq.${id}`,{method:"DELETE"});
+    const costos=await sb(`curso_costos?curso_id=eq.${cursoId}&select=*&order=orden`);
+    document.getElementById(`cd-costos-${cursoId}`).innerHTML=buildCostosTabHtml(cursoId,costos);
+  }catch(e){toast("Error","err");}
+}
+
+async function addCursoCosto(cursoId){
+  const el=document.getElementById(`costo-new-${cursoId}`);
+  const catEl=document.getElementById(`costo-cat-${cursoId}`);
+  const nombre=el?.value.trim();
+  if(!nombre){toast("Escribí un nombre","err");return;}
+  const categoria=catEl?.value||"Otros";
+  try{
+    const last=await sb(`curso_costos?curso_id=eq.${cursoId}&select=orden&order=orden.desc&limit=1`);
+    const orden=last.length?(last[0].orden||0)+1:100;
+    await sb("curso_costos",{method:"POST",body:JSON.stringify({curso_id:cursoId,categoria,nombre,aplica:true,monto_estimado:0,orden,updated_at:new Date().toISOString()})});
+    const costos=await sb(`curso_costos?curso_id=eq.${cursoId}&select=*&order=orden`);
+    document.getElementById(`cd-costos-${cursoId}`).innerHTML=buildCostosTabHtml(cursoId,costos);
+    toast("Ítem agregado","ok");
+  }catch(e){toast("Error","err");}
 }
 
 async function refreshChecklist(cursoId){
