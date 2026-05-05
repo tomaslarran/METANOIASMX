@@ -487,6 +487,24 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 .topbar-user:hover{border-color:var(--pu)}
 .topbar-user-avatar{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--fc);font-size:12px;font-weight:700;color:#fff}
 .topbar-user-name{font-size:12px;font-weight:500;color:var(--tx)}
+/* ── BOTTOM NAV MOBILE ── */
+.mobile-nav{display:none}
+@media(max-width:768px){
+  /* CD-tabs: scroll horizontal en lugar de wrap */
+  .cd-tabs{overflow-x:auto;overflow-y:visible;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .cd-tabs::-webkit-scrollbar{display:none}
+  .cd-tab{white-space:nowrap;flex-shrink:0}
+  /* Bottom nav */
+  .mobile-nav{display:flex;position:fixed;bottom:0;left:0;right:0;background:rgba(13,15,26,.97);backdrop-filter:blur(14px);border-top:1px solid var(--b);padding:0 0 env(safe-area-inset-bottom);z-index:150}
+  .mn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 2px 10px;gap:2px;cursor:pointer;color:var(--tx3);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;-webkit-tap-highlight-color:transparent;transition:color .15s;position:relative}
+  .mn-item.on{color:var(--ac)}
+  .mn-item .mn-icon{font-size:20px;line-height:1}
+  .mn-item .mn-badge{position:absolute;top:4px;right:calc(50% - 16px);background:#EF4444;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;pointer-events:none}
+  /* Toolbar search: ancho completo en mobile */
+  .sw{max-width:100%}
+  /* Tablas sin wrapping en contenedores overflow */
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+}
 </style>
 </head>
 <body>
@@ -2446,9 +2464,30 @@ async function renderAlertas(){
         </div>`
     }`;
 }
+function updateMobileNav(page){
+  ["alertas","tareas","cashflow","impuestos","menu"].forEach(k=>{
+    const el=document.getElementById("mn-"+k);
+    if(el)el.classList.toggle("on",k===page||(k==="cashflow"&&page==="cashflow"));
+  });
+}
+function syncMobileNavBadges(){
+  // Badge alertas
+  const ba=document.getElementById("mn-badge-alertas");
+  const badgeAl=document.getElementById("badge-alertas");
+  if(ba&&badgeAl){const v=badgeAl.textContent;ba.textContent=v;ba.style.display=v?"":"none";}
+  // Badge tareas
+  const bt=document.getElementById("mn-badge-tareas");
+  const ph=document.getElementById("badge-ph");
+  if(bt&&ph){const v=ph.textContent;bt.textContent=v;bt.style.display=v&&v!=="—"?"":"none";}
+  // Badge CF
+  const bc=document.getElementById("mn-badge-cf");
+  const badgeCF=document.getElementById("badge-cf");
+  if(bc&&badgeCF){const v=badgeCF.textContent;bc.textContent=v;bc.style.display=v&&v!=="✓"?"":"none";}
+}
 function goPage(name,el){
   curPage=name;
   closeSidebar();
+  updateMobileNav(name);
   document.querySelectorAll(".content>div").forEach(d=>d.style.display="none");
   const pg=document.getElementById("pg-"+name);
   if(pg)pg.style.display="block";
@@ -6849,7 +6888,7 @@ function enterPanel(user,isNewLogin){
 
   if(isNewLogin)toast(`Bienvenido, ${user.nombre} 👋`,"ok");
   goPage('alertas',document.getElementById('nav-alertas'));
-  loadAll().then(()=>{if(curPage==="alertas")renderAlertas()});
+  loadAll().then(()=>{if(curPage==="alertas")renderAlertas();syncMobileNavBadges();});
   requestPushPermission();
   loadNotificaciones();
   startNotifPoll();
@@ -8492,6 +8531,28 @@ if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/sw.js').catch(()=>{});
 }
 </script>
+
+<!-- BOTTOM NAV MOBILE -->
+<nav class="mobile-nav" id="mobile-nav">
+  <div class="mn-item on" id="mn-alertas" onclick="goPage('alertas',document.getElementById('nav-alertas'));updateMobileNav('alertas')">
+    <span class="mn-icon">🔔</span><span>Inicio</span>
+    <span class="mn-badge" id="mn-badge-alertas" style="display:none"></span>
+  </div>
+  <div class="mn-item" id="mn-tareas" onclick="goPage('tareas',document.getElementById('nav-tareas'));updateMobileNav('tareas')">
+    <span class="mn-icon">✅</span><span>Tareas</span>
+    <span class="mn-badge" id="mn-badge-tareas" style="display:none"></span>
+  </div>
+  <div class="mn-item" id="mn-cashflow" onclick="goTo('cashflow',document.getElementById('nav-cashflow'));updateMobileNav('cashflow')">
+    <span class="mn-icon">💰</span><span>Cash Flow</span>
+    <span class="mn-badge" id="mn-badge-cf" style="display:none"></span>
+  </div>
+  <div class="mn-item" id="mn-impuestos" onclick="goPage('impuestos',document.getElementById('nav-impuestos'));updateMobileNav('impuestos')">
+    <span class="mn-icon">🏛</span><span>Impuestos</span>
+  </div>
+  <div class="mn-item" id="mn-menu" onclick="toggleSidebar()">
+    <span class="mn-icon">☰</span><span>Menú</span>
+  </div>
+</nav>
 </body>
 </html>
 
