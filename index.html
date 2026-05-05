@@ -3986,7 +3986,7 @@ const MESES_CF=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov
 
 async function loadCF(){
   try{
-    [cfConceptos,cfValores,cfPrestamos,cfCobranzas,cfInversiones,cfInvMovs,cfPrestCuotas,cfEmpleados,cfPagosEmpleados,rendDiarios,impuestosIngresos,autonomosCuotas]=await Promise.all([
+    [cfConceptos,cfValores,cfPrestamos,cfCobranzas,cfInversiones,cfInvMovs,cfPrestCuotas,cfEmpleados,cfPagosEmpleados,rendDiarios,impuestosIngresos,autonomosCuotas,gananciasAnticipos]=await Promise.all([
       sb("cf_conceptos?select=*&order=tipo,nombre"),
       sb("cf_valores?select=*"),
       sb("cf_prestamos?select=*&order=sociedad,tipo"),
@@ -3998,7 +3998,8 @@ async function loadCF(){
       sb("cf_pagos_empleados?select=*&order=periodo.desc").catch(()=>[]),
       sb("rendimientos_diarios?select=*&order=fecha.asc").catch(()=>[]),
       sb("impuestos_ingresos?select=*&order=periodo.desc").catch(()=>[]),
-      sb("autonomos_cuotas?select=*&order=periodo.desc").catch(()=>[])
+      sb("autonomos_cuotas?select=*&order=periodo.desc").catch(()=>[]),
+      sb("ganancias_anticipos?select=*&order=anio.desc,nro.asc").catch(()=>[])
     ]);
     // Badge: cobranzas vencidas + préstamos próximos
     const hoy=today();
@@ -7340,7 +7341,7 @@ initLogin();
 /* ══════════════════════════════════════
    MÓDULO IMPUESTOS
    ══════════════════════════════════════ */
-let impuestosIngresos=[],autonomosCuotas=[];
+let impuestosIngresos=[],autonomosCuotas=[],gananciasAnticipos=[];
 let impTab="iva";
 const AUTONOMOS_NOMBRES=["Tomás","Mario","Valentina","Amparo"];
 const IIBB_TASA=0.06; // 6% Salta
@@ -7363,11 +7364,12 @@ function setImpTab(tab,btn){
 
 async function loadImpuestos(){
   try{
-    [impuestosIngresos,autonomosCuotas]=await Promise.all([
+    [impuestosIngresos,autonomosCuotas,gananciasAnticipos]=await Promise.all([
       sb("impuestos_ingresos?select=*&order=periodo.desc"),
-      sb("autonomos_cuotas?select=*&order=periodo.desc")
+      sb("autonomos_cuotas?select=*&order=periodo.desc"),
+      sb("ganancias_anticipos?select=*&order=anio.desc,nro.asc").catch(()=>[])
     ]);
-  }catch(e){impuestosIngresos=[];autonomosCuotas=[];}
+  }catch(e){impuestosIngresos=[];autonomosCuotas=[];gananciasAnticipos=[];}
   setImpTab(impTab);
 }
 
@@ -7677,72 +7679,203 @@ async function marcarAutonomoPagado(periodo,nombre){
 /* ── GANANCIAS ── */
 function renderImpGanancias(){
   const wrap=document.getElementById("imp-tab-ganancias");if(!wrap)return;
-  // Proyección anual basada en datos cargados (últimos 12 meses)
   const now=new Date();
   const anio=now.getFullYear();
-  // Ingresos anuales = suma de facturación gravada + exenta de los últimos 12 meses
+  const MESES_FULL=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  const MESES_CORTO=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+  // ── Base de cálculo: últimos 12 meses ──
+  const filas12=[];
   let ingAnual=0,gasAnual=0,mesesConDatos=0;
-  for(let i=0;i<12;i++){
-    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+  for(let i=11;i>=0;i--){
+    const d=new Date(anio,now.getMonth()-i,1);
     const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    const label=`${MESES_CORTO[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
     const sudes=getIngreso(key,"SUDES");const pointers=getIngreso(key,"POINTERS");
-    const ingMes=(sudes.ingresos_gravados||0)+(sudes.ingresos_exentos||0)+(pointers.ingresos_gravados||0)+(pointers.ingresos_exentos||0);
-    const gasMes=comprobantes.filter(c=>{const fi=c.fecha_imputacion||c.fecha;return fi&&fi.startsWith(key);}).reduce((s,c)=>s+(parseFloat(c.total)||0),0);
-    if(ingMes>0||gasMes>0)mesesConDatos++;
-    ingAnual+=ingMes;gasAnual+=gasMes;
+    const ing=(sudes.ingresos_gravados||0)+(sudes.ingresos_exentos||0)+(pointers.ingresos_gravados||0)+(pointers.ingresos_exentos||0);
+    const gas=comprobantes.filter(c=>{const fi=c.fecha_imputacion||c.fecha;return fi&&fi.startsWith(key);}).reduce((s,c)=>s+(parseFloat(c.total)||0),0);
+    // Deducciones del mes: promedio de las cargadas (solo aplica a las que tienen)
+    const dedMes=((sudes.deducciones||0)+(pointers.deducciones||0));
+    const resultado=ing-gas-dedMes;
+    if(ing>0||gas>0)mesesConDatos++;
+    ingAnual+=ing;gasAnual+=gas;
+    filas12.push({key,label,ing,gas,dedMes,resultado,actual:key===`${anio}-${String(now.getMonth()+1).padStart(2,"0")}`});
   }
-  // Si hay menos de 12 meses con datos, proyectar
-  const promMeses=mesesConDatos||1;
-  const ingProyectado=mesesConDatos<12?(ingAnual/promMeses)*12:ingAnual;
-  const gasProyectado=mesesConDatos<12?(gasAnual/promMeses)*12:gasAnual;
-  const resultadoNeto=ingProyectado-gasProyectado;
+  // Proyectar si hay menos de 12 meses con datos
+  const promM=mesesConDatos||1;
+  const ingProy=mesesConDatos<12?(ingAnual/promM)*12:ingAnual;
+  const gasProy=mesesConDatos<12?(gasAnual/promM)*12:gasAnual;
+  // Deducciones anuales manuales (suma total cargada)
+  const dedAnual=impuestosIngresos.reduce((s,r)=>s+(r.deducciones||0),0);
+  const resultadoNeto=ingProy-gasProy-dedAnual;
   const gananciaImponible=Math.max(0,resultadoNeto);
-  const impuesto=Math.round(gananciaImponible*GANANCIAS_TASA);
-  const anticipo=Math.round(impuesto/10); // 10 anticipos anuales
-  // Anticipos: Oct-Jul del año siguiente
-  const mesesAnticipo=["Oct","Nov","Dic","Ene","Feb","Mar","Abr","May","Jun","Jul"];
-  const anticipoRows=mesesAnticipo.map((mes,i)=>{
-    const anioAnticipo=i<3?anio:anio+1;
-    return`<tr style="border-bottom:1px solid var(--b)">
-      <td style="padding:8px 12px;font-size:12px;color:var(--tx2)">${i+1}° anticipo — ${mes} ${anioAnticipo}</td>
-      <td style="text-align:right;padding:8px 12px;font-size:12px;font-weight:600;color:var(--re)">${anticipo?fmtImp(anticipo):"—"}</td>
+  const impuestoTotal=Math.round(gananciaImponible*GANANCIAS_TASA);
+  const anticipoBase=Math.round(impuestoTotal/10);
+
+  // ── Anticipos del año ──
+  const ANTICIPO_MESES=[
+    {mes:"Oct",anio:anio},{mes:"Nov",anio:anio},{mes:"Dic",anio:anio},
+    {mes:"Ene",anio:anio+1},{mes:"Feb",anio:anio+1},{mes:"Mar",anio:anio+1},
+    {mes:"Abr",anio:anio+1},{mes:"May",anio:anio+1},{mes:"Jun",anio:anio+1},{mes:"Jul",anio:anio+1}
+  ];
+  const getAnticipo=(nro)=>gananciasAnticipos.find(a=>a.anio===anio&&a.nro===nro)||null;
+  const totalPagado=ANTICIPO_MESES.reduce((s,_,i)=>{const a=getAnticipo(i+1);return s+(a?.pagado?(a.monto||anticipoBase):0);},0);
+  const totalPendiente=ANTICIPO_MESES.reduce((s,_,i)=>{const a=getAnticipo(i+1);return s+(!a?.pagado?(a?.monto||anticipoBase):0);},0);
+  const proximoIdx=ANTICIPO_MESES.findIndex((_,i)=>!getAnticipo(i+1)?.pagado);
+  const proximoLabel=proximoIdx>=0?`${proximoIdx+1}° — ${ANTICIPO_MESES[proximoIdx].mes} ${ANTICIPO_MESES[proximoIdx].anio}`:"Todos pagados ✓";
+
+  // ── Tabla mensual ──
+  const tablaFilas=filas12.map(f=>{
+    const bg=f.actual?"background:rgba(124,58,237,.06)":"";
+    const resCol=f.resultado>0?"var(--gr)":f.resultado<0?"var(--re)":"var(--tx3)";
+    return`<tr style="border-bottom:1px solid var(--b);${bg}">
+      <td style="padding:6px 10px;font-size:12px;color:${f.actual?"var(--ac)":"var(--tx2)"};font-weight:${f.actual?700:400}">${f.label}</td>
+      <td style="text-align:right;padding:6px 10px;font-size:12px;color:var(--gr)">${f.ing?fmtImp(f.ing):"—"}</td>
+      <td style="text-align:right;padding:6px 10px;font-size:12px;color:var(--re)">${f.gas?fmtImp(f.gas):"—"}</td>
+      <td style="text-align:right;padding:6px 10px;font-size:12px;font-weight:600;color:${resCol}">${f.resultado?fmtImp(Math.abs(f.resultado))+(f.resultado<0?" ▼":" ▲"):"—"}</td>
     </tr>`;
   }).join("");
+
+  // ── Tabla anticipos ──
+  const anticipoFilas=ANTICIPO_MESES.map((am,i)=>{
+    const nro=i+1;const a=getAnticipo(nro);
+    const monto=a?.monto!=null?a.monto:anticipoBase;
+    const pagado=a?.pagado||false;
+    return`<tr style="border-bottom:1px solid var(--b)">
+      <td style="padding:8px 10px;font-size:12px;color:var(--tx2)">${nro}° anticipo</td>
+      <td style="padding:8px 10px;font-size:12px;color:var(--tx3)">${am.mes} ${am.anio}</td>
+      <td style="padding:4px 8px">
+        <input type="number" value="${monto||""}" placeholder="${anticipoBase||0}"
+          style="width:110px;text-align:right;background:transparent;border:none;border-bottom:1px dashed var(--b2);color:var(--tx);font-size:12px;outline:none;font-family:var(--f)"
+          onchange="saveGananciasAnticipo(${anio},${nro},parseFloat(this.value)||0)" onkeydown="if(event.key==='Enter')this.blur()">
+      </td>
+      <td style="text-align:center;padding:8px 10px">
+        ${pagado
+          ?`<span style="color:var(--gr);font-size:12px;font-weight:600">✓ ${a?.fecha_pago?fmt(a.fecha_pago):""}</span>`
+          :`<button onclick="marcarGananciaPagado(${anio},${nro})" style="background:var(--surf2);border:1px solid var(--b);border-radius:5px;padding:3px 10px;font-size:11px;color:var(--tx2);cursor:pointer">Marcar pagado</button>`
+        }
+      </td>
+    </tr>`;
+  }).join("");
+
   wrap.innerHTML=`
-    <div style="background:var(--surf);border:1px solid var(--b2);border-radius:8px;padding:12px;margin-bottom:16px;font-size:12px;color:var(--tx3)">
-      📝 Estimación basada en los datos cargados de los últimos ${mesesConDatos} meses.
-      ${mesesConDatos<12?`<strong style="color:var(--am)">Cargá más meses para mayor precisión (${mesesConDatos}/12 cargados).</strong>`:""}
-      Tasa Ganancias SRL: <strong>35%</strong>. Vencimiento declaración: <strong>julio ${anio+1}</strong>.
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:20px">
+      <div class="sc"><div class="sc-l">Impuesto estimado</div><div class="sc-v" style="color:var(--re)">${impuestoTotal?fmtImp(impuestoTotal):"Sin datos"}</div><div class="sc-s">35% ganancia imponible</div></div>
+      <div class="sc"><div class="sc-l">Anticipos pagados</div><div class="sc-v" style="color:var(--gr)">${totalPagado?fmtImp(totalPagado):"—"}</div><div class="sc-s">${ANTICIPO_MESES.filter((_,i)=>getAnticipo(i+1)?.pagado).length}/10 cuotas</div></div>
+      <div class="sc"><div class="sc-l">Anticipos pendientes</div><div class="sc-v" style="color:var(--am)">${totalPendiente?fmtImp(totalPendiente):"—"}</div><div class="sc-s">${ANTICIPO_MESES.filter((_,i)=>!getAnticipo(i+1)?.pagado).length} restantes</div></div>
+      <div class="sc"><div class="sc-l">Próximo anticipo</div><div class="sc-v" style="font-size:14px;color:var(--ac)">${proximoLabel}</div><div class="sc-s">vencimiento</div></div>
     </div>
+
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+      <!-- Base de cálculo -->
       <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:16px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--tx3);margin-bottom:12px">PROYECCIÓN ANUAL ${anio}</div>
-        ${[
-          ["Ingresos proyectados",ingProyectado,"var(--gr)"],
-          ["Gastos proyectados",gasProyectado,"var(--re)"],
-          ["Resultado neto",resultadoNeto,resultadoNeto>=0?"var(--gr)":"var(--re)"],
-          ["Ganancia imponible (35%)",gananciaImponible,"var(--am)"],
-          ["Impuesto estimado",impuesto,"var(--re)"],
-        ].map(([label,val,col])=>`
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--b);font-size:13px">
-            <span style="color:var(--tx3)">${label}</span>
-            <strong style="color:${col}">${val?fmtImp(val):"—"}</strong>
-          </div>`).join("")}
-      </div>
-      <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:16px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--tx3);margin-bottom:8px">ANTICIPOS (10 cuotas)</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--tx3);margin-bottom:10px">BASE DE CÁLCULO — ÚLTIMOS 12 MESES</div>
+        <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse">
-          ${anticipoRows}
-          <tr style="background:var(--surf2)">
-            <td style="padding:8px 12px;font-size:12px;font-weight:700;color:var(--tx)">Total anticipos</td>
-            <td style="text-align:right;padding:8px 12px;font-size:13px;font-weight:700;color:var(--re)">${impuesto?fmtImp(anticipo*10):"—"}</td>
-          </tr>
+          <thead><tr style="background:var(--surf2)">
+            <th style="text-align:left;padding:5px 10px;font-size:10px;color:var(--tx3)">Mes</th>
+            <th style="text-align:right;padding:5px 10px;font-size:10px;color:var(--gr)">Ingresos</th>
+            <th style="text-align:right;padding:5px 10px;font-size:10px;color:var(--re)">Gastos</th>
+            <th style="text-align:right;padding:5px 10px;font-size:10px;color:var(--tx3)">Resultado</th>
+          </tr></thead>
+          <tbody>${tablaFilas}</tbody>
+          <tfoot>
+            <tr style="background:var(--surf2);border-top:2px solid var(--b2)">
+              <td style="padding:7px 10px;font-size:12px;font-weight:700;color:var(--tx)">TOTAL</td>
+              <td style="text-align:right;padding:7px 10px;font-size:12px;font-weight:700;color:var(--gr)">${ingAnual?fmtImp(ingAnual):"—"}</td>
+              <td style="text-align:right;padding:7px 10px;font-size:12px;font-weight:700;color:var(--re)">${gasAnual?fmtImp(gasAnual):"—"}</td>
+              <td style="text-align:right;padding:7px 10px;font-size:12px;font-weight:700;color:${(ingAnual-gasAnual)>=0?"var(--gr)":"var(--re)"}">${fmtImp(Math.abs(ingAnual-gasAnual))}</td>
+            </tr>
+          </tfoot>
         </table>
+        </div>
+        <!-- Deducciones y resultado final -->
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--b)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span style="font-size:12px;color:var(--tx3)">Deducciones admitidas</span>
+            <input type="number" id="gan-deducciones" value="${dedAnual||""}" placeholder="0"
+              style="width:120px;text-align:right;background:var(--surf2);border:1px solid var(--b);border-radius:5px;color:var(--tx);font-size:12px;padding:3px 8px;outline:none;font-family:var(--f)"
+              onchange="saveGananciaDeducciones(this.value)" onkeydown="if(event.key==='Enter')this.blur()"
+              title="Sueldos, alquileres, amortizaciones, etc.">
+          </div>
+          ${[
+            ["Ingresos proyectados",ingProy,"var(--gr)"],
+            ["Gastos proyectados",gasProy,"var(--re)"],
+            ["Deducciones",dedAnual,"var(--am)"],
+            ["Resultado neto",resultadoNeto,resultadoNeto>=0?"var(--gr)":"var(--re)"],
+            ["Ganancia imponible",gananciaImponible,"var(--am)"],
+            ["Impuesto 35%",impuestoTotal,"var(--re)"],
+          ].map(([l,v,c])=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--b);font-size:12px">
+            <span style="color:var(--tx3)">${l}</span><strong style="color:${c}">${v?fmtImp(v):"—"}</strong>
+          </div>`).join("")}
+          ${mesesConDatos<12?`<div style="margin-top:8px;font-size:11px;color:var(--am)">⚠ ${mesesConDatos}/12 meses con datos — proyectando el resto</div>`:""}
+        </div>
+      </div>
+
+      <!-- Anticipos -->
+      <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:16px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--tx3);margin-bottom:10px">ANTICIPOS ${anio} — 10 CUOTAS (Oct ${anio} – Jul ${anio+1})</div>
+        <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:var(--surf2)">
+            <th style="text-align:left;padding:5px 10px;font-size:10px;color:var(--tx3)">N°</th>
+            <th style="text-align:left;padding:5px 10px;font-size:10px;color:var(--tx3)">Vencimiento</th>
+            <th style="text-align:right;padding:5px 10px;font-size:10px;color:var(--tx3)">Monto</th>
+            <th style="text-align:center;padding:5px 10px;font-size:10px;color:var(--tx3)">Estado</th>
+          </tr></thead>
+          <tbody>${anticipoFilas}</tbody>
+          <tfoot>
+            <tr style="background:var(--surf2);border-top:2px solid var(--b2)">
+              <td colspan="2" style="padding:7px 10px;font-size:12px;font-weight:700;color:var(--tx)">TOTAL ANTICIPOS</td>
+              <td style="text-align:right;padding:7px 10px;font-size:12px;font-weight:700;color:var(--re)">${fmtImp(anticipoBase*10)||"—"}</td>
+              <td style="text-align:center;padding:7px 10px;font-size:11px;color:var(--gr)">${ANTICIPO_MESES.filter((_,i)=>getAnticipo(i+1)?.pagado).length}/10 ✓</td>
+            </tr>
+          </tfoot>
+        </table>
+        </div>
       </div>
     </div>
     <div style="background:var(--surf);border:1px solid var(--b2);border-radius:8px;padding:12px;font-size:11px;color:var(--tx3)">
-      ⚠️ <strong>Importante:</strong> Esta es una estimación simplificada. La base imponible real considera deducciones admitidas, ajuste por inflación, amortizaciones y otros conceptos. Consultá con tu contador para la declaración jurada.
+      ⚠️ <strong>Importante:</strong> Estimación simplificada. La base imponible real considera ajuste por inflación, amortizaciones y otros conceptos específicos. Consultá con tu contador para la declaración jurada. Vencimiento: <strong>julio ${anio+1}</strong>.
     </div>`;
+}
+
+async function saveGananciasAnticipo(anio,nro,monto){
+  const existing=gananciasAnticipos.find(a=>a.anio===anio&&a.nro===nro);
+  try{
+    if(existing){
+      await sb(`ganancias_anticipos?id=eq.${existing.id}`,{method:"PATCH",body:JSON.stringify({monto,updated_at:new Date().toISOString()})});
+      existing.monto=monto;
+    }else{
+      const[r]=await sb("ganancias_anticipos",{method:"POST",body:JSON.stringify({anio,nro,monto,updated_at:new Date().toISOString()})});
+      gananciasAnticipos.push(r);
+    }
+    toast("Monto guardado","ok");
+  }catch(e){toast("Error al guardar","err")}
+}
+async function marcarGananciaPagado(anio,nro){
+  const existing=gananciasAnticipos.find(a=>a.anio===anio&&a.nro===nro);
+  const fechaPago=today();
+  try{
+    if(existing){
+      await sb(`ganancias_anticipos?id=eq.${existing.id}`,{method:"PATCH",body:JSON.stringify({pagado:true,fecha_pago:fechaPago,updated_at:new Date().toISOString()})});
+      existing.pagado=true;existing.fecha_pago=fechaPago;
+    }else{
+      const[r]=await sb("ganancias_anticipos",{method:"POST",body:JSON.stringify({anio,nro,pagado:true,fecha_pago:fechaPago,updated_at:new Date().toISOString()})});
+      gananciasAnticipos.push(r);
+    }
+    renderImpGanancias();toast("Anticipo marcado como pagado ✓","ok");
+  }catch(e){toast("Error","err")}
+}
+async function saveGananciaDeducciones(val){
+  const monto=parseFloat(String(val).replace(/\./g,"").replace(",","."))||0;
+  // Guarda en el mes actual de SUDES como referencia
+  const now=new Date();
+  const periodo=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  try{
+    await saveIngreso(periodo,"SUDES","deducciones",monto);
+    toast("Deducciones guardadas","ok");
+  }catch(e){toast("Error","err")}
 }
 </script>
 
