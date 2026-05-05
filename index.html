@@ -2910,9 +2910,15 @@ async function selectCurso(id){
           <div class="fg form-full"><label class="fl">Respaldo institucional</label><input class="fi" value="${esc(curso.respaldo_institucional||"")}" onchange="updateCursoField('${id}','respaldo_institucional',this.value)"></div>
           <div class="fg form-full"><label class="fl">Descripción</label><textarea class="fta" onchange="updateCursoField('${id}','descripcion',this.value)">${esc(curso.descripcion||"")}</textarea></div>
         </div>
-        <div class="toggle-row">
-          <label class="toggle"><input type="checkbox" ${curso.tiene_after?"checked":""} onchange="updateCursoField('${id}','tiene_after',this.checked)"><span class="tslider"></span></label>
-          <span class="toggle-label">Tiene catering</span>
+        <div style="display:flex;gap:16px;flex-wrap:wrap">
+          <div class="toggle-row">
+            <label class="toggle"><input type="checkbox" ${curso.certificado?"checked":""} onchange="updateCursoField('${id}','certificado',this.checked);selectCurso('${id}')"><span class="tslider"></span></label>
+            <span class="toggle-label">Curso certificado <span style="font-size:10px;color:var(--tx3)">(22% costo)</span></span>
+          </div>
+          <div class="toggle-row">
+            <label class="toggle"><input type="checkbox" ${curso.tiene_after?"checked":""} onchange="updateCursoField('${id}','tiene_after',this.checked)"><span class="tslider"></span></label>
+            <span class="toggle-label">Tiene catering</span>
+          </div>
         </div>
         ${curso.tiene_after?`<div class="fg" style="margin-top:8px"><label class="fl">Descripción del catering</label><input class="fi" value="${esc(curso.descripcion_after||"")}" onchange="updateCursoField('${id}','descripcion_after',this.value)" placeholder="Ej: Cena en Restaurante El Portal, 21hs"></div>`:""}
 
@@ -2922,12 +2928,15 @@ async function selectCurso(id){
           const cos=curso.costo_estimado||0;
           const arancelCalc=(curso.arancel||0)*(curso.cupos_inscriptos||curso.cupos_max||0);
           const ingDisplay=ing||arancelCalc||0;
-          const margen=ingDisplay-cos;
+          const tasa=curso.certificado?0.22:0.17;
+          const costoSugerido=Math.round(ingDisplay*tasa);
+          const cosDisplay=cos||costoSugerido||0;
+          const margen=ingDisplay-cosDisplay;
           const margenPct=ingDisplay?((margen/ingDisplay)*100).toFixed(1):"0.0";
           const margenColor=margen>=0?"var(--gr)":"var(--re)";
 
           return`<div style="background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:12px 14px;margin-top:12px">
-            <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">💰 Presupuesto estimado</div>
+            <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">💰 Presupuesto estimado · <span style="color:var(--pu);font-weight:600">${curso.certificado?"Certificado (22%)":"No certificado (17%)"}</span></div>
             <div class="form-grid">
               <div class="fg">
                 <label class="fl">Ingreso estimado ($)</label>
@@ -2936,7 +2945,8 @@ async function selectCurso(id){
               </div>
               <div class="fg">
                 <label class="fl">Costo estimado ($)</label>
-                <input class="fi" type="number" id="curso-cos-${id}" value="${cos||""}" placeholder="0" oninput="recalcCursoMargen('${id}')" onchange="updateCursoField('${id}','costo_estimado',this.value);recalcCursoMargen('${id}')">
+                <input class="fi" type="number" id="curso-cos-${id}" value="${cos||""}" placeholder="${costoSugerido||0}" oninput="recalcCursoMargen('${id}')" onchange="updateCursoField('${id}','costo_estimado',this.value);recalcCursoMargen('${id}')">
+                ${ingDisplay&&!cos?`<div style="font-size:10px;color:var(--tx3);margin-top:3px">Sugerido: $${costoSugerido.toLocaleString("es-AR")} (${(tasa*100).toFixed(0)}% del ingreso)</div>`:""}
               </div>
             </div>
             <div id="curso-margen-${id}" style="display:flex;gap:16px;margin-top:8px;font-size:12px;flex-wrap:wrap">
@@ -4412,8 +4422,14 @@ function renderCFResumen(){
   // ingreso efectivo: usa ingreso_estimado guardado; si es 0, usa arancel×cupos como fallback (igual que el formulario)
   const getCursoIngEfectivo=(c)=>c.ingreso_estimado||((c.arancel||0)*(c.cupos_inscriptos||c.cupos_max||0))||0;
   const getCursoIngMes=(mkey)=>getCursosDelMes(mkey).reduce((s,c)=>s+getCursoIngEfectivo(c),0);
-  // Costo pendiente = costo_estimado × (1 - progreso%) — disminuye a medida que se tilda el checklist
-  const getCursoCostMes=(mkey)=>getCursosDelMes(mkey).reduce((s,c)=>s+((c.costo_estimado||0)*(1-(c.progreso||0)/100)),0);
+  // Costo efectivo: manual si existe, sino tasa por tipo (certificado 22%, no certificado 17%)
+  const getCursoCostoEfectivo=(c)=>{
+    if(c.costo_estimado) return c.costo_estimado;
+    const ing=getCursoIngEfectivo(c);
+    return ing*(c.certificado?0.22:0.17);
+  };
+  // Costo pendiente = costo_efectivo × (1 - progreso%) — disminuye a medida que se tilda el checklist
+  const getCursoCostMes=(mkey)=>getCursosDelMes(mkey).reduce((s,c)=>s+(getCursoCostoEfectivo(c)*(1-(c.progreso||0)/100)),0);
   // Helpers impuestos para el resumen — respeta cfSociedad
   const AUTO_SOC={SUDES:["Mario","Valentina"],POINTERS:["Tomás","Amparo"]};
   const getImpTax=(mkey)=>{
