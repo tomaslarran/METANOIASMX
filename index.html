@@ -2321,6 +2321,44 @@ async function renderAlertas(){
       onclick:`goPage('cashflow',document.getElementById('nav-cashflow'));setCFTab('inversiones')`});
   });
 
+  // ── Alertas de impuestos ──
+  const mesImpKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  const MESES_LABEL=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  const mesImpLabel=MESES_LABEL[now.getMonth()];
+  const mesProxLabel=MESES_LABEL[(now.getMonth()+1)%12];
+  // IVA e IIBB vencen el 20 del mes siguiente
+  const vencIVADate=new Date(now.getFullYear(),now.getMonth()+1,20);
+  const vencIVAStr=`${vencIVADate.getFullYear()}-${String(vencIVADate.getMonth()+1).padStart(2,"0")}-20`;
+  const dVencIVA=days(vencIVAStr);
+  if(dVencIVA!==null&&dVencIVA<=30){
+    ["SUDES","POINTERS"].forEach(soc=>{
+      const ing=getIngreso(mesImpKey,soc);
+      const deb=(ing.ingresos_gravados||0)*IVA_TASA;
+      const cr=getCreditoFiscal(mesImpKey,soc);
+      const saldo=Math.round(deb-cr);
+      if(saldo>0)alertas.push({tipo:"impuesto",icon:"🏛",urgencia:dVencIVA<0?"critica":dVencIVA===0?"hoy":dVencIVA<=7?"semana":"mes",d:dVencIVA,
+        titulo:`IVA ${mesImpLabel} — ${soc}`,sub:`A pagar: $${saldo.toLocaleString("es-AR")}`,fecha:vencIVAStr,
+        onclick:`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('iva')`});
+      const base=(ing.ingresos_gravados||0)+(ing.ingresos_exentos||0);
+      const iibb=Math.round(base*IIBB_TASA);
+      if(iibb>0)alertas.push({tipo:"impuesto",icon:"🏛",urgencia:dVencIVA<0?"critica":dVencIVA===0?"hoy":dVencIVA<=7?"semana":"mes",d:dVencIVA,
+        titulo:`IIBB ${mesImpLabel} — ${soc}`,sub:`6% de $${Math.round(base).toLocaleString("es-AR")} = $${iibb.toLocaleString("es-AR")}`,fecha:vencIVAStr,
+        onclick:`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('iibb')`});
+    });
+  }
+  // Autónomos: vencen el 20 del mes actual
+  const vencAutoStr=`${mesImpKey}-20`;
+  const dVencAuto=days(vencAutoStr);
+  if(dVencAuto!==null&&dVencAuto<=30){
+    AUTONOMOS_NOMBRES.forEach(nombre=>{
+      const cuota=autonomosCuotas.find(c=>c.periodo===mesImpKey&&c.nombre===nombre);
+      if(cuota&&!cuota.pagado&&(cuota.monto||0)>0)
+        alertas.push({tipo:"impuesto",icon:"👤",urgencia:dVencAuto<0?"critica":dVencAuto===0?"hoy":dVencAuto<=7?"semana":"mes",d:dVencAuto,
+          titulo:`Autónomo ${mesImpLabel} — ${nombre}`,sub:`$${Math.round(cuota.monto).toLocaleString("es-AR")} · pendiente`,fecha:vencAutoStr,
+          onclick:`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('autonomos')`});
+    });
+  }
+
   alertas.sort((a,b)=>(a.d??999)-(b.d??999));
 
   // ── Stats ──
@@ -2332,6 +2370,12 @@ async function renderAlertas(){
   const cobMonto=cobPend.reduce((s,c)=>s+(c.monto||0),0);
   const invActivas=cfInversiones.filter(i=>i.estado==="activa");
   const invMonto=invActivas.reduce((s,i)=>s+(parseFloat(i.monto_actual||i.monto_inicial)||0),0);
+  // Stats impuestos
+  let ivaTotalMes=0;
+  ["SUDES","POINTERS"].forEach(soc=>{const ing=getIngreso(mesImpKey,soc);const s=(ing.ingresos_gravados||0)*IVA_TASA-getCreditoFiscal(mesImpKey,soc);if(s>0)ivaTotalMes+=s;});
+  ivaTotalMes=Math.round(ivaTotalMes);
+  const autoPend=autonomosCuotas.filter(c=>c.periodo===mesImpKey&&!c.pagado&&(c.monto||0)>0);
+  const autoMontoPend=Math.round(autoPend.reduce((s,c)=>s+(c.monto||0),0));
 
   // Badge del nav
   const critCount=alertas.filter(a=>a.urgencia==="critica"||a.urgencia==="hoy").length;
@@ -2383,6 +2427,8 @@ async function renderAlertas(){
       ${statCard("💳",cuotasSem,"Cuotas esta semana",cuotasMonto?"$"+Math.round(cuotasMonto).toLocaleString("es-AR"):"Sin vencimientos",cuotasSem?"#F97316":"var(--tx3)",`goPage('cashflow',document.getElementById('nav-cashflow'));setCFTab('prestamos')`)}
       ${statCard("📥","$"+Math.round(cobMonto).toLocaleString("es-AR"),"Por cobrar",`${cobPend.length} pendiente${cobPend.length!==1?"s":""}`,cobMonto>0?"var(--gr)":"var(--tx3)",`goPage('cashflow',document.getElementById('nav-cashflow'));setCFTab('cobranzas')`)}
       ${statCard("💰",invActivas.length,"Inversiones activas",invMonto?"$"+Math.round(invMonto).toLocaleString("es-AR"):"—","var(--ac)",`goPage('cashflow',document.getElementById('nav-cashflow'));setCFTab('inversiones')`)}
+      ${statCard("🏛",ivaTotalMes?"$"+ivaTotalMes.toLocaleString("es-AR"):"Sin datos","IVA "+mesImpLabel,`Vence el 20 de ${mesProxLabel}`,ivaTotalMes?"var(--re)":"var(--tx3)",`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('iva')`)}
+      ${statCard("👤",autoPend.length||"✓","Autónomos "+mesImpLabel,autoMontoPend?"$"+autoMontoPend.toLocaleString("es-AR")+" pendiente":"Al día",autoPend.length?"var(--am)":"var(--gr)",`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('autonomos')`)}
     </div>
     ${!alertas.length
       ?`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:48px;text-align:center"><div style="font-size:40px;margin-bottom:12px">🎉</div><div style="font-size:15px;font-weight:600;color:var(--tx)">Todo al día</div><div style="font-size:13px;color:var(--tx3);margin-top:6px">No hay vencimientos ni alertas en los próximos 30 días.</div></div>`
