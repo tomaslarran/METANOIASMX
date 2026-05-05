@@ -1896,12 +1896,19 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
 <!-- MODAL EDITAR CELDA CF -->
 <div class="mov" id="modal-cf-celda" onclick="if(event.target===this)closeModal('modal-cf-celda')">
-  <div class="modal" style="max-width:360px">
+  <div class="modal" style="max-width:420px">
     <div class="mt"><span id="mcel-title">Editar valor</span><button class="mt-close" onclick="closeModal('modal-cf-celda')">✕</button></div>
-    <div class="fg">
-      <label class="fl" id="mcel-label">Monto ($)</label>
-      <input class="fi" id="mcel-monto" type="number" placeholder="0" min="0" step="0.01" style="font-size:18px;text-align:right" onkeydown="if(event.key==='Enter')saveCFCelda()">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="fg">
+        <label class="fl">📋 Proyectado</label>
+        <input class="fi" id="mcel-monto" type="number" placeholder="0" min="0" step="0.01" style="text-align:right" oninput="updateMcelDelta()" onkeydown="if(event.key==='Enter')saveCFCelda()">
+      </div>
+      <div class="fg">
+        <label class="fl">✅ Real</label>
+        <input class="fi" id="mcel-real" type="number" placeholder="sin dato" min="0" step="0.01" style="text-align:right" oninput="updateMcelDelta()" onkeydown="if(event.key==='Enter')saveCFCelda()">
+      </div>
     </div>
+    <div id="mcel-delta" style="font-size:12px;text-align:center;padding:6px 0;min-height:22px;font-weight:600"></div>
     <div class="ma"><button class="bc" onclick="closeModal('modal-cf-celda')">Cancelar</button><button class="bk" id="mcel-save-btn" onclick="saveCFCelda()">Guardar</button></div>
   </div>
 </div>
@@ -4163,6 +4170,14 @@ function renderCFResumen(){
   const egresos=conceptos.filter(c=>c.tipo==="Egreso");
 
   const getVal=(c,mkey)=>{const v=cfValores.find(v=>v.concepto_id===c.id&&v.periodo===mkey);return v?.monto||0;};
+  const getReal=(c,mkey)=>{const v=cfValores.find(v=>v.concepto_id===c.id&&v.periodo===mkey);return v?.monto_real??null;};
+  const getRealEfectivo=(c,mkey)=>getReal(c,mkey)??getVal(c,mkey);
+  const getTotalRealTipo=(tipo,mkey)=>{
+    const base=conceptos.filter(c=>c.tipo===tipo).reduce((s,c)=>s+getRealEfectivo(c,mkey),0);
+    if(tipo==="Egreso")return base+getCuotasTotalMes(mkey)+getSueldosTotalMes(mkey)+getCursoCostMes(mkey)+getImpTotal(mkey);
+    return base+getCursoIngMes(mkey);
+  };
+  const hayRealEnMes=(tipo,mkey)=>conceptos.filter(c=>c.tipo===tipo).some(c=>getReal(c,mkey)!==null);
   const getCuotasTotalMes=(mkey)=>cfPrestamos
     .filter(p=>p.activo&&p.incluir_en_cf!==false&&(p.sociedad===cfSociedad||cfSociedad==="Ambas"))
     .reduce((s,p)=>s+cfPrestCuotas
@@ -4276,13 +4291,29 @@ function renderCFResumen(){
     list.forEach(c=>{
       const celdas=meses.map(m=>{
         const monto=getVal(c,m.key);
-        const montoFmt=monto?("$"+Math.round(monto).toLocaleString("es-AR")):"—";
+        const real=getReal(c,m.key);
         const bgActual=m.actual?"background:rgba(124,58,237,.06)":"";
-        const faded=m.pasado&&!monto?"opacity:.45":"";
-        return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${monto?"var(--tx)":"var(--tx3)"};border-right:1px solid var(--b);cursor:pointer;transition:background .12s;${bgActual};${faded}"
+        const faded=m.pasado&&!monto&&real===null?"opacity:.45":"";
+        let display,cellColor;
+        if(real!==null){
+          const delta=real-monto;
+          const isGood=tipo==="Ingreso"?delta>=0:delta<=0;
+          const deltaCol=delta===0?"var(--tx3)":isGood?"var(--gr)":"var(--re)";
+          const sign=delta>0?"+":"-";
+          display=`<div style="line-height:1.35">
+            <div style="font-weight:700;color:${deltaCol==="var(--tx3)"?"var(--tx)":deltaCol}">${real?"$"+Math.round(real).toLocaleString("es-AR"):"—"}</div>
+            ${monto?`<div style="font-size:10px;color:var(--tx4)">proy $${Math.round(monto).toLocaleString("es-AR")}</div>`:""}
+            ${delta!==0?`<div style="font-size:10px;color:${deltaCol}">${sign}$${Math.round(Math.abs(delta)).toLocaleString("es-AR")}</div>`:""}
+          </div>`;
+          cellColor="var(--tx)";
+        }else{
+          display=monto?"$"+Math.round(monto).toLocaleString("es-AR"):"—";
+          cellColor=monto?"var(--tx)":"var(--tx3)";
+        }
+        return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${cellColor};border-right:1px solid var(--b);cursor:pointer;transition:background .12s;${bgActual};${faded}"
           onmouseenter="this.style.background='var(--surf2)'" onmouseleave="this.style.background='${m.actual?'rgba(124,58,237,.06)':''}'"
-          onclick="editCFCelda('${c.id}','${m.key}','${esc(c.nombre)}','${m.label}',${monto})"
-          title="Click para editar">${montoFmt}</td>`;
+          onclick="editCFCelda('${c.id}','${m.key}','${esc(c.nombre)}','${m.label}',${monto},${real!==null?real:'null'},'${tipo}')"
+          title="Click para editar">${display}</td>`;
       }).join("");
       const cat=c.categoria?`<span style="font-size:9px;color:var(--tx4);margin-left:4px">${esc(c.categoria)}</span>`:"";
       rows+=`<tr style="border-bottom:1px solid var(--b)">
@@ -4487,11 +4518,26 @@ function renderCFResumen(){
         }
       }
     }
-    // Fila total del bloque (incluye cuotas para Egreso via getTotalTipo)
+    // Fila total del bloque
     const totales=meses.map(m=>{
-      const total=getTotalTipo(tipo,m.key);
+      const proy=getTotalTipo(tipo,m.key);
+      const real=getTotalRealTipo(tipo,m.key);
+      const hayReal=hayRealEnMes(tipo,m.key);
       const bgActual=m.actual?"background:rgba(124,58,237,.1)":"background:"+colorH;
-      return`<td style="text-align:right;padding:6px 10px;font-size:12px;font-weight:700;color:${colorT};border-right:1px solid var(--b);${bgActual}">${total?"$"+Math.round(total).toLocaleString("es-AR"):"—"}</td>`;
+      if(hayReal){
+        const delta=real-proy;
+        const isGood=tipo==="Ingreso"?delta>=0:delta<=0;
+        const deltaCol=delta===0?"var(--tx3)":isGood?"var(--gr)":"var(--re)";
+        const sign=delta>0?"+":"-";
+        return`<td style="text-align:right;padding:6px 10px;font-size:12px;border-right:1px solid var(--b);${bgActual}">
+          <div style="line-height:1.35">
+            <div style="font-weight:700;color:${colorT}">${real?"$"+Math.round(real).toLocaleString("es-AR"):"—"}</div>
+            <div style="font-size:10px;color:var(--tx4)">proy $${Math.round(proy).toLocaleString("es-AR")}</div>
+            ${delta!==0?`<div style="font-size:10px;color:${deltaCol}">${sign}$${Math.round(Math.abs(delta)).toLocaleString("es-AR")}</div>`:""}
+          </div>
+        </td>`;
+      }
+      return`<td style="text-align:right;padding:6px 10px;font-size:12px;font-weight:700;color:${colorT};border-right:1px solid var(--b);${bgActual}">${proy?"$"+Math.round(proy).toLocaleString("es-AR"):"—"}</td>`;
     }).join("");
     rows+=`<tr><td style="padding:6px 12px;font-size:11px;font-weight:700;color:${colorT};background:${colorH}">TOTAL ${tipo==="Ingreso"?"INGRESOS":"EGRESOS"}</td>${totales}</tr>`;
     return rows;
@@ -4499,11 +4545,26 @@ function renderCFResumen(){
 
   // Fila resultado financiero del mes
   const filaResultado=mesesFiltrados.map(m=>{
-    const ing=getTotalTipo("Ingreso",m.key);
-    const egr=getTotalTipo("Egreso",m.key);
-    const r=ing-egr;
+    const hayReal=hayRealEnMes("Ingreso",m.key)||hayRealEnMes("Egreso",m.key);
+    const ingProy=getTotalTipo("Ingreso",m.key);
+    const egrProy=getTotalTipo("Egreso",m.key);
+    const rProy=ingProy-egrProy;
     const bgActual=m.actual?"background:rgba(124,58,237,.08)":"background:var(--surf2)";
-    return`<td style="text-align:right;padding:7px 10px;font-size:12px;font-weight:700;color:${r>0?"var(--gr)":r<0?"var(--re)":"var(--tx3)"};border-right:1px solid var(--b);${bgActual}">${r?"$"+Math.round(r).toLocaleString("es-AR"):"—"}</td>`;
+    if(hayReal){
+      const ingReal=getTotalRealTipo("Ingreso",m.key);
+      const egrReal=getTotalRealTipo("Egreso",m.key);
+      const rReal=ingReal-egrReal;
+      const delta=rReal-rProy;
+      const sign=delta>0?"+":"-";
+      return`<td style="text-align:right;padding:7px 10px;font-size:12px;border-right:1px solid var(--b);${bgActual}">
+        <div style="line-height:1.35">
+          <div style="font-weight:700;color:${rReal>0?"var(--gr)":rReal<0?"var(--re)":"var(--tx3)"}">${rReal?"$"+Math.round(rReal).toLocaleString("es-AR"):"—"}</div>
+          <div style="font-size:10px;color:var(--tx4)">proy $${Math.round(rProy).toLocaleString("es-AR")}</div>
+          ${delta!==0?`<div style="font-size:10px;color:${delta>0?"var(--gr)":"var(--re)"}">${sign}$${Math.round(Math.abs(delta)).toLocaleString("es-AR")}</div>`:""}
+        </div>
+      </td>`;
+    }
+    return`<td style="text-align:right;padding:7px 10px;font-size:12px;font-weight:700;color:${rProy>0?"var(--gr)":rProy<0?"var(--re)":"var(--tx3)"};border-right:1px solid var(--b);${bgActual}">${rProy?"$"+Math.round(rProy).toLocaleString("es-AR"):"—"}</td>`;
   }).join("");
 
   // Fila saldo acumulado
@@ -4540,29 +4601,45 @@ function renderCFResumen(){
   if(cfCuotasWrap)cfCuotasWrap.innerHTML="";
 }
 
-let _cfCeldaConceptoId=null,_cfCeldaPeriodo=null;
-function editCFCelda(conceptoId,periodo,nombre,mesLabel,montoActual){
-  _cfCeldaConceptoId=conceptoId;_cfCeldaPeriodo=periodo;
+let _cfCeldaConceptoId=null,_cfCeldaPeriodo=null,_cfCeldaTipo=null;
+function editCFCelda(conceptoId,periodo,nombre,mesLabel,montoActual,montoReal,tipoConc){
+  _cfCeldaConceptoId=conceptoId;_cfCeldaPeriodo=periodo;_cfCeldaTipo=tipoConc||null;
   document.getElementById("mcel-title").textContent=nombre+" — "+mesLabel;
-  document.getElementById("mcel-label").textContent="Monto actual: $"+Math.round(montoActual).toLocaleString("es-AR");
-  const inp=document.getElementById("mcel-monto");
-  inp.value=montoActual||"";
+  document.getElementById("mcel-monto").value=montoActual||"";
+  document.getElementById("mcel-real").value=montoReal!=null?montoReal:"";
+  updateMcelDelta();
   openM("modal-cf-celda");
-  setTimeout(()=>{inp.focus();inp.select()},80);
+  setTimeout(()=>{document.getElementById("mcel-monto").focus();document.getElementById("mcel-monto").select()},80);
+}
+function updateMcelDelta(){
+  const proj=parseFloat(document.getElementById("mcel-monto").value)||0;
+  const realStr=document.getElementById("mcel-real").value;
+  const el=document.getElementById("mcel-delta");if(!el)return;
+  if(!realStr){el.textContent="";return;}
+  const real=parseFloat(realStr)||0;
+  const delta=real-proj;
+  if(delta===0){el.textContent="✓ Real igual al proyectado";el.style.color="var(--tx3)";return;}
+  const isGood=_cfCeldaTipo==="Ingreso"?delta>0:delta<0;
+  const sign=delta>0?"+":"-";
+  el.textContent=`${sign}$${Math.round(Math.abs(delta)).toLocaleString("es-AR")} vs proyectado`;
+  el.style.color=isGood?"var(--gr)":"var(--re)";
 }
 async function saveCFCelda(){
   const monto=parseFloat(String(document.getElementById("mcel-monto").value).replace(/\./g,"").replace(",","."))||0;
+  const realStr=document.getElementById("mcel-real").value;
+  const monto_real=realStr!==""?parseFloat(String(realStr).replace(/\./g,"").replace(",","."))||0:null;
   const btn=document.getElementById("mcel-save-btn");btn.disabled=true;
   try{
     const existing=cfValores.find(v=>v.concepto_id===_cfCeldaConceptoId&&v.periodo===_cfCeldaPeriodo);
+    const payload={monto,monto_real,updated_at:new Date().toISOString()};
     if(existing){
-      await sb(`cf_valores?id=eq.${existing.id}`,{method:"PATCH",body:JSON.stringify({monto,updated_at:new Date().toISOString()})});
-      existing.monto=monto;
+      await sb(`cf_valores?id=eq.${existing.id}`,{method:"PATCH",body:JSON.stringify(payload)});
+      existing.monto=monto;existing.monto_real=monto_real;
     }else{
-      const[created]=await sb("cf_valores",{method:"POST",body:JSON.stringify({concepto_id:_cfCeldaConceptoId,periodo:_cfCeldaPeriodo,monto,updated_at:new Date().toISOString()})});
+      const[created]=await sb("cf_valores",{method:"POST",body:JSON.stringify({concepto_id:_cfCeldaConceptoId,periodo:_cfCeldaPeriodo,...payload})});
       cfValores.push(created);
     }
-    closeM("modal-cf-celda");renderCFResumen();toast("$"+Math.round(monto).toLocaleString("es-AR")+" guardado","ok");
+    closeM("modal-cf-celda");renderCFResumen();toast("Guardado","ok");
   }catch(e){toast("Error al guardar","err")}
   finally{btn.disabled=false}
 }
