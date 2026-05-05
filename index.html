@@ -2867,12 +2867,14 @@ async function selectCurso(id){
   document.querySelectorAll(".curso-card").forEach(c=>c.classList.toggle("selected",c.onclick?.toString().includes(id)));
   const [tareasCurso,costosCurso0]=await Promise.all([
     sb(`curso_tareas?curso_id=eq.${id}&select=*&order=orden`),
-    sb(`curso_costos?curso_id=eq.${id}&select=*&order=orden`)
+    sb(`curso_costos?curso_id=eq.${id}&select=*&order=orden`).catch(()=>[])
   ]);
   let costosCurso=costosCurso0;
   if(!costosCurso.length){
-    await Promise.all(COSTO_TMPL.map(t=>sb("curso_costos",{method:"POST",body:JSON.stringify({curso_id:id,...t,aplica:false,monto_estimado:0,updated_at:new Date().toISOString()})})));
-    costosCurso=await sb(`curso_costos?curso_id=eq.${id}&select=*&order=orden`);
+    try{
+      await Promise.all(COSTO_TMPL.map(t=>sb("curso_costos",{method:"POST",body:JSON.stringify({curso_id:id,...t,aplica:false,monto_estimado:0,updated_at:new Date().toISOString()})})));
+      costosCurso=await sb(`curso_costos?curso_id=eq.${id}&select=*&order=orden`).catch(()=>[]);
+    }catch(e){costosCurso=[];}
   }
   const prov=proveedores.find(p=>p.id===curso.proveedor_id);
   const det=document.getElementById("curso-detail-container");
