@@ -3986,7 +3986,7 @@ const MESES_CF=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov
 
 async function loadCF(){
   try{
-    [cfConceptos,cfValores,cfPrestamos,cfCobranzas,cfInversiones,cfInvMovs,cfPrestCuotas,cfEmpleados,cfPagosEmpleados,rendDiarios,impuestosIngresos,autonomosCuotas,gananciasAnticipos]=await Promise.all([
+    [cfConceptos,cfValores,cfPrestamos,cfCobranzas,cfInversiones,cfInvMovs,cfPrestCuotas,cfEmpleados,cfPagosEmpleados,rendDiarios,impuestosIngresos,autonomosCuotas,gananciasAnticipos,impuestosDeclaraciones]=await Promise.all([
       sb("cf_conceptos?select=*&order=tipo,nombre"),
       sb("cf_valores?select=*"),
       sb("cf_prestamos?select=*&order=sociedad,tipo"),
@@ -3999,7 +3999,8 @@ async function loadCF(){
       sb("rendimientos_diarios?select=*&order=fecha.asc").catch(()=>[]),
       sb("impuestos_ingresos?select=*&order=periodo.desc").catch(()=>[]),
       sb("autonomos_cuotas?select=*&order=periodo.desc").catch(()=>[]),
-      sb("ganancias_anticipos?select=*&order=anio.desc,nro.asc").catch(()=>[])
+      sb("ganancias_anticipos?select=*&order=anio.desc,nro.asc").catch(()=>[]),
+      sb("impuestos_declaraciones?select=*").catch(()=>[])
     ]);
     // Badge: cobranzas vencidas + préstamos próximos
     const hoy=today();
@@ -7341,7 +7342,7 @@ initLogin();
 /* ══════════════════════════════════════
    MÓDULO IMPUESTOS
    ══════════════════════════════════════ */
-let impuestosIngresos=[],autonomosCuotas=[],gananciasAnticipos=[];
+let impuestosIngresos=[],autonomosCuotas=[],gananciasAnticipos=[],impuestosDeclaraciones=[];
 let impTab="iva";
 const AUTONOMOS_NOMBRES=["Tomás","Mario","Valentina","Amparo"];
 const IIBB_TASA=0.06; // 6% Salta
@@ -7364,10 +7365,11 @@ function setImpTab(tab,btn){
 
 async function loadImpuestos(){
   try{
-    [impuestosIngresos,autonomosCuotas,gananciasAnticipos]=await Promise.all([
+    [impuestosIngresos,autonomosCuotas,gananciasAnticipos,impuestosDeclaraciones]=await Promise.all([
       sb("impuestos_ingresos?select=*&order=periodo.desc"),
       sb("autonomos_cuotas?select=*&order=periodo.desc"),
-      sb("ganancias_anticipos?select=*&order=anio.desc,nro.asc").catch(()=>[])
+      sb("ganancias_anticipos?select=*&order=anio.desc,nro.asc").catch(()=>[]),
+      sb("impuestos_declaraciones?select=*").catch(()=>[])
     ]);
   }catch(e){impuestosIngresos=[];autonomosCuotas=[];gananciasAnticipos=[];}
   setImpTab(impTab);
@@ -7417,6 +7419,27 @@ async function saveIngreso(periodo,sociedad,field,val){
     if(impTab==="iva")renderImpIVA();
     if(impTab==="iibb")renderImpIIBB();
     if(impTab==="ganancias")renderImpGanancias();
+  }catch(e){toast("Error al guardar","err")}
+}
+
+/* ── Declaraciones presentadas ── */
+function getDeclaracion(periodo,sociedad,tipo){
+  return impuestosDeclaraciones.find(d=>d.periodo===periodo&&d.sociedad===sociedad&&d.tipo===tipo)||null;
+}
+async function marcarPresentado(periodo,sociedad,tipo){
+  const existing=getDeclaracion(periodo,sociedad,tipo);
+  const fecha=today();
+  try{
+    if(existing){
+      await sb(`impuestos_declaraciones?id=eq.${existing.id}`,{method:"PATCH",body:JSON.stringify({presentado:true,fecha_presentacion:fecha,updated_at:new Date().toISOString()})});
+      existing.presentado=true;existing.fecha_presentacion=fecha;
+    }else{
+      const[r]=await sb("impuestos_declaraciones",{method:"POST",body:JSON.stringify({periodo,sociedad,tipo,presentado:true,fecha_presentacion:fecha,updated_at:new Date().toISOString()})});
+      impuestosDeclaraciones.push(r);
+    }
+    toast(`${tipo} ${periodo} — ${sociedad} marcado como presentado ✓`,"ok");
+    if(impTab==="iva")renderImpIVA();
+    if(impTab==="iibb")renderImpIIBB();
   }catch(e){toast("Error al guardar","err")}
 }
 
@@ -7470,7 +7493,7 @@ function renderImpIVA(){
     }).join("");
     rows+=`<tr style="border-bottom:1px solid var(--b)">
       <td style="padding:6px 12px;font-size:12px;color:var(--tx3)"><span style="color:${color};font-size:10px;font-weight:700">${soc}</span> Crédito fiscal (de comprobantes) 🔗</td>${cred}</tr>`;
-    // Saldo IVA
+    // Saldo IVA + estado presentación
     const saldos=meses.map(m=>{
       const ing=getIngreso(m.key,soc);
       const deb=(ing.ingresos_gravados||0)*IVA_TASA;
@@ -7478,8 +7501,12 @@ function renderImpIVA(){
       const saldo=Math.round(deb-cr);
       const bg=m.actual?"background:rgba(124,58,237,.1)":"background:var(--surf2)";
       const col=saldo>0?"var(--re)":saldo<0?"var(--gr)":"var(--tx3)";
-      const label=saldo>0?"A PAGAR":saldo<0?"A FAVOR":"—";
-      return`<td style="text-align:right;padding:6px 10px;font-size:12px;font-weight:700;color:${col};border-right:1px solid var(--b);${bg}" title="${label}">${saldo?fmtImp(Math.abs(saldo)):"—"}</td>`;
+      const decl=getDeclaracion(m.key,soc,"IVA");
+      const pres=decl?.presentado;
+      const presBtn=saldo&&!pres
+        ?`<div><button onclick="marcarPresentado('${m.key}','${soc}','IVA')" style="margin-top:4px;background:var(--surf);border:1px solid var(--b);border-radius:4px;padding:2px 7px;font-size:10px;color:var(--tx3);cursor:pointer;white-space:nowrap">Presentar →</button></div>`
+        :pres?`<div style="font-size:10px;color:var(--gr);margin-top:3px">✓ ${decl.fecha_presentacion?fmt(decl.fecha_presentacion):"presentado"}</div>`:"";
+      return`<td style="text-align:right;padding:6px 10px;font-size:12px;font-weight:700;color:${col};border-right:1px solid var(--b);${bg}">${saldo?fmtImp(Math.abs(saldo)):"—"}${presBtn}</td>`;
     }).join("");
     rows+=`<tr><td style="padding:6px 12px;font-size:12px;font-weight:700;color:${color};background:var(--surf2)">SALDO IVA ${soc}</td>${saldos}</tr>`;
     return rows;
@@ -7541,7 +7568,12 @@ function renderImpIIBB(){
       const base=(ing.ingresos_gravados||0)+(ing.ingresos_exentos||0);
       const v=Math.round(base*IIBB_TASA);
       const bg=m.actual?"background:rgba(124,58,237,.1)":"background:var(--surf2)";
-      return`<td style="text-align:right;padding:6px 10px;font-size:12px;font-weight:700;color:${v?"var(--re)":"var(--tx3)"};border-right:1px solid var(--b);${bg}">${v?fmtImp(v):"—"}</td>`;
+      const decl=getDeclaracion(m.key,soc,"IIBB");
+      const pres=decl?.presentado;
+      const presBtn=v&&!pres
+        ?`<div><button onclick="marcarPresentado('${m.key}','${soc}','IIBB')" style="margin-top:4px;background:var(--surf);border:1px solid var(--b);border-radius:4px;padding:2px 7px;font-size:10px;color:var(--tx3);cursor:pointer;white-space:nowrap">Presentar →</button></div>`
+        :pres?`<div style="font-size:10px;color:var(--gr);margin-top:3px">✓ ${decl.fecha_presentacion?fmt(decl.fecha_presentacion):"presentado"}</div>`:"";
+      return`<td style="text-align:right;padding:6px 10px;font-size:12px;font-weight:700;color:${v?"var(--re)":"var(--tx3)"};border-right:1px solid var(--b);${bg}">${v?fmtImp(v):"—"}${presBtn}</td>`;
     }).join("");
     return`
       <tr style="border-bottom:1px solid var(--b)">
