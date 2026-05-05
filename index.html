@@ -356,9 +356,12 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   .form-grid-2{grid-template-columns:1fr}
   /* Portal form grids inline */
   .pf-2col{grid-template-columns:1fr !important}
-  /* Topbar: ocultar nombre y separador para ganar espacio */
+  /* Topbar: ocultar elementos secundarios para ganar espacio */
   .topbar-user-name,.logo-sep,.logo-sub{display:none}
+  #rbtn,#newBtn{display:none!important}
   .topbar{padding-left:12px;padding-right:12px;gap:8px}
+  /* Select de usuario: más compacto */
+  #usel{max-width:130px;font-size:11px;padding:4px 6px}
   /* Notif panel: ancho completo */
   .np{width:calc(100vw - 16px);right:8px;left:8px}
   /* Toast: centrado abajo */
