@@ -5918,23 +5918,26 @@ function renderBenchmark(){
   const meses=[...mesesSet].sort().reverse().slice(0,12);
   if(!meses.length){el.innerHTML=`<div style="font-size:12px;color:var(--tx3);text-align:center;padding:20px">Sin datos de seguimiento diario aún — registrá valores para activar el benchmark</div>`;return;}
 
-  function valorPortfolioEn(fecha){
-    const activas=cfInversiones.filter(i=>i.estado==="Activa"||new Date(i.updated_at||"")>=new Date(fecha));
-    const porInv=cfInversiones.map(inv=>{
-      const reg=[...rendDiarios.filter(r=>r.inversion_id===inv.id&&r.fecha<=fecha)].pop();
-      return reg?reg.valor:0;
-    });
-    return porInv.reduce((s,v)=>s+v,0);
-  }
-
+  // Rendimiento por inversión en un mes: compara primer vs último registro diario
+  // Usa retorno ponderado por capital para no distorsionar con rescates
   const rows=meses.map(mes=>{
     const diasDelMes=rendDiarios.filter(r=>r.fecha.startsWith(mes));
     if(!diasDelMes.length)return null;
-    const fechas=[...new Set(diasDelMes.map(r=>r.fecha))].sort();
-    const inicio=fechas[0];const fin=fechas[fechas.length-1];
-    const valInicio=valorPortfolioEn(inicio);
-    const valFin=valorPortfolioEn(fin);
-    const rendPct=valInicio>0?((valFin-valInicio)/valInicio*100):null;
+    const invIds=[...new Set(diasDelMes.map(r=>r.inversion_id))];
+    let sumRendPonderado=0,sumPeso=0,valFin=0;
+    invIds.forEach(invId=>{
+      const regs=diasDelMes.filter(r=>r.inversion_id===invId).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+      if(regs.length<1)return;
+      const vInicio=regs[0].valor;
+      const vFin=regs[regs.length-1].valor;
+      valFin+=vFin;
+      if(vInicio>0){
+        const rPct=(vFin-vInicio)/vInicio*100;
+        sumRendPonderado+=rPct*vInicio;
+        sumPeso+=vInicio;
+      }
+    });
+    const rendPct=sumPeso>0?sumRendPonderado/sumPeso:null;
     const inf=inflacionMensual.find(i=>i.periodo===mes);
     const infTasa=inf?inf.tasa:null;
     const real=rendPct!==null&&infTasa!==null?rendPct-infTasa:null;
@@ -6003,7 +6006,7 @@ async function saveInflacion(periodo,tasa){
       await sb(`inflacion_mensual?id=eq.${existing.id}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({tasa:t,updated_at:new Date().toISOString()})});
       existing.tasa=t;
     }else{
-      const[r]=await sb("inflacion_mensual",{method:"POST",body:JSON.stringify({periodo,tasa:t,updated_at:new Date().toISOString()})});
+      const[r]=await sb("inflacion_mensual",{method:"POST",headers:{"Prefer":"return=representation"},body:JSON.stringify({periodo,tasa:t,updated_at:new Date().toISOString()})});
       inflacionMensual.push(r);
     }
     renderBenchmark();
