@@ -5388,6 +5388,21 @@ function renderCFInversiones(){
   const getCapHist=(inv)=>(inv.capital||0)+cfInvMovs.filter(m=>m.inversion_id===inv.id&&m.tipo==="Aporte de capital").reduce((s,m)=>s+(m.monto||0),0);
   const getRescatado=(inv)=>cfInvMovs.filter(m=>m.inversion_id===inv.id&&m.tipo!=="Aporte de capital").reduce((s,m)=>s+(m.monto||0),0);
   const getCapActivo=(inv)=>inv.valor_actual!=null?inv.valor_actual:(inv.capital||0);
+  // Rendimiento realizado vs flotante (método costo promedio)
+  const getRendDesglosado=(inv)=>{
+    const capHist=getCapHist(inv);
+    const valAct=getCapActivo(inv);
+    const resc=getRescatado(inv);
+    const totalVal=valAct+resc;
+    const pctResc=totalVal>0?resc/totalVal:0;
+    const capResc=capHist*pctResc;
+    const capPend=capHist-capResc;
+    return{
+      realizado:Math.round(resc-capResc),
+      flotante:Math.round(valAct-capPend),
+      total:Math.round((resc-capResc)+(valAct-capPend))
+    };
+  };
   // Totales globales (todas las inversiones, no solo activas)
   const totalCapHist=cfInversiones.reduce((s,i)=>s+getCapHist(i),0);
   const totalCapActivo=activas.reduce((s,i)=>s+getCapActivo(i),0);
@@ -5413,7 +5428,9 @@ function renderCFInversiones(){
     const risk={};RIESGOS.forEach(r=>risk[r.k]=0);
     activas.forEach(inv=>{const rk=inv.tipo_riesgo;if(rk&&risk[rk]!==undefined)risk[rk]+=getCapActivo(inv);});
     const totalRisk=Object.values(risk).reduce((s,v)=>s+v,0);
-    liqEl.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    const totalRealizado=cfInversiones.reduce((s,i)=>s+getRendDesglosado(i).realizado,0);
+    const totalFlotante=activas.reduce((s,i)=>s+getRendDesglosado(i).flotante,0);
+    liqEl.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
       <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:14px 16px">
         <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">💧 Liquidez estimada</div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px">
@@ -5424,6 +5441,19 @@ function renderCFInversiones(){
         <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">⚖️ Distribución de riesgo</div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px">
           ${RIESGOS.map(r=>{const v=risk[r.k];const pct=totalRisk?(v/totalRisk*100).toFixed(0):"0";return`<div style="background:${r.dot};border:1px solid ${r.border};border-radius:var(--r);padding:8px 10px"><div style="font-size:10px;color:${r.color};margin-bottom:3px;font-weight:600">${r.k}</div><div style="font-size:14px;font-weight:700;color:${r.color}">$${Math.round(v).toLocaleString("es-AR")}</div><div style="font-size:10px;color:var(--tx3)">${pct}%</div></div>`;}).join("")}
+        </div>
+      </div>
+      <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:14px 16px">
+        <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">📊 Rendimiento desglosado</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--r);padding:10px 12px">
+            <div style="font-size:10px;color:var(--tx3);margin-bottom:3px">✅ Realizado <span style="font-style:italic">(ya en el bolsillo)</span></div>
+            <div style="font-size:16px;font-weight:700;color:${totalRealizado>=0?"var(--gr)":"var(--re)"}">${totalRealizado>=0?"+":""}$${Math.abs(totalRealizado).toLocaleString("es-AR")}</div>
+          </div>
+          <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:var(--r);padding:10px 12px">
+            <div style="font-size:10px;color:var(--tx3);margin-bottom:3px">📈 Flotante <span style="font-style:italic">(depende del mercado)</span></div>
+            <div style="font-size:16px;font-weight:700;color:${totalFlotante>=0?"#60A5FA":"var(--re)"}">${totalFlotante>=0?"+":""}$${Math.abs(totalFlotante).toLocaleString("es-AR")}</div>
+          </div>
         </div>
       </div>
     </div>`;
@@ -5487,6 +5517,7 @@ function renderCFInversiones(){
             const totalRescatado=getRescatado(inv);
             const rendReal=(isActiva?ival:0)+totalRescatado-icap;
             const rendPct=icap?((rendReal/icap)*100).toFixed(1):"0.0";
+            const rend=getRendDesglosado(inv);
             const cp=calcCapitalProm(inv,movs);
             const d=inv.fecha_vencimiento?days(inv.fecha_vencimiento):null;
             const vencAlert=d!==null&&d<0?"🔴 ":d!==null&&d<=7?"⚠ ":"";
@@ -5505,10 +5536,14 @@ function renderCFInversiones(){
                     <span>Capital: <strong style="color:var(--tx)">$${Math.round(icap).toLocaleString("es-AR")}</strong></span>
                     ${isActiva?`<span>Valor actual: <strong style="color:var(--gr)">$${Math.round(ival).toLocaleString("es-AR")}</strong></span>`:""}
                     ${totalRescatado>0?`<span>Rescatado: <strong style="color:var(--am)">$${Math.round(totalRescatado).toLocaleString("es-AR")}</strong></span>`:""}
-                    <span style="color:${rendReal>=0?"var(--gr)":"var(--re)"}"><strong>${rendReal>=0?"+":""}$${Math.round(Math.abs(rendReal)).toLocaleString("es-AR")} (${rendReal>=0?"+":""}${rendPct}%)</strong></span>
                     ${inv.entidad?`<span>📍 ${esc(inv.entidad)}</span>`:""}
                     ${inv.tasa?`<span>📊 ${esc(inv.tasa)}</span>`:""}
                     ${inv.fecha_vencimiento?`<span style="color:${d!==null&&d<=7?"#FCD34D":"var(--tx3)"}">${vencAlert}${isActiva?"Vence":"Cerrada"}: ${fmt(inv.fecha_rescate||inv.fecha_vencimiento)}${isActiva&&d!==null?" ("+Math.abs(d)+"d"+(d<0?" pasado":" restante")+")":""}</span>`:""}
+                  </div>
+                  <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;margin-top:5px;padding-top:5px;border-top:1px solid var(--b)">
+                    <span style="color:var(--tx3)">Realizado: <strong style="color:${rend.realizado>=0?"var(--gr)":"var(--re)"}">${rend.realizado>=0?"+":""}$${Math.abs(rend.realizado).toLocaleString("es-AR")}</strong></span>
+                    <span style="color:var(--tx3)">Flotante: <strong style="color:${rend.flotante>=0?"var(--gr)":"var(--re)"}">${rend.flotante>=0?"+":""}$${Math.abs(rend.flotante).toLocaleString("es-AR")}</strong></span>
+                    <span style="color:var(--tx3)">Total: <strong style="color:${rend.total>=0?"var(--gr)":"var(--re)"}">${rend.total>=0?"+":""}$${Math.abs(rend.total).toLocaleString("es-AR")} (${rendPct}%)</strong></span>
                   </div>
                   ${inv.notas?`<div style="font-size:10px;color:var(--tx3);margin-top:3px;font-style:italic">${esc(inv.notas)}</div>`:""}
                   ${cp?`<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;margin-top:6px;padding:5px 8px;background:var(--surf2);border-radius:5px;align-items:center">
