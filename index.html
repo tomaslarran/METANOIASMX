@@ -1678,6 +1678,9 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="fg"><label class="fl">Liquidez (plazo de rescate)</label><select class="fs" id="cfi-plazo"><option value="T+0">T+0 — Inmediata</option><option value="24hs">24hs</option><option value="48hs">48hs</option><option value=">30d">&gt;30 días</option></select></div>
       <div class="fg"><label class="fl">Objetivo</label><select class="fs" id="cfi-objetivo"><option value="">— Sin clasificar —</option><option value="Liquidez">Liquidez</option><option value="Tasa">Tasa</option><option value="Inflación">Inflación (CER)</option><option value="Carry">Carry / crédito</option><option value="Crecimiento">Crecimiento</option></select></div>
     </div>
+    <div class="fgrid">
+      <div class="fg"><label class="fl">Tipo de riesgo</label><select class="fs" id="cfi-riesgo"><option value="">— Sin clasificar —</option><option value="Bajo">🟢 Bajo (MM / caja)</option><option value="Medio">🟡 Medio (CER / tasa)</option><option value="Medio-Alto">🟠 Medio-Alto (crédito privado)</option><option value="Alto">🔴 Alto (acciones / cripto)</option></select></div>
+    </div>
     <div class="fg"><label class="fl">Notas</label><textarea class="fi fta" id="cfi-notas" placeholder="Condiciones, rendimientos, observaciones..." style="min-height:52px"></textarea></div>
     <div class="ma"><button class="bc" onclick="closeModal('modal-cf-inversion')">Cancelar</button><button class="bk" id="cfi-save-btn" onclick="saveCFInversion()">Guardar</button></div>
   </div>
@@ -5405,10 +5408,23 @@ function renderCFInversiones(){
   const liqEl=document.getElementById("inv-liquidez");
   if(liqEl){
     const totalLiq=Object.values(liq).reduce((s,v)=>s+v,0);
-    liqEl.innerHTML=`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:14px 16px">
-      <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">💧 Liquidez estimada — capital activo ($${Math.round(totalLiq).toLocaleString("es-AR")})</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
-        ${PLAZOS.map(p=>{const v=liq[p.k];const pct=totalLiq?(v/totalLiq*100).toFixed(0):"0";const color=p.k==="T+0"?"var(--gr)":p.k==="24hs"?"var(--ac)":p.k==="48hs"?"var(--am)":"var(--re)";return`<div style="background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:8px 10px;text-align:center"><div style="font-size:10px;color:var(--tx3);margin-bottom:4px">${p.label}</div><div style="font-size:15px;font-weight:700;color:${color}">$${Math.round(v).toLocaleString("es-AR")}</div><div style="font-size:10px;color:var(--tx3)">${pct}%</div></div>`;}).join("")}
+    // Distribución de riesgo
+    const RIESGOS=[{k:"Bajo",color:"var(--gr)",dot:"rgba(16,185,129,.12)",border:"rgba(16,185,129,.25)"},{k:"Medio",color:"#EAB308",dot:"rgba(234,179,8,.12)",border:"rgba(234,179,8,.25)"},{k:"Medio-Alto",color:"#F97316",dot:"rgba(249,115,22,.12)",border:"rgba(249,115,22,.25)"},{k:"Alto",color:"var(--re)",dot:"rgba(239,68,68,.12)",border:"rgba(239,68,68,.25)"}];
+    const risk={};RIESGOS.forEach(r=>risk[r.k]=0);
+    activas.forEach(inv=>{const rk=inv.tipo_riesgo;if(rk&&risk[rk]!==undefined)risk[rk]+=getCapActivo(inv);});
+    const totalRisk=Object.values(risk).reduce((s,v)=>s+v,0);
+    liqEl.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:14px 16px">
+        <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">💧 Liquidez estimada</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px">
+          ${PLAZOS.map(p=>{const v=liq[p.k];const pct=totalLiq?(v/totalLiq*100).toFixed(0):"0";const color=p.k==="T+0"?"var(--gr)":p.k==="24hs"?"var(--ac)":p.k==="48hs"?"var(--am)":"var(--re)";return`<div style="background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:8px 10px"><div style="font-size:10px;color:var(--tx3);margin-bottom:3px">${p.label}</div><div style="font-size:14px;font-weight:700;color:${color}">$${Math.round(v).toLocaleString("es-AR")}</div><div style="font-size:10px;color:var(--tx3)">${pct}%</div></div>`;}).join("")}
+        </div>
+      </div>
+      <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:14px 16px">
+        <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">⚖️ Distribución de riesgo</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px">
+          ${RIESGOS.map(r=>{const v=risk[r.k];const pct=totalRisk?(v/totalRisk*100).toFixed(0):"0";return`<div style="background:${r.dot};border:1px solid ${r.border};border-radius:var(--r);padding:8px 10px"><div style="font-size:10px;color:${r.color};margin-bottom:3px;font-weight:600">${r.k}</div><div style="font-size:14px;font-weight:700;color:${r.color}">$${Math.round(v).toLocaleString("es-AR")}</div><div style="font-size:10px;color:var(--tx3)">${pct}%</div></div>`;}).join("")}
+        </div>
       </div>
     </div>`;
   }
@@ -5483,6 +5499,7 @@ function renderCFInversiones(){
                     <span class="badge ${EST_COLOR[inv.estado]||"btd"}" style="font-size:10px">${inv.estado}</span>
                     ${inv.objetivo?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:var(--pll);color:#C4B5FD;border:1px solid rgba(124,58,237,.2)">${esc(inv.objetivo)}</span>`:""}
                     ${inv.plazo_rescate?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:var(--bg3);color:var(--tx3);border:1px solid var(--b)">💧${inv.plazo_rescate}</span>`:""}
+                    ${{Bajo:`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(16,185,129,.12);color:var(--gr);border:1px solid rgba(16,185,129,.25)">🟢 Bajo</span>`,Medio:`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(234,179,8,.12);color:#EAB308;border:1px solid rgba(234,179,8,.25)">🟡 Medio</span>`,"Medio-Alto":`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(249,115,22,.12);color:#F97316;border:1px solid rgba(249,115,22,.25)">🟠 Medio-Alto</span>`,Alto:`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(239,68,68,.12);color:var(--re);border:1px solid rgba(239,68,68,.25)">🔴 Alto</span>`}[inv.tipo_riesgo]||""}
                   </div>
                   <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--tx3)">
                     <span>Capital: <strong style="color:var(--tx)">$${Math.round(icap).toLocaleString("es-AR")}</strong></span>
@@ -5777,6 +5794,7 @@ function openAddInversion(){
   document.getElementById("cfi-venc").value="";
   document.getElementById("cfi-plazo").value="T+0";
   document.getElementById("cfi-objetivo").value="";
+  document.getElementById("cfi-riesgo").value="";
   openModal("modal-cf-inversion");
 }
 function editCFInv(id){
@@ -5796,12 +5814,13 @@ function editCFInv(id){
   document.getElementById("cfi-estado").value=inv.estado||"Activa";
   document.getElementById("cfi-plazo").value=inv.plazo_rescate||"T+0";
   document.getElementById("cfi-objetivo").value=inv.objetivo||"";
+  document.getElementById("cfi-riesgo").value=inv.tipo_riesgo||"";
   document.getElementById("cfi-notas").value=inv.notas||"";
   openModal("modal-cf-inversion");
 }
 async function saveCFInversion(){
   const nombre=document.getElementById("cfi-nombre").value.trim();if(!nombre){toast("Escribí un nombre","err");return}
-  const data={nombre,tipo:document.getElementById("cfi-tipo").value,entidad:document.getElementById("cfi-entidad").value.trim()||null,sociedad:document.getElementById("cfi-soc").value,capital:parseFloat(document.getElementById("cfi-capital").value)||null,valor_actual:parseFloat(document.getElementById("cfi-valor").value)||null,fecha_inicio:document.getElementById("cfi-inicio").value||null,fecha_vencimiento:document.getElementById("cfi-venc").value||null,tasa:document.getElementById("cfi-tasa").value.trim()||null,estado:document.getElementById("cfi-estado").value,plazo_rescate:document.getElementById("cfi-plazo").value||"T+0",objetivo:document.getElementById("cfi-objetivo").value||null,notas:document.getElementById("cfi-notas").value.trim()||null,updated_at:new Date().toISOString()};
+  const data={nombre,tipo:document.getElementById("cfi-tipo").value,entidad:document.getElementById("cfi-entidad").value.trim()||null,sociedad:document.getElementById("cfi-soc").value,capital:parseFloat(document.getElementById("cfi-capital").value)||null,valor_actual:parseFloat(document.getElementById("cfi-valor").value)||null,fecha_inicio:document.getElementById("cfi-inicio").value||null,fecha_vencimiento:document.getElementById("cfi-venc").value||null,tasa:document.getElementById("cfi-tasa").value.trim()||null,estado:document.getElementById("cfi-estado").value,plazo_rescate:document.getElementById("cfi-plazo").value||"T+0",objetivo:document.getElementById("cfi-objetivo").value||null,tipo_riesgo:document.getElementById("cfi-riesgo").value||null,notas:document.getElementById("cfi-notas").value.trim()||null,updated_at:new Date().toISOString()};
   const btn=document.getElementById("cfi-save-btn");btn.disabled=true;
   try{
     if(editCFInvId){await sb(`cf_inversiones?id=eq.${editCFInvId}`,{method:"PATCH",body:JSON.stringify(data)});const i=cfInversiones.findIndex(x=>x.id===editCFInvId);if(i>=0)cfInversiones[i]={...cfInversiones[i],...data};toast("Inversión actualizada","ok")}
