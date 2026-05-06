@@ -5387,7 +5387,7 @@ function renderCFInversiones(){
   // Helpers de capital histórico y rescates por inversión
   const getCapHist=(inv)=>(inv.capital||0)+cfInvMovs.filter(m=>m.inversion_id===inv.id&&m.tipo==="Aporte de capital").reduce((s,m)=>s+(m.monto||0),0);
   const getRescatado=(inv)=>cfInvMovs.filter(m=>m.inversion_id===inv.id&&m.tipo!=="Aporte de capital").reduce((s,m)=>s+(m.monto||0),0);
-  const getCapActivo=(inv)=>inv.valor_actual||inv.capital||0;
+  const getCapActivo=(inv)=>inv.valor_actual!=null?inv.valor_actual:(inv.capital||0);
   // Totales globales (todas las inversiones, no solo activas)
   const totalCapHist=cfInversiones.reduce((s,i)=>s+getCapHist(i),0);
   const totalCapActivo=activas.reduce((s,i)=>s+getCapActivo(i),0);
