@@ -1239,6 +1239,15 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </div>
 
     <div id="cf-inversiones-list"><div class="loading"><div class="loader"></div><div class="lt">Cargando inversiones...</div></div></div>
+
+    <!-- BENCHMARK VS INFLACIÓN -->
+    <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:16px;margin-top:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);display:flex;align-items:center;gap:6px">📉 Benchmark vs Inflación</div>
+        <div style="font-size:11px;color:var(--tx3)">Ingresá la inflación mensual estimada para ver el rendimiento real</div>
+      </div>
+      <div id="benchmark-tabla"></div>
+    </div>
   </div>
 
   <!-- TAB: HISTORIAL DE PAGOS -->
@@ -4157,7 +4166,7 @@ async function doDelRutina(id){
 
 /* ── CASH FLOW ── */
 let cfConceptos=[],cfValores=[],cfPrestamos=[],cfCobranzas=[],cfInversiones=[],cfInvMovs=[],cfPrestCuotas=[];
-let cfEmpleados=[],cfPagosEmpleados=[],rendDiarios=[];
+let cfEmpleados=[],cfPagosEmpleados=[],rendDiarios=[],inflacionMensual=[];
 let chartRend=null;
 let cfSueldosFiltro="all",cfSueldosMes=null;
 let editEmpId=null,_mpeEmpId=null,_mpePeriodo=null;
@@ -4169,7 +4178,7 @@ const MESES_CF=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov
 
 async function loadCF(){
   try{
-    [cfConceptos,cfValores,cfPrestamos,cfCobranzas,cfInversiones,cfInvMovs,cfPrestCuotas,cfEmpleados,cfPagosEmpleados,rendDiarios,impuestosIngresos,autonomosCuotas,gananciasAnticipos,impuestosDeclaraciones]=await Promise.all([
+    [cfConceptos,cfValores,cfPrestamos,cfCobranzas,cfInversiones,cfInvMovs,cfPrestCuotas,cfEmpleados,cfPagosEmpleados,rendDiarios,inflacionMensual,impuestosIngresos,autonomosCuotas,gananciasAnticipos,impuestosDeclaraciones]=await Promise.all([
       sb("cf_conceptos?select=*&order=tipo,nombre"),
       sb("cf_valores?select=*"),
       sb("cf_prestamos?select=*&order=sociedad,tipo"),
@@ -4180,6 +4189,7 @@ async function loadCF(){
       sb("cf_empleados?select=*&order=categoria,nombre").catch(()=>[]),
       sb("cf_pagos_empleados?select=*&order=periodo.desc").catch(()=>[]),
       sb("rendimientos_diarios?select=*&order=fecha.asc").catch(()=>[]),
+      sb("inflacion_mensual?select=*&order=periodo.desc").catch(()=>[]),
       sb("impuestos_ingresos?select=*&order=periodo.desc").catch(()=>[]),
       sb("autonomos_cuotas?select=*&order=periodo.desc").catch(()=>[]),
       sb("ganancias_anticipos?select=*&order=anio.desc,nro.asc").catch(()=>[]),
@@ -5383,6 +5393,7 @@ function calcCapitalProm(inv,movs){
 function renderCFInversiones(){
   renderRendStats();
   renderRendChart();
+  renderBenchmark();
   const activas=cfInversiones.filter(i=>i.estado==="Activa");
   // Helpers de capital histórico y rescates por inversión
   const getCapHist=(inv)=>(inv.capital||0)+cfInvMovs.filter(m=>m.inversion_id===inv.id&&m.tipo==="Aporte de capital").reduce((s,m)=>s+(m.monto||0),0);
@@ -5897,6 +5908,106 @@ function calcRendStats(){
   // Para "hoy" usamos valor_actual como fallback si no hay registro
   const vHoy=activas.reduce((s,inv)=>{const r=valInvEn(inv,hoy);return s+(r!==null?r:(inv.valor_actual||inv.capital||0));},0);
   return{hoy:diffPortfolio(dAyer),sem:diffPortfolio(dSem),mes:diffPortfolio(dMes),vHoy};
+}
+
+function renderBenchmark(){
+  const el=document.getElementById("benchmark-tabla");
+  if(!el)return;
+  // Obtener meses con datos de rendDiarios
+  const mesesSet=new Set(rendDiarios.map(r=>r.fecha.slice(0,7)));
+  const meses=[...mesesSet].sort().reverse().slice(0,12);
+  if(!meses.length){el.innerHTML=`<div style="font-size:12px;color:var(--tx3);text-align:center;padding:20px">Sin datos de seguimiento diario aún — registrá valores para activar el benchmark</div>`;return;}
+
+  function valorPortfolioEn(fecha){
+    const activas=cfInversiones.filter(i=>i.estado==="Activa"||new Date(i.updated_at||"")>=new Date(fecha));
+    const porInv=cfInversiones.map(inv=>{
+      const reg=[...rendDiarios.filter(r=>r.inversion_id===inv.id&&r.fecha<=fecha)].pop();
+      return reg?reg.valor:0;
+    });
+    return porInv.reduce((s,v)=>s+v,0);
+  }
+
+  const rows=meses.map(mes=>{
+    const diasDelMes=rendDiarios.filter(r=>r.fecha.startsWith(mes));
+    if(!diasDelMes.length)return null;
+    const fechas=[...new Set(diasDelMes.map(r=>r.fecha))].sort();
+    const inicio=fechas[0];const fin=fechas[fechas.length-1];
+    const valInicio=valorPortfolioEn(inicio);
+    const valFin=valorPortfolioEn(fin);
+    const rendPct=valInicio>0?((valFin-valInicio)/valInicio*100):null;
+    const inf=inflacionMensual.find(i=>i.periodo===mes);
+    const infTasa=inf?inf.tasa:null;
+    const real=rendPct!==null&&infTasa!==null?rendPct-infTasa:null;
+    return{mes,rendPct,infTasa,real,valFin};
+  }).filter(Boolean);
+
+  const mesesNombres={"01":"Ene","02":"Feb","03":"Mar","04":"Abr","05":"May","06":"Jun","07":"Jul","08":"Ago","09":"Sep","10":"Oct","11":"Nov","12":"Dic"};
+  const fmtMes=m=>{const[y,mm]=m.split("-");return`${mesesNombres[mm]||mm} ${y}`;};
+  const fmtPct=v=>v==null?"—":(v>=0?"+":"")+v.toFixed(1)+"%";
+  const col=v=>v==null?"var(--tx3)":v>=0?"var(--gr)":"var(--re)";
+
+  let html=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="border-bottom:2px solid var(--b)">
+      <th style="text-align:left;padding:6px 10px;color:var(--tx3);font-weight:600">Período</th>
+      <th style="text-align:right;padding:6px 10px;color:var(--tx3);font-weight:600">Cartera</th>
+      <th style="text-align:right;padding:6px 10px;color:var(--tx3);font-weight:600">Inflación</th>
+      <th style="text-align:right;padding:6px 10px;color:var(--tx3);font-weight:600">Real</th>
+      <th style="text-align:right;padding:6px 10px;color:var(--tx3);font-weight:600">Valor cierre</th>
+    </tr></thead><tbody>`;
+
+  rows.forEach(r=>{
+    const ganaBench=r.real!==null&&r.real>0;
+    const pierdeBench=r.real!==null&&r.real<0;
+    html+=`<tr style="border-bottom:1px solid var(--b);transition:background .1s" onmouseenter="this.style.background='var(--surf2)'" onmouseleave="this.style.background=''">
+      <td style="padding:8px 10px;font-weight:600;color:var(--tx)">${fmtMes(r.mes)}</td>
+      <td style="padding:8px 10px;text-align:right;color:${col(r.rendPct)};font-weight:600">${fmtPct(r.rendPct)}</td>
+      <td style="padding:8px 10px;text-align:right">
+        <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">
+          <input type="number" value="${r.infTasa??""}" placeholder="ej: 2.7" step="0.1"
+            style="width:70px;background:var(--surf2);border:1px solid var(--b2);border-radius:4px;padding:3px 6px;font-family:var(--f);font-size:11px;color:var(--tx);text-align:right;outline:none"
+            onchange="saveInflacion('${r.mes}',this.value)"
+            onkeydown="if(event.key==='Enter')this.blur()">
+          <span style="color:var(--tx3);font-size:10px">%</span>
+        </div>
+      </td>
+      <td style="padding:8px 10px;text-align:right">
+        ${r.real!==null?`<span style="font-weight:700;color:${col(r.real)};background:${ganaBench?"rgba(16,185,129,.1)":pierdeBench?"rgba(239,68,68,.1)":"transparent"};padding:2px 6px;border-radius:4px">${fmtPct(r.real)}</span>`:`<span style="color:var(--tx3)">— cargar inflación</span>`}
+      </td>
+      <td style="padding:8px 10px;text-align:right;color:var(--tx3)">$${Math.round(r.valFin).toLocaleString("es-AR")}</td>
+    </tr>`;
+  });
+
+  html+=`</tbody></table></div>`;
+  // Resumen acumulado si hay datos completos
+  const completos=rows.filter(r=>r.rendPct!==null&&r.infTasa!==null);
+  if(completos.length>=2){
+    const rendAcum=completos.reduce((s,r)=>s+r.rendPct,0);
+    const infAcum=completos.reduce((s,r)=>s+r.infTasa,0);
+    const realAcum=rendAcum-infAcum;
+    html+=`<div style="margin-top:10px;padding:10px 14px;background:var(--surf2);border-radius:var(--r);display:flex;gap:20px;flex-wrap:wrap;font-size:12px">
+      <span style="color:var(--tx3)">Acumulado ${completos.length} meses —</span>
+      <span>Cartera: <strong style="color:${col(rendAcum)}">${fmtPct(rendAcum)}</strong></span>
+      <span>Inflación: <strong style="color:var(--tx2)">${fmtPct(infAcum)}</strong></span>
+      <span>Real: <strong style="color:${col(realAcum)};font-size:13px">${fmtPct(realAcum)}</strong></span>
+    </div>`;
+  }
+  el.innerHTML=html;
+}
+
+async function saveInflacion(periodo,tasa){
+  const t=parseFloat(tasa);
+  if(isNaN(t))return;
+  try{
+    const existing=inflacionMensual.find(i=>i.periodo===periodo);
+    if(existing){
+      await sb(`inflacion_mensual?id=eq.${existing.id}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({tasa:t,updated_at:new Date().toISOString()})});
+      existing.tasa=t;
+    }else{
+      const[r]=await sb("inflacion_mensual",{method:"POST",body:JSON.stringify({periodo,tasa:t,updated_at:new Date().toISOString()})});
+      inflacionMensual.push(r);
+    }
+    renderBenchmark();
+  }catch(e){toast("Error al guardar","err");}
 }
 
 function renderRendStats(){
