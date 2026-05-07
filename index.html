@@ -5961,7 +5961,6 @@ function renderBenchmark(){
       <td style="padding:8px 10px;text-align:right">
         ${r.real!==null?`<span style="font-weight:700;color:${col(r.real)};background:${ganaBench?"rgba(16,185,129,.1)":pierdeBench?"rgba(239,68,68,.1)":"transparent"};padding:2px 8px;border-radius:4px;font-size:13px">${fmtPct(r.real)}</span>`:`<span style="color:var(--tx3);font-size:11px">— completar campos</span>`}
       </td>
-      <td style="padding:8px 10px;text-align:right;color:var(--tx3)">$${Math.round(r.valFin).toLocaleString("es-AR")}</td>
     </tr>`;
   });
 
@@ -5987,12 +5986,16 @@ async function saveInflacion(periodo,campo,valor){
   if(isNaN(v))return;
   try{
     const existing=inflacionMensual.find(i=>i.periodo===periodo);
-    const payload={periodo,[campo]:v,updated_at:new Date().toISOString()};
-    const[r]=await sb("inflacion_mensual?on_conflict=periodo",{method:"POST",headers:{"Prefer":"resolution=merge-duplicates,return=representation"},body:JSON.stringify(payload)});
-    if(existing)Object.assign(existing,r);
-    else inflacionMensual.push(r);
+    if(existing){
+      await sb(`inflacion_mensual?id=eq.${existing.id}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({[campo]:v,updated_at:new Date().toISOString()})});
+      existing[campo]=v;
+    }else{
+      const res=await sb("inflacion_mensual",{method:"POST",headers:{"Prefer":"return=representation"},body:JSON.stringify({periodo,[campo]:v,updated_at:new Date().toISOString()})});
+      const r=Array.isArray(res)?res[0]:res;
+      if(r)inflacionMensual.push(r);
+    }
     renderBenchmark();
-  }catch(e){toast("Error al guardar","err");}
+  }catch(e){toast("Error al guardar: "+e.message,"err");}
 }
 
 function renderRendStats(){
