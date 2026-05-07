@@ -1680,7 +1680,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="fg"><label class="fl">Fecha de vencimiento</label><input class="fi" id="cfi-venc" type="date" placeholder="Dejar vacío si no vence"></div>
     </div>
     <div class="fgrid">
-      <div class="fg"><label class="fl">Tasa / Rendimiento esperado</label><input class="fi" id="cfi-tasa" type="text" placeholder="Ej: TNA 42%, 5.1% mensual"></div>
+      <div class="fg"><label class="fl">Tasa / descripción</label><input class="fi" id="cfi-tasa" type="text" placeholder="Ej: TNA 42%, 5.1% mensual"></div>
+      <div class="fg"><label class="fl">TNA % (numérico)</label><input class="fi" id="cfi-tna" type="number" step="0.1" placeholder="Ej: 42"></div>
+    </div>
+    <div class="fgrid">
       <div class="fg"><label class="fl">Estado</label><select class="fs" id="cfi-estado"><option value="Activa">Activa</option><option value="Vencida">Vencida</option><option value="Rescatada">Rescatada</option></select></div>
     </div>
     <div class="fgrid">
@@ -5548,7 +5551,7 @@ function renderCFInversiones(){
                     ${isActiva?`<span>Valor actual: <strong style="color:var(--gr)">$${Math.round(ival).toLocaleString("es-AR")}</strong></span>`:""}
                     ${totalRescatado>0?`<span>Rescatado: <strong style="color:var(--am)">$${Math.round(totalRescatado).toLocaleString("es-AR")}</strong></span>`:""}
                     ${inv.entidad?`<span>📍 ${esc(inv.entidad)}</span>`:""}
-                    ${inv.tasa?`<span>📊 ${esc(inv.tasa)}</span>`:""}
+                    ${inv.tna?`<span>📊 TNA ${inv.tna}%${inv.tasa?` · ${esc(inv.tasa)}`:""}</span>`:inv.tasa?`<span>📊 ${esc(inv.tasa)}</span>`:""}
                     ${inv.fecha_vencimiento?`<span style="color:${d!==null&&d<=7?"#FCD34D":"var(--tx3)"}">${vencAlert}${isActiva?"Vence":"Cerrada"}: ${fmt(inv.fecha_rescate||inv.fecha_vencimiento)}${isActiva&&d!==null?" ("+Math.abs(d)+"d"+(d<0?" pasado":" restante")+")":""}</span>`:""}
                   </div>
                   <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;margin-top:5px;padding-top:5px;border-top:1px solid var(--b)">
@@ -5832,7 +5835,7 @@ function openAddInversion(){
   editCFInvId=null;
   document.getElementById("mci-title").textContent="Nueva Inversión";
   document.getElementById("cfi-save-btn").textContent="Guardar";
-  ["cfi-nombre","cfi-entidad","cfi-capital","cfi-valor","cfi-tasa","cfi-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+  ["cfi-nombre","cfi-entidad","cfi-capital","cfi-valor","cfi-tasa","cfi-tna","cfi-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
   document.getElementById("cfi-tipo").value="FCI";
   document.getElementById("cfi-soc").value="SUDES";
   document.getElementById("cfi-estado").value="Activa";
@@ -5857,6 +5860,7 @@ function editCFInv(id){
   document.getElementById("cfi-inicio").value=inv.fecha_inicio||"";
   document.getElementById("cfi-venc").value=inv.fecha_vencimiento||"";
   document.getElementById("cfi-tasa").value=inv.tasa||"";
+  document.getElementById("cfi-tna").value=inv.tna||"";
   document.getElementById("cfi-estado").value=inv.estado||"Activa";
   document.getElementById("cfi-plazo").value=inv.plazo_rescate||"T+0";
   document.getElementById("cfi-objetivo").value=inv.objetivo||"";
@@ -5866,7 +5870,7 @@ function editCFInv(id){
 }
 async function saveCFInversion(){
   const nombre=document.getElementById("cfi-nombre").value.trim();if(!nombre){toast("Escribí un nombre","err");return}
-  const data={nombre,tipo:document.getElementById("cfi-tipo").value,entidad:document.getElementById("cfi-entidad").value.trim()||null,sociedad:document.getElementById("cfi-soc").value,capital:parseFloat(document.getElementById("cfi-capital").value)||null,valor_actual:parseFloat(document.getElementById("cfi-valor").value)||null,fecha_inicio:document.getElementById("cfi-inicio").value||null,fecha_vencimiento:document.getElementById("cfi-venc").value||null,tasa:document.getElementById("cfi-tasa").value.trim()||null,estado:document.getElementById("cfi-estado").value,plazo_rescate:document.getElementById("cfi-plazo").value||"T+0",objetivo:document.getElementById("cfi-objetivo").value||null,tipo_riesgo:document.getElementById("cfi-riesgo").value||null,notas:document.getElementById("cfi-notas").value.trim()||null,updated_at:new Date().toISOString()};
+  const data={nombre,tipo:document.getElementById("cfi-tipo").value,entidad:document.getElementById("cfi-entidad").value.trim()||null,sociedad:document.getElementById("cfi-soc").value,capital:parseFloat(document.getElementById("cfi-capital").value)||null,valor_actual:parseFloat(document.getElementById("cfi-valor").value)||null,fecha_inicio:document.getElementById("cfi-inicio").value||null,fecha_vencimiento:document.getElementById("cfi-venc").value||null,tasa:document.getElementById("cfi-tasa").value.trim()||null,tna:parseFloat(document.getElementById("cfi-tna").value)||null,estado:document.getElementById("cfi-estado").value,plazo_rescate:document.getElementById("cfi-plazo").value||"T+0",objetivo:document.getElementById("cfi-objetivo").value||null,tipo_riesgo:document.getElementById("cfi-riesgo").value||null,notas:document.getElementById("cfi-notas").value.trim()||null,updated_at:new Date().toISOString()};
   const btn=document.getElementById("cfi-save-btn");btn.disabled=true;
   try{
     if(editCFInvId){await sb(`cf_inversiones?id=eq.${editCFInvId}`,{method:"PATCH",body:JSON.stringify(data)});const i=cfInversiones.findIndex(x=>x.id===editCFInvId);if(i>=0)cfInversiones[i]={...cfInversiones[i],...data};toast("Inversión actualizada","ok")}
@@ -5922,13 +5926,23 @@ function renderBenchmark(){
     d.setMonth(d.getMonth()-1);
   }
 
-  const inp=(val,placeholder,campo,mes)=>`<div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
+  // Rendimiento mensual estimado de cartera ponderado por TNA de inversiones activas
+  const activasConTna=cfInversiones.filter(i=>i.estado==="Activa"&&i.tna);
+  const totalCapTna=activasConTna.reduce((s,i)=>s+getCapActivo(i),0);
+  const rendEstimado=totalCapTna>0
+    ?activasConTna.reduce((s,i)=>s+(i.tna/12)*(getCapActivo(i)/totalCapTna),0)
+    :null;
+
+  const inp=(val,placeholder,campo,mes,sugerido)=>{
+    const hint=sugerido!=null&&val==null?`<div style="font-size:10px;color:var(--tx3);margin-top:2px;text-align:right">estimado: ${sugerido.toFixed(2)}%</div>`:"";
+    return`<div><div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
     <input type="number" value="${val??""}" placeholder="${placeholder}" step="0.1"
       style="width:68px;background:var(--surf2);border:1px solid var(--b2);border-radius:4px;padding:3px 6px;font-family:var(--f);font-size:11px;color:var(--tx);text-align:right;outline:none"
       onchange="saveInflacion('${mes}','${campo}',this.value)"
       onkeydown="if(event.key==='Enter')this.blur()">
     <span style="color:var(--tx3);font-size:10px">%</span>
-  </div>`;
+  </div>${hint}</div>`;
+  };
 
   const mesesNombres={"01":"Ene","02":"Feb","03":"Mar","04":"Abr","05":"May","06":"Jun","07":"Jul","08":"Ago","09":"Sep","10":"Oct","11":"Nov","12":"Dic"};
   const fmtMes=m=>{const[y,mm]=m.split("-");return`${mesesNombres[mm]||mm} ${y}`;};
@@ -5956,8 +5970,8 @@ function renderBenchmark(){
     const pierdeBench=r.real!==null&&r.real<0;
     html+=`<tr style="border-bottom:1px solid var(--b);transition:background .1s" onmouseenter="this.style.background='var(--surf2)'" onmouseleave="this.style.background=''">
       <td style="padding:8px 10px;font-weight:600;color:var(--tx)">${fmtMes(r.mes)}</td>
-      <td style="padding:6px 10px;text-align:right">${inp(r.rendPct,"ej: 2.1","rend_cartera",r.mes)}</td>
-      <td style="padding:6px 10px;text-align:right">${inp(r.infTasa,"ej: 2.7","tasa",r.mes)}</td>
+      <td style="padding:6px 10px;text-align:right">${inp(r.rendPct,"ej: 2.1","rend_cartera",r.mes,r.mes===meses[0]?rendEstimado:null)}</td>
+      <td style="padding:6px 10px;text-align:right">${inp(r.infTasa,"ej: 2.7","tasa",r.mes,null)}</td>
       <td style="padding:8px 10px;text-align:right">
         ${r.real!==null?`<span style="font-weight:700;color:${col(r.real)};background:${ganaBench?"rgba(16,185,129,.1)":pierdeBench?"rgba(239,68,68,.1)":"transparent"};padding:2px 8px;border-radius:4px;font-size:13px">${fmtPct(r.real)}</span>`:`<span style="color:var(--tx3);font-size:11px">— completar campos</span>`}
       </td>
