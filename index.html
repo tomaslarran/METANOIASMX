@@ -5926,10 +5926,38 @@ function renderBenchmark(){
     d.setMonth(d.getMonth()-1);
   }
 
-  // Rendimiento mensual estimado de cartera ponderado por TNA de inversiones activas
+  // Calcula rendimiento mensual de cartera:
+  // - Inversiones sin movimientos en el mes → retorno real desde rendDiarios
+  // - Inversiones con rescates/aportes en el mes → TNA/12 como estimado
+  function calcRendMes(mes){
+    const todas=cfInversiones.filter(i=>i.estado==="Activa"||(i.fecha_rescate||"").startsWith(mes));
+    let sumPonderado=0,sumPeso=0;
+    todas.forEach(inv=>{
+      const diasInv=rendDiarios.filter(r=>r.inversion_id===inv.id&&r.fecha.startsWith(mes)).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+      if(!diasInv.length)return;
+      const vInicio=diasInv[0].valor;
+      const vFin=diasInv[diasInv.length-1].valor;
+      const tieneMovs=cfInvMovs.some(m=>m.inversion_id===inv.id&&(m.fecha||"").startsWith(mes));
+      let rPct;
+      if(tieneMovs){
+        // Con rescates/aportes: usar TNA/12 si disponible, sino skip
+        if(!inv.tna)return;
+        rPct=inv.tna/12;
+      }else{
+        // Sin movimientos: retorno real
+        if(vInicio<=0)return;
+        rPct=(vFin-vInicio)/vInicio*100;
+      }
+      sumPonderado+=rPct*vInicio;
+      sumPeso+=vInicio;
+    });
+    return sumPeso>0?sumPonderado/sumPeso:null;
+  }
+
+  // Para el mes actual: también calcular estimado desde TNA si no hay suficientes datos
   const activasConTna=cfInversiones.filter(i=>i.estado==="Activa"&&i.tna);
   const totalCapTna=activasConTna.reduce((s,i)=>s+getCapActivo(i),0);
-  const rendEstimado=totalCapTna>0
+  const rendEstimadoTNA=totalCapTna>0
     ?activasConTna.reduce((s,i)=>s+(i.tna/12)*(getCapActivo(i)/totalCapTna),0)
     :null;
 
@@ -5952,9 +5980,11 @@ function renderBenchmark(){
   const rows=meses.map(mes=>{
     const rec=inflacionMensual.find(i=>i.periodo===mes);
     const rendPct=rec?.rend_cartera??null;
+    const rendAuto=calcRendMes(mes);
     const infTasa=rec?.tasa??null;
-    const real=rendPct!==null&&infTasa!==null?rendPct-infTasa:null;
-    return{mes,rendPct,infTasa,real};
+    const rendEfectivo=rendPct??rendAuto;
+    const real=rendEfectivo!==null&&infTasa!==null?rendEfectivo-infTasa:null;
+    return{mes,rendPct,rendAuto,infTasa,real};
   });
 
   let html=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -5970,19 +6000,19 @@ function renderBenchmark(){
     const pierdeBench=r.real!==null&&r.real<0;
     html+=`<tr style="border-bottom:1px solid var(--b);transition:background .1s" onmouseenter="this.style.background='var(--surf2)'" onmouseleave="this.style.background=''">
       <td style="padding:8px 10px;font-weight:600;color:var(--tx)">${fmtMes(r.mes)}</td>
-      <td style="padding:6px 10px;text-align:right">${inp(r.rendPct,"ej: 2.1","rend_cartera",r.mes,r.mes===meses[0]?rendEstimado:null)}</td>
+      <td style="padding:6px 10px;text-align:right">${inp(r.rendPct,"ej: 2.1","rend_cartera",r.mes,r.rendAuto)}</td>
       <td style="padding:6px 10px;text-align:right">${inp(r.infTasa,"ej: 2.7","tasa",r.mes,null)}</td>
       <td style="padding:8px 10px;text-align:right">
-        ${r.real!==null?`<span style="font-weight:700;color:${col(r.real)};background:${ganaBench?"rgba(16,185,129,.1)":pierdeBench?"rgba(239,68,68,.1)":"transparent"};padding:2px 8px;border-radius:4px;font-size:13px">${fmtPct(r.real)}</span>`:`<span style="color:var(--tx3);font-size:11px">— completar campos</span>`}
+        ${r.real!==null?`<span style="font-weight:700;color:${col(r.real)};background:${ganaBench?"rgba(16,185,129,.1)":pierdeBench?"rgba(239,68,68,.1)":"transparent"};padding:2px 8px;border-radius:4px;font-size:13px${r.rendPct===null?" opacity:.7":""}">${fmtPct(r.real)}${r.rendPct===null?`<span style="font-size:9px;margin-left:3px;color:var(--tx3)">~</span>`:""}</span>`:`<span style="color:var(--tx3);font-size:11px">— completar campos</span>`}
       </td>
     </tr>`;
   });
 
   html+=`</tbody></table></div>`;
   // Resumen acumulado si hay datos completos
-  const completos=rows.filter(r=>r.rendPct!==null&&r.infTasa!==null);
+  const completos=rows.filter(r=>(r.rendPct??r.rendAuto)!==null&&r.infTasa!==null);
   if(completos.length>=2){
-    const rendAcum=completos.reduce((s,r)=>s+r.rendPct,0);
+    const rendAcum=completos.reduce((s,r)=>s+(r.rendPct??r.rendAuto),0);
     const infAcum=completos.reduce((s,r)=>s+r.infTasa,0);
     const realAcum=rendAcum-infAcum;
     html+=`<div style="margin-top:10px;padding:10px 14px;background:var(--surf2);border-radius:var(--r);display:flex;gap:20px;flex-wrap:wrap;font-size:12px">
