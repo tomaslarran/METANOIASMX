@@ -5913,49 +5913,42 @@ function calcRendStats(){
 function renderBenchmark(){
   const el=document.getElementById("benchmark-tabla");
   if(!el)return;
-  // Obtener meses con datos de rendDiarios
-  const mesesSet=new Set(rendDiarios.map(r=>r.fecha.slice(0,7)));
-  const meses=[...mesesSet].sort().reverse().slice(0,12);
-  if(!meses.length){el.innerHTML=`<div style="font-size:12px;color:var(--tx3);text-align:center;padding:20px">Sin datos de seguimiento diario aún — registrá valores para activar el benchmark</div>`;return;}
+  // Últimos 12 meses calendario
+  const meses=[];
+  const d=new Date();
+  for(let i=0;i<12;i++){
+    const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0");
+    meses.push(`${y}-${m}`);
+    d.setMonth(d.getMonth()-1);
+  }
 
-  // Rendimiento por inversión en un mes: compara primer vs último registro diario
-  // Usa retorno ponderado por capital para no distorsionar con rescates
-  const rows=meses.map(mes=>{
-    const diasDelMes=rendDiarios.filter(r=>r.fecha.startsWith(mes));
-    if(!diasDelMes.length)return null;
-    const invIds=[...new Set(diasDelMes.map(r=>r.inversion_id))];
-    let sumRendPonderado=0,sumPeso=0,valFin=0;
-    invIds.forEach(invId=>{
-      const regs=diasDelMes.filter(r=>r.inversion_id===invId).sort((a,b)=>a.fecha.localeCompare(b.fecha));
-      if(regs.length<1)return;
-      const vInicio=regs[0].valor;
-      const vFin=regs[regs.length-1].valor;
-      valFin+=vFin;
-      if(vInicio>0){
-        const rPct=(vFin-vInicio)/vInicio*100;
-        sumRendPonderado+=rPct*vInicio;
-        sumPeso+=vInicio;
-      }
-    });
-    const rendPct=sumPeso>0?sumRendPonderado/sumPeso:null;
-    const inf=inflacionMensual.find(i=>i.periodo===mes);
-    const infTasa=inf?inf.tasa:null;
-    const real=rendPct!==null&&infTasa!==null?rendPct-infTasa:null;
-    return{mes,rendPct,infTasa,real,valFin};
-  }).filter(Boolean);
+  const inp=(val,placeholder,campo,mes)=>`<div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
+    <input type="number" value="${val??""}" placeholder="${placeholder}" step="0.1"
+      style="width:68px;background:var(--surf2);border:1px solid var(--b2);border-radius:4px;padding:3px 6px;font-family:var(--f);font-size:11px;color:var(--tx);text-align:right;outline:none"
+      onchange="saveInflacion('${mes}','${campo}',this.value)"
+      onkeydown="if(event.key==='Enter')this.blur()">
+    <span style="color:var(--tx3);font-size:10px">%</span>
+  </div>`;
 
   const mesesNombres={"01":"Ene","02":"Feb","03":"Mar","04":"Abr","05":"May","06":"Jun","07":"Jul","08":"Ago","09":"Sep","10":"Oct","11":"Nov","12":"Dic"};
   const fmtMes=m=>{const[y,mm]=m.split("-");return`${mesesNombres[mm]||mm} ${y}`;};
   const fmtPct=v=>v==null?"—":(v>=0?"+":"")+v.toFixed(1)+"%";
   const col=v=>v==null?"var(--tx3)":v>=0?"var(--gr)":"var(--re)";
 
+  const rows=meses.map(mes=>{
+    const rec=inflacionMensual.find(i=>i.periodo===mes);
+    const rendPct=rec?.rend_cartera??null;
+    const infTasa=rec?.tasa??null;
+    const real=rendPct!==null&&infTasa!==null?rendPct-infTasa:null;
+    return{mes,rendPct,infTasa,real};
+  });
+
   let html=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead><tr style="border-bottom:2px solid var(--b)">
       <th style="text-align:left;padding:6px 10px;color:var(--tx3);font-weight:600">Período</th>
-      <th style="text-align:right;padding:6px 10px;color:var(--tx3);font-weight:600">Cartera</th>
-      <th style="text-align:right;padding:6px 10px;color:var(--tx3);font-weight:600">Inflación</th>
+      <th style="text-align:right;padding:6px 10px;color:var(--tx3);font-weight:600">Cartera %</th>
+      <th style="text-align:right;padding:6px 10px;color:var(--tx3);font-weight:600">Inflación %</th>
       <th style="text-align:right;padding:6px 10px;color:var(--tx3);font-weight:600">Real</th>
-      <th style="text-align:right;padding:6px 10px;color:var(--tx3);font-weight:600">Valor cierre</th>
     </tr></thead><tbody>`;
 
   rows.forEach(r=>{
@@ -5963,18 +5956,10 @@ function renderBenchmark(){
     const pierdeBench=r.real!==null&&r.real<0;
     html+=`<tr style="border-bottom:1px solid var(--b);transition:background .1s" onmouseenter="this.style.background='var(--surf2)'" onmouseleave="this.style.background=''">
       <td style="padding:8px 10px;font-weight:600;color:var(--tx)">${fmtMes(r.mes)}</td>
-      <td style="padding:8px 10px;text-align:right;color:${col(r.rendPct)};font-weight:600">${fmtPct(r.rendPct)}</td>
+      <td style="padding:6px 10px;text-align:right">${inp(r.rendPct,"ej: 2.1","rend_cartera",r.mes)}</td>
+      <td style="padding:6px 10px;text-align:right">${inp(r.infTasa,"ej: 2.7","tasa",r.mes)}</td>
       <td style="padding:8px 10px;text-align:right">
-        <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">
-          <input type="number" value="${r.infTasa??""}" placeholder="ej: 2.7" step="0.1"
-            style="width:70px;background:var(--surf2);border:1px solid var(--b2);border-radius:4px;padding:3px 6px;font-family:var(--f);font-size:11px;color:var(--tx);text-align:right;outline:none"
-            onchange="saveInflacion('${r.mes}',this.value)"
-            onkeydown="if(event.key==='Enter')this.blur()">
-          <span style="color:var(--tx3);font-size:10px">%</span>
-        </div>
-      </td>
-      <td style="padding:8px 10px;text-align:right">
-        ${r.real!==null?`<span style="font-weight:700;color:${col(r.real)};background:${ganaBench?"rgba(16,185,129,.1)":pierdeBench?"rgba(239,68,68,.1)":"transparent"};padding:2px 6px;border-radius:4px">${fmtPct(r.real)}</span>`:`<span style="color:var(--tx3)">— cargar inflación</span>`}
+        ${r.real!==null?`<span style="font-weight:700;color:${col(r.real)};background:${ganaBench?"rgba(16,185,129,.1)":pierdeBench?"rgba(239,68,68,.1)":"transparent"};padding:2px 8px;border-radius:4px;font-size:13px">${fmtPct(r.real)}</span>`:`<span style="color:var(--tx3);font-size:11px">— completar campos</span>`}
       </td>
       <td style="padding:8px 10px;text-align:right;color:var(--tx3)">$${Math.round(r.valFin).toLocaleString("es-AR")}</td>
     </tr>`;
@@ -5997,18 +5982,15 @@ function renderBenchmark(){
   el.innerHTML=html;
 }
 
-async function saveInflacion(periodo,tasa){
-  const t=parseFloat(tasa);
-  if(isNaN(t))return;
+async function saveInflacion(periodo,campo,valor){
+  const v=parseFloat(valor);
+  if(isNaN(v))return;
   try{
     const existing=inflacionMensual.find(i=>i.periodo===periodo);
-    if(existing){
-      await sb(`inflacion_mensual?id=eq.${existing.id}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({tasa:t,updated_at:new Date().toISOString()})});
-      existing.tasa=t;
-    }else{
-      const[r]=await sb("inflacion_mensual",{method:"POST",headers:{"Prefer":"return=representation"},body:JSON.stringify({periodo,tasa:t,updated_at:new Date().toISOString()})});
-      inflacionMensual.push(r);
-    }
+    const payload={periodo,[campo]:v,updated_at:new Date().toISOString()};
+    const[r]=await sb("inflacion_mensual?on_conflict=periodo",{method:"POST",headers:{"Prefer":"resolution=merge-duplicates,return=representation"},body:JSON.stringify(payload)});
+    if(existing)Object.assign(existing,r);
+    else inflacionMensual.push(r);
     renderBenchmark();
   }catch(e){toast("Error al guardar","err");}
 }
