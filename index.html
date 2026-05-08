@@ -3197,15 +3197,17 @@ async function loadInscriptos(cursoId){
         </tr></thead><tbody>`;
       insc.forEach(i=>{
         const a=i.alumnos||{};
-        const stColor=i.estado==="Pagado"?"var(--gr)":i.estado==="Cancelado"?"var(--re)":"var(--al)";
+        const stColor=i.estado==="Pagado"||i.estado==="Certificado"?"var(--gr)":i.estado==="Baja"?"var(--re)":i.estado==="Lista espera"?"var(--tx3)":"var(--al)";
         h+=`<tr style="border-bottom:1px solid var(--b)">
           <td style="padding:8px">${a.nombre||""} ${a.apellido||""}</td>
           <td style="padding:8px;color:var(--tx2)">${a.dni||"—"}</td>
           <td style="padding:8px">
             <select style="background:transparent;border:none;color:${stColor};font-size:12px;font-weight:600;cursor:pointer" onchange="updateEstadoInscripcion('${i.id}',this.value,'${cursoId}')">
-              <option value="Pendiente"${i.estado==="Pendiente"?" selected":""}>Pendiente</option>
+              <option value="Inscripto"${i.estado==="Inscripto"?" selected":""}>Inscripto</option>
+              <option value="Lista espera"${i.estado==="Lista espera"?" selected":""}>Lista espera</option>
               <option value="Pagado"${i.estado==="Pagado"?" selected":""}>Pagado</option>
-              <option value="Cancelado"${i.estado==="Cancelado"?" selected":""}>Cancelado</option>
+              <option value="Certificado"${i.estado==="Certificado"?" selected":""}>Certificado</option>
+              <option value="Baja"${i.estado==="Baja"?" selected":""}>Baja</option>
             </select>
           </td>
           <td style="padding:8px;color:var(--tx2)">${i.monto_pagado?"$"+Number(i.monto_pagado).toLocaleString("es-AR"):"—"}</td>
@@ -3227,7 +3229,7 @@ async function addInscripto(cursoId){
   const sel=document.getElementById(`sel-insc-alumno-${cursoId}`);
   if(!sel||!sel.value){toast("Seleccioná un alumno","err");return;}
   try{
-    await sb("inscripciones",{method:"POST",body:JSON.stringify({alumno_id:sel.value,curso_id:cursoId,estado:"Pendiente"})});
+    await sb("inscripciones",{method:"POST",body:JSON.stringify({alumno_id:sel.value,curso_id:cursoId,estado:"Inscripto"})});
     toast("Alumno inscripto","ok");
     loadInscriptos(cursoId);
   }catch(e){toast("Error: "+e.message,"err")}
