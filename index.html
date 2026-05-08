@@ -2111,8 +2111,9 @@ const H={"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/
 
 async function sb(path,opts={},retry=2){
   const {headers:extraH,...restOpts}=opts;
+  const bearer=authToken||KEY;
   try{
-    const r=await fetch(SB+"/rest/v1/"+path,{mode:"cors",headers:{...H,...(extraH||{})}, ...restOpts});
+    const r=await fetch(SB+"/rest/v1/"+path,{mode:"cors",headers:{...H,"Authorization":"Bearer "+bearer,...(extraH||{})}, ...restOpts});
     if(!r.ok){const e=await r.text();throw new Error(e)}
     const txt=await r.text();
     return txt?JSON.parse(txt):null;
