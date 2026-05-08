@@ -2945,6 +2945,7 @@ async function selectCurso(id){
       <div class="cd-tab on" onclick="showCdTab(this,'cd-info-${id}')">Información</div>
       <div class="cd-tab" onclick="showCdTab(this,'cd-tareas-${id}')">Checklist (${tareasCurso.length})</div>
       <div class="cd-tab" onclick="showCdTab(this,'cd-costos-${id}')">💰 Costos (${costosCurso.filter(c=>c.aplica).length})</div>
+      <div class="cd-tab" onclick="showCdTab(this,'cd-instmat-${id}');loadInstMat('${id}')">👥 Instructores y materiales</div>
     </div>
     <div class="cd-body">
       <div id="cd-info-${id}">
@@ -3013,6 +3014,9 @@ async function selectCurso(id){
       <div id="cd-costos-${id}" style="display:none">
         ${buildCostosTabHtml(id,costosCurso)}
       </div>
+      <div id="cd-instmat-${id}" style="display:none">
+        <div id="instmat-content-${id}" style="padding:4px 0"></div>
+      </div>
     </div>
   </div>`;
   det.scrollIntoView({behavior:"smooth",block:"start"});
@@ -3025,6 +3029,132 @@ function showCdTab(btn,targetId){
   btn.closest(".cd-tabs").querySelectorAll(".cd-tab").forEach(t=>t.classList.remove("on"));
   btn.classList.add("on");
 }
+
+// ── INSTRUCTORES Y MATERIALES DE CURSO ──────────────────────────────
+async function loadInstMat(cursoId){
+  const el=document.getElementById(`instmat-content-${cursoId}`);
+  if(!el)return;
+  el.innerHTML=`<div style="padding:16px;text-align:center;color:var(--tx3);font-size:13px">Cargando...</div>`;
+  try{
+    const [asignados,materiales,todosInst,todosItems]=await Promise.all([
+      sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(id,nombre,apellido,especialidad)`),
+      sb(`curso_materiales?curso_id=eq.${cursoId}&select=*,items_inventario(id,nombre,unidad,stock_actual)`),
+      sb(`instructores?select=id,nombre,apellido&activo=eq.true&order=apellido`),
+      sb(`items_inventario?select=id,nombre,unidad,stock_actual&order=nombre`)
+    ]);
+    const instDisp=todosInst.filter(i=>!asignados.some(a=>a.instructor_id===i.id));
+    const itemsDisp=todosItems.filter(i=>!materiales.some(m=>m.item_id===i.id));
+    const rolBadge=r=>{const c={titular:"var(--pu)",asistente:"var(--bl)",invitado:"var(--tx3)"};return`<span style="font-size:10px;padding:1px 7px;border-radius:8px;background:${c[r]||"var(--tx3)"}22;color:${c[r]||"var(--tx3)"};border:1px solid ${c[r]||"var(--tx3)"}40">${r}</span>`;};
+    let h=``;
+    // ── Instructores ──
+    h+=`<div style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--pu)" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span style="font-size:13px;font-weight:600">Instructores asignados</span>
+      </div>`;
+    if(!asignados.length){
+      h+=`<div style="font-size:13px;color:var(--tx3);padding:6px 0">Sin instructores asignados todavía.</div>`;
+    }else{
+      asignados.forEach(a=>{
+        h+=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);margin-bottom:6px">
+          <div>
+            <div style="font-size:13px;font-weight:500">${esc((a.instructores?.apellido||"")+" "+"")}${esc(a.instructores?.apellido||"")}, ${esc(a.instructores?.nombre||"")} &nbsp;${rolBadge(a.rol)}</div>
+            ${a.instructores?.especialidad?`<div style="font-size:11px;color:var(--tx3);margin-top:3px">${esc(a.instructores.especialidad)}</div>`:""}
+          </div>
+          <button class="btn" onclick="removeCursoInstructor('${a.id}','${cursoId}')" style="padding:3px 8px;color:var(--re);font-size:11px">✕</button>
+        </div>`;
+      });
+    }
+    if(instDisp.length){
+      h+=`<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        <select class="fs" id="inst-sel-${cursoId}" style="flex:1;min-width:140px">
+          <option value="">Elegir instructor...</option>
+          ${instDisp.map(i=>`<option value="${i.id}">${esc(i.apellido)}, ${esc(i.nombre)}</option>`).join("")}
+        </select>
+        <select class="fs" id="inst-rol-${cursoId}" style="width:120px">
+          <option value="titular">Titular</option>
+          <option value="asistente">Asistente</option>
+          <option value="invitado">Invitado</option>
+        </select>
+        <button class="bk" onclick="addCursoInstructor('${cursoId}')" style="padding:6px 14px;font-size:12px">+ Asignar</button>
+      </div>`;
+    }
+    h+=`</div><div style="border-top:1px solid var(--b);margin-bottom:20px"></div>`;
+    // ── Materiales ──
+    h+=`<div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--pu)" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+        <span style="font-size:13px;font-weight:600">Materiales previstos</span>
+      </div>`;
+    if(!materiales.length){
+      h+=`<div style="font-size:13px;color:var(--tx3);padding:6px 0">Sin materiales asignados todavía.</div>`;
+    }else{
+      materiales.forEach(m=>{
+        const insuf=m.items_inventario&&Number(m.items_inventario.stock_actual)<Number(m.cantidad_estimada);
+        h+=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:var(--bg3);border:1px solid ${insuf?"rgba(239,68,68,.35)":"var(--b)"};border-radius:var(--r);margin-bottom:6px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500">${esc(m.items_inventario?.nombre||"")}</div>
+            <div style="font-size:11px;color:var(--tx3);margin-top:3px">
+              Necesita: <strong>${Number(m.cantidad_estimada)} ${esc(m.items_inventario?.unidad||"")}</strong>
+              &nbsp;·&nbsp;Stock actual: <span style="font-weight:600;color:${insuf?"var(--re)":"var(--tx2)"}">${Number(m.items_inventario?.stock_actual??0)} ${esc(m.items_inventario?.unidad||"")}</span>
+              ${insuf?`&nbsp;<span style="color:var(--re);font-size:10px">⚠ stock insuficiente</span>`:""}
+            </div>
+          </div>
+          <button class="btn" onclick="removeCursoMaterial('${m.id}','${cursoId}')" style="padding:3px 8px;color:var(--re);font-size:11px">✕</button>
+        </div>`;
+      });
+    }
+    if(itemsDisp.length){
+      h+=`<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">
+        <select class="fs" id="item-sel-${cursoId}" style="flex:1;min-width:140px">
+          <option value="">Elegir material...</option>
+          ${itemsDisp.map(i=>`<option value="${i.id}">${esc(i.nombre)}</option>`).join("")}
+        </select>
+        <input class="fi" type="number" id="item-cant-${cursoId}" min="0.01" step="0.01" value="1" placeholder="Cant." style="width:72px">
+        <button class="bk" onclick="addCursoMaterial('${cursoId}')" style="padding:6px 14px;font-size:12px">+ Agregar</button>
+      </div>`;
+    }
+    h+=`</div>`;
+    el.innerHTML=h;
+  }catch(e){el.innerHTML=`<div style="color:var(--re);padding:12px;font-size:13px">Error al cargar: ${e.message}</div>`;}
+}
+
+async function addCursoInstructor(cursoId){
+  const sel=document.getElementById(`inst-sel-${cursoId}`);
+  const rol=document.getElementById(`inst-rol-${cursoId}`);
+  if(!sel?.value){toast("Seleccioná un instructor","err");return;}
+  try{
+    await sb("curso_instructores",{method:"POST",body:JSON.stringify({curso_id:cursoId,instructor_id:sel.value,rol:rol?.value||"titular"})});
+    toast("Instructor asignado","ok");loadInstMat(cursoId);
+  }catch(e){toast("Error: "+e.message,"err")}
+}
+
+async function removeCursoInstructor(asigId,cursoId){
+  try{
+    await sb(`curso_instructores?id=eq.${asigId}`,{method:"DELETE"});
+    toast("Instructor removido","ok");loadInstMat(cursoId);
+  }catch(e){toast("Error: "+e.message,"err")}
+}
+
+async function addCursoMaterial(cursoId){
+  const sel=document.getElementById(`item-sel-${cursoId}`);
+  const cant=document.getElementById(`item-cant-${cursoId}`);
+  if(!sel?.value){toast("Seleccioná un material","err");return;}
+  const cantidad=parseFloat(cant?.value||"1");
+  if(!cantidad||cantidad<=0){toast("Cantidad inválida","err");return;}
+  try{
+    await sb("curso_materiales",{method:"POST",body:JSON.stringify({curso_id:cursoId,item_id:sel.value,cantidad_estimada:cantidad})});
+    toast("Material agregado","ok");loadInstMat(cursoId);
+  }catch(e){toast("Error: "+e.message,"err")}
+}
+
+async function removeCursoMaterial(matId,cursoId){
+  try{
+    await sb(`curso_materiales?id=eq.${matId}`,{method:"DELETE"});
+    toast("Material removido","ok");loadInstMat(cursoId);
+  }catch(e){toast("Error: "+e.message,"err")}
+}
+// ────────────────────────────────────────────────────────────────────
 
 function renderChecklist(tareas,cursoId){
   const etapas=["Diseño","Convocatoria","Inscripciones","Ejecución","Certificación","Cierre"];
