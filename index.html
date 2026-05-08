@@ -5976,7 +5976,13 @@ async function renderBenchmark(){
       }else{
         // Sin movimientos: retorno real
         if(vInicio<=0)return;
-        rPct=(vFin-vInicio)/vInicio*100;
+        if(diasInv.length===1){
+          // Un solo registro: no se puede calcular crecimiento real → usar TNA/12 si existe
+          if(!inv.tna)return;
+          rPct=inv.tna/12;
+        }else{
+          rPct=(vFin-vInicio)/vInicio*100;
+        }
       }
       sumPonderado+=rPct*vInicio;
       sumPeso+=vInicio;
@@ -6017,8 +6023,8 @@ async function renderBenchmark(){
     return{mes,rendPct,rendAuto,infTasa,real,rec};
   });
 
-  // Auto-guardar rendAuto en meses que no tienen valor manual
-  const sinManual=rows.filter(r=>r.rendPct===null&&r.rendAuto!==null);
+  // Auto-guardar rendAuto en meses sin valor manual o con 0 guardado (probable dato incompleto)
+  const sinManual=rows.filter(r=>(r.rendPct===null||r.rendPct===0)&&r.rendAuto!==null&&r.rendAuto!==0);
   if(sinManual.length){
     await Promise.all(sinManual.map(async r=>{
       const v=parseFloat(r.rendAuto.toFixed(4));
