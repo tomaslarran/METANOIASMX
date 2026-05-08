@@ -14,6 +14,7 @@
 <link rel="apple-touch-icon" href="/icons/icon-192.svg">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 :root{
@@ -2946,6 +2947,7 @@ async function selectCurso(id){
       <div class="cd-tab" onclick="showCdTab(this,'cd-tareas-${id}')">Checklist (${tareasCurso.length})</div>
       <div class="cd-tab" onclick="showCdTab(this,'cd-costos-${id}')">💰 Costos (${costosCurso.filter(c=>c.aplica).length})</div>
       <div class="cd-tab" onclick="showCdTab(this,'cd-instmat-${id}');loadInstMat('${id}')">👥 Instructores y materiales</div>
+      <div class="cd-tab" onclick="showCdTab(this,'cd-inscriptos-${id}');loadInscriptos('${id}')">📋 Inscriptos</div>
     </div>
     <div class="cd-body">
       <div id="cd-info-${id}">
@@ -3016,6 +3018,9 @@ async function selectCurso(id){
       </div>
       <div id="cd-instmat-${id}" style="display:none">
         <div id="instmat-content-${id}" style="padding:4px 0"></div>
+      </div>
+      <div id="cd-inscriptos-${id}" style="display:none">
+        <div id="inscriptos-content-${id}" style="padding:4px 0"></div>
       </div>
     </div>
   </div>`;
@@ -3154,6 +3159,223 @@ async function removeCursoMaterial(matId,cursoId){
     toast("Material removido","ok");loadInstMat(cursoId);
   }catch(e){toast("Error: "+e.message,"err")}
 }
+// ────────────────────────────────────────────────────────────────────
+// INSCRIPTOS + CERTIFICADOS
+// ────────────────────────────────────────────────────────────────────
+
+async function loadInscriptos(cursoId){
+  const el=document.getElementById(`inscriptos-content-${cursoId}`);
+  if(!el)return;
+  el.innerHTML=`<div style="padding:16px;text-align:center;color:var(--tx3);font-size:13px">Cargando...</div>`;
+  const curso=cursos.find(c=>c.id===cursoId)||{};
+  try{
+    const insc=await sb(`inscripciones?curso_id=eq.${cursoId}&select=*,alumnos(id,nombre,apellido,dni)&order=created_at`);
+    const alumnosDisp=alumnos.filter(a=>!insc.some(i=>i.alumno_id===a.id));
+    const esCert=curso.certificado;
+    let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <span style="font-size:13px;color:var(--tx2)">${insc.length} inscripto${insc.length!==1?"s":""}</span>
+      ${alumnosDisp.length?`<div style="display:flex;gap:8px;align-items:center">
+        <select id="sel-insc-alumno-${cursoId}" class="fs" style="font-size:12px;padding:4px 8px">
+          <option value="">— Agregar alumno —</option>
+          ${alumnosDisp.map(a=>`<option value="${a.id}">${a.apellido}, ${a.nombre}</option>`).join("")}
+        </select>
+        <button class="btn btn-sm" onclick="addInscripto('${cursoId}')">+ Agregar</button>
+      </div>`:""}
+    </div>`;
+    if(!insc.length){
+      h+=`<p style="color:var(--tx3);font-size:13px;padding:12px 0">No hay inscriptos todavía.</p>`;
+    }else{
+      h+=`<table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="border-bottom:1px solid var(--b)">
+          <th style="text-align:left;padding:6px 8px;color:var(--tx3)">Alumno</th>
+          <th style="text-align:left;padding:6px 8px;color:var(--tx3)">DNI</th>
+          <th style="text-align:left;padding:6px 8px;color:var(--tx3)">Estado</th>
+          <th style="text-align:left;padding:6px 8px;color:var(--tx3)">Monto</th>
+          ${esCert?`<th style="text-align:center;padding:6px 8px;color:var(--tx3)">Certificado</th>`:""}
+          <th style="padding:6px 8px"></th>
+        </tr></thead><tbody>`;
+      insc.forEach(i=>{
+        const a=i.alumnos||{};
+        const stColor=i.estado==="Pagado"?"var(--gr)":i.estado==="Cancelado"?"var(--re)":"var(--al)";
+        h+=`<tr style="border-bottom:1px solid var(--b)">
+          <td style="padding:8px">${a.nombre||""} ${a.apellido||""}</td>
+          <td style="padding:8px;color:var(--tx2)">${a.dni||"—"}</td>
+          <td style="padding:8px">
+            <select style="background:transparent;border:none;color:${stColor};font-size:12px;font-weight:600;cursor:pointer" onchange="updateEstadoInscripcion('${i.id}',this.value,'${cursoId}')">
+              <option value="Pendiente"${i.estado==="Pendiente"?" selected":""}>Pendiente</option>
+              <option value="Pagado"${i.estado==="Pagado"?" selected":""}>Pagado</option>
+              <option value="Cancelado"${i.estado==="Cancelado"?" selected":""}>Cancelado</option>
+            </select>
+          </td>
+          <td style="padding:8px;color:var(--tx2)">${i.monto_pagado?"$"+Number(i.monto_pagado).toLocaleString("es-AR"):"—"}</td>
+          ${esCert?`<td style="padding:8px;text-align:center">
+            ${i.certificado_emitido
+              ?`<span style="color:var(--gr);font-size:11px">✓ Emitido</span>&nbsp;<button class="btn btn-xs" title="Descargar de nuevo" onclick="generarCertificado('${i.id}','${cursoId}')">↓</button>`
+              :`<button class="btn btn-sm" onclick="generarCertificado('${i.id}','${cursoId}')">📄 Generar</button>`}
+          </td>`:""}
+          <td style="padding:8px;text-align:right"><button class="btn btn-xs" style="color:var(--re)" onclick="removeInscripcion('${i.id}','${cursoId}')">✕</button></td>
+        </tr>`;
+      });
+      h+=`</tbody></table>`;
+    }
+    el.innerHTML=h;
+  }catch(e){el.innerHTML=`<p style="color:var(--re)">Error: ${e.message}</p>`}
+}
+
+async function addInscripto(cursoId){
+  const sel=document.getElementById(`sel-insc-alumno-${cursoId}`);
+  if(!sel||!sel.value){toast("Seleccioná un alumno","err");return;}
+  try{
+    await sb("inscripciones",{method:"POST",body:JSON.stringify({alumno_id:sel.value,curso_id:cursoId,estado:"Pendiente"})});
+    toast("Alumno inscripto","ok");
+    loadInscriptos(cursoId);
+  }catch(e){toast("Error: "+e.message,"err")}
+}
+
+async function updateEstadoInscripcion(id,estado,cursoId){
+  try{
+    await sb(`inscripciones?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado})});
+    toast("Estado actualizado","ok");
+  }catch(e){toast("Error al actualizar","err")}
+}
+
+async function removeInscripcion(id,cursoId){
+  if(!confirm("¿Eliminar esta inscripción?"))return;
+  try{
+    await sb(`inscripciones?id=eq.${id}`,{method:"DELETE"});
+    toast("Inscripción eliminada","ok");
+    loadInscriptos(cursoId);
+  }catch(e){toast("Error","err")}
+}
+
+async function generarCertificado(inscId,cursoId){
+  try{
+    const [insc]=await sb(`inscripciones?id=eq.${inscId}&select=*,alumnos(id,nombre,apellido,dni)`);
+    const curso=cursos.find(c=>c.id===cursoId)||{};
+    const a=insc.alumnos||{};
+    let instructorNombre="";
+    try{
+      const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(nombre,apellido)&limit=1`);
+      if(ci[0]){const inst=ci[0].instructores;instructorNombre=`${inst.nombre} ${inst.apellido}`;}
+    }catch(e){}
+
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
+    const W=297,H=210;
+
+    // ── Fondo blanco ──
+    doc.setFillColor(255,255,255);
+    doc.rect(0,0,W,H,"F");
+
+    // ── Borde izquierdo violeta ──
+    doc.setFillColor(109,40,217);
+    doc.rect(0,0,5,H,"F");
+
+    // ── Patrón geométrico top-right (rombos superpuestos) ──
+    const diamond=(cx,cy,rx,ry,r,g,b)=>{
+      doc.setFillColor(r,g,b);
+      doc.triangle(cx,cy-ry,cx+rx,cy,cx,cy+ry,"F");
+      doc.triangle(cx,cy-ry,cx-rx,cy,cx,cy+ry,"F");
+    };
+    diamond(W-10, 35, 65, 48, 237,233,254);
+    diamond(W-30, 55, 55, 40, 221,214,254);
+    diamond(W-5,  15, 50, 36, 196,181,253);
+    diamond(W-20, 65, 42, 32, 167,139,250);
+    diamond(W-10, 40, 32, 24, 139,92, 246);
+    diamond(W-5,  20, 22, 16, 109,40, 217);
+
+    // ── Título ──
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(19);
+    doc.setTextColor(80,40,160);
+    doc.text("Metanoia, ecosistema de aprendizaje médico",W/2,26,{align:"center"});
+
+    // Línea separadora
+    doc.setDrawColor(196,181,253);
+    doc.setLineWidth(0.6);
+    doc.line(15,31,W-15,31);
+
+    // ── "certifica que" ──
+    doc.setFont("helvetica","italic");
+    doc.setFontSize(12);
+    doc.setTextColor(120,100,160);
+    doc.text("certifica que",20,50);
+
+    // ── Nombre del alumno ──
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(20);
+    doc.setTextColor(30,10,70);
+    doc.text(`${a.nombre||""} ${a.apellido||""}`,20,67);
+    doc.setDrawColor(200,190,220);
+    doc.setLineWidth(0.4);
+    doc.line(20,70,200,70);
+
+    // ── DNI y MP ──
+    doc.setFont("helvetica","normal");
+    doc.setFontSize(11);
+    doc.setTextColor(110,100,130);
+    doc.text(`DNI: ${a.dni||"__________________________"}`,20,82);
+    doc.text("MP N°: __________________________",115,82);
+
+    // ── "completó la formación" ──
+    doc.setFontSize(12);
+    doc.setTextColor(110,100,130);
+    doc.text("completó la formación",20,97);
+
+    // ── Nombre del curso ──
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(15);
+    doc.setTextColor(80,40,160);
+    doc.text(curso.titulo||"",20,110);
+    doc.setDrawColor(200,190,220);
+    doc.line(20,114,200,114);
+
+    // ── "dictada por" ──
+    doc.setFont("helvetica","normal");
+    doc.setFontSize(11);
+    doc.setTextColor(110,100,130);
+    doc.text("dictada por",20,128);
+    if(instructorNombre){
+      doc.setFont("helvetica","bold");
+      doc.setTextColor(30,10,70);
+      doc.text(instructorNombre,20,139);
+    }
+    doc.setDrawColor(200,190,220);
+    doc.line(20,142,200,142);
+
+    // ── Línea de firma ──
+    doc.setDrawColor(150,140,170);
+    doc.setLineWidth(0.4);
+    doc.line(190,175,W-15,175);
+    doc.setFont("helvetica","normal");
+    doc.setFontSize(9);
+    doc.setTextColor(150,140,170);
+    doc.text("Firma y sello",220,180,{align:"center"});
+
+    // ── Footer ──
+    const fecha=new Date().toLocaleDateString("es-AR",{day:"2-digit",month:"long",year:"numeric"});
+    doc.setFont("helvetica","normal");
+    doc.setFontSize(10);
+    doc.setTextColor(130,120,150);
+    doc.text(`Fecha: ${fecha}`,20,180);
+    doc.text("Salta, Argentina",20,188);
+
+    // ── Marca de agua Metanoia bottom right ──
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(11);
+    doc.setTextColor(160,140,200);
+    doc.text("METANOIA SMX",W-15,H-8,{align:"right"});
+
+    const fname=`certificado_${(a.apellido||"alumno").replace(/\s+/g,"_")}_${(curso.titulo||"curso").replace(/\s+/g,"_")}.pdf`;
+    doc.save(fname);
+
+    // Marcar certificado_emitido = true
+    await sb(`inscripciones?id=eq.${inscId}`,{method:"PATCH",body:JSON.stringify({certificado_emitido:true})});
+    toast("Certificado generado y descargado","ok");
+    loadInscriptos(cursoId);
+  }catch(e){toast("Error al generar: "+e.message,"err")}
+}
+
 // ────────────────────────────────────────────────────────────────────
 
 function renderChecklist(tareas,cursoId){
