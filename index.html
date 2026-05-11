@@ -353,6 +353,13 @@ body{font-family:var(--f);background:var(--bg);color:var(--tx);min-height:100vh;
 .lt{font-size:13px;color:var(--tx3)}
 .empty{text-align:center;padding:40px 20px;color:var(--tx3);font-size:13px}
 .ei{font-size:28px;margin-bottom:8px;opacity:.4}
+.sr-group{padding:4px 16px 2px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--tx3);margin-top:4px}
+.sr-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;transition:background .1s;border-radius:0}
+.sr-item:hover,.sr-item.on{background:var(--pll)}
+.sr-item.on .sr-title{color:var(--pu)}
+.sr-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.sr-title{font-size:13px;font-weight:500;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sr-sub{font-size:11px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
 .toast{position:fixed;bottom:22px;right:22px;padding:9px 14px;border-radius:var(--rl);font-size:13px;font-weight:500;opacity:0;transform:translateY(8px);transition:all .25s cubic-bezier(.34,1.56,.64,1);z-index:400;max-width:280px;pointer-events:none;border:1px solid transparent}
 .toast.show{opacity:1;transform:translateY(0)}
 .toast.ok{background:var(--gl);border-color:var(--gr);color:#6EE7B7}
@@ -2103,6 +2110,21 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- ── BÚSQUEDA GLOBAL ── -->
+<div id="search-overlay" onclick="closeSearch()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;backdrop-filter:blur(4px)"></div>
+<div id="search-modal" style="display:none;position:fixed;top:18%;left:50%;transform:translateX(-50%);width:min(620px,94vw);background:var(--surf);border:1px solid var(--b2);border-radius:16px;z-index:2001;box-shadow:0 24px 60px rgba(0,0,0,.5);overflow:hidden">
+  <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--b)">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input id="search-input" placeholder="Buscar cursos, alumnos, instructores, inventario..." style="flex:1;background:transparent;border:none;outline:none;font-size:15px;color:var(--tx);font-family:var(--fc)" oninput="runSearch(this.value)" onkeydown="searchKeyNav(event)">
+    <kbd style="font-size:11px;color:var(--tx3);background:var(--bg3);border:1px solid var(--b);border-radius:5px;padding:2px 6px">Esc</kbd>
+  </div>
+  <div id="search-results" style="max-height:420px;overflow-y:auto;padding:8px 0"></div>
+  <div id="search-empty" style="display:none;padding:32px 16px;text-align:center;color:var(--tx3);font-size:13px">Sin resultados</div>
+  <div id="search-hint" style="padding:10px 16px;border-top:1px solid var(--b);display:flex;gap:16px;font-size:11px;color:var(--tx3)">
+    <span>↑↓ navegar</span><span>↵ abrir</span><span>Esc cerrar</span>
+  </div>
+</div>
 
 <script>
 const SB="https://jppxmdvddvbsvymogvcp.supabase.co";
@@ -7105,8 +7127,142 @@ document.addEventListener("keydown",e=>{
     if(e.key==="Escape"){pinClear();return;}
     if(e.key==="Enter"&&pinBuffer.length===4){checkPin();return;}
   }
-  if(e.key==="Escape"){closeConfirm();["modal-tarea","modal-curso","modal-proveedor","modal-alumno","modal-instructor"].forEach(id=>closeModal(id))}
+  // Búsqueda global Cmd+K / Ctrl+K
+  if((e.metaKey||e.ctrlKey)&&e.key==="k"){e.preventDefault();openSearch();return;}
+  if(e.key==="Escape"){
+    if(document.getElementById("search-modal")?.style.display==="block"){closeSearch();return;}
+    closeConfirm();["modal-tarea","modal-curso","modal-proveedor","modal-alumno","modal-instructor"].forEach(id=>closeModal(id));
+  }
 });
+
+// ── BÚSQUEDA GLOBAL ──────────────────────────────────────────────
+let searchIdx=0;
+let searchItems=[];
+
+function openSearch(){
+  const m=document.getElementById("search-modal");
+  const o=document.getElementById("search-overlay");
+  const inp=document.getElementById("search-input");
+  m.style.display="block";o.style.display="block";
+  inp.value="";
+  document.getElementById("search-results").innerHTML="";
+  document.getElementById("search-empty").style.display="none";
+  renderSearchDefault();
+  setTimeout(()=>inp.focus(),60);
+}
+
+function closeSearch(){
+  document.getElementById("search-modal").style.display="none";
+  document.getElementById("search-overlay").style.display="none";
+}
+
+function renderSearchDefault(){
+  // Mostrar accesos rápidos cuando no hay query
+  const nav=[
+    {icon:"📋",title:"Tareas",sub:"Ver todas las tareas",page:"tareas"},
+    {icon:"📚",title:"Cursos",sub:"Ver todos los cursos",page:"cursos"},
+    {icon:"👤",title:"Alumnos",sub:"Ver todos los alumnos",page:"alumnos"},
+    {icon:"🏢",title:"Proveedores",sub:"Ver todos los proveedores",page:"proveedores"},
+    {icon:"👨‍🏫",title:"Instructores",sub:"Ver todos los instructores",page:"instructores"},
+    {icon:"📦",title:"Inventario",sub:"Ver inventario completo",page:"inventario"},
+  ];
+  searchItems=nav;
+  let h=`<div class="sr-group">Accesos rápidos</div>`;
+  nav.forEach((it,i)=>h+=`<div class="sr-item${i===0?" on":""}" onclick="searchGo(${i})" onmouseover="searchHover(${i})">
+    <div class="sr-icon" style="background:var(--pl)">${it.icon}</div>
+    <div style="min-width:0"><div class="sr-title">${it.title}</div><div class="sr-sub">${it.sub}</div></div>
+  </div>`);
+  searchIdx=0;
+  document.getElementById("search-results").innerHTML=h;
+  document.getElementById("search-empty").style.display="none";
+}
+
+function runSearch(q){
+  q=q.trim().toLowerCase();
+  if(!q){renderSearchDefault();return;}
+  const res=[];
+  const match=(str)=>str&&str.toLowerCase().includes(q);
+
+  // Cursos
+  cursos.filter(c=>match(c.titulo)||match(c.descripcion)||match(c.instructor_nombre)).slice(0,5).forEach(c=>
+    res.push({icon:"📚",color:"#7C3AED",title:c.titulo,sub:`${c.estado||""} · ${c.fecha_inicio||"Sin fecha"}`,action:()=>{goPage("cursos",document.getElementById("nav-cursos"));setTimeout(()=>selectCurso(c.id),200)}}));
+
+  // Alumnos
+  alumnos.filter(a=>match(a.nombre)||match(a.apellido)||match(a.dni)||match(a.hospital)).slice(0,5).forEach(a=>
+    res.push({icon:"👤",color:"#3B82F6",title:`${a.nombre} ${a.apellido}`,sub:`DNI ${a.dni||"—"} · ${a.hospital||""}`,action:()=>{goPage("alumnos",document.getElementById("nav-alumnos"));setTimeout(()=>selectAlumno&&selectAlumno(a.id),200)}}));
+
+  // Instructores
+  instructores.filter(i=>match(i.nombre)||match(i.apellido)||match(i.especialidad)).slice(0,4).forEach(i=>
+    res.push({icon:"👨‍🏫",color:"#10B981",title:`${i.nombre} ${i.apellido}`,sub:i.especialidad||"",action:()=>{goPage("instructores",document.getElementById("nav-instructores"))}}));
+
+  // Proveedores
+  proveedores.filter(p=>match(p.nombre)||match(p.cuit)).slice(0,3).forEach(p=>
+    res.push({icon:"🏢",color:"#F59E0B",title:p.nombre,sub:p.cuit||"",action:()=>{goPage("proveedores",document.getElementById("nav-proveedores"))}}));
+
+  // Inventario
+  inventario.filter(it=>match(it.nombre)||match(it.categoria)).slice(0,4).forEach(it=>
+    res.push({icon:"📦",color:"#EC4899",title:it.nombre,sub:`${it.categoria||""} · Stock: ${it.stock_actual??"—"} ${it.unidad||""}`,action:()=>{goPage("inventario",document.getElementById("nav-inventario"))}}));
+
+  // Tareas
+  tasks.filter(t=>match(t.nombre)||match(t.descripcion)).slice(0,4).forEach(t=>
+    res.push({icon:"✅",color:"#14B8A6",title:t.nombre,sub:t.status||"",action:()=>{goPage("tareas",document.getElementById("nav-tareas"))}}));
+
+  searchItems=res;
+  searchIdx=0;
+  const el=document.getElementById("search-results");
+  const empty=document.getElementById("search-empty");
+  if(!res.length){el.innerHTML="";empty.style.display="block";return;}
+  empty.style.display="none";
+
+  // Agrupar por tipo
+  const grupos=[
+    {label:"Cursos",icon:"📚",items:res.filter(r=>r.icon==="📚")},
+    {label:"Alumnos",icon:"👤",items:res.filter(r=>r.icon==="👤")},
+    {label:"Instructores",icon:"👨‍🏫",items:res.filter(r=>r.icon==="👨‍🏫")},
+    {label:"Proveedores",icon:"🏢",items:res.filter(r=>r.icon==="🏢")},
+    {label:"Inventario",icon:"📦",items:res.filter(r=>r.icon==="📦")},
+    {label:"Tareas",icon:"✅",items:res.filter(r=>r.icon==="✅")},
+  ].filter(g=>g.items.length);
+
+  let h="";
+  let globalIdx=0;
+  grupos.forEach(g=>{
+    h+=`<div class="sr-group">${g.label}</div>`;
+    g.items.forEach(it=>{
+      const idx=globalIdx++;
+      h+=`<div class="sr-item${idx===0?" on":""}" onclick="searchGo(${idx})" onmouseover="searchHover(${idx})">
+        <div class="sr-icon" style="background:${it.color}22;color:${it.color}">${it.icon}</div>
+        <div style="min-width:0"><div class="sr-title">${it.title}</div>${it.sub?`<div class="sr-sub">${it.sub}</div>`:""}
+        </div>
+      </div>`;
+    });
+  });
+  el.innerHTML=h;
+}
+
+function searchHover(idx){
+  searchIdx=idx;
+  document.querySelectorAll("#search-results .sr-item").forEach((el,i)=>el.classList.toggle("on",i===idx));
+}
+
+function searchKeyNav(e){
+  const items=document.querySelectorAll("#search-results .sr-item");
+  if(!items.length)return;
+  if(e.key==="ArrowDown"){e.preventDefault();searchIdx=Math.min(searchIdx+1,items.length-1);}
+  else if(e.key==="ArrowUp"){e.preventDefault();searchIdx=Math.max(searchIdx-1,0);}
+  else if(e.key==="Enter"){e.preventDefault();searchGo(searchIdx);return;}
+  else return;
+  items.forEach((el,i)=>el.classList.toggle("on",i===searchIdx));
+  items[searchIdx]?.scrollIntoView({block:"nearest"});
+}
+
+function searchGo(idx){
+  const it=searchItems[idx];
+  if(!it)return;
+  closeSearch();
+  if(it.action)it.action();
+  else if(it.page)goPage(it.page,document.getElementById("nav-"+it.page));
+}
 
 /* ─── CALENDARIO ─────────────────────────── */
 let calYear=new Date().getFullYear();
