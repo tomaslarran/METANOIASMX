@@ -760,6 +760,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
         Gráficos
       </div>
+      <div class="sitem" onclick="goPage('reportes',this)" id="nav-reportes">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Reportes
+      </div>
       <div class="sitem" onclick="goPage('rutinas',this)" id="nav-rutinas">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
         Rutinas
@@ -1072,6 +1076,137 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 </div>
 
+
+<!-- ══ REPORTES ══ -->
+<div id="pg-reportes" style="display:none">
+  <div class="pg-header">
+    <div><div class="pg-title">Reportes</div><div class="pg-title-sub">Exportá datos a CSV para análisis y seguimiento</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
+
+    <!-- Inscripciones -->
+    <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="width:36px;height:36px;border-radius:10px;background:rgba(124,58,237,.15);display:flex;align-items:center;justify-content:center;font-size:18px">📋</div>
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--tx)">Inscripciones</div>
+          <div style="font-size:11px;color:var(--tx3)">Alumnos × cursos</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--tx2);margin-bottom:14px;line-height:1.5">
+        Nombre, DNI, MP, curso, fecha, estado de pago y certificado emitido.
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn pri" style="flex:1;justify-content:center" onclick="exportReporteInscripciones()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Exportar CSV
+        </button>
+      </div>
+    </div>
+
+    <!-- Alumnos -->
+    <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="width:36px;height:36px;border-radius:10px;background:rgba(59,130,246,.12);display:flex;align-items:center;justify-content:center;font-size:18px">🎓</div>
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--tx)">Alumnos</div>
+          <div style="font-size:11px;color:var(--tx3)">Base completa</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--tx2);margin-bottom:14px;line-height:1.5">
+        Nombre, apellido, DNI, matrícula, email, teléfono, institución y especialidad.
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn pri" style="flex:1;justify-content:center" onclick="exportReporteAlumnos()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Exportar CSV
+        </button>
+      </div>
+    </div>
+
+    <!-- Cursos -->
+    <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="width:36px;height:36px;border-radius:10px;background:rgba(16,185,129,.12);display:flex;align-items:center;justify-content:center;font-size:18px">📚</div>
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--tx)">Cursos</div>
+          <div style="font-size:11px;color:var(--tx3)">Todos los estados</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--tx2);margin-bottom:14px;line-height:1.5">
+        Nombre, tipo, estado, fechas, horas, cupos, precio y lugar.
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn pri" style="flex:1;justify-content:center" onclick="exportReporteCursos()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Exportar CSV
+        </button>
+      </div>
+    </div>
+
+    <!-- Instructores -->
+    <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="width:36px;height:36px;border-radius:10px;background:rgba(236,72,153,.12);display:flex;align-items:center;justify-content:center;font-size:18px">👨‍🏫</div>
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--tx)">Instructores</div>
+          <div style="font-size:11px;color:var(--tx3)">Docentes activos e inactivos</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--tx2);margin-bottom:14px;line-height:1.5">
+        Nombre, apellido, especialidad, email, teléfono, institución y estado.
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn pri" style="flex:1;justify-content:center" onclick="exportReporteInstructores()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Exportar CSV
+        </button>
+      </div>
+    </div>
+
+    <!-- Inventario -->
+    <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="width:36px;height:36px;border-radius:10px;background:rgba(20,184,166,.12);display:flex;align-items:center;justify-content:center;font-size:18px">📦</div>
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--tx)">Inventario</div>
+          <div style="font-size:11px;color:var(--tx3)">Stock actual</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--tx2);margin-bottom:14px;line-height:1.5">
+        Código, nombre, categoría, stock actual, unidad, precio y proveedor.
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn pri" style="flex:1;justify-content:center" onclick="exportReporteInventario()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Exportar CSV
+        </button>
+      </div>
+    </div>
+
+    <!-- Comprobantes -->
+    <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="width:36px;height:36px;border-radius:10px;background:rgba(245,158,11,.12);display:flex;align-items:center;justify-content:center;font-size:18px">🧾</div>
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--tx)">Comprobantes</div>
+          <div style="font-size:11px;color:var(--tx3)">Facturas de compra</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--tx2);margin-bottom:14px;line-height:1.5">
+        Fecha, proveedor, CUIT, tipo, número, neto, IVA, total y estado.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <select id="rep-comp-anio" class="sel" style="font-size:12px;flex:1;min-width:90px"></select>
+        <button class="btn pri" style="flex:1;justify-content:center;min-width:110px" onclick="exportReporteComprobantes()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Exportar CSV
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
 
 <!-- ══ RUTINAS ══ -->
 <div id="pg-rutinas" style="display:none">
@@ -2612,6 +2747,7 @@ function goPage(name,el){
   if(name==="notif")renderNotifPage();
   if(name==="usuarios")loadUsuariosPage();
   if(name==="cuentas")loadCuentasPage();
+  if(name==="reportes")initReportesPage();
 }
 function goTo(name,el){goPage(name,el)}
 function renderNotifPage(){
@@ -7106,6 +7242,113 @@ function exportInstructoresPixelio() {
   toast(`${instructores.length} instructores exportados`, 'ok');
 }
 
+// ── REPORTES ──────────────────────────────────────────────────────
+function initReportesPage(){
+  // Cargar comprobantes si aún no están (se cargan lazy, distinto a loadAll)
+  if(!comprobantes.length)loadComprobantes().catch(()=>{});
+  // Poblar selector de año para comprobantes
+  const sel=document.getElementById("rep-comp-anio");
+  if(!sel)return;
+  sel.innerHTML="";
+  const anioActual=new Date().getFullYear();
+  for(let a=anioActual;a>=anioActual-4;a--){
+    const o=document.createElement("option");
+    o.value=a;o.textContent=a;
+    if(a===anioActual)o.selected=true;
+    sel.appendChild(o);
+  }
+  const oTodos=document.createElement("option");oTodos.value="todos";oTodos.textContent="Todos";
+  sel.appendChild(oTodos);
+}
+
+async function exportReporteInscripciones(){
+  toast("Generando reporte...","inf");
+  try{
+    const data=await sb("inscripciones?select=*,alumnos(nombre,apellido,dni,matricula,email,telefono,institucion),cursos(nombre,tipo,fecha_inicio,fecha_fin)&order=created_at.desc");
+    if(!data.length){toast("No hay inscripciones","err");return;}
+    const header=["Apellido","Nombre","DNI","Matrícula/MP","Email","Teléfono","Institución","Curso","Tipo curso","Fecha inicio","Fecha fin","Estado","Monto abonado","Certificado emitido","Fecha inscripción"];
+    const rows=data.map(i=>{
+      const a=i.alumnos||{};const c=i.cursos||{};
+      return[
+        a.apellido||"",a.nombre||"",a.dni||"",a.matricula||"",
+        a.email||"",a.telefono||"",a.institucion||"",
+        c.nombre||"",c.tipo||"",c.fecha_inicio||"",c.fecha_fin||"",
+        i.estado||"",i.monto_abonado||"",
+        i.certificado_emitido?"Sí":"No",
+        i.created_at?i.created_at.substring(0,10):""
+      ];
+    });
+    downloadCSV(`inscripciones_${today()}.csv`,[header,...rows]);
+    toast(`${data.length} inscripciones exportadas`,"ok");
+  }catch(e){toast("Error al exportar","err");console.error(e);}
+}
+
+function exportReporteAlumnos(){
+  if(!alumnos.length){toast("No hay alumnos cargados","err");return;}
+  const header=["Apellido","Nombre","DNI","Matrícula/MP","Email","Teléfono","Institución","Especialidad/Residencia","Notas"];
+  const rows=alumnos.map(a=>[
+    a.apellido||"",a.nombre||"",a.dni||"",a.matricula||"",
+    a.email||"",a.telefono||"",a.institucion||"",a.especialidad||"",a.notas||""
+  ]);
+  downloadCSV(`alumnos_${today()}.csv`,[header,...rows]);
+  toast(`${alumnos.length} alumnos exportados`,"ok");
+}
+
+function exportReporteCursos(){
+  if(!cursos.length){toast("No hay cursos cargados","err");return;}
+  const header=["Nombre","Tipo","Estado","Fecha inicio","Fecha fin","Duración (hs)","Cupos máx","Precio ($)","Lugar","Descripción"];
+  const rows=cursos.map(c=>[
+    c.nombre||"",c.tipo||"",c.estado||"",
+    c.fecha_inicio||"",c.fecha_fin||"",
+    c.duracion_horas||"",c.cupos_max||"",c.precio||"",
+    c.lugar||"",c.descripcion||""
+  ]);
+  downloadCSV(`cursos_${today()}.csv`,[header,...rows]);
+  toast(`${cursos.length} cursos exportados`,"ok");
+}
+
+function exportReporteInstructores(){
+  if(!instructores.length){toast("No hay instructores cargados","err");return;}
+  const header=["Apellido","Nombre","Especialidad","Email","Teléfono","Institución","Activo","Notas"];
+  const rows=instructores.map(i=>[
+    i.apellido||"",i.nombre||"",i.especialidad||"",
+    i.email||"",i.telefono||"",i.institucion||"",
+    i.activo===false?"No":"Sí",i.notas||""
+  ]);
+  downloadCSV(`instructores_${today()}.csv`,[header,...rows]);
+  toast(`${instructores.length} instructores exportados`,"ok");
+}
+
+function exportReporteInventario(){
+  if(!inventario.length){toast("No hay ítems cargados","err");return;}
+  const header=["Código","Nombre","Categoría","Stock actual","Stock mínimo","Unidad","Fabricante","Depósito","Partida","Observaciones"];
+  const rows=inventario.map(i=>[
+    i.codigo||"",i.nombre||"",i.categoria||"",
+    i.stock_actual??i.stock??"",i.stock_minimo||"",i.unidad||"",
+    i.fabricante||"",i.deposito||"",i.partida||"",i.obs||i.observaciones||""
+  ]);
+  downloadCSV(`inventario_${today()}.csv`,[header,...rows]);
+  toast(`${inventario.length} ítems exportados`,"ok");
+}
+
+function exportReporteComprobantes(){
+  const anio=document.getElementById("rep-comp-anio")?.value||"todos";
+  let lista=comprobantes;
+  if(anio!=="todos")lista=lista.filter(c=>(c.fecha||c.fecha_imputacion||"").startsWith(anio));
+  if(!lista.length){toast("No hay comprobantes para ese período","err");return;}
+  const header=["Fecha","Fecha imputación","Proveedor","CUIT","Tipo","Número","Sociedad","Neto 21%","Neto 10.5%","Neto 27%","Neto exento","Monto neto","IVA","Total","Estado","Concepto","Cargado por"];
+  const rows=lista.map(c=>[
+    c.fecha||"",c.fecha_imputacion||"",c.proveedor||"",c.cuit||"",
+    c.tipo||"",c.numero||"",c.sociedad||"",
+    c.neto_21||"",c.neto_105||"",c.neto_27||"",c.neto_exento||"",
+    c.monto_neto||"",c.iva||"",c.total||"",
+    c.estado||"",c.concepto||"",c.cargado_por||""
+  ]);
+  const suf=anio==="todos"?"todos":anio;
+  downloadCSV(`comprobantes_${suf}_${today()}.csv`,[header,...rows]);
+  toast(`${lista.length} comprobantes exportados`,"ok");
+}
+
 // ── TOAST ──
 function toast(msg,type="inf"){const t=document.getElementById("toast");t.textContent=msg;t.className=`toast show ${type}`;clearTimeout(t._t);t._t=setTimeout(()=>{t.className="toast"},3500)}
 function showToast(msg,type="inf"){toast(msg,type)}
@@ -7165,6 +7408,7 @@ function renderSearchDefault(){
     {icon:"🏢",title:"Proveedores",sub:"Ver todos los proveedores",page:"proveedores"},
     {icon:"👨‍🏫",title:"Instructores",sub:"Ver todos los instructores",page:"instructores"},
     {icon:"📦",title:"Inventario",sub:"Ver inventario completo",page:"inventario"},
+    {icon:"📊",title:"Reportes",sub:"Exportar datos a CSV",page:"reportes"},
   ];
   searchItems=nav;
   let h=`<div class="sr-group">Accesos rápidos</div>`;
