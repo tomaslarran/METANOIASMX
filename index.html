@@ -3420,153 +3420,153 @@ async function generarCertificado(inscId,cursoId){
       if(ci[0]){const inst=ci[0].instructores;instructorNombre=`${inst.nombre||""} ${inst.apellido||""}`.trim();}
     }catch(e){}
 
+    // Cargar logo PNG
+    let logoDataUrl=null;
+    try{
+      const r=await fetch('./logo_metanoia.png');
+      const blob=await r.blob();
+      logoDataUrl=await new Promise(res=>{const rd=new FileReader();rd.onload=()=>res(rd.result);rd.readAsDataURL(blob);});
+    }catch(e){}
+
     const {jsPDF}=window.jspdf;
     const doc=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
     const W=297,H=210;
 
     // Colores de marca Metanoia
-    const BG  =[205,203,220];  // lavanda suave
-    const LP  =[123,107,191];  // purple claro (cara frontal logo)
-    const DP  =[46, 40, 104];  // navy purple (cara sombra logo)
-    const MP  =[80, 68, 148];  // purple medio (acento)
-    const TXT =[28, 22, 58];   // texto oscuro
-    const TXT2=[90, 78,128];   // texto secundario
-    const LINE=[140,128,175];  // líneas separadoras
+    const DP  =[46, 40,104];   // navy purple oscuro
+    const LP  =[123,107,191];  // purple claro
+    const MP  =[80, 68,148];   // purple medio
+    const TXT =[28, 22, 58];   // texto principal
+    const TXT2=[100, 88,145];  // texto secundario
+    const LINE=[190,182,220];  // líneas sutiles
 
-    // ── Fondo lavanda ──
-    doc.setFillColor(...BG);
+    // ── Fondo blanco ──
+    doc.setFillColor(255,255,255);
     doc.rect(0,0,W,H,"F");
 
-    // ── Logo Metanoia: 3 chevrons 3D (parallelogramos apilados en zigzag) ──
-    // para(x,y,w,h,tilt,rgb): parallelogramo con tilt horizontal
-    const para=(x,y,w,h,tilt,rgb)=>{
-      doc.setFillColor(...rgb);
-      // Corners: (x,y) → (x+w, y-tilt) → (x+w, y-tilt+h) → (x, y+h) → close
-      doc.lines([[w,-tilt],[0,h],[-w,tilt]],x,y,[1,1],"F",true);
-    };
-
-    // Segmento 1 (arriba): tilt positivo → inclina hacia arriba-derecha
-    const lx=6, lw=58, lh=14, ls=6;
-    para(lx, 18,  lw, lh, 13, LP);
-    para(lx, 18+lh, lw, ls, 13, DP);
-
-    // Segmento 2 (medio): tilt negativo → inclina hacia abajo-derecha
-    para(lx, 52,  lw, lh, -13, LP);
-    para(lx, 52+lh, lw, ls, -13, DP);
-
-    // Segmento 3 (abajo): tilt positivo (espejo del 1)
-    para(lx, 86,  lw, lh, 13, LP);
-    para(lx, 86+lh, lw, ls, 13, DP);
-
-    // ── Texto del logo bajo los chevrons ──
-    doc.setFont("helvetica","bold");
-    doc.setFontSize(11);
-    doc.setTextColor(...DP);
-    doc.text("METANOIA",lx+lw/2,118,{align:"center"});
-    doc.setFont("helvetica","normal");
-    doc.setFontSize(7);
-    doc.setTextColor(...MP);
-    doc.text("MEDICAL SIMULATION CENTER",lx+lw/2,125,{align:"center"});
-
-    // ── Línea vertical separadora izquierda ──
+    // ── Borde exterior (navy) ──
+    doc.setDrawColor(...DP);
+    doc.setLineWidth(1.5);
+    doc.rect(6,6,W-12,H-12);
+    // ── Borde interior (purple claro) ──
     doc.setDrawColor(...LP);
-    doc.setLineWidth(0.8);
-    doc.line(74,12,74,198);
+    doc.setLineWidth(0.4);
+    doc.rect(10,10,W-20,H-20);
 
-    // ── Franja derecha decorativa (navy) ──
+    // ── Marcas de esquina (pequeños cuadrados en cada vértice interior) ──
+    const cornSz=4;
     doc.setFillColor(...DP);
-    doc.rect(W-14,0,14,H,"F");
-    // Mini chevrons en la franja derecha
-    doc.setFillColor(...LP);
-    for(let i=0;i<7;i++){
-      const y=i*32+5;
-      doc.lines([[8,-6],[8,6]],W-14,y,[1,1],"F",true);
+    [[10,10],[W-10-cornSz,10],[10,H-10-cornSz],[W-10-cornSz,H-10-cornSz]].forEach(([cx,cy])=>{
+      doc.rect(cx,cy,cornSz,cornSz,"F");
+    });
+
+    // ── Panel izquierdo: franja lavanda sutil ──
+    doc.setFillColor(247,246,252);
+    doc.rect(10,10,68,H-20,"F");
+    // Línea separadora vertical
+    doc.setDrawColor(...LP);
+    doc.setLineWidth(0.7);
+    doc.line(78,10,78,H-10);
+
+    // ── Logo PNG ──
+    if(logoDataUrl){
+      // PNG ratio: 621×968 px → altura = ancho * (968/621)
+      const lw=46, lh=lw*(968/621);        // ~71.8mm
+      const lx=10+(68-lw)/2;               // centrado en panel 10→78
+      const ly=(H-lh)/2;                   // centrado vertical
+      doc.addImage(logoDataUrl,"PNG",lx,ly,lw,lh);
     }
 
-    // ── Título ──
-    doc.setFont("helvetica","bold");
-    doc.setFontSize(15);
-    doc.setTextColor(...DP);
-    doc.text("Metanoia, ecosistema de aprendizaje médico",78,20);
+    // ── Área contenido: center x entre 78 y 291 ──
+    const cx=(78+291)/2;   // ~184.5
 
-    // ── Línea bajo el título ──
+    // ── Encabezado sutil ──
+    doc.setFont("helvetica","normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...LP);
+    doc.text("MEDICAL SIMULATION CENTER · SALTA, ARGENTINA",cx,19,{align:"center"});
     doc.setDrawColor(...LP);
-    doc.setLineWidth(0.5);
-    doc.line(78,24,W-18,24);
+    doc.setLineWidth(0.3);
+    doc.line(82,22,289,22);
 
     // ── "certifica que" ──
     doc.setFont("helvetica","italic");
-    doc.setFontSize(11);
+    doc.setFontSize(12);
     doc.setTextColor(...TXT2);
-    const cx=(W-14+74)/2;
-    doc.text("certifica que",cx,40,{align:"center"});
+    doc.text("certifica que",cx,37,{align:"center"});
 
     // ── Nombre alumno ──
-    const nombreAlumno=`${(a.nombre||"").toUpperCase()} ${(a.apellido||"").toUpperCase()}`.trim();
+    const nombreAlumno=`${(a.apellido||"").toUpperCase()}, ${(a.nombre||"").toUpperCase()}`.trim().replace(/^,\s*/,"");
     doc.setFont("helvetica","bold");
-    doc.setFontSize(20);
+    doc.setFontSize(22);
     doc.setTextColor(...TXT);
-    doc.text(nombreAlumno,cx,57,{align:"center",maxWidth:190});
-    doc.setDrawColor(...LINE);
-    doc.setLineWidth(0.4);
-    doc.line(80,61,W-18,61);
+    doc.text(nombreAlumno,cx,54,{align:"center",maxWidth:200});
+    doc.setDrawColor(...MP);
+    doc.setLineWidth(0.6);
+    doc.line(85,59,288,59);
 
     // ── DNI · MP ──
     doc.setFont("helvetica","normal");
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setTextColor(...TXT2);
-    const dniStr=`D.N.I.  ${a.dni||"________________________________"}`;
-    const mpStr =`M.P. N°  ${a.matricula||"_____________________"}`;
-    doc.text(`${dniStr}          ${mpStr}`,cx,73,{align:"center"});
+    const dniTxt=a.dni?`D.N.I.  ${a.dni}`:"D.N.I.  ___________________";
+    const mpTxt =a.matricula?`M.P. N°  ${a.matricula}`:"M.P. N°  ________________";
+    doc.text(`${dniTxt}          ${mpTxt}`,cx,69,{align:"center"});
 
-    // ── "completó la formación" ──
+    // ── "completó satisfactoriamente la formación" ──
     doc.setFont("helvetica","italic");
     doc.setFontSize(11);
     doc.setTextColor(...TXT2);
-    doc.text("completó la formación",cx,86,{align:"center"});
+    doc.text("completó satisfactoriamente la formación",cx,82,{align:"center"});
 
     // ── Nombre del curso ──
     doc.setFont("helvetica","bold");
-    doc.setFontSize(15);
+    doc.setFontSize(17);
     doc.setTextColor(...DP);
-    doc.text(curso.nombre||"",cx,99,{align:"center",maxWidth:190});
+    doc.text((curso.nombre||"").toUpperCase(),cx,97,{align:"center",maxWidth:200});
     doc.setDrawColor(...LINE);
     doc.setLineWidth(0.4);
-    doc.line(80,104,W-18,104);
+    doc.line(85,103,288,103);
 
-    // ── "dictada por" ──
+    // ── "dictada por" + instructor ──
     doc.setFont("helvetica","italic");
-    doc.setFontSize(11);
-    doc.setTextColor(...TXT2);
-    doc.text("dictada por",cx,116,{align:"center"});
-
-    // ── Nombre instructor ──
-    doc.setFont("helvetica","bold");
-    doc.setFontSize(13);
-    doc.setTextColor(...TXT);
-    doc.text(instructorNombre||"",cx,127,{align:"center"});
-    doc.setDrawColor(...LINE);
-    doc.setLineWidth(0.4);
-    doc.line(80,131,W-18,131);
-
-    // ── Fecha y lugar ──
-    const fecha=new Date().toLocaleDateString("es-AR",{day:"2-digit",month:"long",year:"numeric"});
-    doc.setFont("helvetica","normal");
     doc.setFontSize(10);
     doc.setTextColor(...TXT2);
-    doc.text(`Fecha: ${fecha}`,W-18,148,{align:"right"});
-    doc.text("Salta, Argentina",W-18,156,{align:"right"});
+    doc.text("dictada por",cx,114,{align:"center"});
+    if(instructorNombre){
+      doc.setFont("helvetica","bold");
+      doc.setFontSize(13);
+      doc.setTextColor(...TXT);
+      doc.text(instructorNombre,cx,125,{align:"center"});
+    }
+    doc.setDrawColor(...LINE);
+    doc.setLineWidth(0.4);
+    doc.line(85,130,288,130);
+
+    // ── Fecha ──
+    const fecha=new Date().toLocaleDateString("es-AR",{day:"2-digit",month:"long",year:"numeric"});
+    doc.setFont("helvetica","normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(...TXT2);
+    doc.text(`Salta, ${fecha}`,cx,141,{align:"center"});
 
     // ── Dos líneas de firma ──
-    doc.setDrawColor(...MP);
-    doc.setLineWidth(0.5);
-    doc.line(82,185,148,185);
-    doc.line(165,185,231,185);
+    const fY=177, fW=62;
+    const f1x=100, f2x=213;
+    doc.setDrawColor(...DP);
+    doc.setLineWidth(0.7);
+    doc.line(f1x,fY,f1x+fW,fY);
+    doc.line(f2x,fY,f2x+fW,fY);
     doc.setFont("helvetica","normal");
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.setTextColor(...TXT2);
-    doc.text("Firma y sello",115,191,{align:"center"});
-    doc.text("Firma y sello",198,191,{align:"center"});
+    doc.text("Firma y sello",f1x+fW/2,183,{align:"center"});
+    doc.text("Firma y sello",f2x+fW/2,183,{align:"center"});
+
+    // ── N° certificado (esquina inferior derecha, dentro del borde) ──
+    doc.setFontSize(6.5);
+    doc.setTextColor(...LINE);
+    doc.text(`N° ${inscId.slice(-8).toUpperCase()}`,287,197,{align:"right"});
 
     const fname=`certificado_${(a.apellido||"alumno").replace(/\s+/g,"_")}_${(curso.nombre||"curso").replace(/\s+/g,"_")}.pdf`;
     doc.save(fname);
