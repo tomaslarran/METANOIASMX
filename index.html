@@ -3202,9 +3202,9 @@ async function loadInstMat(cursoId){
   try{
     const [asignados,materiales,todosInst,todosItems]=await Promise.all([
       sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(id,nombre,apellido,especialidad)`),
-      sb(`curso_materiales?curso_id=eq.${cursoId}&select=*,items_inventario(id,nombre,unidad,stock_actual)`),
+      sb(`curso_materiales?curso_id=eq.${cursoId}&select=*,inventario(id,nombre,unidad,stock_actual)`),
       sb(`instructores?select=id,nombre,apellido&activo=eq.true&order=apellido`),
-      sb(`items_inventario?select=id,nombre,unidad,stock_actual&order=nombre`)
+      sb(`inventario?select=id,nombre,unidad,stock_actual&order=nombre`)
     ]);
     const instDisp=todosInst.filter(i=>!asignados.some(a=>a.instructor_id===i.id));
     const itemsDisp=todosItems.filter(i=>!materiales.some(m=>m.item_id===i.id));
@@ -3254,13 +3254,13 @@ async function loadInstMat(cursoId){
       h+=`<div style="font-size:13px;color:var(--tx3);padding:6px 0">Sin materiales asignados todavía.</div>`;
     }else{
       materiales.forEach(m=>{
-        const insuf=m.items_inventario&&Number(m.items_inventario.stock_actual)<Number(m.cantidad_estimada);
+        const insuf=m.inventario&&Number(m.inventario.stock_actual)<Number(m.cantidad_estimada);
         h+=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:var(--bg3);border:1px solid ${insuf?"rgba(239,68,68,.35)":"var(--b)"};border-radius:var(--r);margin-bottom:6px">
           <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:500">${esc(m.items_inventario?.nombre||"")}</div>
+            <div style="font-size:13px;font-weight:500">${esc(m.inventario?.nombre||"")}</div>
             <div style="font-size:11px;color:var(--tx3);margin-top:3px">
-              Necesita: <strong>${Number(m.cantidad_estimada)} ${esc(m.items_inventario?.unidad||"")}</strong>
-              &nbsp;·&nbsp;Stock actual: <span style="font-weight:600;color:${insuf?"var(--re)":"var(--tx2)"}">${Number(m.items_inventario?.stock_actual??0)} ${esc(m.items_inventario?.unidad||"")}</span>
+              Necesita: <strong>${Number(m.cantidad_estimada)} ${esc(m.inventario?.unidad||"")}</strong>
+              &nbsp;·&nbsp;Stock actual: <span style="font-weight:600;color:${insuf?"var(--re)":"var(--tx2)"}">${Number(m.inventario?.stock_actual??0)} ${esc(m.inventario?.unidad||"")}</span>
               ${insuf?`&nbsp;<span style="color:var(--re);font-size:10px">⚠ stock insuficiente</span>`:""}
             </div>
           </div>
