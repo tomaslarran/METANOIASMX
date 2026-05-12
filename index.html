@@ -3360,12 +3360,12 @@ async function loadInscriptos(cursoId){
           <td style="padding:8px">${a.nombre||""} ${a.apellido||""}</td>
           <td style="padding:8px;color:var(--tx2)">${a.dni||"—"}</td>
           <td style="padding:8px">
-            <select style="background:transparent;border:none;color:${stColor};font-size:12px;font-weight:600;cursor:pointer" onchange="updateEstadoInscripcion('${i.id}',this.value,'${cursoId}')">
-              <option value="Inscripto"${i.estado==="Inscripto"?" selected":""}>Inscripto</option>
-              <option value="Lista espera"${i.estado==="Lista espera"?" selected":""}>Lista espera</option>
-              <option value="Pagado"${i.estado==="Pagado"?" selected":""}>Pagado</option>
-              <option value="Certificado"${i.estado==="Certificado"?" selected":""}>Certificado</option>
-              <option value="Baja"${i.estado==="Baja"?" selected":""}>Baja</option>
+            <select style="background:#1A1D2E;border:1px solid var(--b);border-radius:6px;color:${stColor};font-size:12px;font-weight:600;cursor:pointer;padding:3px 6px" onchange="updateEstadoInscripcion('${i.id}',this.value,'${cursoId}')">
+              <option value="Inscripto" style="background:#1A1D2E;color:#F0F0F5"${i.estado==="Inscripto"?" selected":""}>Inscripto</option>
+              <option value="Lista espera" style="background:#1A1D2E;color:#F0F0F5"${i.estado==="Lista espera"?" selected":""}>Lista espera</option>
+              <option value="Pagado" style="background:#1A1D2E;color:#F0F0F5"${i.estado==="Pagado"?" selected":""}>Pagado</option>
+              <option value="Certificado" style="background:#1A1D2E;color:#F0F0F5"${i.estado==="Certificado"?" selected":""}>Certificado</option>
+              <option value="Baja" style="background:#1A1D2E;color:#F0F0F5"${i.estado==="Baja"?" selected":""}>Baja</option>
             </select>
           </td>
           <td style="padding:8px;color:var(--tx2)">${i.monto_abonado?"$"+Number(i.monto_abonado).toLocaleString("es-AR"):"—"}</td>
