@@ -3202,9 +3202,9 @@ async function loadInstMat(cursoId){
   try{
     const [asignados,materiales,todosInst,todosItems]=await Promise.all([
       sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(id,nombre,apellido,especialidad)`),
-      sb(`curso_materiales?curso_id=eq.${cursoId}&select=*,inventario(id,nombre,unidad,stock_actual)`),
+      sb(`curso_materiales?curso_id=eq.${cursoId}&select=*,inventario(id,nombre,stock_actual,stock_disponible)`),
       sb(`instructores?select=id,nombre,apellido&activo=eq.true&order=apellido`),
-      sb(`inventario?select=id,nombre,unidad,stock_actual&order=nombre`)
+      sb(`inventario?select=id,nombre,stock_actual,stock_disponible&order=nombre`)
     ]);
     const instDisp=todosInst.filter(i=>!asignados.some(a=>a.instructor_id===i.id));
     const itemsDisp=todosItems.filter(i=>!materiales.some(m=>m.item_id===i.id));
@@ -3259,8 +3259,8 @@ async function loadInstMat(cursoId){
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:500">${esc(m.inventario?.nombre||"")}</div>
             <div style="font-size:11px;color:var(--tx3);margin-top:3px">
-              Necesita: <strong>${Number(m.cantidad_estimada)} ${esc(m.inventario?.unidad||"")}</strong>
-              &nbsp;·&nbsp;Stock actual: <span style="font-weight:600;color:${insuf?"var(--re)":"var(--tx2)"}">${Number(m.inventario?.stock_actual??0)} ${esc(m.inventario?.unidad||"")}</span>
+              Necesita: <strong>${Number(m.cantidad_estimada)}</strong>
+              &nbsp;·&nbsp;Stock disponible: <span style="font-weight:600;color:${insuf?"var(--re)":"var(--tx2)"}">${Number(m.inventario?.stock_disponible??m.inventario?.stock_actual??0)}</span>
               ${insuf?`&nbsp;<span style="color:var(--re);font-size:10px">⚠ stock insuficiente</span>`:""}
             </div>
           </div>
@@ -7321,11 +7321,11 @@ function exportReporteInstructores(){
 
 function exportReporteInventario(){
   if(!inventario.length){toast("No hay ítems cargados","err");return;}
-  const header=["Código","Nombre","Categoría","Stock actual","Stock mínimo","Unidad","Fabricante","Depósito","Partida","Observaciones"];
+  const header=["Código","Nombre","Categoría","Stock actual","Stock disponible","Fabricante","Depósito","Partida","Observaciones"];
   const rows=inventario.map(i=>[
     i.codigo||"",i.nombre||"",i.categoria||"",
-    i.stock_actual??i.stock??"",i.stock_minimo||"",i.unidad||"",
-    i.fabricante||"",i.deposito||"",i.partida||"",i.obs||i.observaciones||""
+    i.stock_actual??"",i.stock_disponible??"",
+    i.fabricante||"",i.deposito||"",i.partida||"",i.observaciones||""
   ]);
   downloadCSV(`inventario_${today()}.csv`,[header,...rows]);
   toast(`${inventario.length} ítems exportados`,"ok");
