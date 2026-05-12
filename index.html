@@ -3222,7 +3222,7 @@ async function loadInstMat(cursoId){
       asignados.forEach(a=>{
         h+=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);margin-bottom:6px">
           <div>
-            <div style="font-size:13px;font-weight:500">${esc((a.instructores?.apellido||"")+" "+"")}${esc(a.instructores?.apellido||"")}, ${esc(a.instructores?.nombre||"")} &nbsp;${rolBadge(a.rol)}</div>
+            <div style="font-size:13px;font-weight:500">${esc(a.instructores?.apellido||"")}, ${esc(a.instructores?.nombre||"")} &nbsp;${rolBadge(a.rol)}</div>
             ${a.instructores?.especialidad?`<div style="font-size:11px;color:var(--tx3);margin-top:3px">${esc(a.instructores.especialidad)}</div>`:""}
           </div>
           <button class="btn" onclick="removeCursoInstructor('${a.id}','${cursoId}')" style="padding:3px 8px;color:var(--re);font-size:11px">✕</button>
@@ -3368,7 +3368,7 @@ async function loadInscriptos(cursoId){
               <option value="Baja"${i.estado==="Baja"?" selected":""}>Baja</option>
             </select>
           </td>
-          <td style="padding:8px;color:var(--tx2)">${i.monto_pagado?"$"+Number(i.monto_pagado).toLocaleString("es-AR"):"—"}</td>
+          <td style="padding:8px;color:var(--tx2)">${i.monto_abonado?"$"+Number(i.monto_abonado).toLocaleString("es-AR"):"—"}</td>
           ${esCert?`<td style="padding:8px;text-align:center">
             ${i.certificado_emitido
               ?`<span style="color:var(--gr);font-size:11px">✓ Emitido</span>&nbsp;<button class="btn btn-xs" title="Descargar de nuevo" onclick="generarCertificado('${i.id}','${cursoId}')">↓</button>`
@@ -3487,7 +3487,7 @@ async function generarCertificado(inscId,cursoId){
     doc.setFont("helvetica","bold");
     doc.setFontSize(15);
     doc.setTextColor(80,40,160);
-    doc.text(curso.titulo||"",20,110);
+    doc.text(curso.nombre||"",20,110);
     doc.setDrawColor(200,190,220);
     doc.line(20,114,200,114);
 
@@ -3527,7 +3527,7 @@ async function generarCertificado(inscId,cursoId){
     doc.setTextColor(160,140,200);
     doc.text("METANOIA SMX",W-15,H-8,{align:"right"});
 
-    const fname=`certificado_${(a.apellido||"alumno").replace(/\s+/g,"_")}_${(curso.titulo||"curso").replace(/\s+/g,"_")}.pdf`;
+    const fname=`certificado_${(a.apellido||"alumno").replace(/\s+/g,"_")}_${(curso.nombre||"curso").replace(/\s+/g,"_")}.pdf`;
     doc.save(fname);
 
     // Marcar certificado_emitido = true
@@ -7334,7 +7334,7 @@ function exportReporteInventario(){
 function exportReporteComprobantes(){
   const anio=document.getElementById("rep-comp-anio")?.value||"todos";
   let lista=comprobantes;
-  if(anio!=="todos")lista=lista.filter(c=>(c.fecha||c.fecha_imputacion||"").startsWith(anio));
+  if(anio!=="todos")lista=lista.filter(c=>((c.fecha?.length>=4?c.fecha:null)||c.fecha_imputacion||"").startsWith(anio));
   if(!lista.length){toast("No hay comprobantes para ese período","err");return;}
   const header=["Fecha","Fecha imputación","Proveedor","CUIT","Tipo","Número","Sociedad","Neto 21%","Neto 10.5%","Neto 27%","Neto exento","Monto neto","IVA","Total","Estado","Concepto","Cargado por"];
   const rows=lista.map(c=>[
@@ -7428,12 +7428,12 @@ function runSearch(q){
   const match=(str)=>str&&str.toLowerCase().includes(q);
 
   // Cursos
-  cursos.filter(c=>match(c.titulo)||match(c.descripcion)||match(c.instructor_nombre)).slice(0,5).forEach(c=>
-    res.push({icon:"📚",color:"#7C3AED",title:c.titulo,sub:`${c.estado||""} · ${c.fecha_inicio||"Sin fecha"}`,action:()=>{goPage("cursos",document.getElementById("nav-cursos"));setTimeout(()=>selectCurso(c.id),200)}}));
+  cursos.filter(c=>match(c.nombre)||match(c.descripcion)||match(c.tipo)).slice(0,5).forEach(c=>
+    res.push({icon:"📚",color:"#7C3AED",title:c.nombre,sub:`${c.estado||""} · ${c.fecha_inicio||"Sin fecha"}`,action:()=>{goPage("cursos",document.getElementById("nav-cursos"));setTimeout(()=>selectCurso(c.id),200)}}));
 
   // Alumnos
-  alumnos.filter(a=>match(a.nombre)||match(a.apellido)||match(a.dni)||match(a.hospital)).slice(0,5).forEach(a=>
-    res.push({icon:"👤",color:"#3B82F6",title:`${a.nombre} ${a.apellido}`,sub:`DNI ${a.dni||"—"} · ${a.hospital||""}`,action:()=>{goPage("alumnos",document.getElementById("nav-alumnos"));setTimeout(()=>selectAlumno&&selectAlumno(a.id),200)}}));
+  alumnos.filter(a=>match(a.nombre)||match(a.apellido)||match(a.dni)||match(a.institucion)).slice(0,5).forEach(a=>
+    res.push({icon:"👤",color:"#3B82F6",title:`${a.apellido||""}, ${a.nombre||""}`,sub:`DNI ${a.dni||"—"} · ${a.institucion||""}`,action:()=>{goPage("alumnos",document.getElementById("nav-alumnos"))}}));
 
   // Instructores
   instructores.filter(i=>match(i.nombre)||match(i.apellido)||match(i.especialidad)).slice(0,4).forEach(i=>
