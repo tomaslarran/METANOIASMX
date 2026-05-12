@@ -3411,126 +3411,154 @@ async function removeInscripcion(id,cursoId){
 
 async function generarCertificado(inscId,cursoId){
   try{
-    const [insc]=await sb(`inscripciones?id=eq.${inscId}&select=*,alumnos(id,nombre,apellido,dni)`);
+    const [insc]=await sb(`inscripciones?id=eq.${inscId}&select=*,alumnos(id,nombre,apellido,dni,matricula)`);
     const curso=cursos.find(c=>c.id===cursoId)||{};
-    const a=insc.alumnos||{};
-    let instructorNombre="";
+    const a=insc?.alumnos||{};
+    let instructorNombre=curso.instructor_nombre||"";
     try{
       const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(nombre,apellido)&limit=1`);
-      if(ci[0]){const inst=ci[0].instructores;instructorNombre=`${inst.nombre} ${inst.apellido}`;}
+      if(ci[0]){const inst=ci[0].instructores;instructorNombre=`${inst.nombre||""} ${inst.apellido||""}`.trim();}
     }catch(e){}
 
     const {jsPDF}=window.jspdf;
     const doc=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
     const W=297,H=210;
 
-    // ── Fondo blanco ──
-    doc.setFillColor(255,255,255);
+    // Helper: cuadrilátero como 2 triángulos
+    const quad=(x1,y1,x2,y2,x3,y3,x4,y4)=>{
+      doc.triangle(x1,y1,x2,y2,x3,y3,"F");
+      doc.triangle(x1,y1,x3,y3,x4,y4,"F");
+    };
+
+    // ── Fondo lavanda suave ──
+    doc.setFillColor(202,199,218);
     doc.rect(0,0,W,H,"F");
 
-    // ── Borde izquierdo violeta ──
-    doc.setFillColor(109,40,217);
-    doc.rect(0,0,5,H,"F");
-
-    // ── Patrón geométrico top-right (rombos superpuestos) ──
-    const diamond=(cx,cy,rx,ry,r,g,b)=>{
-      doc.setFillColor(r,g,b);
-      doc.triangle(cx,cy-ry,cx+rx,cy,cx,cy+ry,"F");
-      doc.triangle(cx,cy-ry,cx-rx,cy,cx,cy+ry,"F");
+    // ── Cubos isométricos 3D — esquina superior izquierda ──
+    // cube(cx, cy, s): cara top = rombo, cara derecha e izquierda = paralelogramos
+    const cube=(cx,cy,s,cTop,cRight,cLeft)=>{
+      const h=s*0.55; // altura isométrica del rombo
+      // Cara top (rombo)
+      doc.setFillColor(...cTop);
+      quad(cx, cy-h, cx+s, cy, cx, cy+h, cx-s, cy);
+      // Cara derecha
+      doc.setFillColor(...cRight);
+      quad(cx, cy+h, cx+s, cy, cx+s, cy+s*1.1, cx, cy+h+s*1.1);
+      // Cara izquierda
+      doc.setFillColor(...cLeft);
+      quad(cx-s, cy, cx, cy+h, cx, cy+h+s*1.1, cx-s, cy+s*1.1);
     };
-    diamond(W-10, 35, 65, 48, 237,233,254);
-    diamond(W-30, 55, 55, 40, 221,214,254);
-    diamond(W-5,  15, 50, 36, 196,181,253);
-    diamond(W-20, 65, 42, 32, 167,139,250);
-    diamond(W-10, 40, 32, 24, 139,92, 246);
-    diamond(W-5,  20, 22, 16, 109,40, 217);
+
+    // Cubo grande trasero (más oscuro)
+    cube(-8, -5, 42, [75,62,118],[52,40,90],[40,30,72]);
+    // Cubo mediano central
+    cube(10, 22, 32, [108,94,155],[82,68,128],[65,52,108]);
+    // Cubo delantero más claro
+    cube(24, 46, 24, [140,128,185],[112,100,162],[92,80,145]);
+    // Cubo pequeño acento
+    cube(34, 64, 16, [168,158,208],[140,128,188],[118,108,172]);
+
+    // ── Logo Metanoia (zig-zag M) — esquina superior derecha ──
+    doc.setFillColor(72,58,110);
+    doc.rect(W-22,0,22,H,"F");
+    // Chevrons decorativos en la franja derecha
+    doc.setFillColor(55,44,90);
+    for(let i=0;i<8;i++){
+      const y=i*28-4;
+      quad(W-22,y, W,y+10, W-22,y+20, W-22,y+10);
+    }
+    // Texto vertical METANOIA en la franja
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(7);
+    doc.setTextColor(180,168,215);
+    doc.text("METANOIA SMX",W-11,H-8,{angle:90,align:"center"});
+
+    // ── Franja decorativa izquierda (borde) ──
+    doc.setFillColor(72,58,110);
+    doc.rect(0,0,4,H,"F");
 
     // ── Título ──
     doc.setFont("helvetica","bold");
-    doc.setFontSize(19);
-    doc.setTextColor(80,40,160);
-    doc.text("Metanoia, ecosistema de aprendizaje médico",W/2,26,{align:"center"});
-
-    // Línea separadora
-    doc.setDrawColor(196,181,253);
-    doc.setLineWidth(0.6);
-    doc.line(15,31,W-15,31);
+    doc.setFontSize(17);
+    doc.setTextColor(38,28,68);
+    doc.text("Metanoia, ecosistema de aprendizaje médico",72,28);
 
     // ── "certifica que" ──
-    doc.setFont("helvetica","italic");
-    doc.setFontSize(12);
-    doc.setTextColor(120,100,160);
-    doc.text("certifica que",20,50);
-
-    // ── Nombre del alumno ──
-    doc.setFont("helvetica","bold");
-    doc.setFontSize(20);
-    doc.setTextColor(30,10,70);
-    doc.text(`${a.nombre||""} ${a.apellido||""}`,20,67);
-    doc.setDrawColor(200,190,220);
-    doc.setLineWidth(0.4);
-    doc.line(20,70,200,70);
-
-    // ── DNI y MP ──
     doc.setFont("helvetica","normal");
     doc.setFontSize(11);
-    doc.setTextColor(110,100,130);
-    doc.text(`DNI: ${a.dni||"__________________________"}`,20,82);
-    doc.text("MP N°: __________________________",115,82);
+    doc.setTextColor(90,78,128);
+    doc.text("certifica que",(W-22)/2+4,46,{align:"center"});
+
+    // ── Nombre alumno ──
+    const nombreAlumno=`${(a.nombre||"").toUpperCase()} ${(a.apellido||"").toUpperCase()}`.trim();
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(20);
+    doc.setTextColor(28,18,58);
+    doc.text(nombreAlumno,(W-22)/2+4,64,{align:"center",maxWidth:185});
+    doc.setDrawColor(140,128,175);
+    doc.setLineWidth(0.45);
+    doc.line(68,68,W-28,68);
+
+    // ── DNI · MP ──
+    doc.setFont("helvetica","normal");
+    doc.setFontSize(11);
+    doc.setTextColor(85,72,120);
+    const mp=a.matricula?`M.P. N°  ${a.matricula}`:"M.P. N°  __________________";
+    const dni=a.dni?`D.N.I.  ${a.dni}`:"D.N.I.  __________________";
+    doc.text(`${dni}                    ${mp}`,(W-22)/2+4,80,{align:"center"});
 
     // ── "completó la formación" ──
-    doc.setFontSize(12);
-    doc.setTextColor(110,100,130);
-    doc.text("completó la formación",20,97);
+    doc.setFontSize(11);
+    doc.setTextColor(90,78,128);
+    doc.text("completó la formación",(W-22)/2+4,93,{align:"center"});
 
-    // ── Nombre del curso ──
+    // ── Nombre curso ──
     doc.setFont("helvetica","bold");
-    doc.setFontSize(15);
-    doc.setTextColor(80,40,160);
-    doc.text(curso.nombre||"",20,110);
-    doc.setDrawColor(200,190,220);
-    doc.line(20,114,200,114);
+    doc.setFontSize(14);
+    doc.setTextColor(28,18,58);
+    const cursoNombre=curso.nombre||"";
+    doc.text(cursoNombre,(W-22)/2+4,107,{align:"center",maxWidth:185});
+    doc.setDrawColor(140,128,175);
+    doc.setLineWidth(0.45);
+    doc.line(68,112,W-28,112);
 
     // ── "dictada por" ──
     doc.setFont("helvetica","normal");
     doc.setFontSize(11);
-    doc.setTextColor(110,100,130);
-    doc.text("dictada por",20,128);
-    if(instructorNombre){
-      doc.setFont("helvetica","bold");
-      doc.setTextColor(30,10,70);
-      doc.text(instructorNombre,20,139);
-    }
-    doc.setDrawColor(200,190,220);
-    doc.line(20,142,200,142);
+    doc.setTextColor(90,78,128);
+    doc.text("dictada por",(W-22)/2+4,124,{align:"center"});
 
-    // ── Línea de firma ──
-    doc.setDrawColor(150,140,170);
-    doc.setLineWidth(0.4);
-    doc.line(190,175,W-15,175);
-    doc.setFont("helvetica","normal");
-    doc.setFontSize(9);
-    doc.setTextColor(150,140,170);
-    doc.text("Firma y sello",220,180,{align:"center"});
+    // ── Nombre instructor ──
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(13);
+    doc.setTextColor(28,18,58);
+    doc.text(instructorNombre||"",(W-22)/2+4,136,{align:"center"});
+    doc.setDrawColor(140,128,175);
+    doc.setLineWidth(0.45);
+    doc.line(68,140,W-28,140);
 
-    // ── Footer ──
+    // ── Fecha y lugar (derecha) ──
     const fecha=new Date().toLocaleDateString("es-AR",{day:"2-digit",month:"long",year:"numeric"});
     doc.setFont("helvetica","normal");
     doc.setFontSize(10);
-    doc.setTextColor(130,120,150);
-    doc.text(`Fecha: ${fecha}`,20,180);
-    doc.text("Salta, Argentina",20,188);
+    doc.setTextColor(85,72,120);
+    doc.text(`Fecha: ${fecha}`,W-30,155,{align:"right"});
+    doc.text("Salta, Argentina",W-30,163,{align:"right"});
 
-    // ── Marca de agua Metanoia bottom right ──
-    doc.setFont("helvetica","bold");
-    doc.setFontSize(11);
-    doc.setTextColor(160,140,200);
-    doc.text("METANOIA SMX",W-15,H-8,{align:"right"});
+    // ── Dos líneas de firma ──
+    doc.setDrawColor(120,108,158);
+    doc.setLineWidth(0.5);
+    doc.line(72,185,138,185);
+    doc.line(160,185,226,185);
+    doc.setFont("helvetica","normal");
+    doc.setFontSize(9);
+    doc.setTextColor(110,98,148);
+    doc.text("Firma y sello",105,191,{align:"center"});
+    doc.text("Firma y sello",193,191,{align:"center"});
 
     const fname=`certificado_${(a.apellido||"alumno").replace(/\s+/g,"_")}_${(curso.nombre||"curso").replace(/\s+/g,"_")}.pdf`;
     doc.save(fname);
 
-    // Marcar certificado_emitido = true
     await sb(`inscripciones?id=eq.${inscId}`,{method:"PATCH",body:JSON.stringify({certificado_emitido:true})});
     toast("Certificado generado y descargado","ok");
     loadInscriptos(cursoId);
