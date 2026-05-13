@@ -3564,46 +3564,34 @@ async function generarCertificado(inscId,cursoId){
     doc.text("Firma y sello",f1x+fW/2,183,{align:"center"});
     doc.text("Firma y sello",f2x+fW/2,183,{align:"center"});
 
-    // ── QR code con datos del certificado ──
+    // ── QR con URL pública del certificado en Supabase Storage ──
+    const certPath=`certificados/${inscId}.pdf`;
+    const certUrl=`${SB}/storage/v1/object/public/${certPath}`;
+    const makeQrDataUrl=(text)=>{
+      const qr=qrcode(4,"M");
+      qr.addData(text);qr.make();
+      const mod=qr.getModuleCount();
+      const scale=Math.max(2,Math.floor(200/mod));
+      const sz=mod*scale;
+      const canvas=document.createElement("canvas");
+      canvas.width=sz;canvas.height=sz;
+      const ctx=canvas.getContext("2d");
+      ctx.fillStyle="#ffffff";ctx.fillRect(0,0,sz,sz);
+      ctx.fillStyle="#2E2868";
+      for(let r=0;r<mod;r++)for(let c=0;c<mod;c++)
+        if(qr.isDark(r,c))ctx.fillRect(c*scale,r*scale,scale,scale);
+      return canvas.toDataURL("image/png");
+    };
     try{
-      const qrText=[
-        "METANOIA · MEDICAL SIMULATION CENTER",
-        `Certificado N° ${inscId.slice(-8).toUpperCase()}`,
-        `Alumno: ${(a.apellido||"")+", "+(a.nombre||"")}`,
-        a.dni?`D.N.I.: ${a.dni}`:"",
-        a.matricula?`M.P.: ${a.matricula}`:"",
-        `Curso: ${curso.nombre||""}`,
-        instructorNombre?`Dictado por: ${instructorNombre}`:"",
-        `Fecha: ${fecha}`,
-        "Salta, Argentina"
-      ].filter(Boolean).join("\n");
-      // qrcode-generator: dibuja directamente a canvas, 100% síncrono
-      const qrDataUrl=await new Promise((resolve,reject)=>{
-        try{
-          const qr=qrcode(4,"M");
-          qr.addData(qrText);
-          qr.make();
-          const mod=qr.getModuleCount();
-          const scale=Math.max(2,Math.floor(200/mod));
-          const sz=mod*scale;
-          const canvas=document.createElement("canvas");
-          canvas.width=sz;canvas.height=sz;
-          const ctx=canvas.getContext("2d");
-          ctx.fillStyle="#ffffff";ctx.fillRect(0,0,sz,sz);
-          ctx.fillStyle="#2E2868";
-          for(let r=0;r<mod;r++)for(let c=0;c<mod;c++)
-            if(qr.isDark(r,c))ctx.fillRect(c*scale,r*scale,scale,scale);
-          resolve(canvas.toDataURL("image/png"));
-        }catch(e){reject(e);}
-      });
+      const qrDataUrl=makeQrDataUrl(certUrl);
       const qrSz=36;
       const qrX=21, qrY=148;
       doc.addImage(qrDataUrl,"PNG",qrX,qrY,qrSz,qrSz);
       doc.setFont("helvetica","normal");
       doc.setFontSize(6.5);
       doc.setTextColor(...TXT2);
-      doc.text("Escanear para",qrX+qrSz/2,qrY-4,{align:"center"});
-      doc.text("verificar datos",qrX+qrSz/2,qrY-0.5,{align:"center"});
+      doc.text("Escanear para ver",qrX+qrSz/2,qrY-4,{align:"center"});
+      doc.text("este certificado",qrX+qrSz/2,qrY-0.5,{align:"center"});
     }catch(e){console.warn("QR error:",e);}
 
     // ── N° certificado (esquina inferior derecha, dentro del borde) ──
@@ -3612,9 +3600,22 @@ async function generarCertificado(inscId,cursoId){
     doc.text(`N° ${inscId.slice(-8).toUpperCase()}`,287,197,{align:"right"});
 
     const fname=`certificado_${(a.apellido||"alumno").replace(/\s+/g,"_")}_${(curso.nombre||"curso").replace(/\s+/g,"_")}.pdf`;
+
+    // ── Subir a Supabase Storage ──
+    try{
+      const pdfBytes=doc.output("arraybuffer");
+      const upRes=await fetch(`${SB}/storage/v1/object/${certPath}`,{
+        method:"POST",
+        headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":"application/pdf","x-upsert":"true"},
+        body:pdfBytes
+      });
+      if(!upRes.ok){const t=await upRes.text();console.warn("Storage upload:",t);}
+    }catch(e){console.warn("Storage error:",e);}
+
+    // ── Descargar localmente ──
     doc.save(fname);
     await sb(`inscripciones?id=eq.${inscId}`,{method:"PATCH",body:JSON.stringify({certificado_emitido:true})});
-    toast("Certificado generado y descargado","ok");
+    toast("Certificado generado y guardado en la nube","ok");
     loadInscriptos(cursoId);
   }catch(e){toast("Error al generar: "+e.message,"err")}
 }
