@@ -15,7 +15,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 :root{
@@ -3571,21 +3571,34 @@ async function generarCertificado(inscId,cursoId){
         `Certificado N° ${inscId.slice(-8).toUpperCase()}`,
         `Alumno: ${(a.apellido||"")+", "+(a.nombre||"")}`,
         a.dni?`D.N.I.: ${a.dni}`:"",
-        a.matricula?`M.P. N° ${a.matricula}`:"",
+        a.matricula?`M.P.: ${a.matricula}`:"",
         `Curso: ${curso.nombre||""}`,
         instructorNombre?`Dictado por: ${instructorNombre}`:"",
         `Fecha: ${fecha}`,
         "Salta, Argentina"
       ].filter(Boolean).join("\n");
-      const qrDataUrl=await QRCode.toDataURL(qrText,{width:200,margin:1,color:{dark:"#2E2868",light:"#FFFFFF"}});
+      const qrDataUrl=await new Promise((resolve,reject)=>{
+        const div=document.createElement("div");
+        div.style.cssText="position:fixed;left:-9999px;top:-9999px;width:200px;height:200px";
+        document.body.appendChild(div);
+        try{
+          new QRCode(div,{text:qrText,width:200,height:200,colorDark:"#2E2868",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
+          setTimeout(()=>{
+            const canvas=div.querySelector("canvas");
+            const url=canvas?canvas.toDataURL("image/png"):null;
+            document.body.removeChild(div);
+            url?resolve(url):reject(new Error("no canvas"));
+          },150);
+        }catch(e){document.body.removeChild(div);reject(e);}
+      });
       const qrSz=28;
-      doc.addImage(qrDataUrl,"PNG",13,H-10-qrSz,qrSz,qrSz);
+      const qrX=13, qrY=H-10-qrSz;
+      doc.addImage(qrDataUrl,"PNG",qrX,qrY,qrSz,qrSz);
       doc.setFont("helvetica","normal");
       doc.setFontSize(6);
       doc.setTextColor(...LINE);
-      doc.text("Escanear para",13+qrSz/2,H-10-qrSz-3,{align:"center"});
-      doc.text("verificar datos",13+qrSz/2,H-10-qrSz-0,{align:"center"});
-    }catch(e){}
+      doc.text("Escanear para verificar",qrX+qrSz/2,qrY-2,{align:"center"});
+    }catch(e){console.warn("QR error:",e);}
 
     // ── N° certificado (esquina inferior derecha, dentro del borde) ──
     doc.setFontSize(6.5);
