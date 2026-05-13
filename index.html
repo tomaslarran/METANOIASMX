@@ -15,6 +15,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 :root{
@@ -3562,6 +3563,29 @@ async function generarCertificado(inscId,cursoId){
     doc.setTextColor(...TXT2);
     doc.text("Firma y sello",f1x+fW/2,183,{align:"center"});
     doc.text("Firma y sello",f2x+fW/2,183,{align:"center"});
+
+    // ── QR code con datos del certificado ──
+    try{
+      const qrText=[
+        "METANOIA · MEDICAL SIMULATION CENTER",
+        `Certificado N° ${inscId.slice(-8).toUpperCase()}`,
+        `Alumno: ${(a.apellido||"")+", "+(a.nombre||"")}`,
+        a.dni?`D.N.I.: ${a.dni}`:"",
+        a.matricula?`M.P. N° ${a.matricula}`:"",
+        `Curso: ${curso.nombre||""}`,
+        instructorNombre?`Dictado por: ${instructorNombre}`:"",
+        `Fecha: ${fecha}`,
+        "Salta, Argentina"
+      ].filter(Boolean).join("\n");
+      const qrDataUrl=await QRCode.toDataURL(qrText,{width:200,margin:1,color:{dark:"#2E2868",light:"#FFFFFF"}});
+      const qrSz=28;
+      doc.addImage(qrDataUrl,"PNG",13,H-10-qrSz,qrSz,qrSz);
+      doc.setFont("helvetica","normal");
+      doc.setFontSize(6);
+      doc.setTextColor(...LINE);
+      doc.text("Escanear para",13+qrSz/2,H-10-qrSz-3,{align:"center"});
+      doc.text("verificar datos",13+qrSz/2,H-10-qrSz-0,{align:"center"});
+    }catch(e){}
 
     // ── N° certificado (esquina inferior derecha, dentro del borde) ──
     doc.setFontSize(6.5);
