@@ -3591,13 +3591,14 @@ async function generarCertificado(inscId,cursoId){
           },150);
         }catch(e){document.body.removeChild(div);reject(e);}
       });
-      const qrSz=28;
-      const qrX=13, qrY=H-10-qrSz;
+      const qrSz=36;
+      const qrX=21, qrY=148;
       doc.addImage(qrDataUrl,"PNG",qrX,qrY,qrSz,qrSz);
       doc.setFont("helvetica","normal");
-      doc.setFontSize(6);
-      doc.setTextColor(...LINE);
-      doc.text("Escanear para verificar",qrX+qrSz/2,qrY-2,{align:"center"});
+      doc.setFontSize(6.5);
+      doc.setTextColor(...TXT2);
+      doc.text("Escanear para",qrX+qrSz/2,qrY-4,{align:"center"});
+      doc.text("verificar datos",qrX+qrSz/2,qrY-0.5,{align:"center"});
     }catch(e){console.warn("QR error:",e);}
 
     // ── N° certificado (esquina inferior derecha, dentro del borde) ──
