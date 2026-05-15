@@ -540,6 +540,43 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   /* Tablas sin wrapping en contenedores overflow */
   .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 }
+
+/* ── AGENTE FINANCIERO CHAT ── */
+#ai-fab{position:fixed;bottom:80px;right:20px;z-index:1000;width:48px;height:48px;border-radius:50%;background:var(--gradient-brand);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(124,58,237,.5);transition:transform .2s,box-shadow .2s}
+#ai-fab:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(124,58,237,.65)}
+#ai-fab svg{width:22px;height:22px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#ai-panel{position:fixed;bottom:0;right:0;z-index:999;width:380px;max-width:100vw;height:520px;max-height:calc(100vh - 60px);background:var(--bg2);border:1px solid var(--b2);border-radius:var(--rlg) var(--rlg) 0 0;display:flex;flex-direction:column;box-shadow:var(--shadow-lg);transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);overflow:hidden}
+#ai-panel.open{transform:translateY(0)}
+.ai-header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--b);background:var(--bg3);flex-shrink:0}
+.ai-header-icon{width:32px;height:32px;border-radius:50%;background:var(--gradient-brand);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ai-header-icon svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ai-header-info{flex:1;min-width:0}
+.ai-header-title{font-family:var(--fc);font-size:13px;font-weight:600;color:var(--tx)}
+.ai-header-sub{font-size:11px;color:var(--tx3)}
+.ai-close{background:none;border:none;color:var(--tx3);cursor:pointer;padding:4px;display:flex;align-items:center;border-radius:var(--r);transition:color .15s}
+.ai-close:hover{color:var(--tx)}
+.ai-msgs{flex:1;overflow-y:auto;padding:14px 14px 8px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+.ai-msg{max-width:88%;display:flex;flex-direction:column;gap:3px;animation:fadeUp .2s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.ai-msg.user{align-self:flex-end}
+.ai-msg.agent{align-self:flex-start}
+.ai-bubble{padding:9px 12px;border-radius:12px;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.ai-msg.user .ai-bubble{background:var(--pu);color:#fff;border-bottom-right-radius:3px}
+.ai-msg.agent .ai-bubble{background:var(--surf2);color:var(--tx);border-bottom-left-radius:3px}
+.ai-msg.agent.thinking .ai-bubble{color:var(--tx3);font-style:italic}
+.ai-footer{padding:10px 12px;border-top:1px solid var(--b);display:flex;gap:8px;flex-shrink:0;background:var(--bg3)}
+.ai-input{flex:1;background:var(--surf);border:1px solid var(--b2);border-radius:20px;padding:8px 14px;color:var(--tx);font-family:var(--f);font-size:13px;outline:none;resize:none;min-height:36px;max-height:100px;transition:border-color .2s;line-height:1.4}
+.ai-input::placeholder{color:var(--tx3)}
+.ai-input:focus{border-color:var(--pu)}
+.ai-send{width:36px;height:36px;border-radius:50%;background:var(--pu);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s;align-self:flex-end}
+.ai-send:hover:not(:disabled){background:var(--pu2)}
+.ai-send:disabled{opacity:.4;cursor:not-allowed}
+.ai-send svg{width:15px;height:15px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+@media(min-width:600px){
+  #ai-fab{bottom:24px}
+  #ai-panel{border-radius:var(--rlg);bottom:20px;right:20px;height:540px}
+  #ai-panel.open{transform:translateY(0)}
+}
 </style>
 </head>
 <body>
@@ -10010,6 +10047,108 @@ async function saveComprobante(){
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/sw.js').catch(()=>{});
 }
+</script>
+
+<!-- AGENTE FINANCIERO -->
+<button id="ai-fab" onclick="toggleAiPanel()" title="Agente Financiero">
+  <svg viewBox="0 0 24 24"><path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 3 3v2a3 3 0 0 1-3 3h-1v1a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4v-1H3a3 3 0 0 1-3-3v-2a3 3 0 0 1 3-3h1V6a4 4 0 0 1 4-4h4zm0 2H8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm-1 3h2v2h-2V7zm-3 0h2v2H8V7zm6 0h2v2h-2V7zm-3 4h2v2h-2v-2z"/></svg>
+</button>
+
+<div id="ai-panel">
+  <div class="ai-header">
+    <div class="ai-header-icon">
+      <svg viewBox="0 0 24 24"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/></svg>
+    </div>
+    <div class="ai-header-info">
+      <div class="ai-header-title">Agente Financiero</div>
+      <div class="ai-header-sub">Metanoia SMX · Datos en tiempo real</div>
+    </div>
+    <button class="ai-close" onclick="toggleAiPanel()">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="ai-msgs" id="ai-msgs"></div>
+  <div class="ai-footer">
+    <textarea class="ai-input" id="ai-input" placeholder="Preguntá sobre finanzas…" rows="1"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiMsg()}"
+      oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
+    <button class="ai-send" id="ai-send" onclick="sendAiMsg()">
+      <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const EDGE_URL = 'https://jppxmdvddvbsvymogvcp.supabase.co/functions/v1/agente-financiero';
+  const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwcHhtZHZkZHZic3Z5bW9ndmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMjcyODAsImV4cCI6MjA5MDgwMzI4MH0.KPAqCKfUteE3XK9QFqb_44Hm8jYQxfjVLkrlyGvaMhE';
+  let historial = [];
+  let panelOpen = false;
+
+  window.toggleAiPanel = function() {
+    panelOpen = !panelOpen;
+    document.getElementById('ai-panel').classList.toggle('open', panelOpen);
+    if (panelOpen && historial.length === 0) addAgentMsg('Hola! Soy tu agente financiero. Puedo ayudarte con consultas sobre facturación, cash flow, cobranzas, préstamos y proyecciones. ¿Qué querés saber?');
+    if (panelOpen) setTimeout(() => document.getElementById('ai-input').focus(), 300);
+  };
+
+  window.sendAiMsg = async function() {
+    const input = document.getElementById('ai-input');
+    const msg = input.value.trim();
+    if (!msg) return;
+
+    input.value = '';
+    input.style.height = 'auto';
+    document.getElementById('ai-send').disabled = true;
+
+    addUserMsg(msg);
+    const thinking = addAgentMsg('Analizando datos…', true);
+
+    try {
+      const res = await fetch(EDGE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ANON_KEY },
+        body: JSON.stringify({ message: msg, historial }),
+      });
+      const data = await res.json();
+      const respuesta = data.respuesta || data.error || 'Error al procesar la respuesta.';
+      thinking.remove();
+      addAgentMsg(respuesta);
+      historial.push({ role: 'user', content: msg });
+      historial.push({ role: 'assistant', content: respuesta });
+      if (historial.length > 20) historial = historial.slice(-20);
+    } catch (e) {
+      thinking.remove();
+      addAgentMsg('Error de conexión. Revisá tu internet e intentá de nuevo.');
+    }
+    document.getElementById('ai-send').disabled = false;
+    document.getElementById('ai-input').focus();
+  };
+
+  function addUserMsg(text) {
+    const msgs = document.getElementById('ai-msgs');
+    const el = document.createElement('div');
+    el.className = 'ai-msg user';
+    el.innerHTML = `<div class="ai-bubble">${escHtml(text)}</div>`;
+    msgs.appendChild(el);
+    msgs.scrollTop = msgs.scrollHeight;
+    return el;
+  }
+
+  function addAgentMsg(text, thinking = false) {
+    const msgs = document.getElementById('ai-msgs');
+    const el = document.createElement('div');
+    el.className = 'ai-msg agent' + (thinking ? ' thinking' : '');
+    el.innerHTML = `<div class="ai-bubble">${escHtml(text)}</div>`;
+    msgs.appendChild(el);
+    msgs.scrollTop = msgs.scrollHeight;
+    return el;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+})();
 </script>
 
 <!-- BOTTOM NAV MOBILE -->
