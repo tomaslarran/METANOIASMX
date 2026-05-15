@@ -10188,39 +10188,40 @@ if('serviceWorker' in navigator){
 (function(){
   const EDGE_URL = 'https://jppxmdvddvbsvymogvcp.supabase.co/functions/v1/agente-financiero';
   const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwcHhtZHZkZHZic3Z5bW9ndmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMjcyODAsImV4cCI6MjA5MDgwMzI4MH0.KPAqCKfUteE3XK9QFqb_44Hm8jYQxfjVLkrlyGvaMhE';
-  const LS_KEY = 'ai_chat_historial';
+  const LS_KEY = 'ai_chat_v2';
   let historial = [];
   let panelOpen = false;
   let iniciado = false;
 
-  // Restaurar historial desde localStorage al cargar
   function cargarHistorial() {
     try {
       const saved = localStorage.getItem(LS_KEY);
       if (saved) {
         const data = JSON.parse(saved);
         historial = data.historial || [];
-        (data.mensajes || []).forEach(m => {
+        // Restaurar solo mensajes reales (user/assistant), nunca el saludo
+        historial.forEach(m => {
           if (m.role === 'user') addUserMsg(m.content, false);
           else addAgentMsg(m.content, false, false);
         });
-        iniciado = true;
+        return historial.length > 0;
       }
     } catch(e) {}
+    return false;
   }
 
-  function guardarHistorial(mensajes) {
-    try { localStorage.setItem(LS_KEY, JSON.stringify({ historial, mensajes })); } catch(e) {}
+  function guardarHistorial() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify({ historial })); } catch(e) {}
   }
 
   window.toggleAiPanel = function() {
     panelOpen = !panelOpen;
     document.getElementById('ai-panel').classList.toggle('open', panelOpen);
     if (panelOpen && !iniciado) {
-      cargarHistorial();
-      if (historial.length === 0) {
+      iniciado = true;
+      const tieneHistorial = cargarHistorial();
+      if (!tieneHistorial) {
         addAgentMsg('Hola! Soy tu agente financiero. Puedo ayudarte con consultas sobre facturación, cash flow, cobranzas, préstamos y proyecciones. ¿Qué querés saber?', false, false);
-        iniciado = true;
       }
     }
     if (panelOpen) setTimeout(() => document.getElementById('ai-input').focus(), 300);
@@ -10228,11 +10229,10 @@ if('serviceWorker' in navigator){
 
   window.limpiarChat = function() {
     historial = [];
-    iniciado = false;
+    iniciado = true;
     localStorage.removeItem(LS_KEY);
     document.getElementById('ai-msgs').innerHTML = '';
     addAgentMsg('Conversación reiniciada. ¿En qué te puedo ayudar?', false, false);
-    iniciado = true;
   };
 
   window.sendAiMsg = async function() {
@@ -10260,12 +10260,7 @@ if('serviceWorker' in navigator){
       historial.push({ role: 'user', content: msg });
       historial.push({ role: 'assistant', content: respuesta });
       if (historial.length > 12) historial = historial.slice(-12);
-      // Guardar en localStorage
-      const msgs = Array.from(document.getElementById('ai-msgs').children).map(el => ({
-        role: el.classList.contains('user') ? 'user' : 'assistant',
-        content: el.querySelector('.ai-bubble')?.innerText || ''
-      }));
-      guardarHistorial(msgs);
+      guardarHistorial();
     } catch (e) {
       thinking.remove();
       addAgentMsg('Error de conexión. Revisá tu internet e intentá de nuevo.', false, true);
