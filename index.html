@@ -17,6 +17,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
 <style>
 :root{
   --bg:#0D0F1A;--bg2:#131626;--bg3:#1A1D2E;--surf:#1E2235;--surf2:#252840;
@@ -572,6 +573,17 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 .ai-send:hover:not(:disabled){background:var(--pu2)}
 .ai-send:disabled{opacity:.4;cursor:not-allowed}
 .ai-send svg{width:15px;height:15px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ai-bubble table{width:100%;border-collapse:collapse;font-size:12px;margin:6px 0}
+.ai-bubble th,.ai-bubble td{padding:5px 8px;border:1px solid var(--b2);text-align:left}
+.ai-bubble th{background:var(--surf2);font-weight:600;color:var(--tx)}
+.ai-bubble tr:nth-child(even) td{background:rgba(255,255,255,.03)}
+.ai-bubble h2,.ai-bubble h3{font-size:13px;font-weight:600;margin:8px 0 4px;color:var(--tx)}
+.ai-bubble p{margin:4px 0}
+.ai-bubble ul,.ai-bubble ol{padding-left:16px;margin:4px 0}
+.ai-bubble li{margin:2px 0}
+.ai-bubble hr{border:none;border-top:1px solid var(--b);margin:8px 0}
+.ai-bubble strong{color:var(--tx);font-weight:600}
+.ai-bubble code{background:var(--surf2);padding:1px 4px;border-radius:3px;font-size:11px}
 @media(min-width:600px){
   #ai-fab{bottom:24px}
   #ai-panel{border-radius:var(--rlg);bottom:20px;right:20px;height:540px}
@@ -2530,6 +2542,37 @@ async function renderAlertas(){
   const dateFull=now.toLocaleDateString("es-AR",{day:"numeric",month:"long",year:"numeric"});
   const nombre=(loggedUser?.nombre||"").split(" ")[0];
 
+  // ── Datos del mes actual ──
+  const mesKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  const MN=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const mesLabel=MN[now.getMonth()]+" "+now.getFullYear();
+  const ingMes=cfConceptos.filter(c=>c.tipo==="Ingreso").reduce((s,c)=>{const v=cfValores.find(vv=>vv.concepto_id===c.id&&vv.periodo===mesKey);return s+(v?.monto||0);},0);
+  const egrMesCF=cfConceptos.filter(c=>c.tipo==="Egreso").reduce((s,c)=>{const v=cfValores.find(vv=>vv.concepto_id===c.id&&vv.periodo===mesKey);return s+(v?.monto||0);},0);
+  const sueldosMes=cfEmpleados.filter(e=>e.activo&&e.tipo!=="Variable").reduce((s,e)=>{const pg=cfPagosEmpleados.find(p=>p.empleado_id===e.id&&p.periodo===mesKey);if(pg?.pagado)return s;if(pg?.monto!=null)return s+(parseFloat(pg.monto)||0);return s+(parseFloat(e.monto_mensual)||0);},0);
+  const cuotasMes2=cfPrestCuotas.filter(c=>!c.pagada&&c.fecha&&c.fecha.startsWith(mesKey)).reduce((s,c)=>s+(parseFloat(c.monto_total||c.capital||0)),0);
+  const egrMes=egrMesCF+sueldosMes+cuotasMes2;
+  const netoMes=ingMes-egrMes;
+  const cobPendMonto=cfCobranzas.filter(c=>c.estado==="Pendiente").reduce((s,c)=>s+(c.monto||0),0);
+
+  // ── Cursos stats ──
+  const cursosActivos=cursos.filter(c=>["Convocatoria","Inscripciones","En curso"].includes(c.estado));
+  const cursosCompletados=cursos.filter(c=>c.estado==="Completado");
+
+  // ── Datos 6 meses para mini chart ──
+  const m6=[];
+  for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);m6.push({key:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`,label:MN[d.getMonth()]});}
+  const ing6=m6.map(m=>cfConceptos.filter(c=>c.tipo==="Ingreso").reduce((s,c)=>{const v=cfValores.find(vv=>vv.concepto_id===c.id&&vv.periodo===m.key);return s+(v?.monto||0);},0));
+  const egr6=m6.map(m=>{
+    const cf=cfConceptos.filter(c=>c.tipo==="Egreso").reduce((s,c)=>{const v=cfValores.find(vv=>vv.concepto_id===c.id&&vv.periodo===m.key);return s+(v?.monto||0);},0);
+    const su=cfEmpleados.filter(e=>e.activo&&e.tipo!=="Variable").reduce((s,e)=>{const pg=cfPagosEmpleados.find(p=>p.empleado_id===e.id&&p.periodo===m.key);if(pg?.pagado)return s;if(pg?.monto!=null)return s+(parseFloat(pg.monto)||0);return s+(parseFloat(e.monto_mensual)||0);},0);
+    const cu=cfPrestCuotas.filter(c=>c.fecha&&c.fecha.startsWith(m.key)).reduce((s,c)=>s+(parseFloat(c.monto_total||c.capital||0)),0);
+    return cf+su+cu;
+  });
+
+  // ── Ticket promedio (inscripciones del mes) ──
+  const inscMes=cfCobranzas.filter(c=>c.created_at&&c.created_at.startsWith(mesKey)&&c.monto>0);
+  const ticketProm=inscMes.length?Math.round(inscMes.reduce((s,c)=>s+(c.monto||0),0)/inscMes.length):0;
+
   // ── Recolectar alertas ──
   const alertas=[];
 
@@ -2689,29 +2732,89 @@ async function renderAlertas(){
   const semana=alertas.filter(a=>a.urgencia==="semana");
   const mes=alertas.filter(a=>a.urgencia==="mes");
 
-  const statCard=(icon,val,label,sub,col,onclick)=>`<div onclick="${onclick||''}" style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:16px 18px;${onclick?'cursor:pointer;':''}transition:border-color .15s" ${onclick?`onmouseenter="this.style.borderColor='var(--ac)'" onmouseleave="this.style.borderColor='var(--b)'"`:''}><div style="font-size:18px;margin-bottom:8px">${icon}</div><div style="font-size:22px;font-weight:700;color:${col};line-height:1">${val}</div><div style="font-size:11px;color:var(--tx3);margin-top:4px">${label}</div><div style="font-size:10px;color:var(--tx4);margin-top:2px">${sub}</div></div>`;
+  const fmtM=v=>{if(!v&&v!==0)return"—";const abs="$"+Math.round(Math.abs(v)).toLocaleString("es-AR");return v<0?"-"+abs:abs;};
+  const statCard=(icon,val,label,sub,col,onclick)=>`<div onclick="${onclick||''}" style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:16px 18px;${onclick?'cursor:pointer;':''}transition:border-color .15s" ${onclick?`onmouseenter="this.style.borderColor='rgba(124,58,237,.5)'" onmouseleave="this.style.borderColor='var(--b)'"`:''}><div style="font-size:18px;margin-bottom:8px">${icon}</div><div style="font-size:22px;font-weight:700;color:${col};line-height:1;font-family:var(--fc)">${val}</div><div style="font-size:11px;color:var(--tx3);margin-top:4px">${label}</div><div style="font-size:10px;color:var(--tx3);margin-top:2px">${sub}</div></div>`;
+  const kpiCard=(val,label,sub,col,tag)=>`<div style="background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:12px 14px;flex:1;min-width:0"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--tx3);margin-bottom:4px">${label}</div><div style="font-size:20px;font-weight:700;color:${col};font-family:var(--fc);line-height:1">${val}</div>${sub?`<div style="font-size:10px;color:var(--tx3);margin-top:3px">${sub}</div>`:''}${tag?`<div style="display:inline-block;margin-top:5px;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;background:${col}22;color:${col}">${tag}</div>`:''}</div>`;
 
+  destroyChart("dashCash");
   wrap.innerHTML=`
     <div class="pg-header">
       <div><div class="pg-title" style="text-transform:capitalize">${greeting}${nombre?" "+nombre:""}! 👋</div><div class="pg-title-sub" style="text-transform:capitalize">${dayName}, ${dateFull}</div></div>
       <button class="btn" onclick="renderAlertas()" style="gap:6px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Actualizar</button>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:24px">
-      ${statCard("✅",tareasActivas,"Tareas activas",tareasVenc?`${tareasVenc} vencida${tareasVenc>1?"s":""}`:tareasActivas?"Al día":"Sin tareas",tareasVenc?"#EF4444":"var(--gr)",`goPage('tareas',document.getElementById('nav-tareas'))`)}
-      ${statCard("💳",cuotasSem,"Cuotas esta semana",cuotasMonto?"$"+Math.round(cuotasMonto).toLocaleString("es-AR"):"Sin vencimientos",cuotasSem?"#F97316":"var(--tx3)",`goPage('cashflow',document.getElementById('nav-cashflow'));setCFTab('prestamos')`)}
-      ${statCard("📥","$"+Math.round(cobMonto).toLocaleString("es-AR"),"Por cobrar",`${cobPend.length} pendiente${cobPend.length!==1?"s":""}`,cobMonto>0?"var(--gr)":"var(--tx3)",`goPage('cashflow',document.getElementById('nav-cashflow'));setCFTab('cobranzas')`)}
-      ${statCard("💰",invActivas.length,"Inversiones activas",invMonto?"$"+Math.round(invMonto).toLocaleString("es-AR"):"—","var(--ac)",`goPage('cashflow',document.getElementById('nav-cashflow'));setCFTab('inversiones')`)}
-      ${statCard("🏛",ivaTotalMes?"$"+ivaTotalMes.toLocaleString("es-AR"):"Sin datos","IVA "+mesImpLabel,`Vence el 20 de ${mesProxLabel}`,ivaTotalMes?"var(--re)":"var(--tx3)",`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('iva')`)}
-      ${statCard("👤",autoPend.length||"✓","Autónomos "+mesImpLabel,autoMontoPend?"$"+autoMontoPend.toLocaleString("es-AR")+" pendiente":"Al día",autoPend.length?"var(--am)":"var(--gr)",`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('autonomos')`)}
+
+    <!-- ── Fila 1: Cash flow del mes ── -->
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tx3);margin-bottom:8px;display:flex;align-items:center;gap:8px">Caja · ${mesLabel}<span style="flex:1;height:1px;background:var(--b);display:inline-block"></span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:20px">
+      ${statCard("💰",fmtM(ingMes),"Ingresos del mes","Cash flow",ingMes>0?"var(--gr)":"var(--tx3)",`goPage('cashflow',document.getElementById('nav-cashflow'));setCFTab('resumen')`)}
+      ${statCard("📤",fmtM(egrMes),"Egresos del mes","Gastos + sueldos + cuotas","var(--re)",`goPage('cashflow',document.getElementById('nav-cashflow'));setCFTab('resumen')`)}
+      ${statCard(netoMes>=0?"✅":"⚠",fmtM(netoMes),"Neto del mes","Ingresos − egresos",netoMes>=0?"var(--gr)":"var(--re)",`goPage('cashflow',document.getElementById('nav-cashflow'));setCFTab('resumen')`)}
+      ${statCard("📥",fmtM(cobPendMonto),"Por cobrar",`${cfCobranzas.filter(c=>c.estado==="Pendiente").length} cobranzas pendientes`,cobPendMonto>0?"var(--am)":"var(--tx3)",`goPage('cashflow',document.getElementById('nav-cashflow'));setCFTab('cobranzas')`)}
     </div>
+
+    <!-- ── Fila 2: Formación + KPIs ── -->
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tx3);margin-bottom:8px;display:flex;align-items:center;gap:8px">Formación<span style="flex:1;height:1px;background:var(--b);display:inline-block"></span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:20px">
+      ${statCard("📚",cursosActivos.length,"Cursos activos","Convocatoria · Inscripciones · En curso","var(--pu)",`goPage('cursos',document.getElementById('nav-cursos'));setCursoFilter('activos')`)}
+      ${statCard("🎓",cursosCompletados.length,"Completados","Cursos finalizados","var(--gr)",`goPage('cursos',document.getElementById('nav-cursos'));setCursoFilter('completados')`)}
+      ${statCard("👥",alumnos.length,"Alumnos registrados","Base de alumnos","var(--bl)",`goPage('alumnos',document.getElementById('nav-alumnos'))`)}
+      ${statCard("✅",tareasActivas,"Tareas activas",tareasVenc?`${tareasVenc} vencida${tareasVenc>1?"s":""}`:tareasActivas?"Al día":"Sin tareas",tareasVenc?"#EF4444":"var(--gr)",`goPage('tareas',document.getElementById('nav-tareas'))`)}
+    </div>
+
+    <!-- ── Fila 3: KPIs financieros + Compromisos ── -->
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tx3);margin-bottom:8px;display:flex;align-items:center;gap:8px">KPIs · Control financiero<span style="flex:1;height:1px;background:var(--b);display:inline-block"></span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
+      ${kpiCard(cuotasSem?"$"+Math.round(cuotasMonto).toLocaleString("es-AR"):"Sin venc.","Cuotas esta semana",`${cuotasSem} cuota${cuotasSem!==1?"s":""}`,cuotasSem?"#F97316":"var(--tx3)",cuotasSem?"Atención":null)}
+      ${kpiCard(invActivas.length+" activa"+(invActivas.length!==1?"s":""),"Inversiones",invMonto?fmtM(invMonto):"—","var(--te)",null)}
+      ${kpiCard(ivaTotalMes?fmtM(ivaTotalMes):"Sin datos","IVA "+mesImpLabel,`Vence 20/${mesProxLabel}`,ivaTotalMes?"var(--re)":"var(--tx3)",ivaTotalMes?"Pendiente":null)}
+      ${kpiCard(autoPend.length?"$"+autoMontoPend.toLocaleString("es-AR"):"✓","Autónomos "+mesImpLabel,autoPend.length?`${autoPend.length} pendiente${autoPend.length!==1?"s":""}`:null,autoPend.length?"var(--am)":"var(--gr)",autoPend.length?"Pendiente":"Al día")}
+      ${kpiCard(ticketProm?fmtM(ticketProm):"—","Ticket promedio","Cobranzas del mes","var(--pk)",null)}
+    </div>
+
+    <!-- ── Fila 4: Mini chart 6 meses ── -->
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tx3);margin-bottom:8px;display:flex;align-items:center;gap:8px">Cash flow · últimos 6 meses<span style="flex:1;height:1px;background:var(--b);display:inline-block"></span><span onclick="goPage('graficos',document.getElementById('nav-graficos'))" style="font-size:10px;color:var(--pu);cursor:pointer;font-weight:600;text-transform:none;letter-spacing:0">Ver gráficos →</span></div>
+    <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:16px 20px;margin-bottom:20px">
+      <div style="position:relative;height:160px"><canvas id="dashCashCanvas"></canvas></div>
+    </div>
+
+    <!-- ── Fila 5: Alertas ── -->
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tx3);margin-bottom:8px;display:flex;align-items:center;gap:8px">Alertas y vencimientos<span style="flex:1;height:1px;background:var(--b);display:inline-block"></span>${critCount?`<span style="font-size:10px;font-weight:700;padding:1px 8px;border-radius:8px;background:rgba(239,68,68,.18);color:#FCA5A5">${critCount} urgente${critCount!==1?"s":""}</span>`:""}</div>
     ${!alertas.length
-      ?`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:48px;text-align:center"><div style="font-size:40px;margin-bottom:12px">🎉</div><div style="font-size:15px;font-weight:600;color:var(--tx)">Todo al día</div><div style="font-size:13px;color:var(--tx3);margin-top:6px">No hay vencimientos ni alertas en los próximos 30 días.</div></div>`
+      ?`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:36px;text-align:center"><div style="font-size:36px;margin-bottom:10px">🎉</div><div style="font-size:14px;font-weight:600;color:var(--tx)">Todo al día</div><div style="font-size:12px;color:var(--tx3);margin-top:4px">No hay vencimientos ni alertas en los próximos 30 días.</div></div>`
       :`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:18px 20px">
           ${sect("🔴 Crítico / Vencido","#EF4444",criticas)}
           ${sect("🟠 Esta semana","#F97316",semana)}
           ${sect("🔵 Próximos 30 días","#3B82F6",mes)}
         </div>`
     }`;
+
+  // Render mini chart after DOM is set
+  requestAnimationFrame(()=>{
+    const el=document.getElementById("dashCashCanvas");
+    if(!el)return;
+    destroyChart("dashCash");
+    const hasData=ing6.some(v=>v>0)||egr6.some(v=>v>0);
+    if(!hasData){el.parentElement.innerHTML=`<div style="display:flex;align-items:center;justify-content:center;height:160px;color:var(--tx3);font-size:13px">Sin datos de cash flow aún</div>`;return;}
+    charts.dashCash=new Chart(el,{
+      type:"bar",
+      data:{
+        labels:m6.map(m=>m.label),
+        datasets:[
+          {label:"Ingresos",data:ing6,backgroundColor:"rgba(16,185,129,.55)",borderRadius:4,borderSkipped:false,order:2},
+          {label:"Egresos",data:egr6.map(v=>-v),backgroundColor:"rgba(239,68,68,.45)",borderRadius:4,borderSkipped:false,order:2},
+          {label:"Neto",data:m6.map((_,i)=>ing6[i]-egr6[i]),type:"line",borderColor:"rgba(124,58,237,.9)",backgroundColor:"transparent",tension:.35,pointBackgroundColor:m6.map((_,i)=>ing6[i]-egr6[i]>=0?"#10B981":"#EF4444"),pointRadius:4,order:1}
+        ]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{labels:{color:"#9899B0",font:{size:10},boxWidth:8,padding:12}},tooltip:{callbacks:{label:ctx=>{const v=ctx.dataset.label==="Egresos"?Math.abs(ctx.raw):ctx.raw;return ctx.dataset.label+": $"+Math.round(v).toLocaleString("es-AR");}}}},
+        scales:{
+          x:{ticks:{color:"#5A5C72",font:{size:10}},grid:{display:false},border:{display:false}},
+          y:{ticks:{color:"#5A5C72",font:{size:10},callback:v=>"$"+Math.round(Math.abs(v)/1000)+"k"},grid:{color:"rgba(255,255,255,.04)"},border:{display:false}}
+        }
+      }
+    });
+  });
 }
 function updateMobileNav(page){
   ["alertas","tareas","cashflow","impuestos","menu"].forEach(k=>{
@@ -10139,7 +10242,8 @@ if('serviceWorker' in navigator){
     const msgs = document.getElementById('ai-msgs');
     const el = document.createElement('div');
     el.className = 'ai-msg agent' + (thinking ? ' thinking' : '');
-    el.innerHTML = `<div class="ai-bubble">${escHtml(text)}</div>`;
+    const content = thinking ? escHtml(text) : (typeof marked !== 'undefined' ? marked.parse(text) : escHtml(text));
+    el.innerHTML = `<div class="ai-bubble">${content}</div>`;
     msgs.appendChild(el);
     msgs.scrollTop = msgs.scrollHeight;
     return el;
