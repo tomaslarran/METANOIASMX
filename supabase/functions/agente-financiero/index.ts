@@ -47,6 +47,9 @@ ${JSON.stringify(prestamos.data)}
 INVERSIONES:
 ${JSON.stringify(inversiones.data)}`;
 
+    // Limitar historial para no exceder contexto (sistema prompt es grande)
+    const historialReciente = historial.slice(-6);
+
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -56,13 +59,24 @@ ${JSON.stringify(inversiones.data)}`;
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 1024,
+        max_tokens: 2048,
         system: sistema,
-        messages: [...historial, { role: "user", content: message }],
+        messages: [...historialReciente, { role: "user", content: message }],
       }),
     });
 
     const data = await res.json();
+
+    if (data.type === "error") {
+      const tipo = data.error?.type ?? "error";
+      if (tipo === "overloaded_error") {
+        return new Response(JSON.stringify({ respuesta: "El servicio está saturado en este momento. Intentá de nuevo en unos segundos." }), {
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+      throw new Error(data.error?.message ?? "Error de API");
+    }
+
     const respuesta = data.content?.[0]?.text ?? "No pude generar una respuesta.";
 
     return new Response(JSON.stringify({ respuesta }), {
