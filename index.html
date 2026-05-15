@@ -10159,12 +10159,16 @@ if('serviceWorker' in navigator){
 
 <div id="ai-panel">
   <div class="ai-header">
-    <div class="ai-header-icon">
+    <div class="ai-header-icon" id="ai-header-icon">
       <svg viewBox="0 0 24 24"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/></svg>
     </div>
     <div class="ai-header-info">
-      <div class="ai-header-title">Agente Financiero</div>
-      <div class="ai-header-sub">Metanoia SMX · Datos en tiempo real</div>
+      <div class="ai-header-title" id="ai-header-title">Agente Financiero</div>
+      <select id="ai-agente-sel" onchange="cambiarAgente(this.value)" style="font-size:10px;background:transparent;border:none;color:var(--tx3);cursor:pointer;outline:none;font-family:var(--f);margin-top:1px">
+        <option value="financiero">💰 Finanzas</option>
+        <option value="tareas">✅ Tareas</option>
+        <option value="cursos">🎓 Cursos</option>
+      </select>
     </div>
     <button class="ai-close" onclick="limpiarChat()" title="Limpiar conversación" style="margin-right:2px">
       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
@@ -10175,7 +10179,7 @@ if('serviceWorker' in navigator){
   </div>
   <div class="ai-msgs" id="ai-msgs"></div>
   <div class="ai-footer">
-    <textarea class="ai-input" id="ai-input" placeholder="Preguntá sobre finanzas…" rows="1"
+    <textarea class="ai-input" id="ai-input" placeholder="Preguntá algo…" rows="1"
       onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiMsg()}"
       oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
     <button class="ai-send" id="ai-send" onclick="sendAiMsg()">
@@ -10186,12 +10190,27 @@ if('serviceWorker' in navigator){
 
 <script>
 (function(){
-  const EDGE_URL = 'https://jppxmdvddvbsvymogvcp.supabase.co/functions/v1/agente-financiero';
+  const BASE_URL = 'https://jppxmdvddvbsvymogvcp.supabase.co/functions/v1/';
   const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwcHhtZHZkZHZic3Z5bW9ndmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMjcyODAsImV4cCI6MjA5MDgwMzI4MH0.KPAqCKfUteE3XK9QFqb_44Hm8jYQxfjVLkrlyGvaMhE';
+  const AGENTES = {
+    financiero: { fn: 'agente-financiero', titulo: 'Agente Financiero', placeholder: 'Preguntá sobre finanzas…' },
+    tareas:     { fn: 'agente-tareas',     titulo: 'Agente de Tareas',   placeholder: 'Preguntá sobre tareas…' },
+    cursos:     { fn: 'agente-cursos',     titulo: 'Agente de Cursos',   placeholder: 'Preguntá sobre cursos…' },
+  };
+  let agenteActual = 'financiero';
   const LS_KEY = 'ai_chat_v2';
   let historial = [];
   let panelOpen = false;
   let iniciado = false;
+
+  window.cambiarAgente = function(tipo) {
+    if (tipo === agenteActual) return;
+    agenteActual = tipo;
+    const ag = AGENTES[tipo];
+    document.getElementById('ai-header-title').textContent = ag.titulo;
+    document.getElementById('ai-input').placeholder = ag.placeholder;
+    limpiarChat(true);
+  };
 
   function cargarHistorial() {
     try {
@@ -10227,12 +10246,14 @@ if('serviceWorker' in navigator){
     if (panelOpen) setTimeout(() => document.getElementById('ai-input').focus(), 300);
   };
 
-  window.limpiarChat = function() {
+  window.limpiarChat = function(silencioso = false) {
     historial = [];
     iniciado = true;
     localStorage.removeItem(LS_KEY);
     document.getElementById('ai-msgs').innerHTML = '';
-    addAgentMsg('Conversación reiniciada. ¿En qué te puedo ayudar?', false, false);
+    const ag = AGENTES[agenteActual];
+    if (!silencioso) addAgentMsg('Conversación reiniciada. ¿En qué te puedo ayudar?', false, false);
+    else addAgentMsg(`Hola! Soy el ${ag.titulo}. ¿En qué te puedo ayudar?`, false, false);
   };
 
   window.sendAiMsg = async function() {
@@ -10248,7 +10269,8 @@ if('serviceWorker' in navigator){
     const thinking = addAgentMsg('Analizando datos…', true, true);
 
     try {
-      const res = await fetch(EDGE_URL, {
+      const edgeUrl = BASE_URL + AGENTES[agenteActual].fn;
+      const res = await fetch(edgeUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ANON_KEY },
         body: JSON.stringify({ message: msg, historial }),
