@@ -764,6 +764,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="sitem ssub" onclick="setTareaFilter('Por Hacer')" id="nav-ph">Por hacer <span class="sitem-badge" id="badge-ph">—</span></div>
       <div class="sitem ssub" onclick="setTareaFilter('En Progreso')" id="nav-ep">En progreso <span class="sitem-badge" id="badge-ep">—</span></div>
       <div class="sitem ssub" onclick="setTareaFilter('Bloqueado')" id="nav-bl">Bloqueadas <span class="sitem-badge" id="badge-bl">—</span></div>
+      <div class="sitem" onclick="goPage('reuniones',this)" id="nav-reuniones">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Reuniones
+        <span class="sitem-badge" id="badge-reuniones" style="display:none"></span>
+      </div>
     </div>
   </div>
   <div class="sgroup" id="sg-cursos">
@@ -934,6 +939,20 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </select>
   </div>
   <div id="container"><div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div></div>
+</div>
+
+<!-- ══ REUNIONES ══ -->
+<div id="pg-reuniones" style="display:none">
+  <div class="pg-header">
+    <div>
+      <h1 class="pg-title">🎙️ Reuniones</h1>
+      <p class="pg-sub">Transcripción y análisis automático con IA</p>
+    </div>
+    <button class="bk" onclick="openAddReunion()">+ Nueva reunión</button>
+  </div>
+  <div id="reuniones-list" style="display:flex;flex-direction:column;gap:12px;margin-top:8px">
+    <div class="empty"><div class="ei">🎙️</div>Cargando reuniones...</div>
+  </div>
 </div>
 
 <!-- ══ CURSOS ══ -->
@@ -2078,6 +2097,62 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 </div>
 
+<!-- ══ MODAL NUEVA REUNIÓN ══ -->
+<div class="mov" id="modal-reunion" onclick="if(event.target===this)closeModal('modal-reunion')">
+  <div class="modal" style="max-width:560px">
+    <div class="mt"><span>🎙️ Nueva Reunión</span><button class="mt-close" onclick="closeModal('modal-reunion')">✕</button></div>
+
+    <div class="fg"><label class="fl">Título *</label><input class="fi" id="mr-titulo" type="text" placeholder="Ej: Reunión semanal de equipo"></div>
+    <div class="fgrid" style="margin-top:8px">
+      <div class="fg"><label class="fl">Fecha</label><input class="fi" id="mr-fecha" type="date"></div>
+      <div class="fg"><label class="fl">Sociedad</label><select class="fs" id="mr-soc"><option value="SUDES">SUDES</option><option value="POINTERS">POINTERS</option><option value="Ambas">Ambas</option></select></div>
+    </div>
+    <div class="fg" style="margin-top:8px"><label class="fl">Participantes (separados por coma)</label><input class="fi" id="mr-participantes" type="text" placeholder="Ej: Tomás, Mario, Valentina"></div>
+    <div class="fg" style="margin-top:8px"><label class="fl">Notas previas</label><textarea class="fi fta" id="mr-notas" placeholder="Agenda, temas a tratar..." style="min-height:52px"></textarea></div>
+
+    <!-- Upload de audio -->
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--b)">
+      <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Audio de la reunión *</div>
+      <div id="mr-drop-zone" onclick="document.getElementById('mr-audio-input').click()"
+        style="border:2px dashed var(--b);border-radius:10px;padding:28px;text-align:center;cursor:pointer;transition:border-color .2s"
+        ondragover="event.preventDefault();this.style.borderColor='var(--ac)'"
+        ondragleave="this.style.borderColor='var(--b)'"
+        ondrop="mrHandleDrop(event)">
+        <div style="font-size:28px;margin-bottom:8px">🎵</div>
+        <div style="font-size:13px;color:var(--tx2)">Arrastrá el archivo o hacé click para seleccionar</div>
+        <div style="font-size:11px;color:var(--tx3);margin-top:4px">MP3, M4A, WAV, OGG, WEBM · máx 500MB</div>
+      </div>
+      <input type="file" id="mr-audio-input" accept="audio/*,video/webm,video/mp4" style="display:none" onchange="mrAudioSeleccionado(this)">
+      <div id="mr-audio-info" style="display:none;margin-top:10px;padding:10px 14px;background:var(--surf2);border-radius:8px;font-size:13px;display:none">
+        <span id="mr-audio-nombre" style="color:var(--tx)"></span>
+        <span id="mr-audio-size" style="color:var(--tx3);margin-left:8px"></span>
+        <button onclick="mrQuitarAudio()" style="float:right;background:none;border:none;color:var(--re);cursor:pointer;font-size:16px;line-height:1">✕</button>
+      </div>
+    </div>
+
+    <!-- Progreso de subida -->
+    <div id="mr-progreso" style="display:none;margin-top:12px">
+      <div style="font-size:12px;color:var(--tx2);margin-bottom:6px" id="mr-progreso-txt">Subiendo audio...</div>
+      <div style="height:4px;background:var(--surf2);border-radius:2px;overflow:hidden">
+        <div id="mr-progreso-bar" style="height:100%;background:var(--ac);border-radius:2px;width:0%;transition:width .3s"></div>
+      </div>
+    </div>
+
+    <div class="ma" style="margin-top:16px">
+      <button class="bc" onclick="closeModal('modal-reunion')">Cancelar</button>
+      <button class="bk" id="mr-btn-procesar" onclick="mrProcesar()">🎙️ Procesar reunión</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL DETALLE REUNIÓN ══ -->
+<div class="mov" id="modal-reunion-detalle" onclick="if(event.target===this)closeModal('modal-reunion-detalle')">
+  <div class="modal" style="max-width:720px;max-height:88vh;overflow-y:auto">
+    <div class="mt"><span id="mrd-titulo">Detalle de reunión</span><button class="mt-close" onclick="closeModal('modal-reunion-detalle')">✕</button></div>
+    <div id="mrd-contenido" style="padding-bottom:8px"></div>
+  </div>
+</div>
+
 <!-- ══ MODAL EMPLEADO ══ -->
 <div class="mov" id="modal-empleado" onclick="if(event.target===this)closeM('modal-empleado')">
   <div class="modal" style="max-width:460px">
@@ -2916,6 +2991,7 @@ function goPage(name,el){
   if(name==="comprobantes")loadComprobantes();
   if(name==="impuestos")loadImpuestos();
   if(name==="notif")renderNotifPage();
+  if(name==="reuniones")loadReuniones();
   if(name==="usuarios")loadUsuariosPage();
   if(name==="cuentas")loadCuentasPage();
   if(name==="reportes")initReportesPage();
@@ -7422,6 +7498,277 @@ async function apGuardar(){
     renderCFPrestamos();
   }catch(e){toast("Error: "+e.message,"err")}
   finally{btn.disabled=false}
+}
+
+/* ── REUNIONES ── */
+let reuniones=[];
+let mrAudioFile=null;
+let mrPollingInterval=null;
+
+async function loadReuniones(){
+  const data=await sb("reuniones?order=created_at.desc&limit=50");
+  reuniones=data||[];
+  renderReuniones();
+}
+
+function renderReuniones(){
+  const cont=document.getElementById("reuniones-list");if(!cont)return;
+  if(!reuniones.length){
+    cont.innerHTML=`<div class="empty"><div class="ei">🎙️</div>No hay reuniones aún. <button class="btn" onclick="openAddReunion()" style="margin-top:8px">+ Nueva reunión</button></div>`;
+    return;
+  }
+  const estadoInfo={
+    listo:{icon:"✅",col:"var(--gr)",txt:"Analizado"},
+    procesando:{icon:"⏳",col:"var(--am)",txt:"Procesando..."},
+    pendiente:{icon:"🕐",col:"var(--tx3)",txt:"Pendiente"},
+    error:{icon:"❌",col:"var(--re)",txt:"Error"},
+  };
+  cont.innerHTML=reuniones.map(r=>{
+    const ei=estadoInfo[r.estado]||estadoInfo.pendiente;
+    const partic=(r.participantes||[]).join(", ");
+    return `<div class="card" style="cursor:pointer" onclick="verDetalleReunion('${r.id}')">
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <div style="font-size:24px;flex-shrink:0">🎙️</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-weight:700;font-size:14px;color:var(--tx)">${r.titulo}</span>
+            <span class="badge ${r.sociedad==="SUDES"?"bpr":"bdo"}">${r.sociedad}</span>
+            <span style="font-size:12px;color:${ei.col}">${ei.icon} ${ei.txt}</span>
+          </div>
+          <div style="font-size:12px;color:var(--tx3);margin-top:3px">
+            ${r.fecha?fmt(r.fecha):"Sin fecha"}${r.duracion_min?` · ${r.duracion_min} min`:""}${partic?" · "+partic:""}
+          </div>
+          ${r.resumen?`<div style="font-size:12px;color:var(--tx2);margin-top:6px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${r.resumen}</div>`:""}
+          ${r.estado==="procesando"?`<div style="margin-top:8px"><button class="btn" style="font-size:11px" onclick="event.stopPropagation();mrActualizar('${r.id}')">🔄 Actualizar estado</button></div>`:""}
+        </div>
+        <div style="font-size:18px;color:var(--tx3);flex-shrink:0">›</div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function openAddReunion(){
+  mrAudioFile=null;
+  document.getElementById("mr-titulo").value="";
+  document.getElementById("mr-fecha").value=new Date().toISOString().split("T")[0];
+  document.getElementById("mr-participantes").value="";
+  document.getElementById("mr-notas").value="";
+  document.getElementById("mr-soc").value="SUDES";
+  document.getElementById("mr-audio-info").style.display="none";
+  document.getElementById("mr-drop-zone").style.display="";
+  document.getElementById("mr-progreso").style.display="none";
+  document.getElementById("mr-btn-procesar").disabled=false;
+  document.getElementById("mr-btn-procesar").textContent="🎙️ Procesar reunión";
+  openModal("modal-reunion");
+}
+
+function mrAudioSeleccionado(input){
+  const file=input.files[0];if(!file)return;
+  mrAudioFile=file;
+  document.getElementById("mr-audio-nombre").textContent=file.name;
+  document.getElementById("mr-audio-size").textContent=`(${(file.size/1024/1024).toFixed(1)} MB)`;
+  document.getElementById("mr-audio-info").style.display="";
+  document.getElementById("mr-drop-zone").style.display="none";
+}
+
+function mrHandleDrop(e){
+  e.preventDefault();
+  document.getElementById("mr-drop-zone").style.borderColor="var(--b)";
+  const file=e.dataTransfer.files[0];
+  if(!file|!file.type.startsWith("audio/")&&!file.type.includes("video/")){toast("Formato no válido","err");return;}
+  const dt=new DataTransfer();dt.items.add(file);
+  document.getElementById("mr-audio-input").files=dt.files;
+  mrAudioSeleccionado(document.getElementById("mr-audio-input"));
+}
+
+function mrQuitarAudio(){
+  mrAudioFile=null;
+  document.getElementById("mr-audio-input").value="";
+  document.getElementById("mr-audio-info").style.display="none";
+  document.getElementById("mr-drop-zone").style.display="";
+}
+
+async function mrProcesar(){
+  const titulo=document.getElementById("mr-titulo").value.trim();
+  if(!titulo){toast("Escribí un título","err");return;}
+  if(!mrAudioFile){toast("Seleccioná un archivo de audio","err");return;}
+
+  const btn=document.getElementById("mr-btn-procesar");
+  btn.disabled=true;btn.textContent="Subiendo...";
+  document.getElementById("mr-progreso").style.display="";
+  document.getElementById("mr-progreso-txt").textContent="Subiendo audio a Supabase...";
+  document.getElementById("mr-progreso-bar").style.width="20%";
+
+  try{
+    // 1. Subir a Supabase Storage (bucket público "reuniones-audio")
+    const ext=mrAudioFile.name.split(".").pop()||"mp3";
+    const fileName=`${Date.now()}_${titulo.replace(/[^a-z0-9]/gi,"_").slice(0,30)}.${ext}`;
+    const uploadRes=await fetch(`${SB}/storage/v1/object/reuniones-audio/${fileName}`,{
+      method:"POST",
+      headers:{"Authorization":`Bearer ${KEY}`,"apikey":KEY,"Content-Type":mrAudioFile.type||"audio/mpeg"},
+      body:mrAudioFile,
+    });
+    if(!uploadRes.ok){const e=await uploadRes.json();throw new Error(e.error||"Error al subir audio");}
+
+    document.getElementById("mr-progreso-bar").style.width="50%";
+    document.getElementById("mr-progreso-txt").textContent="Enviando a AssemblyAI...";
+
+    const audioUrl=`${SB}/storage/v1/object/public/reuniones-audio/${fileName}`;
+    const participantes=document.getElementById("mr-participantes").value.split(",").map(s=>s.trim()).filter(Boolean);
+
+    // 2. Llamar a iniciar-reunion
+    const res=await fetch(`${SB}/functions/v1/iniciar-reunion`,{
+      method:"POST",
+      headers:{"Authorization":`Bearer ${KEY}`,"apikey":KEY,"Content-Type":"application/json"},
+      body:JSON.stringify({
+        titulo,
+        fecha:document.getElementById("mr-fecha").value||null,
+        participantes,
+        sociedad:document.getElementById("mr-soc").value,
+        audio_url:audioUrl,
+        notas:document.getElementById("mr-notas").value.trim()||null,
+        creado_por:"Panel",
+      }),
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error);
+
+    document.getElementById("mr-progreso-bar").style.width="100%";
+    document.getElementById("mr-progreso-txt").textContent="¡Enviado! Procesando transcripción...";
+
+    // 3. Recargar lista y cerrar modal
+    await loadReuniones();
+    closeModal("modal-reunion");
+    toast("Reunión enviada a procesar · AssemblyAI está transcribiendo...","ok");
+
+    // 4. Iniciar polling automático
+    if(data.reunion_id)mrIniciarPolling(data.reunion_id);
+
+  }catch(e){
+    toast("Error: "+e.message,"err");
+    btn.disabled=false;btn.textContent="🎙️ Procesar reunión";
+    document.getElementById("mr-progreso").style.display="none";
+  }
+}
+
+function mrIniciarPolling(reunionId){
+  if(mrPollingInterval)clearInterval(mrPollingInterval);
+  let intentos=0;
+  mrPollingInterval=setInterval(async()=>{
+    intentos++;
+    if(intentos>60){clearInterval(mrPollingInterval);return;} // max 10 min
+    const ok=await mrActualizar(reunionId,true);
+    if(ok)clearInterval(mrPollingInterval);
+  },10000);
+}
+
+async function mrActualizar(reunionId,silencioso=false){
+  try{
+    const res=await fetch(`${SB}/functions/v1/verificar-reunion`,{
+      method:"POST",
+      headers:{"Authorization":`Bearer ${KEY}`,"apikey":KEY,"Content-Type":"application/json"},
+      body:JSON.stringify({reunion_id:reunionId}),
+    });
+    const data=await res.json();
+    if(data.estado==="listo"){
+      await loadReuniones();
+      if(!silencioso)toast("Reunión analizada ✓","ok");
+      return true;
+    } else if(data.estado==="error"){
+      const i=reuniones.findIndex(r=>r.id===reunionId);
+      if(i>=0){reuniones[i].estado="error";renderReuniones();}
+      if(!silencioso)toast("Error en AssemblyAI: "+data.error,"err");
+      return true;
+    }
+    return false;
+  }catch(e){
+    if(!silencioso)toast("Error: "+e.message,"err");
+    return false;
+  }
+}
+
+function verDetalleReunion(id){
+  const r=reuniones.find(r=>r.id===id);if(!r)return;
+  document.getElementById("mrd-titulo").textContent="🎙️ "+r.titulo;
+
+  const partic=(r.participantes||[]).join(", ")||"—";
+  const dur=r.duracion_min?`${r.duracion_min} min`:"—";
+
+  let html=`<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--b)">
+    <div><span style="font-size:11px;color:var(--tx3)">Fecha</span><div style="font-size:13px;font-weight:600">${r.fecha?fmt(r.fecha):"—"}</div></div>
+    <div><span style="font-size:11px;color:var(--tx3)">Duración</span><div style="font-size:13px;font-weight:600">${dur}</div></div>
+    <div><span style="font-size:11px;color:var(--tx3)">Sociedad</span><div style="font-size:13px;font-weight:600">${r.sociedad||"—"}</div></div>
+    <div><span style="font-size:11px;color:var(--tx3)">Participantes</span><div style="font-size:13px;font-weight:600">${partic}</div></div>
+  </div>`;
+
+  if(r.estado==="procesando"){
+    html+=`<div style="text-align:center;padding:32px;color:var(--tx2)">
+      <div style="font-size:32px;margin-bottom:12px">⏳</div>
+      <div style="font-weight:600">Transcripción en proceso</div>
+      <div style="font-size:12px;color:var(--tx3);margin-top:6px">AssemblyAI está analizando el audio · puede tardar unos minutos</div>
+      <button class="bk" style="margin-top:16px" onclick="mrActualizar('${r.id}').then(()=>verDetalleReunion('${r.id}'))">🔄 Verificar ahora</button>
+    </div>`;
+  } else if(r.estado==="listo"){
+    // Resumen
+    if(r.resumen)html+=`<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📋 Resumen</div><div style="font-size:13px;color:var(--tx2);line-height:1.6;background:var(--surf2);padding:12px;border-radius:8px">${r.resumen}</div></div>`;
+
+    // Decisiones
+    if(r.decisiones?.length){
+      html+=`<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🎯 Decisiones tomadas</div><ul style="margin:0;padding-left:16px;display:flex;flex-direction:column;gap:4px">${r.decisiones.map(d=>`<li style="font-size:13px;color:var(--tx2)">${d}</li>`).join("")}</ul></div>`;
+    }
+
+    // Tareas extraídas
+    if(r.tareas_extraidas?.length){
+      html+=`<div style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px">✅ Tareas detectadas</div>
+          <button class="btn" style="font-size:11px" onclick="mrImportarTareas('${r.id}')">+ Importar a Tareas</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">${r.tareas_extraidas.map(t=>`
+          <div style="padding:10px 12px;background:var(--surf2);border-radius:8px;font-size:13px">
+            <span style="color:var(--tx)">${t.tarea}</span>
+            ${t.responsable?`<span style="margin-left:8px;font-size:11px;color:var(--ac)">→ ${t.responsable}</span>`:""}
+            ${t.fecha_sugerida?`<span style="margin-left:8px;font-size:11px;color:var(--tx3)">${fmt(t.fecha_sugerida)}</span>`:""}
+          </div>`).join("")}
+        </div>
+      </div>`;
+    }
+
+    // Transcript diarizado
+    if(r.transcripcion_diarizada?.length){
+      html+=`<div><div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🎙️ Transcripción</div>
+        <div style="max-height:300px;overflow-y:auto;border:1px solid var(--b);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:10px">
+          ${r.transcripcion_diarizada.map(u=>`<div>
+            <div style="font-size:11px;font-weight:700;color:var(--ac);margin-bottom:3px">${u.speaker}</div>
+            <div style="font-size:13px;color:var(--tx2);line-height:1.5">${u.texto}</div>
+          </div>`).join("")}
+        </div>
+      </div>`;
+    }
+  } else if(r.estado==="error"){
+    html+=`<div style="text-align:center;padding:24px;color:var(--re)">❌ Error al procesar · Intentá subir el audio nuevamente</div>`;
+  }
+
+  document.getElementById("mrd-contenido").innerHTML=html;
+  openModal("modal-reunion-detalle");
+}
+
+async function mrImportarTareas(reunionId){
+  const r=reuniones.find(r=>r.id===reunionId);
+  if(!r?.tareas_extraidas?.length)return;
+  try{
+    const hoy=new Date().toISOString().split("T")[0];
+    const nuevas=r.tareas_extraidas.map(t=>({
+      nombre:t.tarea,
+      status:"Por Hacer",
+      fecha_vencimiento:t.fecha_sugerida||null,
+      notas:`Importada de reunión: ${r.titulo}`,
+      prioridad:"Media",
+    }));
+    await sb("tareas",{method:"POST",body:JSON.stringify(nuevas)});
+    toast(`${nuevas.length} tarea${nuevas.length!==1?"s":""} importada${nuevas.length!==1?"s":""} ✓`,"ok");
+    await loadAll();
+  }catch(e){toast("Error: "+e.message,"err")}
 }
 
 /* ── INTEGRACIÓN CASH FLOW → CALENDARIO ── */
