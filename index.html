@@ -6652,9 +6652,18 @@ async function saveCFInversion(){
   finally{btn.disabled=false;editCFInvId=null}
 }
 function delCFInv(id){
-  confirmDel("¿Eliminar esta inversión?",async()=>{
-    try{await sb(`cf_inversiones?id=eq.${id}`,{method:"DELETE"});cfInversiones=cfInversiones.filter(i=>i.id!==id);renderCFInversiones();toast("Eliminada","ok")}
-    catch(e){toast("Error","err")}
+  confirmDel("¿Eliminar esta inversión? Se eliminarán también sus movimientos y rendimientos diarios.",async()=>{
+    try{
+      // Eliminar registros relacionados primero para evitar error de FK
+      await Promise.all([
+        sb(`cf_inversiones_movimientos?inversion_id=eq.${id}`,{method:"DELETE"}),
+        sb(`rendimientos_diarios?inversion_id=eq.${id}`,{method:"DELETE"}),
+      ]);
+      await sb(`cf_inversiones?id=eq.${id}`,{method:"DELETE"});
+      cfInversiones=cfInversiones.filter(i=>i.id!==id);
+      renderCFInversiones();
+      toast("Inversión eliminada","ok");
+    }catch(e){toast("Error al eliminar: "+e.message,"err")}
   });
 }
 
