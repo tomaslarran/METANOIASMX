@@ -7798,53 +7798,65 @@ function mrExportarPDF(reunionId){
 async function mrExportarWord(reunionId){
   const r=reuniones.find(r=>r.id===reunionId);if(!r)return;
   toast("Generando Word...","ok");
-  // Cargar librería docx dinámicamente
-  if(!window.docx){
-    await new Promise((res,rej)=>{
-      const s=document.createElement("script");
-      s.src="https://unpkg.com/docx@8/build/index.js";
-      s.onload=res;s.onerror=rej;document.head.appendChild(s);
-    });
+  try{
+    // Cargar html-docx-js (más compatible que docx@8)
+    if(!window.htmlDocx){
+      await new Promise((res,rej)=>{
+        const s=document.createElement("script");
+        s.src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.js";
+        s.onload=res;s.onerror=rej;document.head.appendChild(s);
+      });
+    }
+    let html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+      body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1a1a1a}
+      h1{color:#7C3AED;font-size:18pt;border-bottom:2px solid #7C3AED;padding-bottom:4pt}
+      h2{color:#5B21B6;font-size:13pt;margin-top:14pt;margin-bottom:4pt}
+      .meta{color:#666;font-size:9pt;margin-bottom:12pt}
+      ul{margin:0 0 8pt 18pt;padding:0}
+      li{margin-bottom:3pt}
+      .hablante{font-weight:bold;color:#7C3AED;margin-top:10pt;margin-bottom:2pt}
+      .texto{margin:0 0 6pt 0}
+      hr{border:none;border-top:1px solid #ddd;margin:16pt 0}
+    </style></head><body>`;
+    html+=`<h1>${r.titulo}</h1>`;
+    html+=`<p class="meta">Fecha: ${r.fecha?fmt(r.fecha):"—"} &nbsp;|&nbsp; Duracion: ${r.duracion_min?r.duracion_min+" min":"—"} &nbsp;|&nbsp; ${r.sociedad||""}</p>`;
+    if(r.resumen){
+      html+=`<h2>Resumen</h2><p>${r.resumen}</p>`;
+    }
+    if(r.decisiones?.length){
+      html+=`<h2>Decisiones</h2><ul>`;
+      r.decisiones.forEach(d=>{html+=`<li>${d}</li>`;});
+      html+=`</ul>`;
+    }
+    if(r.tareas_extraidas?.length){
+      html+=`<h2>Tareas detectadas</h2><ul>`;
+      r.tareas_extraidas.forEach(t=>{
+        let txt=t.tarea;
+        if(t.responsable)txt+=` — ${t.responsable}`;
+        if(t.fecha_sugerida)txt+=` (${fmt(t.fecha_sugerida)})`;
+        html+=`<li>${txt}</li>`;
+      });
+      html+=`</ul>`;
+    }
+    if(r.transcripcion_diarizada?.length){
+      html+=`<hr><h2>Transcripcion</h2>`;
+      r.transcripcion_diarizada.forEach(u=>{
+        html+=`<p class="hablante">${u.speaker}</p><p class="texto">${u.texto}</p>`;
+      });
+    }
+    html+=`</body></html>`;
+    const blob=window.htmlDocx.asBlob(html);
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download=`${r.titulo.replace(/[^a-z0-9áéíóúñü\s]/gi,"_")}_${r.fecha||"reunion"}.docx`;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast("Word descargado","ok");
+  }catch(e){
+    console.error("Word export:",e);
+    toast("Error generando Word: "+e.message,"err");
   }
-  const {Document,Paragraph,TextRun,HeadingLevel,Packer,AlignmentType}=window.docx;
-  const pr=(txt,bold,color)=>new Paragraph({children:[new TextRun({text:txt||"",bold:bold||false,color:color||"000000"})],spacing:{after:80}});
-  const h2=(txt)=>new Paragraph({text:txt,heading:HeadingLevel.HEADING_2,spacing:{before:300,after:100}});
-  const kids=[
-    new Paragraph({children:[new TextRun({text:"🎙️ "+r.titulo,bold:true,size:36,color:"7C3AED"})],spacing:{after:120}}),
-    new Paragraph({children:[
-      new TextRun({text:`Fecha: ${r.fecha?fmt(r.fecha):"—"}  ·  Duración: ${r.duracion_min?r.duracion_min+" min":"—"}  ·  ${r.sociedad}`,color:"666666",size:22}),
-    ],spacing:{after:240}}),
-  ];
-  if(r.resumen){kids.push(h2("📋 Resumen"),pr(r.resumen));}
-  if(r.decisiones?.length){
-    kids.push(h2("🎯 Decisiones"));
-    r.decisiones.forEach(d=>kids.push(new Paragraph({children:[new TextRun({text:"• "+d})],spacing:{after:60}})));
-  }
-  if(r.tareas_extraidas?.length){
-    kids.push(h2("✅ Tareas detectadas"));
-    r.tareas_extraidas.forEach(t=>{
-      let txt=`• ${t.tarea}`;
-      if(t.responsable)txt+=` → ${t.responsable}`;
-      if(t.fecha_sugerida)txt+=` (${fmt(t.fecha_sugerida)})`;
-      kids.push(new Paragraph({children:[new TextRun({text:txt})],spacing:{after:60}}));
-    });
-  }
-  if(r.transcripcion_diarizada?.length){
-    kids.push(h2("🎙️ Transcripción"));
-    r.transcripcion_diarizada.forEach(u=>{
-      kids.push(
-        new Paragraph({children:[new TextRun({text:u.speaker,bold:true,color:"7C3AED",size:20})],spacing:{before:180,after:40}}),
-        new Paragraph({children:[new TextRun({text:u.texto})],spacing:{after:80}}),
-      );
-    });
-  }
-  const doc=new Document({sections:[{properties:{},children:kids}]});
-  const blob=await Packer.toBlob(doc);
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  a.href=url;
-  a.download=`${r.titulo.replace(/[^a-z0-9]/gi,"_")}_${r.fecha||"reunion"}.docx`;
-  a.click();URL.revokeObjectURL(url);
 }
 
 async function mrImportarTareas(reunionId){
