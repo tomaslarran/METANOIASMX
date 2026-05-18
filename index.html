@@ -2023,23 +2023,53 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <div class="mov" id="modal-cf-prestamo" onclick="if(event.target===this)closeModal('modal-cf-prestamo')">
-  <div class="modal">
+  <div class="modal" style="max-width:680px">
     <div class="mt"><span id="mcp-title">Nuevo Préstamo</span><button class="mt-close" onclick="closeModal('modal-cf-prestamo')">✕</button></div>
+
+    <!-- Identificación -->
+    <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Identificación</div>
     <div class="fg"><label class="fl">Nombre *</label><input class="fi" id="cfp-nombre" type="text" placeholder="Ej: Préstamo BCO Macro"></div>
-    <div class="fgrid">
+    <div class="fgrid" style="margin-top:8px">
       <div class="fg"><label class="fl">Tipo</label><select class="fs" id="cfp-tipo"><option>Bancario</option><option>Informal</option><option>Tarjeta</option><option>Otro</option></select></div>
       <div class="fg"><label class="fl">Entidad</label><input class="fi" id="cfp-entidad" type="text" placeholder="Banco Macro, Angel..."></div>
     </div>
-    <div class="fg"><label class="fl">Sociedad</label><select class="fs" id="cfp-soc"><option value="SUDES">SUDES</option><option value="POINTERS">POINTERS</option><option value="Ambas">Ambas</option></select></div>
+    <div class="fg" style="margin-top:8px"><label class="fl">Sociedad</label><select class="fs" id="cfp-soc"><option value="SUDES">SUDES</option><option value="POINTERS">POINTERS</option><option value="Ambas">Ambas</option></select></div>
+
+    <!-- Simulador -->
+    <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 10px;padding-top:14px;border-top:1px solid var(--b)">Simulador de amortización</div>
+    <div class="fgrid">
+      <div class="fg"><label class="fl">Capital ($)</label><input class="fi" id="cfp-capital" type="number" placeholder="0" min="0" step="0.01" oninput="cfpSimuladorActualizar()"></div>
+      <div class="fg"><label class="fl">TNA (%)</label><input class="fi" id="cfp-tna" type="number" placeholder="Ej: 65" min="0" step="0.01" oninput="cfpSimuladorActualizar()"></div>
+    </div>
+    <div class="fgrid" style="margin-top:8px">
+      <div class="fg"><label class="fl">Sistema</label><select class="fs" id="cfp-sistema" onchange="cfpSimuladorActualizar()"><option value="Frances">Francés (cuota fija)</option><option value="Aleman">Alemán (amort. fija)</option></select></div>
+      <div class="fg"><label class="fl">Tipo de tasa</label><select class="fs" id="cfp-tipo-tasa"><option value="Fija">Fija</option><option value="Variable">Variable</option></select></div>
+    </div>
+    <div class="fgrid" style="margin-top:8px">
+      <div class="fg"><label class="fl">N° de cuotas</label><input class="fi" id="cfp-n-cuotas" type="number" placeholder="12" min="1" step="1" oninput="cfpSimuladorActualizar()"></div>
+      <div class="fg"><label class="fl">Periodicidad</label><select class="fs" id="cfp-period" onchange="cfpSimuladorActualizar()"><option value="Mensual">Mensual</option><option value="Bimestral">Bimestral</option><option value="Trimestral">Trimestral</option></select></div>
+      <div class="fg"><label class="fl">Primer vencimiento</label><input class="fi" id="cfp-fecha-inicio" type="date" oninput="cfpSimuladorActualizar()"></div>
+    </div>
+    <!-- Preview tabla amortización -->
+    <div id="cfp-sim-wrap" style="display:none;margin-top:12px;border:1px solid var(--b);border-radius:8px;overflow:hidden">
+      <div id="cfp-sim-resumen" style="padding:10px 14px;background:var(--surf2);font-size:12px;color:var(--tx2);line-height:1.5"></div>
+      <div style="max-height:200px;overflow-y:auto">
+        <table id="cfp-sim-tabla" style="width:100%;border-collapse:collapse;font-size:12px"></table>
+      </div>
+    </div>
+
+    <!-- Estado actual -->
+    <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 10px;padding-top:14px;border-top:1px solid var(--b)">Estado actual <span style="font-weight:400;color:var(--tx3)">(se completa automáticamente al simular)</span></div>
     <div class="fgrid">
       <div class="fg"><label class="fl">Saldo actual ($)</label><input class="fi" id="cfp-saldo" type="number" placeholder="0" min="0" step="0.01"></div>
       <div class="fg"><label class="fl">Cuota mensual ($)</label><input class="fi" id="cfp-cuota" type="number" placeholder="0" min="0" step="0.01"></div>
     </div>
-    <div class="fgrid">
+    <div class="fgrid" style="margin-top:8px">
       <div class="fg"><label class="fl">Cuotas pendientes</label><input class="fi" id="cfp-cuotas" type="number" placeholder="0" min="0"></div>
       <div class="fg"><label class="fl">Próximo vencimiento</label><input class="fi" id="cfp-venc" type="date"></div>
     </div>
-    <div class="fg"><label class="fl">Notas</label><textarea class="fi fta" id="cfp-notas" placeholder="Condiciones, TNA..." style="min-height:52px"></textarea></div>
+
+    <div class="fg" style="margin-top:8px"><label class="fl">Notas</label><textarea class="fi fta" id="cfp-notas" placeholder="Condiciones, observaciones..." style="min-height:52px"></textarea></div>
     <div style="display:flex;align-items:center;gap:8px;padding:10px 0 4px;border-top:1px solid var(--b);margin-top:8px">
       <input type="checkbox" id="cfp-incluir-cf" checked style="accent-color:var(--ac);width:15px;height:15px">
       <label for="cfp-incluir-cf" style="font-size:13px;color:var(--tx2);cursor:pointer">Incluir cuotas en Cash Flow y Calendario</label>
@@ -5795,17 +5825,163 @@ function renderCFPrestamos(){
   }).join("")}</div>`;
 }
 
-function openAddPrestamo(){editCFPrestId=null;document.getElementById("mcp-title").textContent="Nuevo Préstamo";document.getElementById("cfp-save-btn").textContent="Guardar";["cfp-nombre","cfp-entidad","cfp-saldo","cfp-cuota","cfp-cuotas","cfp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("cfp-tipo").value="Bancario";document.getElementById("cfp-soc").value="SUDES";document.getElementById("cfp-venc").value="";document.getElementById("cfp-incluir-cf").checked=true;openM("modal-cf-prestamo")}
-function editCFPrest(id){const p=cfPrestamos.find(p=>p.id===id);if(!p)return;editCFPrestId=id;document.getElementById("mcp-title").textContent="Editar Préstamo";document.getElementById("cfp-save-btn").textContent="Guardar cambios";document.getElementById("cfp-nombre").value=p.nombre||"";document.getElementById("cfp-tipo").value=p.tipo||"Bancario";document.getElementById("cfp-entidad").value=p.entidad||"";document.getElementById("cfp-soc").value=p.sociedad||"SUDES";document.getElementById("cfp-saldo").value=p.saldo_actual||"";document.getElementById("cfp-cuota").value=p.cuota_mensual||"";document.getElementById("cfp-cuotas").value=p.cuotas_pendientes||"";document.getElementById("cfp-venc").value=p.fecha_vencimiento||"";document.getElementById("cfp-notas").value=p.notas||"";document.getElementById("cfp-incluir-cf").checked=p.incluir_en_cf!==false;openM("modal-cf-prestamo")}
+function openAddPrestamo(){
+  editCFPrestId=null;
+  document.getElementById("mcp-title").textContent="Nuevo Préstamo";
+  document.getElementById("cfp-save-btn").textContent="Guardar";
+  ["cfp-nombre","cfp-entidad","cfp-capital","cfp-tna","cfp-n-cuotas","cfp-saldo","cfp-cuota","cfp-cuotas","cfp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+  document.getElementById("cfp-tipo").value="Bancario";
+  document.getElementById("cfp-soc").value="SUDES";
+  document.getElementById("cfp-sistema").value="Frances";
+  document.getElementById("cfp-tipo-tasa").value="Fija";
+  document.getElementById("cfp-period").value="Mensual";
+  document.getElementById("cfp-fecha-inicio").value="";
+  document.getElementById("cfp-venc").value="";
+  document.getElementById("cfp-incluir-cf").checked=true;
+  document.getElementById("cfp-sim-wrap").style.display="none";
+  openM("modal-cf-prestamo");
+}
+function editCFPrest(id){
+  const p=cfPrestamos.find(p=>p.id===id);if(!p)return;
+  editCFPrestId=id;
+  document.getElementById("mcp-title").textContent="Editar Préstamo";
+  document.getElementById("cfp-save-btn").textContent="Guardar cambios";
+  document.getElementById("cfp-nombre").value=p.nombre||"";
+  document.getElementById("cfp-tipo").value=p.tipo||"Bancario";
+  document.getElementById("cfp-entidad").value=p.entidad||"";
+  document.getElementById("cfp-soc").value=p.sociedad||"SUDES";
+  document.getElementById("cfp-capital").value=p.capital||"";
+  document.getElementById("cfp-tna").value=p.tna||"";
+  document.getElementById("cfp-sistema").value=p.sistema_amort||"Frances";
+  document.getElementById("cfp-tipo-tasa").value=p.tipo_tasa||"Fija";
+  document.getElementById("cfp-n-cuotas").value=p.n_cuotas_total||"";
+  document.getElementById("cfp-period").value=p.periodicidad||"Mensual";
+  document.getElementById("cfp-fecha-inicio").value=p.fecha_inicio||"";
+  document.getElementById("cfp-saldo").value=p.saldo_actual||"";
+  document.getElementById("cfp-cuota").value=p.cuota_mensual||"";
+  document.getElementById("cfp-cuotas").value=p.cuotas_pendientes||"";
+  document.getElementById("cfp-venc").value=p.fecha_vencimiento||"";
+  document.getElementById("cfp-notas").value=p.notas||"";
+  document.getElementById("cfp-incluir-cf").checked=p.incluir_en_cf!==false;
+  if(p.capital&&p.tna&&p.n_cuotas_total)cfpSimuladorActualizar();
+  else document.getElementById("cfp-sim-wrap").style.display="none";
+  openM("modal-cf-prestamo");
+}
 async function saveCFPrestamo(){
   const nombre=document.getElementById("cfp-nombre").value.trim();if(!nombre){toast("Escribí un nombre","err");return}
-  const data={nombre,tipo:document.getElementById("cfp-tipo").value,entidad:document.getElementById("cfp-entidad").value.trim()||null,sociedad:document.getElementById("cfp-soc").value,saldo_actual:parseFloat(document.getElementById("cfp-saldo").value)||null,cuota_mensual:parseFloat(document.getElementById("cfp-cuota").value)||null,cuotas_pendientes:parseInt(document.getElementById("cfp-cuotas").value)||null,fecha_vencimiento:document.getElementById("cfp-venc").value||null,notas:document.getElementById("cfp-notas").value.trim()||null,incluir_en_cf:document.getElementById("cfp-incluir-cf").checked,activo:true,updated_at:new Date().toISOString()};
+  const capital=parseFloat(document.getElementById("cfp-capital").value)||null;
+  const tna=parseFloat(document.getElementById("cfp-tna").value)||null;
+  const nCuotas=parseInt(document.getElementById("cfp-n-cuotas").value)||null;
+  const sistema=document.getElementById("cfp-sistema").value;
+  const period=document.getElementById("cfp-period").value;
+  const fechaInicio=document.getElementById("cfp-fecha-inicio").value||null;
+  // Generar cuotas si hay parámetros completos
+  let cuotasSimuladas=[];
+  if(capital&&tna&&nCuotas)cuotasSimuladas=cfpSimular(capital,tna,nCuotas,sistema,fechaInicio,period);
+  const proxCuota=cuotasSimuladas[0];
+  const ultimaCuota=cuotasSimuladas[cuotasSimuladas.length-1];
+  const data={
+    nombre,tipo:document.getElementById("cfp-tipo").value,
+    entidad:document.getElementById("cfp-entidad").value.trim()||null,
+    sociedad:document.getElementById("cfp-soc").value,
+    capital,tna,sistema_amort:sistema,
+    tipo_tasa:document.getElementById("cfp-tipo-tasa").value,
+    n_cuotas_total:nCuotas,fecha_inicio:fechaInicio,periodicidad:period,
+    saldo_actual:parseFloat(document.getElementById("cfp-saldo").value)||(capital||null),
+    cuota_mensual:parseFloat(document.getElementById("cfp-cuota").value)||(proxCuota?proxCuota.monto_total:null),
+    cuotas_pendientes:parseInt(document.getElementById("cfp-cuotas").value)||nCuotas||null,
+    fecha_vencimiento:document.getElementById("cfp-venc").value||(ultimaCuota?.fecha||null),
+    notas:document.getElementById("cfp-notas").value.trim()||null,
+    incluir_en_cf:document.getElementById("cfp-incluir-cf").checked,activo:true,updated_at:new Date().toISOString()
+  };
   const btn=document.getElementById("cfp-save-btn");btn.disabled=true;
   try{
-    if(editCFPrestId){await sb(`cf_prestamos?id=eq.${editCFPrestId}`,{method:"PATCH",body:JSON.stringify(data)});const i=cfPrestamos.findIndex(p=>p.id===editCFPrestId);if(i>=0)cfPrestamos[i]={...cfPrestamos[i],...data};toast("Préstamo actualizado","ok")}
-    else{const[c]=await sb("cf_prestamos",{method:"POST",body:JSON.stringify(data)});cfPrestamos.push(c);toast("Préstamo creado","ok")}
+    let prestId;
+    if(editCFPrestId){
+      await sb(`cf_prestamos?id=eq.${editCFPrestId}`,{method:"PATCH",body:JSON.stringify(data)});
+      const i=cfPrestamos.findIndex(p=>p.id===editCFPrestId);if(i>=0)cfPrestamos[i]={...cfPrestamos[i],...data};
+      prestId=editCFPrestId;
+    } else {
+      const[c]=await sb("cf_prestamos",{method:"POST",body:JSON.stringify(data)});
+      cfPrestamos.push(c);prestId=c.id;
+    }
+    // Guardar cuotas simuladas
+    if(cuotasSimuladas.length&&prestId){
+      if(editCFPrestId){
+        await sb(`cf_prestamos_cuotas?prestamo_id=eq.${prestId}`,{method:"DELETE"});
+        cfPrestCuotas=cfPrestCuotas.filter(c=>c.prestamo_id!==prestId);
+      }
+      const cuotasData=cuotasSimuladas.map(c=>({
+        prestamo_id:prestId,nro_cuota:c.nro_cuota,fecha:c.fecha,
+        monto_total:c.monto_total,capital:c.capital,intereses:c.intereses,
+        saldo_restante:c.saldo_restante,pagada:false
+      }));
+      const nuevas=await sb("cf_prestamos_cuotas",{method:"POST",body:JSON.stringify(cuotasData)});
+      cfPrestCuotas.push(...(Array.isArray(nuevas)?nuevas:[]));
+      toast(`Préstamo guardado con ${cuotasSimuladas.length} cuotas ✓`,"ok");
+    } else {
+      toast(editCFPrestId?"Préstamo actualizado":"Préstamo creado","ok");
+    }
     closeM("modal-cf-prestamo");renderCFPrestamos();
   }catch(e){toast("Error: "+e.message,"err")}finally{btn.disabled=false;editCFPrestId=null}
+}
+/* ── SIMULADOR AMORTIZACIÓN ── */
+function cfpCalcFecha(base,i,period){
+  const d=new Date(base+"T12:00:00");
+  const m={"Mensual":1,"Bimestral":2,"Trimestral":3}[period]||1;
+  d.setMonth(d.getMonth()+i*m);
+  return d.toISOString().split("T")[0];
+}
+function cfpSimular(capital,tna,n,sistema,fechaBase,period){
+  const mesesP={"Mensual":1,"Bimestral":2,"Trimestral":3}[period]||1;
+  const tasaP=(tna/100)/12*mesesP;
+  let saldo=capital;const cuotas=[];
+  if(sistema==="Frances"){
+    const cuota=capital*tasaP/(1-Math.pow(1+tasaP,-n));
+    for(let i=1;i<=n;i++){
+      const int=saldo*tasaP;const cap=cuota-int;saldo=Math.max(0,saldo-cap);
+      cuotas.push({nro_cuota:i,fecha:fechaBase?cfpCalcFecha(fechaBase,i-1,period):null,
+        monto_total:Math.round(cuota*100)/100,capital:Math.round(cap*100)/100,
+        intereses:Math.round(int*100)/100,saldo_restante:Math.round(saldo*100)/100,pagada:false});
+    }
+  } else {
+    const capFijo=capital/n;
+    for(let i=1;i<=n;i++){
+      const int=saldo*tasaP;saldo=Math.max(0,saldo-capFijo);
+      cuotas.push({nro_cuota:i,fecha:fechaBase?cfpCalcFecha(fechaBase,i-1,period):null,
+        monto_total:Math.round((capFijo+int)*100)/100,capital:Math.round(capFijo*100)/100,
+        intereses:Math.round(int*100)/100,saldo_restante:Math.round(saldo*100)/100,pagada:false});
+    }
+  }
+  return cuotas;
+}
+function cfpSimuladorActualizar(){
+  const capital=parseFloat(document.getElementById("cfp-capital").value)||0;
+  const tna=parseFloat(document.getElementById("cfp-tna").value)||0;
+  const n=parseInt(document.getElementById("cfp-n-cuotas").value)||0;
+  const sistema=document.getElementById("cfp-sistema").value;
+  const period=document.getElementById("cfp-period").value;
+  const fechaBase=document.getElementById("cfp-fecha-inicio").value;
+  const wrap=document.getElementById("cfp-sim-wrap");
+  if(!capital||!tna||!n){wrap.style.display="none";return}
+  const cuotas=cfpSimular(capital,tna,n,sistema,fechaBase,period);
+  if(!cuotas.length){wrap.style.display="none";return}
+  const totalInt=cuotas.reduce((s,c)=>s+c.intereses,0);
+  const prim=cuotas[0];const ult=cuotas[n-1];
+  const fmtM=v=>"$"+Math.round(v).toLocaleString("es-AR");
+  document.getElementById("cfp-sim-resumen").innerHTML=
+    `<strong>${n} cuotas ${sistema==="Frances"?"fijas de "+fmtM(prim.monto_total):"de "+fmtM(prim.monto_total)+" → "+fmtM(ult.monto_total)}</strong> · `+
+    `Intereses totales: <strong style="color:#FCA5A5">${fmtM(totalInt)}</strong> · `+
+    `Total a pagar: <strong>${fmtM(capital+totalInt)}</strong>`;
+  document.getElementById("cfp-sim-tabla").innerHTML=
+    `<thead><tr style="background:var(--surf2)"><th style="padding:5px 10px;text-align:left;color:var(--tx3)">#</th><th style="padding:5px 10px;text-align:left;color:var(--tx3)">Fecha</th><th style="padding:5px 10px;text-align:right;color:var(--tx3)">Cuota</th><th style="padding:5px 10px;text-align:right;color:var(--gr)">Capital</th><th style="padding:5px 10px;text-align:right;color:#FCA5A5">Intereses</th><th style="padding:5px 10px;text-align:right;color:var(--tx3)">Saldo</th></tr></thead>`+
+    `<tbody>${cuotas.map(c=>`<tr style="border-top:1px solid var(--surf2)"><td style="padding:4px 10px;color:var(--tx3)">${c.nro_cuota}</td><td style="padding:4px 10px;color:var(--tx2)">${c.fecha?fmt(c.fecha):"—"}</td><td style="padding:4px 10px;text-align:right;font-weight:600">${fmtM(c.monto_total)}</td><td style="padding:4px 10px;text-align:right;color:var(--gr)">${fmtM(c.capital)}</td><td style="padding:4px 10px;text-align:right;color:#FCA5A5">${fmtM(c.intereses)}</td><td style="padding:4px 10px;text-align:right;color:var(--tx3)">${fmtM(c.saldo_restante)}</td></tr>`).join("")}</tbody>`;
+  wrap.style.display="";
+  // Auto-rellenar campos de estado actual
+  document.getElementById("cfp-saldo").value=capital;
+  document.getElementById("cfp-cuota").value=Math.round(prim.monto_total);
+  document.getElementById("cfp-cuotas").value=n;
+  if(ult.fecha)document.getElementById("cfp-venc").value=ult.fecha;
 }
 function delCFPrest(id){
   confirmDel("¿Eliminar este préstamo?",async()=>{
@@ -7056,7 +7232,7 @@ async function confirmarPagoCuota(){
 }
 
 /* ── ANALIZAR PRÉSTAMO CON IA ── */
-let apArchivoUrl=null,apArchivoFile=null,apCuotasExtraidas=[];
+let apArchivoUrl=null,apArchivoFile=null,apCuotasExtraidas=[],apTnaNum=null,apCapitalNum=null;
 const SUPA_URL_P="https://jppxmdvddvbsvymogvcp.supabase.co";
 const KEY_P="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwcHhtZHZkZHZic3Z5bW9ndmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMjcyODAsImV4cCI6MjA5MDgwMzI4MH0.KPAqCKfUteE3XK9QFqb_44Hm8jYQxfjVLkrlyGvaMhE";
 
@@ -7066,7 +7242,7 @@ function openAnalizarPrestamo(){
 }
 
 function apReset(){
-  apArchivoUrl=null;apArchivoFile=null;apCuotasExtraidas=[];
+  apArchivoUrl=null;apArchivoFile=null;apCuotasExtraidas=[];apTnaNum=null;apCapitalNum=null;
   document.getElementById("ap-step1").style.display="";
   document.getElementById("ap-step2").style.display="none";
   document.getElementById("ap-step3").style.display="none";
@@ -7130,9 +7306,24 @@ async function apAnalizar(){
   }
 }
 
+function apDetectSistema(cuotas){
+  if(cuotas.length<2)return"Frances";
+  const caps=cuotas.map(c=>c.capital).filter(v=>v!=null&&v>0);
+  if(caps.length===cuotas.length){
+    const avg=caps.reduce((s,v)=>s+v,0)/caps.length;
+    if(caps.every(v=>Math.abs(v-avg)/avg<0.02))return"Aleman";
+  }
+  const tots=cuotas.map(c=>c.monto_total).filter(v=>v>0);
+  const avgT=tots.reduce((s,v)=>s+v,0)/tots.length;
+  if(tots.every(v=>Math.abs(v-avgT)/avgT<0.02))return"Frances";
+  return"Frances";
+}
 function apMostrarResultado(data){
   document.getElementById("ap-step2").style.display="none";
   document.getElementById("ap-step3").style.display="";
+  // Guardar datos numéricos para apGuardar
+  apTnaNum=typeof data.tasa_nominal_anual==="number"?data.tasa_nominal_anual:parseFloat(data.tasa_nominal_anual)||null;
+  apCapitalNum=typeof data.monto_original==="number"?data.monto_original:parseFloat(data.monto_original)||null;
   // Pre-llenar campos
   document.getElementById("ap-nombre").value=data.nombre_prestamo||data.entidad||"";
   document.getElementById("ap-entidad").value=data.entidad||"";
@@ -7186,13 +7377,21 @@ async function apGuardar(){
     const proxCuota=cuotasPend.sort((a,b)=>a.fecha>b.fecha?1:-1)[0];
     const ultimaCuota=apCuotasExtraidas[apCuotasExtraidas.length-1];
     const saldoPend=cuotasPend.reduce((s,c)=>s+(c.capital||c.monto_total||0),0)||null;
+    const sistemaDetect=apDetectSistema(apCuotasExtraidas);
     const data={
       nombre,
       entidad:document.getElementById("ap-entidad").value.trim()||null,
       sociedad:document.getElementById("ap-soc").value,
       tipo:document.getElementById("ap-tipo").value,
       notas:document.getElementById("ap-tasa").value?`Tasa: ${document.getElementById("ap-tasa").value}`:null,
-      saldo_actual:saldoPend||parseFloat(document.getElementById("ap-monto-orig").value)||null,
+      capital:apCapitalNum||null,
+      tna:apTnaNum||null,
+      sistema_amort:sistemaDetect,
+      tipo_tasa:"Fija",
+      n_cuotas_total:apCuotasExtraidas.length||null,
+      fecha_inicio:apCuotasExtraidas[0]?.fecha||null,
+      periodicidad:"Mensual",
+      saldo_actual:saldoPend||apCapitalNum||parseFloat(document.getElementById("ap-monto-orig").value)||null,
       cuota_mensual:proxCuota?proxCuota.monto_total:null,
       cuotas_pendientes:cuotasPend.length||null,
       fecha_vencimiento:ultimaCuota?.fecha||null,

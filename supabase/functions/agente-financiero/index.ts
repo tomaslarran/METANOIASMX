@@ -17,12 +17,19 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const [conceptos, valores, cobranzas, prestamos, inversiones] = await Promise.all([
-      supabase.from("cf_conceptos").select("*").eq("activo", true),
-      supabase.from("cf_valores").select("*, cf_conceptos(nombre, tipo, categoria, sociedad)"),
-      supabase.from("cf_cobranzas").select("*").order("fecha_vencimiento"),
-      supabase.from("cf_prestamos").select("*").eq("activo", true),
-      supabase.from("cf_inversiones").select("*"),
+    const hace7dias = new Date();
+    hace7dias.setDate(hace7dias.getDate() - 7);
+    const fecha7dias = hace7dias.toISOString().split("T")[0];
+
+    const [conceptos, valores, cobranzas, prestamos, inversiones, invMovimientos, rendDiarios, inflacion] = await Promise.all([
+      supabase.from("cf_conceptos").select("nombre,tipo,categoria,sociedad").eq("activo", true),
+      supabase.from("cf_valores").select("concepto_id,periodo,monto,monto_real,cf_conceptos(nombre,tipo,sociedad)"),
+      supabase.from("cf_cobranzas").select("descripcion,monto,fecha_vencimiento,estado,empresa").order("fecha_vencimiento"),
+      supabase.from("cf_prestamos").select("nombre,sociedad,capital,cuota_mensual,tasa,saldo_pendiente").eq("activo", true),
+      supabase.from("cf_inversiones").select("id,nombre,tipo,entidad,sociedad,capital,valor_actual,tna,fecha_inicio,fecha_vencimiento,plazo_rescate,objetivo,tipo_riesgo,estado"),
+      supabase.from("cf_inversiones_movimientos").select("inversion_id,tipo,monto,fecha").order("fecha", { ascending: false }).limit(50),
+      supabase.from("rendimientos_diarios").select("inversion_id,fecha,valor").gte("fecha", fecha7dias).order("fecha", { ascending: true }),
+      supabase.from("inflacion_mensual").select("periodo,tasa,rend_cartera").order("periodo", { ascending: false }).limit(6),
     ]);
 
     const hoy = new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Salta" });
@@ -45,7 +52,16 @@ PRÉSTAMOS ACTIVOS:
 ${JSON.stringify(prestamos.data)}
 
 INVERSIONES:
-${JSON.stringify(inversiones.data)}`;
+${JSON.stringify(inversiones.data)}
+
+MOVIMIENTOS DE INVERSIONES (aportes y rescates por inversion_id):
+${JSON.stringify(invMovimientos.data)}
+
+RENDIMIENTOS DIARIOS ÚLTIMOS 30 DÍAS:
+${JSON.stringify(rendDiarios.data)}
+
+INFLACIÓN ÚLTIMOS 6 MESES (periodo=YYYY-MM, tasa=inflación mensual %, rend_cartera=rendimiento cartera % ese mes):
+${JSON.stringify(inflacion.data)}`;
 
     // Limitar historial para no exceder contexto (sistema prompt es grande)
     const historialReciente = historial.slice(-6);

@@ -3,7 +3,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const TWILIO_SID = Deno.env.get("TWILIO_ACCOUNT_SID")!;
 const TWILIO_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN")!;
-const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
 serve(async (req) => {
   try {
@@ -42,20 +41,20 @@ serve(async (req) => {
       const fileName = `${Date.now()}_${from.replace(/\D/g, "")}.${ext}`;
 
       // Subir a Supabase Storage
-      const { data: upload, error: uploadErr } = await supabase.storage
+      const { error: uploadErr } = await supabase.storage
         .from("Facturas")
         .upload(fileName, imgBuffer, { contentType: mediaType });
 
       if (uploadErr) throw new Error("Error al subir imagen: " + uploadErr.message);
 
-      const imagenUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/Facturas/${fileName}`;
+      const archivoUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/Facturas/${fileName}`;
 
       // Guardar sesión pendiente
       await supabase.from("wpp_sesiones").upsert({
         telefono: from,
         tipo: "factura",
         paso: "sociedad",
-        datos: { imagen_url: imagenUrl },
+        datos: { archivo_url: archivoUrl },
         updated_at: new Date().toISOString(),
       }, { onConflict: "telefono,tipo" });
 
@@ -89,21 +88,36 @@ serve(async (req) => {
       }
       if (!encargado) return twiml("Por favor respondé 1 (Tomás), 2 (Mario), 3 (Valentina) o 4 (Amparo).");
 
-      const datos = sesion.datos as Record<string, string>;
+      await supabase.from("wpp_sesiones").update({
+        paso: "proveedor",
+        datos: { ...sesion.datos, encargado },
+        updated_at: new Date().toISOString(),
+      }).eq("telefono", from).eq("tipo", "factura");
 
-      // Guardar factura en la base
-      await supabase.from("facturas").insert({
-        imagen_url: datos.imagen_url,
+      return twiml(`Encargado: *${encargado}* ✓\n\n¿Cuál es el nombre del proveedor? (escribilo libremente)`);
+    }
+
+    // Paso 4: usuario responde el proveedor
+    if (sesion?.paso === "proveedor") {
+      if (!message) return twiml("Por favor escribí el nombre del proveedor.");
+
+      const datos = sesion.datos as Record<string, string>;
+      const hoy = new Date().toISOString().split("T")[0];
+
+      // Guardar en comprobantes_compra (tabla existente del panel)
+      await supabase.from("comprobantes_compra").insert({
+        archivo_url: datos.archivo_url,
         sociedad: datos.sociedad,
-        encargado,
+        cargado_por: datos.encargado,
+        proveedor: message.trim(),
         estado: "pendiente",
-        subida_por: from,
+        fecha_imputacion: hoy,
       });
 
       // Limpiar sesión
       await supabase.from("wpp_sesiones").delete().eq("telefono", from).eq("tipo", "factura");
 
-      return twiml(`✅ Factura guardada correctamente.\n\n📋 *Resumen:*\n• Sociedad: ${datos.sociedad}\n• Encargado: ${encargado}\n• Estado: Pendiente de revisión\n\nPodés verla en el panel de Metanoia.`);
+      return twiml(`✅ Factura guardada correctamente.\n\n📋 *Resumen:*\n• Proveedor: ${message.trim()}\n• Sociedad: ${datos.sociedad}\n• Encargado: ${datos.encargado}\n• Estado: Pendiente de revisión\n\nPodés verla en el panel de Metanoia → Comprobantes de Compra.`);
     }
 
     // --- FLUJO GENERAL DEL AGENTE FINANCIERO ---
