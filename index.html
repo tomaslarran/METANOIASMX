@@ -7650,7 +7650,6 @@ async function mrProcesar(){
     document.getElementById("mr-progreso-bar").style.width="80%";
     document.getElementById("mr-progreso-txt").textContent="Enviando a AssemblyAI...";
 
-    const audioUrl=`${SB}/storage/v1/object/public/reuniones-audio/${fileName}`;
     const participantes=document.getElementById("mr-participantes").value.split(",").map(s=>s.trim()).filter(Boolean);
 
     // 2. Llamar a iniciar-reunion
