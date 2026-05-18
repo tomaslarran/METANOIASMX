@@ -7696,11 +7696,17 @@ function verDetalleReunion(id){
   const partic=(r.participantes||[]).join(", ")||"—";
   const dur=r.duracion_min?`${r.duracion_min} min`:"—";
 
-  let html=`<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--b)">
-    <div><span style="font-size:11px;color:var(--tx3)">Fecha</span><div style="font-size:13px;font-weight:600">${r.fecha?fmt(r.fecha):"—"}</div></div>
-    <div><span style="font-size:11px;color:var(--tx3)">Duración</span><div style="font-size:13px;font-weight:600">${dur}</div></div>
-    <div><span style="font-size:11px;color:var(--tx3)">Sociedad</span><div style="font-size:13px;font-weight:600">${r.sociedad||"—"}</div></div>
-    <div><span style="font-size:11px;color:var(--tx3)">Participantes</span><div style="font-size:13px;font-weight:600">${partic}</div></div>
+  let html=`<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--b);flex-wrap:wrap">
+    <div style="display:flex;gap:16px;flex-wrap:wrap;flex:1">
+      <div><span style="font-size:11px;color:var(--tx3)">Fecha</span><div style="font-size:13px;font-weight:600">${r.fecha?fmt(r.fecha):"—"}</div></div>
+      <div><span style="font-size:11px;color:var(--tx3)">Duración</span><div style="font-size:13px;font-weight:600">${dur}</div></div>
+      <div><span style="font-size:11px;color:var(--tx3)">Sociedad</span><div style="font-size:13px;font-weight:600">${r.sociedad||"—"}</div></div>
+      <div><span style="font-size:11px;color:var(--tx3)">Participantes</span><div style="font-size:13px;font-weight:600">${partic}</div></div>
+    </div>
+    ${r.estado==="listo"?`<div style="display:flex;gap:6px;flex-shrink:0">
+      <button class="btn" style="font-size:11px" onclick="event.stopPropagation();mrExportarPDF('${r.id}')">📄 PDF</button>
+      <button class="btn" style="font-size:11px" onclick="event.stopPropagation();mrExportarWord('${r.id}')">📝 Word</button>
+    </div>`:""}
   </div>`;
 
   if(r.estado==="procesando"){
@@ -7753,6 +7759,92 @@ function verDetalleReunion(id){
 
   document.getElementById("mrd-contenido").innerHTML=html;
   openModal("modal-reunion-detalle");
+}
+
+function mrExportarPDF(reunionId){
+  const r=reuniones.find(r=>r.id===reunionId);if(!r)return;
+  const partic=(r.participantes||[]).join(", ")||"—";
+  const seccion=(emoji,titulo,html)=>`<div class="sec"><h2>${emoji} ${titulo}</h2>${html}</div>`;
+  const body=[
+    r.resumen?seccion("📋","Resumen",`<p>${r.resumen}</p>`):"",
+    r.decisiones?.length?seccion("🎯","Decisiones",`<ul>${r.decisiones.map(d=>`<li>${d}</li>`).join("")}</ul>`):"",
+    r.tareas_extraidas?.length?seccion("✅","Tareas detectadas",r.tareas_extraidas.map(t=>`<div class="tarea"><strong>${t.tarea}</strong>${t.responsable?` → <em>${t.responsable}</em>`:""}${t.fecha_sugerida?` <span class="fecha">${fmt(t.fecha_sugerida)}</span>`:""}</div>`).join("")):"",
+    r.transcripcion_diarizada?.length?seccion("🎙️","Transcripción",r.transcripcion_diarizada.map(u=>`<div class="utt"><div class="spk">${u.speaker}</div><div>${u.texto}</div></div>`).join("")):"",
+  ].filter(Boolean).join("");
+  const html=`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${r.titulo}</title>
+  <style>
+    body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;color:#222;font-size:14px;line-height:1.6}
+    h1{color:#7C3AED;border-bottom:3px solid #7C3AED;padding-bottom:10px;margin-bottom:4px}
+    .meta{color:#666;font-size:13px;margin-bottom:28px}
+    h2{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:#555;margin:24px 0 10px;padding-bottom:4px;border-bottom:1px solid #eee}
+    ul{margin:0;padding-left:20px}li{margin-bottom:6px}
+    .tarea{background:#f8f5ff;border-left:3px solid #7C3AED;padding:8px 12px;border-radius:0 6px 6px 0;margin-bottom:8px}
+    .fecha{color:#888;font-size:12px}
+    .utt{margin-bottom:14px}.spk{font-weight:700;color:#7C3AED;font-size:12px;margin-bottom:3px;text-transform:uppercase}
+    .sec{margin-bottom:24px}
+    @media print{body{margin:20px}h2{break-after:avoid}.utt{break-inside:avoid}}
+  </style></head><body>
+  <h1>🎙️ ${r.titulo}</h1>
+  <div class="meta">📅 ${r.fecha?fmt(r.fecha):"—"} &nbsp;·&nbsp; ⏱️ ${r.duracion_min?r.duracion_min+" min":"—"} &nbsp;·&nbsp; 🏢 ${r.sociedad} &nbsp;·&nbsp; 👥 ${partic}</div>
+  ${body}
+  <div style="margin-top:40px;padding-top:12px;border-top:1px solid #ddd;color:#999;font-size:11px;text-align:center">Metanoia SMX · Generado desde el Panel de Gestión</div>
+  </body></html>`;
+  const w=window.open("","_blank");
+  if(!w){toast("Permitir popups para exportar PDF","err");return;}
+  w.document.write(html);w.document.close();
+  setTimeout(()=>w.print(),600);
+}
+
+async function mrExportarWord(reunionId){
+  const r=reuniones.find(r=>r.id===reunionId);if(!r)return;
+  toast("Generando Word...","ok");
+  // Cargar librería docx dinámicamente
+  if(!window.docx){
+    await new Promise((res,rej)=>{
+      const s=document.createElement("script");
+      s.src="https://unpkg.com/docx@8/build/index.js";
+      s.onload=res;s.onerror=rej;document.head.appendChild(s);
+    });
+  }
+  const {Document,Paragraph,TextRun,HeadingLevel,Packer,AlignmentType}=window.docx;
+  const pr=(txt,bold,color)=>new Paragraph({children:[new TextRun({text:txt||"",bold:bold||false,color:color||"000000"})],spacing:{after:80}});
+  const h2=(txt)=>new Paragraph({text:txt,heading:HeadingLevel.HEADING_2,spacing:{before:300,after:100}});
+  const kids=[
+    new Paragraph({children:[new TextRun({text:"🎙️ "+r.titulo,bold:true,size:36,color:"7C3AED"})],spacing:{after:120}}),
+    new Paragraph({children:[
+      new TextRun({text:`Fecha: ${r.fecha?fmt(r.fecha):"—"}  ·  Duración: ${r.duracion_min?r.duracion_min+" min":"—"}  ·  ${r.sociedad}`,color:"666666",size:22}),
+    ],spacing:{after:240}}),
+  ];
+  if(r.resumen){kids.push(h2("📋 Resumen"),pr(r.resumen));}
+  if(r.decisiones?.length){
+    kids.push(h2("🎯 Decisiones"));
+    r.decisiones.forEach(d=>kids.push(new Paragraph({children:[new TextRun({text:"• "+d})],spacing:{after:60}})));
+  }
+  if(r.tareas_extraidas?.length){
+    kids.push(h2("✅ Tareas detectadas"));
+    r.tareas_extraidas.forEach(t=>{
+      let txt=`• ${t.tarea}`;
+      if(t.responsable)txt+=` → ${t.responsable}`;
+      if(t.fecha_sugerida)txt+=` (${fmt(t.fecha_sugerida)})`;
+      kids.push(new Paragraph({children:[new TextRun({text:txt})],spacing:{after:60}}));
+    });
+  }
+  if(r.transcripcion_diarizada?.length){
+    kids.push(h2("🎙️ Transcripción"));
+    r.transcripcion_diarizada.forEach(u=>{
+      kids.push(
+        new Paragraph({children:[new TextRun({text:u.speaker,bold:true,color:"7C3AED",size:20})],spacing:{before:180,after:40}}),
+        new Paragraph({children:[new TextRun({text:u.texto})],spacing:{after:80}}),
+      );
+    });
+  }
+  const doc=new Document({sections:[{properties:{},children:kids}]});
+  const blob=await Packer.toBlob(doc);
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=`${r.titulo.replace(/[^a-z0-9]/gi,"_")}_${r.fecha||"reunion"}.docx`;
+  a.click();URL.revokeObjectURL(url);
 }
 
 async function mrImportarTareas(reunionId){
