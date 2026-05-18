@@ -7588,6 +7588,45 @@ function mrQuitarAudio(){
   document.getElementById("mr-drop-zone").style.display="";
 }
 
+async function mrTusUpload(file, bucket, path, onProgress){
+  // Upload por chunks TUS (protocolo resumible) — bypasea el límite de 50MB del gateway
+  const CHUNK=6*1024*1024; // 6MB por chunk
+  const mime=file.type||"audio/mpeg";
+  // Crear sesión TUS
+  const createRes=await fetch(`${SB}/storage/v1/upload/resumable`,{
+    method:"POST",
+    headers:{
+      "Authorization":`Bearer ${KEY}`,"apikey":KEY,
+      "tus-resumable":"1.0.0",
+      "upload-length":String(file.size),
+      "upload-metadata":`bucketName ${btoa(bucket)},objectName ${btoa(path)},contentType ${btoa(mime)},cacheControl ${btoa("3600")}`,
+      "Content-Type":"application/offset+octet-stream",
+    },
+  });
+  if(!createRes.ok){const t=await createRes.text();throw new Error("TUS create: "+t);}
+  const uploadUrl=createRes.headers.get("Location");
+  if(!uploadUrl)throw new Error("No se obtuvo URL de upload TUS");
+  // Subir en chunks
+  let offset=0;
+  while(offset<file.size){
+    const chunk=file.slice(offset,Math.min(offset+CHUNK,file.size));
+    const patchRes=await fetch(uploadUrl,{
+      method:"PATCH",
+      headers:{
+        "Authorization":`Bearer ${KEY}`,"apikey":KEY,
+        "tus-resumable":"1.0.0",
+        "upload-offset":String(offset),
+        "Content-Type":"application/offset+octet-stream",
+      },
+      body:chunk,
+    });
+    if(!patchRes.ok){const t=await patchRes.text();throw new Error("TUS patch: "+t);}
+    offset=parseInt(patchRes.headers.get("Upload-Offset")||String(offset+chunk.size));
+    if(onProgress)onProgress(offset/file.size);
+  }
+  return`${SB}/storage/v1/object/public/${bucket}/${path}`;
+}
+
 async function mrProcesar(){
   const titulo=document.getElementById("mr-titulo").value.trim();
   if(!titulo){toast("Escribí un título","err");return;}
@@ -7596,21 +7635,19 @@ async function mrProcesar(){
   const btn=document.getElementById("mr-btn-procesar");
   btn.disabled=true;btn.textContent="Subiendo...";
   document.getElementById("mr-progreso").style.display="";
-  document.getElementById("mr-progreso-txt").textContent="Subiendo audio a Supabase...";
-  document.getElementById("mr-progreso-bar").style.width="20%";
+  document.getElementById("mr-progreso-txt").textContent="Subiendo audio...";
+  document.getElementById("mr-progreso-bar").style.width="5%";
 
   try{
-    // 1. Subir a Supabase Storage (bucket público "reuniones-audio")
+    // 1. Subir a Supabase Storage via TUS (soporta archivos grandes)
     const ext=mrAudioFile.name.split(".").pop()||"mp3";
     const fileName=`${Date.now()}_${titulo.replace(/[^a-z0-9]/gi,"_").slice(0,30)}.${ext}`;
-    const uploadRes=await fetch(`${SB}/storage/v1/object/reuniones-audio/${fileName}`,{
-      method:"POST",
-      headers:{"Authorization":`Bearer ${KEY}`,"apikey":KEY,"Content-Type":mrAudioFile.type||"audio/mpeg"},
-      body:mrAudioFile,
+    const audioUrl=await mrTusUpload(mrAudioFile,"reuniones-audio",fileName,(pct)=>{
+      document.getElementById("mr-progreso-bar").style.width=Math.round(pct*70)+"%";
+      document.getElementById("mr-progreso-txt").textContent=`Subiendo audio... ${Math.round(pct*100)}%`;
     });
-    if(!uploadRes.ok){const e=await uploadRes.json();throw new Error(e.error||"Error al subir audio");}
 
-    document.getElementById("mr-progreso-bar").style.width="50%";
+    document.getElementById("mr-progreso-bar").style.width="80%";
     document.getElementById("mr-progreso-txt").textContent="Enviando a AssemblyAI...";
 
     const audioUrl=`${SB}/storage/v1/object/public/reuniones-audio/${fileName}`;
