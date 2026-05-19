@@ -7710,6 +7710,7 @@ function verDetalleReunion(id){
       ${r.estado==="listo"?`
       <button class="btn" style="font-size:11px" onclick="mrExportarPDF('${r.id}')">📄 PDF</button>
       <button class="btn" style="font-size:11px" onclick="mrExportarWord('${r.id}')">📝 Word</button>`:""}
+      <button class="btn" style="font-size:11px" onclick="mrReanalizar('${r.id}')">🔄 Re-analizar</button>
       <button class="btn" style="font-size:11px;color:var(--re);border-color:var(--re)" onclick="mrEliminarReunion('${r.id}')">🗑️ Eliminar</button>
     </div>
   </div>`;
@@ -7880,6 +7881,28 @@ async function mrImportarTareas(reunionId){
     toast(`${nuevas.length} tarea${nuevas.length!==1?"s":""} importada${nuevas.length!==1?"s":""} ✓`,"ok");
     await loadAll();
   }catch(e){toast("Error: "+e.message,"err")}
+}
+
+async function mrReanalizar(reunionId){
+  const r=reuniones.find(r=>r.id===reunionId);if(!r)return;
+  toast("Analizando con IA...","ok");
+  try{
+    const res=await fetch(`${SB}/functions/v1/verificar-reunion`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${SB_KEY}`},
+      body:JSON.stringify({reunion_id:reunionId,reanalizar:true}),
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error);
+    // Actualizar local
+    const i=reuniones.findIndex(r=>r.id===reunionId);
+    if(i>=0){
+      reuniones[i]={...reuniones[i],resumen:data.resumen,decisiones:data.decisiones,tareas_extraidas:data.tareas_extraidas,transcripcion_diarizada:data.transcripcion_diarizada};
+    }
+    renderReuniones();
+    verDetalleReunion(reunionId);
+    toast("Re-análisis completado ✓","ok");
+  }catch(e){toast("Error: "+e.message,"err");}
 }
 
 async function mrEliminarReunion(id){

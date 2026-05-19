@@ -6,18 +6,71 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const EQUIPO: Record<string, string> = {
-  "335d872b-594c-8130-87af-000274e4aae6": "Tomás",
-  "335d872b-594c-81f8-908b-00029b173f99": "Mario",
-  "335d872b-594c-8152-a424-00024820cc46": "Valentina",
-  "335d872b-594c-81e8-9623-00023e80a236": "Amparo",
-};
+// Extrae y parsea JSON de la respuesta de Claude, tolerando markdown code fences
+function parsearAnalisis(rawText: string): any {
+  let txt = rawText.trim();
+  // Quitar ```json ... ``` o ``` ... ```
+  txt = txt.replace(/^```[\w]*\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+  // Si sigue sin empezar con {, buscar el primer objeto JSON dentro del texto
+  if (!txt.startsWith("{")) {
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (m) txt = m[0];
+  }
+  return JSON.parse(txt);
+}
+
+async function analizarConClaude(transcripcionTexto: string, anthropicKey: string): Promise<any> {
+  const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": anthropicKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 2048,
+      system: `Sos el asistente de Metanoia SMX. Analizás transcripciones de reuniones de la empresa.
+La empresa tiene dos sociedades: SUDES (capacitación médica) y POINTERS (logística/servicios).
+El equipo es: Tomás (gestión económica), Mario (cursos/relaciones), Valentina (contratos/redes), Amparo (administración).
+
+Dado el transcript de una reunión, devolvé ÚNICAMENTE un objeto JSON válido, sin markdown, sin bloques de código, sin texto extra antes ni después:
+{
+  "resumen": "Resumen ejecutivo claro de 3-5 oraciones",
+  "temas_tratados": ["tema 1", "tema 2"],
+  "decisiones": ["Decisión concreta 1", "Decisión concreta 2"],
+  "tareas_extraidas": [
+    {"tarea": "descripción de la tarea", "responsable": "Nombre o null", "fecha_sugerida": "YYYY-MM-DD o null"}
+  ],
+  "proximos_pasos": ["paso 1", "paso 2"]
+}
+
+Si el transcript está vacío o es incomprensible, devolvé el JSON con campos vacíos.`,
+      messages: [
+        // Prefill para forzar que Claude arranque directo con el JSON
+        { role: "user", content: `TRANSCRIPT:\n\n${transcripcionTexto.slice(0, 60000)}` },
+        { role: "assistant", content: "{" },
+      ],
+    }),
+  });
+
+  const claudeData = await claudeRes.json();
+  // El prefill hace que la respuesta arranque sin el "{", lo reponemos
+  const rawText = "{" + (claudeData.content?.[0]?.text ?? "");
+  try {
+    return parsearAnalisis(rawText);
+  } catch {
+    // Fallback: intentar con el texto sin prefill por si algo salió mal
+    const raw2 = claudeData.content?.[0]?.text ?? "{}";
+    try { return parsearAnalisis(raw2); } catch { return null; }
+  }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
-    const { reunion_id } = await req.json();
+    const { reunion_id, reanalizar } = await req.json();
     if (!reunion_id) throw new Error("reunion_id requerido");
 
     const supabase = createClient(
@@ -25,6 +78,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
     const ASSEMBLY_KEY = Deno.env.get("ASSEMBLYAI_API_KEY")!;
+    const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 
     // Obtener reunión de la DB
     const { data: reunion, error: dbErr } = await supabase
@@ -34,9 +88,31 @@ serve(async (req) => {
       .single();
 
     if (dbErr || !reunion) throw new Error("Reunión no encontrada");
-    if (!reunion.assembly_job_id) throw new Error("Sin job_id de AssemblyAI");
 
-    // Si ya está lista, devolver resultado
+    // ── Modo re-análisis: usar transcripción ya guardada, llamar solo a Claude ──
+    if (reanalizar && reunion.transcripcion) {
+      const analisis = await analizarConClaude(reunion.transcripcion, ANTHROPIC_KEY);
+      if (!analisis) throw new Error("Claude no pudo analizar la transcripción");
+
+      await supabase.from("reuniones").update({
+        resumen: analisis.resumen || null,
+        decisiones: analisis.decisiones || [],
+        tareas_extraidas: analisis.tareas_extraidas || [],
+      }).eq("id", reunion_id);
+
+      return new Response(JSON.stringify({
+        estado: "listo",
+        resumen: analisis.resumen,
+        temas_tratados: analisis.temas_tratados,
+        decisiones: analisis.decisiones,
+        tareas_extraidas: analisis.tareas_extraidas,
+        proximos_pasos: analisis.proximos_pasos,
+        transcripcion_diarizada: reunion.transcripcion_diarizada,
+        duracion_min: reunion.duracion_min,
+      }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    // Si ya está lista y no es re-análisis, devolver resultado cacheado
     if (reunion.estado === "listo") {
       return new Response(JSON.stringify({
         estado: "listo",
@@ -47,6 +123,8 @@ serve(async (req) => {
         duracion_min: reunion.duracion_min,
       }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
+
+    if (!reunion.assembly_job_id) throw new Error("Sin job_id de AssemblyAI");
 
     // Consultar estado en AssemblyAI
     const aaiRes = await fetch(`https://api.assemblyai.com/v2/transcript/${reunion.assembly_job_id}`, {
@@ -71,7 +149,6 @@ serve(async (req) => {
     const utterances: { speaker: string; text: string; start: number; end: number }[] = aaiData.utterances || [];
     const letrasHablantes = ["A","B","C","D","E","F","G","H","I","J"];
 
-    // Mapear speakers a participantes si los hay
     const participantes: string[] = reunion.participantes || [];
     const speakerMap: Record<string, string> = {};
     utterances.forEach(u => {
@@ -95,47 +172,9 @@ serve(async (req) => {
     const duracionMin = aaiData.audio_duration ? Math.round(aaiData.audio_duration / 60) : null;
 
     // ── Análisis con Claude ──
-    const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": Deno.env.get("ANTHROPIC_API_KEY")!,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 2048,
-        system: `Sos el asistente de Metanoia SMX. Analizás transcripciones de reuniones de la empresa.
-La empresa tiene dos sociedades: SUDES (capacitación médica) y POINTERS (logística/servicios).
-El equipo es: Tomás (gestión económica), Mario (cursos/relaciones), Valentina (contratos/redes), Amparo (administración).
-
-Dado el transcript de una reunión, devolvé ÚNICAMENTE un JSON válido (sin markdown, sin texto extra):
-{
-  "resumen": "Resumen ejecutivo claro de 3-5 oraciones",
-  "temas_tratados": ["tema 1", "tema 2"],
-  "decisiones": ["Decisión concreta 1", "Decisión concreta 2"],
-  "tareas_extraidas": [
-    {"tarea": "descripción de la tarea", "responsable": "Nombre o null", "fecha_sugerida": "YYYY-MM-DD o null"}
-  ],
-  "proximos_pasos": ["paso 1", "paso 2"]
-}
-
-Si el transcript está vacío o es incomprensible, devolvé el JSON con campos vacíos.`,
-        messages: [{
-          role: "user",
-          content: `TRANSCRIPT:\n\n${transcripcionTexto.slice(0, 60000)}`,
-        }],
-      }),
-    });
-
-    const claudeData = await claudeRes.json();
-    const rawText = claudeData.content?.[0]?.text ?? "{}";
-    let analisis: any = {};
-    try {
-      analisis = JSON.parse(rawText.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim());
-    } catch {
-      analisis = { resumen: rawText.slice(0, 500), decisiones: [], tareas_extraidas: [], proximos_pasos: [], temas_tratados: [] };
-    }
+    const analisis = await analizarConClaude(transcripcionTexto, ANTHROPIC_KEY) ?? {
+      resumen: null, decisiones: [], tareas_extraidas: [], proximos_pasos: [], temas_tratados: [],
+    };
 
     // Guardar en DB
     await supabase.from("reuniones").update({
