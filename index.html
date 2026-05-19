@@ -4510,7 +4510,7 @@ async function editAlumno(id){
   list.innerHTML=`<div style="color:var(--tx3);font-size:12px">Cargando...</div>`;
   openModal("modal-alumno");
   try{
-    const insc=await sb(`inscripciones?alumno_id=eq.${id}&select=*,cursos(id,titulo,fecha_inicio,estado,sociedad)&order=created_at.desc`);
+    const insc=await sb(`inscripciones?alumno_id=eq.${id}&select=*,cursos(*)&order=created_at.desc`);
     if(!insc.length){
       list.innerHTML=`<div style="color:var(--tx3);font-size:12px;padding:8px 0">Sin inscripciones registradas</div>`;
       return;
@@ -4521,8 +4521,8 @@ async function editAlumno(id){
       const col=estadoColor[i.estado]||"var(--tx3)";
       return`<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surf2);border-radius:8px;border:1px solid var(--b)">
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.titulo||"Curso"}</div>
-          <div style="font-size:11px;color:var(--tx3);margin-top:2px">${c.fecha_inicio?fmt(c.fecha_inicio):"Sin fecha"} · ${c.sociedad||""}</div>
+          <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nombre||"Curso"}</div>
+          <div style="font-size:11px;color:var(--tx3);margin-top:2px">${c.fecha_inicio?fmt(c.fecha_inicio):"Sin fecha"}${c.tipo?" · "+c.tipo:""}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
           <span style="font-size:11px;font-weight:700;color:${col};background:${col}18;border:1px solid ${col}40;padding:2px 8px;border-radius:10px">${i.estado||"—"}</span>
