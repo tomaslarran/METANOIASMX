@@ -7889,7 +7889,7 @@ async function mrReanalizar(reunionId){
   try{
     const res=await fetch(`${SB}/functions/v1/verificar-reunion`,{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${SB_KEY}`},
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`,"apikey":KEY},
       body:JSON.stringify({reunion_id:reunionId,reanalizar:true}),
     });
     const data=await res.json();
