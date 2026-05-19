@@ -3696,150 +3696,132 @@ async function generarCertificado(inscId,cursoId){
       if(ci[0]){const inst=ci[0].instructores;instructorNombre=`${inst.nombre||""} ${inst.apellido||""}`.trim();}
     }catch(e){}
 
-    // Cargar logo PNG
-    let logoDataUrl=null;
-    try{
-      const r=await fetch('./logo_metanoia.png');
-      const blob=await r.blob();
-      logoDataUrl=await new Promise(res=>{const rd=new FileReader();rd.onload=()=>res(rd.result);rd.readAsDataURL(blob);});
-    }catch(e){}
+    // Cargar imagen de fondo del diploma
+    const loadImg=async(path)=>{
+      try{
+        const r=await fetch(path);if(!r.ok)return null;
+        const blob=await r.blob();
+        return new Promise(res=>{const rd=new FileReader();rd.onload=()=>res(rd.result);rd.readAsDataURL(blob);});
+      }catch(e){return null;}
+    };
+    const [bgDataUrl,logoDataUrl]=await Promise.all([loadImg('./diploma-fondo.png'),loadImg('./logo_metanoia.png')]);
 
     const {jsPDF}=window.jspdf;
     const doc=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
     const W=297,H=210;
 
-    // Colores de marca Metanoia
-    const DP  =[46, 40,104];   // navy purple oscuro
-    const LP  =[123,107,191];  // purple claro
-    const MP  =[80, 68,148];   // purple medio
-    const TXT =[28, 22, 58];   // texto principal
-    const TXT2=[100, 88,145];  // texto secundario
-    const LINE=[190,182,220];  // líneas sutiles
+    // Colores del diseño (extraídos del diploma)
+    const TXT =[46, 40, 95];    // texto principal oscuro (purple navy)
+    const TXT2=[90, 82,140];    // texto secundario
+    const LINE=[160,150,195];   // líneas sutiles
+    const cx=W/2;               // centro horizontal
 
-    // ── Fondo blanco ──
-    doc.setFillColor(255,255,255);
-    doc.rect(0,0,W,H,"F");
-
-    // ── Borde exterior (navy) ──
-    doc.setDrawColor(...DP);
-    doc.setLineWidth(1.5);
-    doc.rect(6,6,W-12,H-12);
-    // ── Borde interior (purple claro) ──
-    doc.setDrawColor(...LP);
-    doc.setLineWidth(0.4);
-    doc.rect(10,10,W-20,H-20);
-
-    // ── Marcas de esquina (pequeños cuadrados en cada vértice interior) ──
-    const cornSz=4;
-    doc.setFillColor(...DP);
-    [[10,10],[W-10-cornSz,10],[10,H-10-cornSz],[W-10-cornSz,H-10-cornSz]].forEach(([cx,cy])=>{
-      doc.rect(cx,cy,cornSz,cornSz,"F");
-    });
-
-    // ── Panel izquierdo: franja lavanda sutil ──
-    doc.setFillColor(247,246,252);
-    doc.rect(10,10,68,H-20,"F");
-    // Línea separadora vertical
-    doc.setDrawColor(...LP);
-    doc.setLineWidth(0.7);
-    doc.line(78,10,78,H-10);
-
-    // ── Logo PNG ──
-    if(logoDataUrl){
-      // PNG ratio: 621×968 px → altura = ancho * (968/621)
-      const lw=46, lh=lw*(968/621);        // ~71.8mm
-      const lx=10+(68-lw)/2;               // centrado en panel 10→78
-      const ly=(H-lh)/2;                   // centrado vertical
-      doc.addImage(logoDataUrl,"PNG",lx,ly,lw,lh);
+    // ── Fondo: imagen del diseño PSD ──
+    if(bgDataUrl){
+      doc.addImage(bgDataUrl,"PNG",0,0,W,H);
+    }else{
+      // Fallback: fondo lavanda si no se cargó la imagen
+      doc.setFillColor(196,193,215);
+      doc.rect(0,0,W,H,"F");
     }
 
-    // ── Área contenido: center x entre 78 y 291 ──
-    const cx=(78+291)/2;   // ~184.5
+    // ── Logo en esquina superior derecha (si no está en el fondo) ──
+    if(logoDataUrl&&!bgDataUrl){
+      const lw=22,lh=lw*(968/621);
+      doc.addImage(logoDataUrl,"PNG",W-lw-10,8,lw,lh);
+    }
 
-    // ── Encabezado sutil ──
+    // ── "Metanoia, ecosistema de aprendizaje médico" ──
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(16);
+    doc.setTextColor(...TXT);
+    doc.text("Metanoia, ecosistema de aprendizaje médico",cx,42,{align:"center"});
+
+    // ── "certifica que:" ──
     doc.setFont("helvetica","normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(...LP);
-    doc.text("MEDICAL SIMULATION CENTER · SALTA, ARGENTINA",cx,19,{align:"center"});
-    doc.setDrawColor(...LP);
-    doc.setLineWidth(0.3);
-    doc.line(82,22,289,22);
-
-    // ── "certifica que" ──
-    doc.setFont("helvetica","italic");
-    doc.setFontSize(12);
+    doc.setFontSize(11);
     doc.setTextColor(...TXT2);
-    doc.text("certifica que",cx,37,{align:"center"});
+    doc.text("certifica que:",cx,52,{align:"center"});
+
+    // ── Línea separadora ──
+    doc.setDrawColor(...LINE);
+    doc.setLineWidth(0.4);
+    doc.line(30,58,W-30,58);
 
     // ── Nombre alumno ──
     const nombreAlumno=`${(a.apellido||"").toUpperCase()}, ${(a.nombre||"").toUpperCase()}`.trim().replace(/^,\s*/,"");
     doc.setFont("helvetica","bold");
     doc.setFontSize(22);
     doc.setTextColor(...TXT);
-    doc.text(nombreAlumno,cx,54,{align:"center",maxWidth:200});
-    doc.setDrawColor(...MP);
-    doc.setLineWidth(0.6);
-    doc.line(85,59,288,59);
+    doc.text(nombreAlumno,cx,75,{align:"center",maxWidth:230});
 
     // ── DNI · MP ──
     doc.setFont("helvetica","normal");
     doc.setFontSize(10);
     doc.setTextColor(...TXT2);
-    const dniTxt=a.dni?`D.N.I.  ${a.dni}`:"D.N.I.  ___________________";
-    const mpTxt =a.matricula?`M.P. N°  ${a.matricula}`:"M.P. N°  ________________";
-    doc.text(`${dniTxt}          ${mpTxt}`,cx,69,{align:"center"});
+    const dniTxt=a.dni?`D.N.I  ${a.dni}`:"D.N.I  ______________________";
+    const mpTxt =a.matricula?`M.P. N°  ${a.matricula}`:"M.P. N°  ___________________";
+    doc.text(dniTxt,cx-30,86,{align:"right"});
+    doc.text(mpTxt,cx+30,86,{align:"left"});
 
-    // ── "completó satisfactoriamente la formación" ──
-    doc.setFont("helvetica","italic");
+    // ── "completó la formación" ──
+    doc.setFont("helvetica","normal");
     doc.setFontSize(11);
     doc.setTextColor(...TXT2);
-    doc.text("completó satisfactoriamente la formación",cx,82,{align:"center"});
+    doc.text("completó la formación",cx,98,{align:"center"});
+
+    // ── Línea separadora ──
+    doc.setDrawColor(...LINE);
+    doc.setLineWidth(0.4);
+    doc.line(30,104,W-30,104);
 
     // ── Nombre del curso ──
     doc.setFont("helvetica","bold");
-    doc.setFontSize(17);
-    doc.setTextColor(...DP);
-    doc.text((curso.nombre||"").toUpperCase(),cx,97,{align:"center",maxWidth:200});
-    doc.setDrawColor(...LINE);
-    doc.setLineWidth(0.4);
-    doc.line(85,103,288,103);
+    doc.setFontSize(15);
+    doc.setTextColor(...TXT);
+    doc.text((curso.nombre||"").toUpperCase(),cx,116,{align:"center",maxWidth:230});
 
-    // ── "dictada por" + instructor ──
-    doc.setFont("helvetica","italic");
+    // ── "dictada por" ──
+    doc.setFont("helvetica","normal");
     doc.setFontSize(10);
     doc.setTextColor(...TXT2);
-    doc.text("dictada por",cx,114,{align:"center"});
+    doc.text("dictada por",cx,128,{align:"center"});
+
+    // ── Instructor ──
     if(instructorNombre){
       doc.setFont("helvetica","bold");
-      doc.setFontSize(13);
+      doc.setFontSize(12);
       doc.setTextColor(...TXT);
-      doc.text(instructorNombre,cx,125,{align:"center"});
+      doc.text(instructorNombre,cx,138,{align:"center"});
     }
+
+    // ── Línea separadora ──
     doc.setDrawColor(...LINE);
     doc.setLineWidth(0.4);
-    doc.line(85,130,288,130);
+    doc.line(30,144,W-30,144);
 
-    // ── Fecha ──
+    // ── Fecha · Salta, Argentina ──
     const fecha=new Date().toLocaleDateString("es-AR",{day:"2-digit",month:"long",year:"numeric"});
     doc.setFont("helvetica","normal");
-    doc.setFontSize(9.5);
+    doc.setFontSize(10);
     doc.setTextColor(...TXT2);
-    doc.text(`Salta, ${fecha}`,cx,141,{align:"center"});
+    doc.text(fecha,W-35,156,{align:"right"});
+    doc.text("Salta, Argentina",W-35,163,{align:"right"});
 
     // ── Dos líneas de firma ──
-    const fY=177, fW=62;
-    const f1x=100, f2x=213;
-    doc.setDrawColor(...DP);
-    doc.setLineWidth(0.7);
+    const fY=188,fW=60;
+    const f1x=55,f2x=182;
+    doc.setDrawColor(...LINE);
+    doc.setLineWidth(0.6);
     doc.line(f1x,fY,f1x+fW,fY);
     doc.line(f2x,fY,f2x+fW,fY);
     doc.setFont("helvetica","normal");
     doc.setFontSize(8);
     doc.setTextColor(...TXT2);
-    doc.text("Firma y sello",f1x+fW/2,183,{align:"center"});
-    doc.text("Firma y sello",f2x+fW/2,183,{align:"center"});
+    doc.text("Firma y sello",f1x+fW/2,194,{align:"center"});
+    doc.text("Firma y sello",f2x+fW/2,194,{align:"center"});
 
-    // ── QR con URL pública del certificado en Supabase Storage ──
+    // ── QR ──
     const certPath=`certificados/${inscId}.pdf`;
     const certUrl=`${SB}/storage/v1/object/public/${certPath}`;
     const makeQrDataUrl=(text)=>{
@@ -3851,7 +3833,7 @@ async function generarCertificado(inscId,cursoId){
       const canvas=document.createElement("canvas");
       canvas.width=sz;canvas.height=sz;
       const ctx=canvas.getContext("2d");
-      ctx.fillStyle="#ffffff";ctx.fillRect(0,0,sz,sz);
+      ctx.fillStyle="rgba(255,255,255,0)";ctx.fillRect(0,0,sz,sz);
       ctx.fillStyle="#2E2868";
       for(let r=0;r<mod;r++)for(let c=0;c<mod;c++)
         if(qr.isDark(r,c))ctx.fillRect(c*scale,r*scale,scale,scale);
@@ -3859,20 +3841,19 @@ async function generarCertificado(inscId,cursoId){
     };
     try{
       const qrDataUrl=makeQrDataUrl(certUrl);
-      const qrSz=36;
-      const qrX=21, qrY=148;
+      const qrSz=28;
+      const qrX=10,qrY=175;
       doc.addImage(qrDataUrl,"PNG",qrX,qrY,qrSz,qrSz);
       doc.setFont("helvetica","normal");
-      doc.setFontSize(6.5);
+      doc.setFontSize(6);
       doc.setTextColor(...TXT2);
-      doc.text("Escanear para ver",qrX+qrSz/2,qrY-4,{align:"center"});
-      doc.text("este certificado",qrX+qrSz/2,qrY-0.5,{align:"center"});
+      doc.text("Verificar certificado",qrX+qrSz/2,qrY-2,{align:"center"});
     }catch(e){console.warn("QR error:",e);}
 
-    // ── N° certificado (esquina inferior derecha, dentro del borde) ──
+    // ── N° certificado ──
     doc.setFontSize(6.5);
     doc.setTextColor(...LINE);
-    doc.text(`N° ${inscId.slice(-8).toUpperCase()}`,287,197,{align:"right"});
+    doc.text(`N° ${inscId.slice(-8).toUpperCase()}`,W-8,H-4,{align:"right"});
 
     const fname=`certificado_${(a.apellido||"alumno").replace(/\s+/g,"_")}_${(curso.nombre||"curso").replace(/\s+/g,"_")}.pdf`;
 
