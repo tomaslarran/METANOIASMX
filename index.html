@@ -7939,13 +7939,21 @@ async function mrGuardarHablantes(reunionId, speakers){
   });
   // Aplicar mapeo a toda la transcripción
   const nueva=r.transcripcion_diarizada.map(u=>({...u,speaker:mapping[u.speaker]??u.speaker}));
+  // Aplicar mapeo también al responsable de las tareas extraídas
+  const nuevasTareas=(r.tareas_extraidas||[]).map(t=>({
+    ...t,
+    responsable:t.responsable?(mapping[t.responsable]??t.responsable):t.responsable
+  }));
   try{
-    await sb(`reuniones?id=eq.${reunionId}`,{method:"PATCH",body:JSON.stringify({transcripcion_diarizada:nueva})});
+    await sb(`reuniones?id=eq.${reunionId}`,{method:"PATCH",body:JSON.stringify({
+      transcripcion_diarizada:nueva,
+      tareas_extraidas:nuevasTareas,
+    })});
     const i=reuniones.findIndex(r=>r.id===reunionId);
-    if(i>=0) reuniones[i].transcripcion_diarizada=nueva;
+    if(i>=0){reuniones[i].transcripcion_diarizada=nueva;reuniones[i].tareas_extraidas=nuevasTareas;}
     renderReuniones();
     verDetalleReunion(reunionId);
-    toast("Hablantes actualizados ✓","ok");
+    toast("Hablantes y tareas actualizados ✓","ok");
   }catch(e){toast("Error: "+e.message,"err");}
 }
 
