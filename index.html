@@ -3700,7 +3700,13 @@ async function generarCertificado(inscId,cursoId){
     // Margen Word: left=25mm, top=30mm. Conversión: 1pt = 0.3528mm
     const nombreAlumno=`${a.nombre||""} ${a.apellido||""}`.trim();
     const fecha=new Date().toLocaleDateString("es-AR",{day:"2-digit",month:"long",year:"numeric"});
-    const bgUrl=window.location.href.replace(/[^/]*$/,"")+"diploma-fondo.png";
+    // Precargar imagen como base64 para que funcione en ventana nueva
+    let bgDataUrl="";
+    try{
+      const r=await fetch("./diploma-fondo.png");
+      const blob=await r.blob();
+      bgDataUrl=await new Promise(res=>{const rd=new FileReader();rd.onload=()=>res(rd.result);rd.readAsDataURL(blob);});
+    }catch(e){console.warn("No se pudo cargar diploma-fondo.png",e);}
 
     const html=`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
     <title>Certificado - ${nombreAlumno}</title>
@@ -3718,7 +3724,7 @@ async function generarCertificado(inscId,cursoId){
       }
     </style>
     </head><body><div class="diploma">
-      <img class="bg" src="${bgUrl}">
+      ${bgDataUrl?`<img class="bg" src="${bgDataUrl}">`:`<div class="bg" style="background:#C4C1D7"></div>`}
 
       <!-- NOMBRE — box1: posV=81.5pt→58.75mm desde page, centrado, 89.15mm ancho, 25pt -->
       <div class="tb" style="top:58.75mm;left:0;right:0;text-align:center;font-size:25pt;font-weight:bold">
