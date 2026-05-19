@@ -34,7 +34,11 @@ async function analizarConClaude(transcripcionTexto: string, anthropicKey: strin
 La empresa tiene dos sociedades: SUDES (capacitación médica) y POINTERS (logística/servicios).
 El equipo es: Tomás (gestión económica), Mario (cursos/relaciones), Valentina (contratos/redes), Amparo (administración).
 
-Dado el transcript de una reunión, devolvé ÚNICAMENTE un objeto JSON válido, sin markdown, sin bloques de código, sin texto extra antes ni después:
+Dado el transcript de una reunión, analizalo y devolvé ÚNICAMENTE un objeto JSON válido.
+No uses bloques de código markdown. No escribas nada antes ni después del JSON.
+Empezá tu respuesta directamente con { y terminá con }.
+
+Formato exacto:
 {
   "resumen": "Resumen ejecutivo claro de 3-5 oraciones",
   "temas_tratados": ["tema 1", "tema 2"],
@@ -47,22 +51,17 @@ Dado el transcript de una reunión, devolvé ÚNICAMENTE un objeto JSON válido,
 
 Si el transcript está vacío o es incomprensible, devolvé el JSON con campos vacíos.`,
       messages: [
-        // Prefill para forzar que Claude arranque directo con el JSON
         { role: "user", content: `TRANSCRIPT:\n\n${transcripcionTexto.slice(0, 60000)}` },
-        { role: "assistant", content: "{" },
       ],
     }),
   });
 
   const claudeData = await claudeRes.json();
-  // El prefill hace que la respuesta arranque sin el "{", lo reponemos
-  const rawText = "{" + (claudeData.content?.[0]?.text ?? "");
+  const rawText = claudeData.content?.[0]?.text ?? "{}";
   try {
     return parsearAnalisis(rawText);
   } catch {
-    // Fallback: intentar con el texto sin prefill por si algo salió mal
-    const raw2 = claudeData.content?.[0]?.text ?? "{}";
-    try { return parsearAnalisis(raw2); } catch { return null; }
+    return null;
   }
 }
 
