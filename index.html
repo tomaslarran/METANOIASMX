@@ -264,6 +264,28 @@ body{font-family:var(--f);background:var(--bg);color:var(--tx);min-height:100vh;
 .chk-add input{flex:1;background:var(--surf2);border:1px solid var(--b2);color:var(--tx);padding:6px 10px;border-radius:var(--r);font-family:var(--f);font-size:12px;outline:none}
 .chk-add input:focus{border-color:var(--pu)}
 .chk-add input::placeholder{color:var(--tx3)}
+/* ── SUB-ÍTEMS ── */
+.chk-sub-toggle{background:none;border:none;cursor:pointer;color:var(--tx3);font-size:11px;padding:0 2px;line-height:1;transition:transform .15s;flex-shrink:0}
+.chk-sub-toggle.open{transform:rotate(90deg)}
+.chk-sub-count{font-size:10px;font-weight:600;padding:1px 5px;border-radius:10px;background:var(--surf2);color:var(--tx3);border:1px solid var(--b);flex-shrink:0}
+.chk-sub-count.partial{color:var(--pu);border-color:var(--pu);background:var(--pll)}
+.chk-subitems{padding:4px 0 4px 38px;display:flex;flex-direction:column;gap:3px}
+.chk-subitem{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;transition:background .1s}
+.chk-subitem:hover{background:var(--surf2)}
+.chk-subitem.done .chk-sub-name{text-decoration:line-through;color:var(--tx3)}
+.chk-box-sm{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--b2);flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.chk-box-sm:hover{border-color:var(--pu)}
+.chk-box-sm.checked{background:var(--gr);border-color:var(--gr)}
+.chk-box-sm.checked svg{display:block}
+.chk-box-sm svg{display:none;color:white}
+.chk-sub-name{flex:1;font-size:12px;color:var(--tx2)}
+.chk-sub-del{background:none;border:none;cursor:pointer;color:var(--tx3);opacity:0;padding:0 3px;font-size:13px;line-height:1;transition:opacity .1s}
+.chk-subitem:hover .chk-sub-del{opacity:.6}
+.chk-sub-del:hover{opacity:1!important;color:var(--re)}
+.chk-sub-add{display:flex;align-items:center;gap:6px;padding:3px 8px;margin-top:2px}
+.chk-sub-add input{flex:1;background:transparent;border:none;border-bottom:1px solid var(--b);color:var(--tx);padding:3px 0;font-size:12px;outline:none;font-family:var(--f)}
+.chk-sub-add input:focus{border-bottom-color:var(--pu)}
+.chk-sub-add input::placeholder{color:var(--tx3)}
 
 /* ── PROVEEDOR / ALUMNO CARD ── */
 .entity-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
@@ -3885,18 +3907,127 @@ function renderChecklist(tareas,cursoId){
     html+=`<div class="checklist-etapa"><div class="etapa-label">${e}</div>`;
     byEtapa[e].forEach(t=>{
       const assH=(t.assignees||[]).map(id=>{const n=uName(id);const col=uColor(id);return n?`<span class="chk-pill" style="background:${col}18;color:${col};border-color:${col}40">${n}</span>`:""}).join("");
-      html+=`<div class="chk-item${t.completada?" done":""}">
-        <div class="chk-box${t.completada?" checked":""}" onclick="toggleCursoTarea('${t.id}','${cursoId}',${!t.completada})">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      const subs=t.subitems||[];
+      const subDone=subs.filter(s=>s.completada).length;
+      const subCount=subs.length?`<span class="chk-sub-count${subDone===subs.length&&subs.length?" partial":subDone>0?" partial":""}">${subDone}/${subs.length}</span>`:"";
+      const checkSvg=`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+      html+=`<div class="chk-wrap" id="chkw-${t.id}">
+        <div class="chk-item${t.completada?" done":""}">
+          <button class="chk-sub-toggle" id="chk-tog-${t.id}" onclick="toggleSubitems('${t.id}')" title="Ver sub-ítems">›</button>
+          <div class="chk-box${t.completada?" checked":""}" onclick="toggleCursoTarea('${t.id}','${cursoId}',${!t.completada})">${checkSvg}</div>
+          <span class="chk-name">${esc(t.nombre)}</span>
+          ${subCount}
+          <div class="chk-assignees">${assH}</div>
+          <button class="del-btn" onclick="delCursoTarea('${t.id}','${cursoId}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
         </div>
-        <span class="chk-name">${esc(t.nombre)}</span>
-        <div class="chk-assignees">${assH}</div>
-        <button class="del-btn" onclick="delCursoTarea('${t.id}','${cursoId}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+        <div class="chk-subitems" id="chksub-${t.id}" style="display:none">
+          ${subs.map((s,i)=>`
+            <div class="chk-subitem${s.completada?" done":""}" id="chksi-${t.id}-${i}">
+              <div class="chk-box-sm${s.completada?" checked":""}" onclick="toggleSubitem('${t.id}',${i},${cursoId})">${checkSvg}</div>
+              <span class="chk-sub-name">${esc(s.texto)}</span>
+              <button class="chk-sub-del" onclick="delSubitem('${t.id}',${i},'${cursoId}')" title="Eliminar">✕</button>
+            </div>`).join("")}
+          <div class="chk-sub-add">
+            <input id="new-sub-${t.id}" placeholder="+ Nuevo sub-ítem..." onkeydown="if(event.key==='Enter')addSubitem('${t.id}','${cursoId}')">
+          </div>
+        </div>
       </div>`;
     });
     html+=`</div>`;
   });
   return html;
+}
+
+function toggleSubitems(tareaId){
+  const cont=document.getElementById(`chksub-${tareaId}`);
+  const tog=document.getElementById(`chk-tog-${tareaId}`);
+  if(!cont)return;
+  const open=cont.style.display==="none";
+  cont.style.display=open?"":"none";
+  if(tog)tog.classList.toggle("open",open);
+  if(open){const inp=document.getElementById(`new-sub-${tareaId}`);if(inp)inp.focus();}
+}
+
+async function addSubitem(tareaId,cursoId){
+  const inp=document.getElementById(`new-sub-${tareaId}`);
+  if(!inp)return;
+  const texto=inp.value.trim();if(!texto)return;
+  // Obtener subitems actuales del array local
+  const tarea=tareasCurso_global[cursoId]?.find(t=>t.id===tareaId);
+  const subs=[...(tarea?.subitems||[]),{id:crypto.randomUUID(),texto,completada:false}];
+  try{
+    await sb(`curso_tareas?id=eq.${tareaId}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({subitems:subs})});
+    if(tarea)tarea.subitems=subs;
+    inp.value="";
+    // Actualizar solo los sub-ítems del ítem actual
+    const cont=document.getElementById(`chksub-${tareaId}`);
+    const checkSvg=`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+    if(cont){
+      const adds=cont.querySelector(".chk-sub-add");
+      const div=document.createElement("div");
+      div.className="chk-subitem";div.id=`chksi-${tareaId}-${subs.length-1}`;
+      div.innerHTML=`<div class="chk-box-sm" onclick="toggleSubitem('${tareaId}',${subs.length-1},'${cursoId}')">${checkSvg}</div><span class="chk-sub-name">${esc(texto)}</span><button class="chk-sub-del" onclick="delSubitem('${tareaId}',${subs.length-1},'${cursoId}')" title="Eliminar">✕</button>`;
+      cont.insertBefore(div,adds);
+    }
+    // Actualizar contador
+    const cnt=document.querySelector(`#chkw-${tareaId} .chk-sub-count`);
+    const done=subs.filter(s=>s.completada).length;
+    if(cnt){cnt.textContent=`${done}/${subs.length}`;cnt.className=`chk-sub-count${done>0?" partial":""}`;}
+    else{
+      const nameEl=document.querySelector(`#chkw-${tareaId} .chk-name`);
+      if(nameEl){const span=document.createElement("span");span.className="chk-sub-count";span.textContent=`0/${subs.length}`;nameEl.after(span);}
+    }
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function toggleSubitem(tareaId,idx,cursoId){
+  const tarea=tareasCurso_global[cursoId]?.find(t=>t.id===tareaId);
+  if(!tarea?.subitems)return;
+  const subs=[...tarea.subitems];
+  subs[idx]={...subs[idx],completada:!subs[idx].completada};
+  try{
+    await sb(`curso_tareas?id=eq.${tareaId}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({subitems:subs})});
+    tarea.subitems=subs;
+    const el=document.getElementById(`chksi-${tareaId}-${idx}`);
+    if(el){
+      el.classList.toggle("done",subs[idx].completada);
+      const box=el.querySelector(".chk-box-sm");
+      if(box)box.classList.toggle("checked",subs[idx].completada);
+    }
+    const done=subs.filter(s=>s.completada).length;
+    const cnt=document.querySelector(`#chkw-${tareaId} .chk-sub-count`);
+    if(cnt){cnt.textContent=`${done}/${subs.length}`;cnt.className=`chk-sub-count${done>0?" partial":""}`;}
+  }catch(e){toast("Error","err");}
+}
+
+async function delSubitem(tareaId,idx,cursoId){
+  const tarea=tareasCurso_global[cursoId]?.find(t=>t.id===tareaId);
+  if(!tarea?.subitems)return;
+  const subs=tarea.subitems.filter((_,i)=>i!==idx);
+  try{
+    await sb(`curso_tareas?id=eq.${tareaId}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({subitems:subs})});
+    tarea.subitems=subs;
+    // Re-render sub-ítem eliminado
+    const cont=document.getElementById(`chksub-${tareaId}`);
+    if(cont){
+      const checkSvg=`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+      const adds=cont.querySelector(".chk-sub-add");
+      // Re-render todos los sub-ítems
+      cont.querySelectorAll(".chk-subitem").forEach(el=>el.remove());
+      subs.forEach((s,i)=>{
+        const div=document.createElement("div");
+        div.className=`chk-subitem${s.completada?" done":""}`;div.id=`chksi-${tareaId}-${i}`;
+        div.innerHTML=`<div class="chk-box-sm${s.completada?" checked":""}" onclick="toggleSubitem('${tareaId}',${i},'${cursoId}')">${checkSvg}</div><span class="chk-sub-name">${esc(s.texto)}</span><button class="chk-sub-del" onclick="delSubitem('${tareaId}',${i},'${cursoId}')" title="Eliminar">✕</button>`;
+        cont.insertBefore(div,adds);
+      });
+    }
+    const done=subs.filter(s=>s.completada).length;
+    const cnt=document.querySelector(`#chkw-${tareaId} .chk-sub-count`);
+    if(cnt){
+      if(!subs.length)cnt.remove();
+      else{cnt.textContent=`${done}/${subs.length}`;cnt.className=`chk-sub-count${done>0?" partial":""}`;}
+    }
+  }catch(e){toast("Error","err");}
 }
 
 async function toggleCursoTarea(tareaId,cursoId,val){
@@ -3927,6 +4058,7 @@ async function toggleCursoTarea(tareaId,cursoId,val){
 }
 
 function buildChecklistTabHtml(cursoId, tareasCurso, curso){
+  tareasCurso_global[cursoId]=tareasCurso; // cache para sub-ítems
   return`${renderChecklist(tareasCurso,cursoId)}
     ${tareasCurso.length===0?`
     <div style="background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -7499,6 +7631,9 @@ async function apGuardar(){
   }catch(e){toast("Error: "+e.message,"err")}
   finally{btn.disabled=false}
 }
+
+/* ── CACHE TAREAS CURSO (para sub-ítems) ── */
+const tareasCurso_global={};
 
 /* ── REUNIONES ── */
 let reuniones=[];
