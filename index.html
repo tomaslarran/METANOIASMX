@@ -3696,8 +3696,9 @@ async function generarCertificado(inscId,cursoId){
       if(ci[0]){const inst=ci[0].instructores;instructorNombre=`${inst.nombre||""} ${inst.apellido||""}`.trim();}
     }catch(e){}
 
-    // ── Generar diploma como HTML + print ──
-    const nombreAlumno=`${(a.apellido||"").toUpperCase()}, ${(a.nombre||"").toUpperCase()}`.trim().replace(/^,\s*/,"");
+    // ── Generar diploma HTML con coordenadas exactas del DIPLOMA EDITABLE.docx ──
+    // Margen Word: left=25mm, top=30mm. Conversión: 1pt = 0.3528mm
+    const nombreAlumno=`${a.nombre||""} ${a.apellido||""}`.trim();
     const fecha=new Date().toLocaleDateString("es-AR",{day:"2-digit",month:"long",year:"numeric"});
     const bgUrl=window.location.href.replace(/[^/]*$/,"")+"diploma-fondo.png";
 
@@ -3705,61 +3706,60 @@ async function generarCertificado(inscId,cursoId){
     <title>Certificado - ${nombreAlumno}</title>
     <style>
       *{margin:0;padding:0;box-sizing:border-box}
-      html,body{width:297mm;height:210mm;overflow:hidden}
-      .diploma{
-        width:297mm;height:210mm;
-        background:url('${bgUrl}') center/cover no-repeat;
-        position:relative;
-        font-family:'Georgia',serif;
-      }
-      /* ── textos ── */
-      .t{position:absolute;left:0;right:0;text-align:center}
-      .encabezado{top:68mm;font-size:13.5pt;font-weight:bold;color:#2E2860}
-      .certifica{top:79mm;font-size:10pt;font-weight:normal;color:#6054a0;font-style:italic}
-      .linea1{top:86mm;border:none;border-top:0.5px solid #b0a8d0;margin:0 28mm}
-      .nombre{top:95mm;font-size:20pt;font-weight:bold;color:#2E2860;letter-spacing:1px}
-      .dni-mp{top:108mm;font-size:9.5pt;color:#6054a0;display:flex;justify-content:center;gap:40mm}
-      .completo{top:118mm;font-size:10pt;color:#6054a0;font-style:italic}
-      .linea2{top:125mm;border:none;border-top:0.5px solid #b0a8d0;margin:0 28mm}
-      .curso{top:133mm;font-size:13.5pt;font-weight:bold;color:#2E2860;letter-spacing:.5px}
-      .dictada{top:145mm;font-size:9.5pt;color:#6054a0;font-style:italic}
-      .instructor{top:153mm;font-size:12pt;font-weight:bold;color:#2E2860}
-      .linea3{top:161mm;border:none;border-top:0.5px solid #b0a8d0;margin:0 80mm 0 auto;width:100mm}
-      .fecha{position:absolute;right:28mm;top:165mm;font-size:9.5pt;color:#6054a0;text-align:right}
-      /* firmas */
-      .firma1,.firma2{position:absolute;bottom:14mm;width:55mm;text-align:center}
-      .firma1{left:80mm}.firma2{right:55mm}
-      .firma-linea{border-top:0.6px solid #9088c0;margin-bottom:3mm}
-      .firma-txt{font-size:7.5pt;color:#8078b0}
-      /* N° */
-      .num{position:absolute;bottom:4mm;right:8mm;font-size:6pt;color:#b0a8d0}
+      html,body{width:297mm;height:210mm;overflow:hidden;background:white}
+      .diploma{width:297mm;height:210mm;position:relative;overflow:hidden}
+      /* Fondo: imagen a 50% opacidad igual que el Word */
+      .bg{position:absolute;left:-8mm;top:-2.5mm;width:303.5mm;height:218.7mm;opacity:.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      /* Texto dinámico */
+      .tb{position:absolute;font-family:'Arial Rounded MT Bold',Arial,sans-serif;color:#2E2860;line-height:1.15;white-space:nowrap}
       @media print{
         html,body{width:297mm;height:210mm}
         @page{size:A4 landscape;margin:0}
       }
     </style>
-    </head><body>
-    <div class="diploma">
-      <div class="t encabezado">Metanoia, ecosistema de aprendizaje médico</div>
-      <div class="t certifica">certifica que:</div>
-      <hr class="linea1">
-      <div class="t nombre">${nombreAlumno}</div>
-      <div class="dni-mp" style="position:absolute;top:108mm;left:0;right:0;display:flex;justify-content:center;gap:40mm">
-        <span style="font-size:9.5pt;color:#6054a0">${a.dni?`D.N.I &nbsp; ${a.dni}`:"D.N.I &nbsp; ___________________"}</span>
-        <span style="font-size:9.5pt;color:#6054a0">${a.matricula?`M.P. N° &nbsp; ${a.matricula}`:"M.P. N° &nbsp; _________________"}</span>
+    </head><body><div class="diploma">
+      <img class="bg" src="${bgUrl}">
+
+      <!-- NOMBRE — box1: posV=81.5pt→58.75mm desde page, centrado, 89.15mm ancho, 25pt -->
+      <div class="tb" style="top:58.75mm;left:0;right:0;text-align:center;font-size:25pt;font-weight:bold">
+        ${nombreAlumno}
       </div>
-      <div class="t completo">completó la formación</div>
-      <hr class="linea2">
-      <div class="t curso">${(curso.nombre||"").toUpperCase()}</div>
-      <div class="t dictada">dictada por</div>
-      ${instructorNombre?`<div class="t instructor">${instructorNombre}</div>`:""}
-      <div style="position:absolute;top:161mm;left:28mm;right:28mm;border-top:0.5px solid #b0a8d0"></div>
-      <div class="fecha">${fecha}<br>Salta, Argentina</div>
-      <div class="firma1"><div class="firma-linea"></div><div class="firma-txt">Firma y sello</div></div>
-      <div class="firma2"><div class="firma-linea"></div><div class="firma-txt">Firma y sello</div></div>
-      <div class="num">N° ${inscId.slice(-8).toUpperCase()}</div>
-    </div>
-    </body></html>`;
+
+      <!-- DNI — box3: posH=86.9mm, posV=75.9mm, 20pt -->
+      <div class="tb" style="top:75.9mm;left:86.9mm;font-size:20pt">
+        ${a.dni||""}
+      </div>
+
+      <!-- MATRÍCULA — box4: posH=167.4mm, posV=76.7mm, 20pt -->
+      <div class="tb" style="top:76.7mm;left:167.4mm;font-size:20pt">
+        ${a.matricula||""}
+      </div>
+
+      <!-- CURSO — box2: posV=98.2mm, centrado, 22pt -->
+      <div class="tb" style="top:98.2mm;left:0;right:0;text-align:center;font-size:22pt;font-weight:bold;white-space:normal;padding:0 30mm">
+        ${(curso.nombre||"").toUpperCase()}
+      </div>
+
+      <!-- INSTRUCTOR — box5: posH=39.84mm, posV=127mm, centrado, 19pt -->
+      <div class="tb" style="top:127mm;left:39.84mm;width:220.1mm;text-align:center;font-size:19pt">
+        ${instructorNombre||""}
+      </div>
+
+      <!-- FECHA — estimada cerca del área "Fecha" del fondo -->
+      <div class="tb" style="top:156mm;right:28mm;text-align:right;font-size:11pt">
+        ${fecha}
+      </div>
+
+      <!-- FIRMA DER — box7: posH=167.2mm, posV=185mm -->
+      <div class="tb" style="top:185mm;left:167.2mm;font-size:9pt">
+        MARIO LARRÁN – CEO METANOIA
+      </div>
+
+      <!-- N° certificado -->
+      <div style="position:absolute;bottom:3mm;right:6mm;font-size:6pt;color:#9088c0;font-family:Arial,sans-serif">
+        N° ${inscId.slice(-8).toUpperCase()}
+      </div>
+    </div></body></html>`;
 
     const w=window.open("","_blank","width=1200,height=900");
     w.document.write(html);
