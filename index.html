@@ -7750,7 +7750,25 @@ function verDetalleReunion(id){
 
     // Transcript diarizado
     if(r.transcripcion_diarizada?.length){
-      html+=`<div><div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🎙️ Transcripción</div>
+      const speakers=[...new Set(r.transcripcion_diarizada.map(u=>u.speaker))];
+      html+=`<div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px">🎙️ Transcripción</div>
+          <button class="btn" style="font-size:11px" onclick="mrToggleEditorHablantes('${r.id}')">✏️ Editar hablantes</button>
+        </div>
+        <div id="mrd-spk-editor" style="display:none;margin-bottom:12px;padding:12px;background:var(--surf2);border-radius:8px;border:1px solid var(--b)">
+          <div style="font-size:12px;color:var(--tx3);margin-bottom:10px">Reasigná los nombres correctos para cada voz detectada:</div>
+          ${speakers.map((s,i)=>`
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <span style="min-width:150px;font-size:12px;font-weight:700;color:var(--ac);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s}</span>
+              <span style="color:var(--tx3);font-size:12px">→</span>
+              <input id="spk-input-${i}" value="${s}" style="flex:1;padding:5px 8px;background:var(--surf);border:1px solid var(--b);border-radius:6px;color:var(--tx);font-size:12px" placeholder="Nombre correcto">
+            </div>`).join("")}
+          <div style="display:flex;gap:6px;margin-top:10px">
+            <button class="bk" onclick="mrGuardarHablantes('${r.id}',${JSON.stringify(speakers).replace(/"/g,'&quot;')})">💾 Guardar</button>
+            <button class="btn" onclick="document.getElementById('mrd-spk-editor').style.display='none'">Cancelar</button>
+          </div>
+        </div>
         <div style="max-height:300px;overflow-y:auto;border:1px solid var(--b);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:10px">
           ${r.transcripcion_diarizada.map(u=>`<div>
             <div style="font-size:11px;font-weight:700;color:var(--ac);margin-bottom:3px">${u.speaker}</div>
@@ -7902,6 +7920,32 @@ async function mrReanalizar(reunionId){
     renderReuniones();
     verDetalleReunion(reunionId);
     toast("Re-análisis completado ✓","ok");
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+function mrToggleEditorHablantes(reunionId){
+  const ed=document.getElementById("mrd-spk-editor");
+  if(ed) ed.style.display=ed.style.display==="none"?"":"none";
+}
+
+async function mrGuardarHablantes(reunionId, speakers){
+  const r=reuniones.find(r=>r.id===reunionId);
+  if(!r?.transcripcion_diarizada?.length)return;
+  // Leer valores actuales de los inputs
+  const mapping={};
+  speakers.forEach((s,i)=>{
+    const inp=document.getElementById(`spk-input-${i}`);
+    mapping[s]=(inp?.value||"").trim()||s;
+  });
+  // Aplicar mapeo a toda la transcripción
+  const nueva=r.transcripcion_diarizada.map(u=>({...u,speaker:mapping[u.speaker]??u.speaker}));
+  try{
+    await sb(`reuniones?id=eq.${reunionId}`,{method:"PATCH",body:JSON.stringify({transcripcion_diarizada:nueva})});
+    const i=reuniones.findIndex(r=>r.id===reunionId);
+    if(i>=0) reuniones[i].transcripcion_diarizada=nueva;
+    renderReuniones();
+    verDetalleReunion(reunionId);
+    toast("Hablantes actualizados ✓","ok");
   }catch(e){toast("Error: "+e.message,"err");}
 }
 
