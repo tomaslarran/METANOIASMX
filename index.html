@@ -3696,191 +3696,84 @@ async function generarCertificado(inscId,cursoId){
       if(ci[0]){const inst=ci[0].instructores;instructorNombre=`${inst.nombre||""} ${inst.apellido||""}`.trim();}
     }catch(e){}
 
-    // Cargar imagen de fondo del diploma
-    const loadImg=async(path)=>{
-      try{
-        const r=await fetch(path);if(!r.ok)return null;
-        const blob=await r.blob();
-        return new Promise(res=>{const rd=new FileReader();rd.onload=()=>res(rd.result);rd.readAsDataURL(blob);});
-      }catch(e){return null;}
-    };
-    const [bgDataUrl,logoDataUrl]=await Promise.all([loadImg('./diploma-fondo.png'),loadImg('./logo_metanoia.png')]);
-
-    const {jsPDF}=window.jspdf;
-    const doc=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
-    const W=297,H=210;
-
-    // Colores del diseño (extraídos del diploma)
-    const TXT =[46, 40, 95];    // texto principal oscuro (purple navy)
-    const TXT2=[90, 82,140];    // texto secundario
-    const LINE=[160,150,195];   // líneas sutiles
-    const cx=W/2;               // centro horizontal
-
-    // ── Fondo: imagen del diseño PSD ──
-    if(bgDataUrl){
-      doc.addImage(bgDataUrl,"PNG",0,0,W,H);
-    }else{
-      // Fallback: fondo lavanda si no se cargó la imagen
-      doc.setFillColor(196,193,215);
-      doc.rect(0,0,W,H,"F");
-    }
-
-    // ── Logo en esquina superior derecha (si no está en el fondo) ──
-    if(logoDataUrl&&!bgDataUrl){
-      const lw=22,lh=lw*(968/621);
-      doc.addImage(logoDataUrl,"PNG",W-lw-10,8,lw,lh);
-    }
-
-    // ── "Metanoia, ecosistema de aprendizaje médico" ──
-    doc.setFont("helvetica","bold");
-    doc.setFontSize(16);
-    doc.setTextColor(...TXT);
-    doc.text("Metanoia, ecosistema de aprendizaje médico",cx,42,{align:"center"});
-
-    // ── "certifica que:" ──
-    doc.setFont("helvetica","normal");
-    doc.setFontSize(11);
-    doc.setTextColor(...TXT2);
-    doc.text("certifica que:",cx,52,{align:"center"});
-
-    // ── Línea separadora ──
-    doc.setDrawColor(...LINE);
-    doc.setLineWidth(0.4);
-    doc.line(30,58,W-30,58);
-
-    // ── Nombre alumno ──
+    // ── Generar diploma como HTML + print ──
     const nombreAlumno=`${(a.apellido||"").toUpperCase()}, ${(a.nombre||"").toUpperCase()}`.trim().replace(/^,\s*/,"");
-    doc.setFont("helvetica","bold");
-    doc.setFontSize(22);
-    doc.setTextColor(...TXT);
-    doc.text(nombreAlumno,cx,75,{align:"center",maxWidth:230});
-
-    // ── DNI · MP ──
-    doc.setFont("helvetica","normal");
-    doc.setFontSize(10);
-    doc.setTextColor(...TXT2);
-    const dniTxt=a.dni?`D.N.I  ${a.dni}`:"D.N.I  ______________________";
-    const mpTxt =a.matricula?`M.P. N°  ${a.matricula}`:"M.P. N°  ___________________";
-    doc.text(dniTxt,cx-30,86,{align:"right"});
-    doc.text(mpTxt,cx+30,86,{align:"left"});
-
-    // ── "completó la formación" ──
-    doc.setFont("helvetica","normal");
-    doc.setFontSize(11);
-    doc.setTextColor(...TXT2);
-    doc.text("completó la formación",cx,98,{align:"center"});
-
-    // ── Línea separadora ──
-    doc.setDrawColor(...LINE);
-    doc.setLineWidth(0.4);
-    doc.line(30,104,W-30,104);
-
-    // ── Nombre del curso ──
-    doc.setFont("helvetica","bold");
-    doc.setFontSize(15);
-    doc.setTextColor(...TXT);
-    doc.text((curso.nombre||"").toUpperCase(),cx,116,{align:"center",maxWidth:230});
-
-    // ── "dictada por" ──
-    doc.setFont("helvetica","normal");
-    doc.setFontSize(10);
-    doc.setTextColor(...TXT2);
-    doc.text("dictada por",cx,128,{align:"center"});
-
-    // ── Instructor ──
-    if(instructorNombre){
-      doc.setFont("helvetica","bold");
-      doc.setFontSize(12);
-      doc.setTextColor(...TXT);
-      doc.text(instructorNombre,cx,138,{align:"center"});
-    }
-
-    // ── Línea separadora ──
-    doc.setDrawColor(...LINE);
-    doc.setLineWidth(0.4);
-    doc.line(30,144,W-30,144);
-
-    // ── Fecha · Salta, Argentina ──
     const fecha=new Date().toLocaleDateString("es-AR",{day:"2-digit",month:"long",year:"numeric"});
-    doc.setFont("helvetica","normal");
-    doc.setFontSize(10);
-    doc.setTextColor(...TXT2);
-    doc.text(fecha,W-35,156,{align:"right"});
-    doc.text("Salta, Argentina",W-35,163,{align:"right"});
+    const bgUrl=window.location.href.replace(/[^/]*$/,"")+"diploma-fondo.png";
 
-    // ── Dos líneas de firma ──
-    const fY=188,fW=60;
-    const f1x=55,f2x=182;
-    doc.setDrawColor(...LINE);
-    doc.setLineWidth(0.6);
-    doc.line(f1x,fY,f1x+fW,fY);
-    doc.line(f2x,fY,f2x+fW,fY);
-    doc.setFont("helvetica","normal");
-    doc.setFontSize(8);
-    doc.setTextColor(...TXT2);
-    doc.text("Firma y sello",f1x+fW/2,194,{align:"center"});
-    doc.text("Firma y sello",f2x+fW/2,194,{align:"center"});
-
-    // ── QR ──
-    const certPath=`certificados/${inscId}.pdf`;
-    const certUrl=`${SB}/storage/v1/object/public/${certPath}`;
-    const makeQrDataUrl=(text)=>{
-      const qr=qrcode(0,"M");
-      qr.addData(text);qr.make();
-      const mod=qr.getModuleCount();
-      const scale=Math.max(2,Math.floor(200/mod));
-      const sz=mod*scale;
-      const canvas=document.createElement("canvas");
-      canvas.width=sz;canvas.height=sz;
-      const ctx=canvas.getContext("2d");
-      ctx.fillStyle="rgba(255,255,255,0)";ctx.fillRect(0,0,sz,sz);
-      ctx.fillStyle="#2E2868";
-      for(let r=0;r<mod;r++)for(let c=0;c<mod;c++)
-        if(qr.isDark(r,c))ctx.fillRect(c*scale,r*scale,scale,scale);
-      return canvas.toDataURL("image/png");
-    };
-    try{
-      const qrDataUrl=makeQrDataUrl(certUrl);
-      const qrSz=28;
-      const qrX=10,qrY=175;
-      doc.addImage(qrDataUrl,"PNG",qrX,qrY,qrSz,qrSz);
-      doc.setFont("helvetica","normal");
-      doc.setFontSize(6);
-      doc.setTextColor(...TXT2);
-      doc.text("Verificar certificado",qrX+qrSz/2,qrY-2,{align:"center"});
-    }catch(e){console.warn("QR error:",e);}
-
-    // ── N° certificado ──
-    doc.setFontSize(6.5);
-    doc.setTextColor(...LINE);
-    doc.text(`N° ${inscId.slice(-8).toUpperCase()}`,W-8,H-4,{align:"right"});
-
-    const fname=`certificado_${(a.apellido||"alumno").replace(/\s+/g,"_")}_${(curso.nombre||"curso").replace(/\s+/g,"_")}.pdf`;
-
-    // ── Subir a Supabase Storage ──
-    let subidoOk=false;
-    try{
-      const pdfBytes=doc.output("arraybuffer");
-      const upRes=await fetch(`${SB}/storage/v1/object/${certPath}`,{
-        method:"POST",
-        headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":"application/pdf","x-upsert":"true"},
-        body:pdfBytes
-      });
-      if(upRes.ok){subidoOk=true;}
-      else{
-        const t=await upRes.text();
-        console.warn("Storage upload error:",t);
-        toast("Certificado descargado (error al subir a la nube: "+upRes.status+")","warn");
+    const html=`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+    <title>Certificado - ${nombreAlumno}</title>
+    <style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      html,body{width:297mm;height:210mm;overflow:hidden}
+      .diploma{
+        width:297mm;height:210mm;
+        background:url('${bgUrl}') center/cover no-repeat;
+        position:relative;
+        font-family:'Georgia',serif;
       }
-    }catch(e){console.warn("Storage error:",e);toast("Certificado descargado (sin conexión a Storage)","warn");}
+      /* ── textos ── */
+      .t{position:absolute;left:0;right:0;text-align:center}
+      .encabezado{top:68mm;font-size:13.5pt;font-weight:bold;color:#2E2860}
+      .certifica{top:79mm;font-size:10pt;font-weight:normal;color:#6054a0;font-style:italic}
+      .linea1{top:86mm;border:none;border-top:0.5px solid #b0a8d0;margin:0 28mm}
+      .nombre{top:95mm;font-size:20pt;font-weight:bold;color:#2E2860;letter-spacing:1px}
+      .dni-mp{top:108mm;font-size:9.5pt;color:#6054a0;display:flex;justify-content:center;gap:40mm}
+      .completo{top:118mm;font-size:10pt;color:#6054a0;font-style:italic}
+      .linea2{top:125mm;border:none;border-top:0.5px solid #b0a8d0;margin:0 28mm}
+      .curso{top:133mm;font-size:13.5pt;font-weight:bold;color:#2E2860;letter-spacing:.5px}
+      .dictada{top:145mm;font-size:9.5pt;color:#6054a0;font-style:italic}
+      .instructor{top:153mm;font-size:12pt;font-weight:bold;color:#2E2860}
+      .linea3{top:161mm;border:none;border-top:0.5px solid #b0a8d0;margin:0 80mm 0 auto;width:100mm}
+      .fecha{position:absolute;right:28mm;top:165mm;font-size:9.5pt;color:#6054a0;text-align:right}
+      /* firmas */
+      .firma1,.firma2{position:absolute;bottom:14mm;width:55mm;text-align:center}
+      .firma1{left:80mm}.firma2{right:55mm}
+      .firma-linea{border-top:0.6px solid #9088c0;margin-bottom:3mm}
+      .firma-txt{font-size:7.5pt;color:#8078b0}
+      /* N° */
+      .num{position:absolute;bottom:4mm;right:8mm;font-size:6pt;color:#b0a8d0}
+      @media print{
+        html,body{width:297mm;height:210mm}
+        @page{size:A4 landscape;margin:0}
+      }
+    </style>
+    </head><body>
+    <div class="diploma">
+      <div class="t encabezado">Metanoia, ecosistema de aprendizaje médico</div>
+      <div class="t certifica">certifica que:</div>
+      <hr class="linea1">
+      <div class="t nombre">${nombreAlumno}</div>
+      <div class="dni-mp" style="position:absolute;top:108mm;left:0;right:0;display:flex;justify-content:center;gap:40mm">
+        <span style="font-size:9.5pt;color:#6054a0">${a.dni?`D.N.I &nbsp; ${a.dni}`:"D.N.I &nbsp; ___________________"}</span>
+        <span style="font-size:9.5pt;color:#6054a0">${a.matricula?`M.P. N° &nbsp; ${a.matricula}`:"M.P. N° &nbsp; _________________"}</span>
+      </div>
+      <div class="t completo">completó la formación</div>
+      <hr class="linea2">
+      <div class="t curso">${(curso.nombre||"").toUpperCase()}</div>
+      <div class="t dictada">dictada por</div>
+      ${instructorNombre?`<div class="t instructor">${instructorNombre}</div>`:""}
+      <div style="position:absolute;top:161mm;left:28mm;right:28mm;border-top:0.5px solid #b0a8d0"></div>
+      <div class="fecha">${fecha}<br>Salta, Argentina</div>
+      <div class="firma1"><div class="firma-linea"></div><div class="firma-txt">Firma y sello</div></div>
+      <div class="firma2"><div class="firma-linea"></div><div class="firma-txt">Firma y sello</div></div>
+      <div class="num">N° ${inscId.slice(-8).toUpperCase()}</div>
+    </div>
+    </body></html>`;
 
-    // ── Descargar localmente ──
-    doc.save(fname);
+    const w=window.open("","_blank","width=1200,height=900");
+    w.document.write(html);
+    w.document.close();
+    setTimeout(()=>w.print(),800);
+
+    // Marcar como emitido
     await sb(`inscripciones?id=eq.${inscId}`,{method:"PATCH",body:JSON.stringify({certificado_emitido:true})});
-    toast(subidoOk?"Certificado generado y guardado en la nube ✓":"Certificado descargado localmente","ok");
+    toast("Diploma generado ✓","ok");
     loadInscriptos(cursoId);
   }catch(e){toast("Error al generar: "+e.message,"err")}
 }
+
+// (código jsPDF reemplazado por HTML print)
 
 // ────────────────────────────────────────────────────────────────────
 
