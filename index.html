@@ -611,6 +611,16 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   #ai-panel{border-radius:var(--rlg);bottom:20px;right:20px;height:540px}
   #ai-panel.open{transform:translateY(0)}
 }
+/* ── COMUNICACIONES ── */
+.pub-card{background:var(--bg2);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px;cursor:pointer;transition:border-color .15s}
+.pub-card:hover{border-color:var(--pu)}
+.pub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.pub-plat-ig{color:#E1306C}
+.pub-plat-fb{color:#1877F2}
+.pub-plat-li{color:#0A66C2}
+.vid-card{background:var(--bg2);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
+.vid-card:hover{border-color:var(--pu)}
+.met-block{background:var(--bg2);border:1px solid var(--b);border-radius:var(--r);padding:16px;margin-bottom:12px}
 </style>
 </head>
 <body>
@@ -790,6 +800,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Reuniones
         <span class="sitem-badge" id="badge-reuniones" style="display:none"></span>
+      </div>
+      <div class="sitem" onclick="goPage('comunicaciones',this)" id="nav-comunicaciones">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Comunicaciones
       </div>
     </div>
   </div>
@@ -974,6 +988,89 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
   <div id="reuniones-list" style="display:flex;flex-direction:column;gap:12px;margin-top:8px">
     <div class="empty"><div class="ei">🎙️</div>Cargando reuniones...</div>
+  </div>
+</div>
+
+<!-- ══ COMUNICACIONES ══ -->
+<div id="pg-comunicaciones" style="display:none">
+  <div class="pg-header">
+    <div>
+      <div class="pg-title">Comunicaciones</div>
+      <div class="pg-title-sub" id="com-subtitulo">Publicaciones y contenido</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="openModalNuevoPost()">+ Nueva publicación</button>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="sc"><div class="sc-l">Publicaciones</div><div class="sc-v vp" id="com-st-total">—</div><div class="sc-s">registradas</div></div>
+    <div class="sc"><div class="sc-l">Alcance total</div><div class="sc-v vb" id="com-st-alcance">—</div><div class="sc-s">personas</div></div>
+    <div class="sc"><div class="sc-l">Promedio likes</div><div class="sc-v va" id="com-st-likes">—</div><div class="sc-s">por post</div></div>
+    <div class="sc"><div class="sc-l">Videos IA</div><div class="sc-v vg" id="com-st-videos">—</div><div class="sc-s">en producción</div></div>
+  </div>
+  <div class="cd-tabs" style="margin-bottom:16px">
+    <div class="cd-tab on" id="com-tab-pub" onclick="showComTab('pub')">📊 Publicaciones</div>
+    <div class="cd-tab" id="com-tab-met" onclick="showComTab('met')">📈 Métricas</div>
+    <div class="cd-tab" id="com-tab-agente" onclick="showComTab('agente')">🤖 Agente IA</div>
+    <div class="cd-tab" id="com-tab-videos" onclick="showComTab('videos')">🎬 Videos IA</div>
+  </div>
+  <!-- TAB Publicaciones -->
+  <div id="com-tab-pub-content">
+    <div class="toolbar" style="margin-bottom:12px">
+      <select class="fi" style="width:140px;font-size:12px" onchange="renderPublicaciones()" id="com-fil-plat">
+        <option value="">Todas las plataformas</option>
+        <option value="instagram">Instagram</option>
+        <option value="facebook">Facebook</option>
+        <option value="linkedin">LinkedIn</option>
+      </select>
+      <select class="fi" style="width:120px;font-size:12px;margin-left:8px" onchange="renderPublicaciones()" id="com-fil-tipo">
+        <option value="">Todos los tipos</option>
+        <option value="foto">Foto</option>
+        <option value="video">Video</option>
+        <option value="reel">Reel</option>
+        <option value="carrusel">Carrusel</option>
+        <option value="historia">Historia</option>
+      </select>
+    </div>
+    <div id="com-pub-lista"><div class="loading"><div class="loader"></div><div class="lt">Cargando publicaciones...</div></div></div>
+  </div>
+  <!-- TAB Métricas -->
+  <div id="com-tab-met-content" style="display:none">
+    <div id="com-met-container" style="padding:8px 0"></div>
+  </div>
+  <!-- TAB Agente IA -->
+  <div id="com-tab-agente-content" style="display:none">
+    <div style="background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:20px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:8px">🤖 Agente de análisis de comunicaciones</div>
+      <div style="font-size:12px;color:var(--tx3);margin-bottom:16px">Analizá el rendimiento de tus publicaciones y obtené recomendaciones concretas para mejorar.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn pri" onclick="comAnalizarRendimiento()">📊 Analizar rendimiento general</button>
+        <button class="btn sec" onclick="comAnalizarRecap()">📣 Planificar campaña recap</button>
+      </div>
+    </div>
+    <div style="background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:20px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:8px">✅ Validar contenido antes de publicar</div>
+      <textarea id="com-validar-texto" class="fi" style="width:100%;min-height:80px;resize:vertical;font-size:13px" placeholder="Pegá el caption o texto del post acá..."></textarea>
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <select class="fi" style="width:140px;font-size:12px" id="com-validar-plat">
+          <option value="instagram">Instagram</option>
+          <option value="facebook">Facebook</option>
+          <option value="linkedin">LinkedIn</option>
+        </select>
+        <button class="btn pri" onclick="comValidarContenido()">Validar con IA</button>
+      </div>
+    </div>
+    <div id="com-agente-resultado" style="display:none;background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:20px">
+      <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Análisis</div>
+      <div id="com-agente-texto" style="font-size:13px;color:var(--tx);line-height:1.7;white-space:pre-wrap"></div>
+    </div>
+  </div>
+  <!-- TAB Videos IA -->
+  <div id="com-tab-videos-content" style="display:none">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+      <button class="btn" onclick="openModalNuevoVideo()">+ Nuevo script</button>
+    </div>
+    <div id="com-videos-lista"><div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div></div>
   </div>
 </div>
 
@@ -3024,6 +3121,7 @@ function goPage(name,el){
   if(name==="impuestos")loadImpuestos();
   if(name==="notif")renderNotifPage();
   if(name==="reuniones")loadReuniones();
+  if(name==="comunicaciones")loadComunicaciones();
   if(name==="usuarios")loadUsuariosPage();
   if(name==="cuentas")loadCuentasPage();
   if(name==="reportes")initReportesPage();
@@ -3043,6 +3141,7 @@ function openNewModal(){
   else if(curPage==="alumnos"){document.getElementById("alum-edit-id").value="";document.getElementById("modal-alum-title").textContent="Nuevo Alumno";["a-nombre","a-apellido","a-dni","a-matricula","a-esp","a-inst","a-email","a-tel","a-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("alum-cursos-section").style.display="none";openModal("modal-alumno")}
   else if(curPage==="proveedores"){document.getElementById("prov-edit-id").value="";document.getElementById("modal-prov-title").textContent="Nuevo Proveedor";["p-nombre","p-email","p-tel","p-esp","p-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("p-tipo").value="Empresa";openModal("modal-proveedor")}
   else if(curPage==="instructores"){document.getElementById("inst-edit-id").value="";document.getElementById("modal-inst-title").textContent="Nuevo Instructor";["i-nombre","i-apellido","i-esp","i-matricula","i-email","i-tel","i-inst","i-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("i-activo").checked=true;document.getElementById("ibtn-del").style.display="none";openModal("modal-instructor")}
+  else if(curPage==="comunicaciones")openModalNuevoPost();
 }
 function openModal(id){const el=document.getElementById(id);el.style.display="flex";el.classList.add("on")}
 function closeModal(id){const el=document.getElementById(id);el.classList.remove("on");el.style.display="none"}
@@ -7574,6 +7673,10 @@ const tareasCurso_global={};
 
 /* ── REUNIONES ── */
 let reuniones=[];
+
+/* ── COMUNICACIONES ── */
+let publicaciones=[];
+let videosIA=[];
 let mrAudioFile=null;
 let mrPollingInterval=null;
 
@@ -10978,6 +11081,354 @@ async function saveComprobante(){
   }catch(e){toast("Error: "+e.message,"err")}
   finally{btn.disabled=false;btn.textContent=editCompId?"Guardar cambios":"Guardar";}
 }
+
+// ══ COMUNICACIONES ══════════════════════════════════════════════════
+
+let comTabActual="pub";
+
+function showComTab(tab){
+  comTabActual=tab;
+  ["pub","met","agente","videos"].forEach(t=>{
+    document.getElementById(`com-tab-${t}`).classList.toggle("on",t===tab);
+    document.getElementById(`com-tab-${t}-content`).style.display=t===tab?"block":"none";
+  });
+  if(tab==="met")renderComMetricas();
+  if(tab==="videos")renderVideosIA();
+}
+
+async function loadComunicaciones(){
+  try{
+    const [pubs,vids]=await Promise.all([
+      sb("publicaciones?select=*&order=fecha_publicacion.desc,created_at.desc"),
+      sb("videos_ia?select=*&order=created_at.desc")
+    ]);
+    publicaciones=pubs||[];
+    videosIA=vids||[];
+    renderPublicaciones();
+    updateComStats();
+  }catch(e){
+    document.getElementById("com-pub-lista").innerHTML=`<div class="empty"><div class="ei">⚠️</div>Error al cargar</div>`;
+  }
+}
+
+function updateComStats(){
+  const total=publicaciones.length;
+  const alcanceTotal=publicaciones.reduce((s,p)=>s+(p.alcance||0),0);
+  const avgLikes=total?Math.round(publicaciones.reduce((s,p)=>s+(p.likes||0),0)/total):0;
+  const vidsActivos=videosIA.filter(v=>v.estado!=="publicado").length;
+  document.getElementById("com-st-total").textContent=total||"—";
+  document.getElementById("com-st-alcance").textContent=alcanceTotal?alcanceTotal.toLocaleString("es-AR"):"—";
+  document.getElementById("com-st-likes").textContent=avgLikes||"—";
+  document.getElementById("com-st-videos").textContent=vidsActivos||"—";
+}
+
+const PLAT_ICON={instagram:"📸",facebook:"👤",linkedin:"💼"};
+const PLAT_COLOR={instagram:"#E1306C",facebook:"#1877F2",linkedin:"#0A66C2"};
+const TIPO_ICON={foto:"🖼️",reel:"🎬",carrusel:"🔁",video:"📹",historia:"⏳"};
+const VID_ESTADO_COLOR={script:"var(--am)",generando:"var(--pu)",listo:"var(--gr)",publicado:"var(--tx3)"};
+const VID_ESTADO_LABEL={script:"📝 Script listo",generando:"⚙️ Generando",listo:"✅ Video listo",publicado:"🚀 Publicado"};
+
+function renderPublicaciones(){
+  const el=document.getElementById("com-pub-lista");
+  const filtPlat=document.getElementById("com-fil-plat")?.value||"";
+  const filtTipo=document.getElementById("com-fil-tipo")?.value||"";
+  let list=publicaciones;
+  if(filtPlat)list=list.filter(p=>p.plataforma===filtPlat);
+  if(filtTipo)list=list.filter(p=>p.tipo===filtTipo);
+  if(!list.length){el.innerHTML=`<div class="empty"><div class="ei">📊</div>No hay publicaciones registradas aún.<br>Cargá la primera para empezar a trackerear.</div>`;return;}
+  el.innerHTML=`<div class="pub-grid">${list.map(p=>{
+    const icon=PLAT_ICON[p.plataforma]||"📱";
+    const col=PLAT_COLOR[p.plataforma]||"var(--tx3)";
+    const tipoIcon=TIPO_ICON[p.tipo]||"";
+    const eng=p.alcance?(((p.likes||0)+(p.comentarios||0)+(p.guardados||0))/p.alcance*100).toFixed(1):null;
+    return`<div class="pub-card" onclick="editPost('${p.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:13px;font-weight:700;color:${col}">${icon} ${p.plataforma||""}</span>
+        <span style="font-size:11px;color:var(--tx3)">${tipoIcon} ${p.tipo||""}</span>
+      </div>
+      ${p.tema?`<div style="font-size:11px;font-weight:600;color:var(--pu);margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">${esc(p.tema)}</div>`:""}
+      ${p.caption?`<div style="font-size:12px;color:var(--tx2);margin-bottom:8px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(p.caption)}</div>`:""}
+      <div style="font-size:10px;color:var(--tx3);margin-bottom:8px">${p.fecha_publicacion?fmt(p.fecha_publicacion):""}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--tx3)">
+        ${p.alcance?`<span>👁 ${p.alcance.toLocaleString("es-AR")}</span>`:""}
+        ${p.likes?`<span>❤️ ${p.likes}</span>`:""}
+        ${p.comentarios?`<span>💬 ${p.comentarios}</span>`:""}
+        ${p.guardados?`<span>🔖 ${p.guardados}</span>`:""}
+        ${eng?`<span style="color:var(--gr);font-weight:600">⚡ ${eng}%</span>`:""}
+      </div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+function renderComMetricas(){
+  const el=document.getElementById("com-met-container");
+  if(!publicaciones.length){el.innerHTML=`<div class="empty"><div class="ei">📈</div>Cargá publicaciones para ver métricas</div>`;return;}
+
+  // Por plataforma
+  const plats=["instagram","facebook","linkedin"];
+  const porPlat=plats.map(pl=>{
+    const pubs=publicaciones.filter(p=>p.plataforma===pl);
+    const avg=pubs.length?Math.round(pubs.reduce((s,p)=>s+(p.likes||0),0)/pubs.length):0;
+    const alcance=pubs.reduce((s,p)=>s+(p.alcance||0),0);
+    return{pl,n:pubs.length,avg,alcance};
+  }).filter(x=>x.n>0);
+
+  // Por tipo
+  const tipos=["foto","reel","carrusel","video","historia"];
+  const porTipo=tipos.map(t=>{
+    const pubs=publicaciones.filter(p=>p.tipo===t);
+    const avg=pubs.length?Math.round(pubs.reduce((s,p)=>s+(p.likes||0),0)/pubs.length):0;
+    return{t,n:pubs.length,avg};
+  }).filter(x=>x.n>0).sort((a,b)=>b.avg-a.avg);
+
+  // Top 5 posts
+  const top5=[...publicaciones].sort((a,b)=>(b.likes||0)-(a.likes||0)).slice(0,5);
+
+  const maxAlcance=Math.max(...porPlat.map(x=>x.alcance),1);
+  const maxLikes=Math.max(...porTipo.map(x=>x.avg),1);
+
+  el.innerHTML=`
+  <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:12px">
+    <div class="met-block">
+      <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Alcance por plataforma</div>
+      ${porPlat.map(x=>`
+        <div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--tx2);margin-bottom:4px">
+            <span>${PLAT_ICON[x.pl]||""} ${x.pl} <span style="color:var(--tx3)">(${x.n} posts)</span></span>
+            <span style="font-weight:600">${x.alcance.toLocaleString("es-AR")}</span>
+          </div>
+          <div style="height:6px;background:var(--bg3);border-radius:3px"><div style="height:6px;width:${Math.round(x.alcance/maxAlcance*100)}%;background:${PLAT_COLOR[x.pl]||"var(--pu)"};border-radius:3px"></div></div>
+        </div>`).join("")}
+    </div>
+    <div class="met-block">
+      <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Promedio likes por tipo</div>
+      ${porTipo.map(x=>`
+        <div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--tx2);margin-bottom:4px">
+            <span>${TIPO_ICON[x.t]||""} ${x.t} <span style="color:var(--tx3)">(${x.n})</span></span>
+            <span style="font-weight:600">${x.avg} ❤️</span>
+          </div>
+          <div style="height:6px;background:var(--bg3);border-radius:3px"><div style="height:6px;width:${Math.round(x.avg/maxLikes*100)}%;background:var(--pu);border-radius:3px"></div></div>
+        </div>`).join("")}
+    </div>
+  </div>
+  <div class="met-block">
+    <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Top 5 posts por likes</div>
+    ${top5.map((p,i)=>`
+      <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--b);cursor:pointer" onclick="editPost('${p.id}')">
+        <span style="font-size:18px;font-weight:800;color:var(--tx3);min-width:20px">${i+1}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;color:var(--tx);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.tema||p.caption||"Sin título")}</div>
+          <div style="font-size:11px;color:var(--tx3)">${PLAT_ICON[p.plataforma]||""} ${p.plataforma} · ${p.fecha_publicacion?fmt(p.fecha_publicacion):""}</div>
+        </div>
+        <div style="text-align:right;font-size:12px">
+          <div style="color:var(--gr);font-weight:600">❤️ ${p.likes||0}</div>
+          ${p.alcance?`<div style="color:var(--tx3)">👁 ${p.alcance.toLocaleString("es-AR")}</div>`:""}
+        </div>
+      </div>`).join("")}
+  </div>`;
+}
+
+function renderVideosIA(){
+  const el=document.getElementById("com-videos-lista");
+  if(!videosIA.length){el.innerHTML=`<div class="empty"><div class="ei">🎬</div>No hay scripts de video todavía.<br>Creá el primero para arrancar la producción.</div>`;return;}
+  el.innerHTML=videosIA.map(v=>`
+    <div class="vid-card" onclick="editVideoIA('${v.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div style="font-size:14px;font-weight:600;color:var(--tx)">${esc(v.ejercicio||"Sin nombre")}</div>
+        <span style="font-size:11px;color:${VID_ESTADO_COLOR[v.estado]||"var(--tx3)"};white-space:nowrap;margin-left:8px">${VID_ESTADO_LABEL[v.estado]||v.estado}</span>
+      </div>
+      ${v.objetivo?`<div style="font-size:12px;color:var(--tx3);margin-bottom:6px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(v.objetivo)}</div>`:""}
+      <div style="display:flex;gap:12px;font-size:11px;color:var(--tx3)">
+        ${v.herramienta?`<span>🛠 ${v.herramienta}</span>`:""}
+        ${v.url_video?`<a href="${esc(v.url_video)}" target="_blank" onclick="event.stopPropagation()" style="color:var(--pu)">Ver video →</a>`:""}
+      </div>
+    </div>`).join("");
+}
+
+// ── CRUD Publicaciones ────────────────────────────────────────────────
+function openModalNuevoPost(){
+  document.getElementById("post-edit-id").value="";
+  document.getElementById("modal-post-titulo").textContent="Nueva publicación";
+  document.getElementById("post-btn-del").style.display="none";
+  ["post-plat","post-tipo","post-fecha","post-tema","post-caption","post-url","post-alcance","post-impresiones","post-likes","post-comentarios","post-guardados","post-compartidos"].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.value=id==="post-plat"?"instagram":id==="post-tipo"?"foto":"";
+  });
+  document.getElementById("post-fecha").value=new Date().toISOString().slice(0,10);
+  openModal("modal-com-post");
+}
+
+function editPost(id){
+  const p=publicaciones.find(x=>x.id===id);if(!p)return;
+  document.getElementById("post-edit-id").value=id;
+  document.getElementById("modal-post-titulo").textContent="Editar publicación";
+  document.getElementById("post-btn-del").style.display="inline-flex";
+  document.getElementById("post-plat").value=p.plataforma||"instagram";
+  document.getElementById("post-tipo").value=p.tipo||"foto";
+  document.getElementById("post-fecha").value=p.fecha_publicacion||"";
+  document.getElementById("post-tema").value=p.tema||"";
+  document.getElementById("post-caption").value=p.caption||"";
+  document.getElementById("post-url").value=p.url||"";
+  document.getElementById("post-alcance").value=p.alcance||"";
+  document.getElementById("post-impresiones").value=p.impresiones||"";
+  document.getElementById("post-likes").value=p.likes||"";
+  document.getElementById("post-comentarios").value=p.comentarios||"";
+  document.getElementById("post-guardados").value=p.guardados||"";
+  document.getElementById("post-compartidos").value=p.compartidos||"";
+  openModal("modal-com-post");
+}
+
+async function savePost(){
+  const id=document.getElementById("post-edit-id").value;
+  const n=v=>parseInt(document.getElementById(v).value)||null;
+  const body={
+    plataforma:document.getElementById("post-plat").value,
+    tipo:document.getElementById("post-tipo").value,
+    fecha_publicacion:document.getElementById("post-fecha").value||null,
+    tema:document.getElementById("post-tema").value.trim()||null,
+    caption:document.getElementById("post-caption").value.trim()||null,
+    url:document.getElementById("post-url").value.trim()||null,
+    alcance:n("post-alcance"),impresiones:n("post-impresiones"),likes:n("post-likes"),
+    comentarios:n("post-comentarios"),guardados:n("post-guardados"),compartidos:n("post-compartidos"),
+  };
+  try{
+    if(id){
+      await sb(`publicaciones?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(body)});
+      const i=publicaciones.findIndex(x=>x.id===id);if(i>=0)publicaciones[i]={...publicaciones[i],...body};
+      toast("Publicación actualizada","ok");
+    }else{
+      const res=await sb("publicaciones",{method:"POST",headers:{"Prefer":"return=representation"},body:JSON.stringify(body)});
+      publicaciones.unshift(Array.isArray(res)?res[0]:res);
+      toast("Publicación guardada","ok");
+    }
+    closeModal("modal-com-post");
+    renderPublicaciones();
+    updateComStats();
+  }catch(e){toast("Error al guardar","err");}
+}
+
+async function deletePost(){
+  const id=document.getElementById("post-edit-id").value;
+  if(!id||!confirm("¿Eliminar esta publicación?"))return;
+  try{
+    await sb(`publicaciones?id=eq.${id}`,{method:"DELETE"});
+    publicaciones=publicaciones.filter(x=>x.id!==id);
+    closeModal("modal-com-post");renderPublicaciones();updateComStats();
+    toast("Eliminada","ok");
+  }catch(e){toast("Error","err");}
+}
+
+// ── CRUD Videos IA ────────────────────────────────────────────────────
+function openModalNuevoVideo(){
+  document.getElementById("video-edit-id").value="";
+  document.getElementById("modal-video-titulo").textContent="Nuevo script de video";
+  document.getElementById("video-btn-del").style.display="none";
+  ["video-ejercicio","video-objetivo","video-prompt","video-url","video-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  document.getElementById("video-herramienta").value="runway";
+  document.getElementById("video-estado").value="script";
+  openModal("modal-com-video");
+}
+
+function editVideoIA(id){
+  const v=videosIA.find(x=>x.id===id);if(!v)return;
+  document.getElementById("video-edit-id").value=id;
+  document.getElementById("modal-video-titulo").textContent="Editar script";
+  document.getElementById("video-btn-del").style.display="inline-flex";
+  document.getElementById("video-ejercicio").value=v.ejercicio||"";
+  document.getElementById("video-objetivo").value=v.objetivo||"";
+  document.getElementById("video-prompt").value=v.prompt_ia||"";
+  document.getElementById("video-herramienta").value=v.herramienta||"runway";
+  document.getElementById("video-estado").value=v.estado||"script";
+  document.getElementById("video-url").value=v.url_video||"";
+  document.getElementById("video-notas").value=v.notas||"";
+  openModal("modal-com-video");
+}
+
+async function saveVideoIA(){
+  const id=document.getElementById("video-edit-id").value;
+  const body={
+    ejercicio:document.getElementById("video-ejercicio").value.trim()||null,
+    objetivo:document.getElementById("video-objetivo").value.trim()||null,
+    prompt_ia:document.getElementById("video-prompt").value.trim()||null,
+    herramienta:document.getElementById("video-herramienta").value,
+    estado:document.getElementById("video-estado").value,
+    url_video:document.getElementById("video-url").value.trim()||null,
+    notas:document.getElementById("video-notas").value.trim()||null,
+  };
+  try{
+    if(id){
+      await sb(`videos_ia?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(body)});
+      const i=videosIA.findIndex(x=>x.id===id);if(i>=0)videosIA[i]={...videosIA[i],...body};
+      toast("Actualizado","ok");
+    }else{
+      const res=await sb("videos_ia",{method:"POST",headers:{"Prefer":"return=representation"},body:JSON.stringify(body)});
+      videosIA.unshift(Array.isArray(res)?res[0]:res);
+      toast("Script guardado","ok");
+    }
+    closeModal("modal-com-video");renderVideosIA();updateComStats();
+  }catch(e){toast("Error","err");}
+}
+
+async function deleteVideoIA(){
+  const id=document.getElementById("video-edit-id").value;
+  if(!id||!confirm("¿Eliminar este script?"))return;
+  try{
+    await sb(`videos_ia?id=eq.${id}`,{method:"DELETE"});
+    videosIA=videosIA.filter(x=>x.id!==id);
+    closeModal("modal-com-video");renderVideosIA();updateComStats();
+    toast("Eliminado","ok");
+  }catch(e){toast("Error","err");}
+}
+
+// ── Agente IA ─────────────────────────────────────────────────────────
+async function _comCallIA(prompt){
+  const resultado=document.getElementById("com-agente-resultado");
+  const texto=document.getElementById("com-agente-texto");
+  resultado.style.display="block";
+  texto.textContent="Analizando...";
+  try{
+    const res=await fetch(`${SB}/functions/v1/agente-comunicaciones`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`,"apikey":KEY},
+      body:JSON.stringify({prompt,publicaciones,videosIA}),
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error);
+    texto.textContent=data.respuesta||"Sin respuesta";
+  }catch(e){texto.textContent="Error: "+e.message;}
+}
+
+function comAnalizarRendimiento(){
+  _comCallIA("analizar_rendimiento");
+}
+function comAnalizarRecap(){
+  _comCallIA("planificar_recap");
+}
+async function comValidarContenido(){
+  const caption=document.getElementById("com-validar-texto").value.trim();
+  const plataforma=document.getElementById("com-validar-plat").value;
+  if(!caption){toast("Escribí el contenido a validar","err");return;}
+  _comCallIA(JSON.stringify({tipo:"validar",caption,plataforma}));
+}
+
+async function comGenerarPrompt(){
+  const ejercicio=document.getElementById("video-ejercicio").value.trim();
+  const objetivo=document.getElementById("video-objetivo").value.trim();
+  if(!ejercicio&&!objetivo){toast("Completá el ejercicio y objetivo primero","err");return;}
+  const btn=event.target;btn.disabled=true;btn.textContent="Generando...";
+  try{
+    const res=await fetch(`${SB}/functions/v1/agente-comunicaciones`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`,"apikey":KEY},
+      body:JSON.stringify({prompt:JSON.stringify({tipo:"prompt_video",ejercicio,objetivo}),publicaciones:[],videosIA:[]}),
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error);
+    document.getElementById("video-prompt").value=data.respuesta||"";
+    toast("Prompt generado","ok");
+  }catch(e){toast("Error: "+e.message,"err");}
+  btn.disabled=false;btn.textContent="✨ Generar prompt con IA";
+}
 </script>
 
 <script>
@@ -11151,6 +11602,93 @@ if('serviceWorker' in navigator){
   }
 })();
 </script>
+
+<!-- MODAL COMUNICACIONES: Nueva publicación -->
+<div class="modal-overlay" id="modal-com-post" onclick="closeModal('modal-com-post')">
+  <div class="modal" onclick="e=>e.stopPropagation()" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-post-titulo">Nueva publicación</div>
+      <button class="modal-close" onclick="closeModal('modal-com-post')">✕</button>
+    </div>
+    <input type="hidden" id="post-edit-id">
+    <div class="form-grid">
+      <div class="fg"><label class="fl">Plataforma</label>
+        <select class="fi" id="post-plat">
+          <option value="instagram">Instagram</option>
+          <option value="facebook">Facebook</option>
+          <option value="linkedin">LinkedIn</option>
+        </select>
+      </div>
+      <div class="fg"><label class="fl">Tipo</label>
+        <select class="fi" id="post-tipo">
+          <option value="foto">Foto</option>
+          <option value="reel">Reel</option>
+          <option value="carrusel">Carrusel</option>
+          <option value="video">Video</option>
+          <option value="historia">Historia</option>
+        </select>
+      </div>
+      <div class="fg"><label class="fl">Fecha</label><input class="fi" type="date" id="post-fecha"></div>
+      <div class="fg"><label class="fl">Tema / Categoría</label><input class="fi" id="post-tema" placeholder="Ej: Olimpiada, Curso tórax, La Cofradía..."></div>
+    </div>
+    <div class="fg" style="margin-top:8px"><label class="fl">Caption</label><textarea class="fi" id="post-caption" style="min-height:80px;resize:vertical" placeholder="Texto del post..."></textarea></div>
+    <div class="fg" style="margin-top:8px"><label class="fl">URL del post</label><input class="fi" id="post-url" placeholder="https://instagram.com/p/..."></div>
+    <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;margin:14px 0 8px">Métricas</div>
+    <div class="form-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="fg"><label class="fl">Alcance</label><input class="fi" type="number" id="post-alcance" placeholder="0"></div>
+      <div class="fg"><label class="fl">Impresiones</label><input class="fi" type="number" id="post-impresiones" placeholder="0"></div>
+      <div class="fg"><label class="fl">Likes</label><input class="fi" type="number" id="post-likes" placeholder="0"></div>
+      <div class="fg"><label class="fl">Comentarios</label><input class="fi" type="number" id="post-comentarios" placeholder="0"></div>
+      <div class="fg"><label class="fl">Guardados</label><input class="fi" type="number" id="post-guardados" placeholder="0"></div>
+      <div class="fg"><label class="fl">Compartidos</label><input class="fi" type="number" id="post-compartidos" placeholder="0"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+      <button id="post-btn-del" class="btn" style="color:var(--re);border-color:var(--re);display:none" onclick="deletePost()">Eliminar</button>
+      <button class="btn pri" onclick="savePost()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL COMUNICACIONES: Nuevo video IA -->
+<div class="modal-overlay" id="modal-com-video" onclick="closeModal('modal-com-video')">
+  <div class="modal" onclick="e=>e.stopPropagation()" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-video-titulo">Nuevo script de video</div>
+      <button class="modal-close" onclick="closeModal('modal-com-video')">✕</button>
+    </div>
+    <input type="hidden" id="video-edit-id">
+    <div class="form-grid">
+      <div class="fg"><label class="fl">Ejercicio / Nombre</label><input class="fi" id="video-ejercicio" placeholder="Ej: Entrenamiento con Tratafix"></div>
+      <div class="fg"><label class="fl">Herramienta IA</label>
+        <select class="fi" id="video-herramienta">
+          <option value="runway">Runway Gen-3</option>
+          <option value="kling">Kling</option>
+          <option value="sora">Sora</option>
+          <option value="otra">Otra</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg" style="margin-top:8px"><label class="fl">Objetivo del ejercicio</label><textarea class="fi" id="video-objetivo" style="min-height:70px;resize:vertical" placeholder="¿Qué aprende el alumno con este ejercicio?"></textarea></div>
+    <div class="fg" style="margin-top:8px"><label class="fl">Prompt para la IA</label><textarea class="fi" id="video-prompt" style="min-height:90px;resize:vertical" placeholder="Descripción visual para generar el video con IA..."></textarea></div>
+    <div class="form-grid" style="margin-top:8px">
+      <div class="fg"><label class="fl">Estado</label>
+        <select class="fi" id="video-estado">
+          <option value="script">Script listo</option>
+          <option value="generando">Generando</option>
+          <option value="listo">Video listo</option>
+          <option value="publicado">Publicado</option>
+        </select>
+      </div>
+      <div class="fg"><label class="fl">URL del video</label><input class="fi" id="video-url" placeholder="https://..."></div>
+    </div>
+    <div class="fg" style="margin-top:8px"><label class="fl">Notas</label><input class="fi" id="video-notas" placeholder="Observaciones..."></div>
+    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+      <button id="video-btn-del" class="btn" style="color:var(--re);border-color:var(--re);display:none" onclick="deleteVideoIA()">Eliminar</button>
+      <button class="btn sec" onclick="comGenerarPrompt()" style="margin-right:auto">✨ Generar prompt con IA</button>
+      <button class="btn pri" onclick="saveVideoIA()">Guardar</button>
+    </div>
+  </div>
+</div>
 
 <!-- BOTTOM NAV MOBILE -->
 <nav class="mobile-nav" id="mobile-nav">
