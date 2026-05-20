@@ -33,14 +33,20 @@ CAPTION:
 ${parsedPrompt.caption}`;
 
     } else if (parsedPrompt?.tipo === "prompt_video") {
-      const textoBase = `Generá un prompt detallado en inglés para crear un video con IA (Runway Gen-3 / Kling) que muestre visualmente el siguiente ejercicio de simulación médica.
-El video debe ser claro, educativo y mostrar el procedimiento o habilidad de forma atractiva.
-${imagenes?.length ? "Analizá las imágenes adjuntas del simulador para que el prompt sea lo más fiel posible al equipo real." : ""}
+      const textoBase = `Generá un prompt optimizado para **Runway Agent** (herramienta de video IA multi-shot) que muestre visualmente el siguiente ejercicio de simulación médica.
+
+Runway Agent funciona de forma conversacional y genera múltiples tomas editadas. El prompt debe:
+- Estar en inglés
+- Describir el video como una secuencia de 3-4 shots cortos (ej: "Shot 1: close-up of hands..., Shot 2: wide angle of simulator...")
+- Incluir: iluminación profesional, fondo limpio o quirúrgico, tono educativo
+- Terminar con: "educational medical simulation video, professional quality, smooth camera movement"
+- Ser específico sobre los instrumentos y movimientos del ejercicio
+${imagenes?.length ? "- Analizá las imágenes adjuntas del simulador para describir con precisión el equipo real (colores, materiales, forma)" : ""}
 
 Ejercicio: ${parsedPrompt.ejercicio || ""}
 Objetivo: ${parsedPrompt.objetivo || ""}
 
-Devolvé SOLO el prompt en inglés, listo para pegar en la herramienta de IA. Máximo 200 palabras.`;
+Devolvé SOLO el prompt en inglés, listo para pegar en Runway Agent. Entre 150 y 250 palabras.`;
 
       // Si hay imágenes, construir content block con visión
       if (imagenes?.length) {
