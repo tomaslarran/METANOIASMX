@@ -11604,8 +11604,8 @@ if('serviceWorker' in navigator){
 </script>
 
 <!-- MODAL COMUNICACIONES: Nueva publicación -->
-<div class="modal-overlay" id="modal-com-post" onclick="closeModal('modal-com-post')">
-  <div class="modal" onclick="e=>e.stopPropagation()" style="max-width:560px">
+<div class="mov" id="modal-com-post" onclick="if(event.target===this)closeModal('modal-com-post')">
+  <div class="modal" style="max-width:560px">
     <div class="modal-header">
       <div class="modal-title" id="modal-post-titulo">Nueva publicación</div>
       <button class="modal-close" onclick="closeModal('modal-com-post')">✕</button>
@@ -11650,8 +11650,8 @@ if('serviceWorker' in navigator){
 </div>
 
 <!-- MODAL COMUNICACIONES: Nuevo video IA -->
-<div class="modal-overlay" id="modal-com-video" onclick="closeModal('modal-com-video')">
-  <div class="modal" onclick="e=>e.stopPropagation()" style="max-width:520px">
+<div class="mov" id="modal-com-video" onclick="if(event.target===this)closeModal('modal-com-video')">
+  <div class="modal" style="max-width:520px">
     <div class="modal-header">
       <div class="modal-title" id="modal-video-titulo">Nuevo script de video</div>
       <button class="modal-close" onclick="closeModal('modal-com-video')">✕</button>
