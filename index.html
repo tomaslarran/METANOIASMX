@@ -11319,6 +11319,47 @@ async function deletePost(){
 }
 
 // ── CRUD Videos IA ────────────────────────────────────────────────────
+let _videoImgs=[]; // base64 strings de imágenes de referencia
+
+function _clearVideoImgs(){
+  _videoImgs=[];
+  const prev=document.getElementById("video-img-preview");
+  if(prev)prev.innerHTML="";
+  const inp=document.getElementById("video-img-input");
+  if(inp)inp.value="";
+}
+
+function handleVideoImgSelect(input){
+  const files=Array.from(input.files).slice(0,3);
+  _loadVideoImgs(files);
+}
+function handleVideoImgDrop(e){
+  const files=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith("image/")).slice(0,3);
+  _loadVideoImgs(files);
+}
+function _loadVideoImgs(files){
+  _videoImgs=[];
+  const prev=document.getElementById("video-img-preview");
+  prev.innerHTML="";
+  files.forEach((file,i)=>{
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const b64=ev.target.result; // data:image/jpeg;base64,...
+      _videoImgs[i]=b64;
+      const img=document.createElement("div");
+      img.style.cssText="position:relative;width:72px;height:72px";
+      img.innerHTML=`<img src="${b64}" style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--b)">
+        <button onclick="_removeVideoImg(${i},this.parentElement)" style="position:absolute;top:-4px;right:-4px;background:var(--re);border:none;border-radius:50%;width:16px;height:16px;font-size:9px;cursor:pointer;color:#fff;line-height:1">✕</button>`;
+      prev.appendChild(img);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function _removeVideoImg(i,el){
+  _videoImgs[i]=null;
+  el.remove();
+}
+
 function openModalNuevoVideo(){
   document.getElementById("video-edit-id").value="";
   document.getElementById("modal-video-titulo").textContent="Nuevo script de video";
@@ -11326,11 +11367,13 @@ function openModalNuevoVideo(){
   ["video-ejercicio","video-objetivo","video-prompt","video-url","video-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
   document.getElementById("video-herramienta").value="runway";
   document.getElementById("video-estado").value="script";
+  _clearVideoImgs();
   openModal("modal-com-video");
 }
 
 function editVideoIA(id){
   const v=videosIA.find(x=>x.id===id);if(!v)return;
+  _clearVideoImgs();
   document.getElementById("video-edit-id").value=id;
   document.getElementById("modal-video-titulo").textContent="Editar script";
   document.getElementById("video-btn-del").style.display="inline-flex";
@@ -11415,17 +11458,27 @@ async function comGenerarPrompt(){
   const ejercicio=document.getElementById("video-ejercicio").value.trim();
   const objetivo=document.getElementById("video-objetivo").value.trim();
   if(!ejercicio&&!objetivo){toast("Completá el ejercicio y objetivo primero","err");return;}
-  const btn=event.target;btn.disabled=true;btn.textContent="Generando...";
+  const btn=document.getElementById("btn-gen-prompt");
+  btn.disabled=true;btn.textContent="Generando...";
+  // Preparar imágenes: filtrar nulls y extraer solo base64 puro (sin el prefijo data:...)
+  const imagenes=_videoImgs.filter(Boolean).map(b64=>{
+    const match=b64.match(/^data:(image\/\w+);base64,(.+)$/);
+    return match?{mediaType:match[1],data:match[2]}:null;
+  }).filter(Boolean);
   try{
     const res=await fetch(`${SB}/functions/v1/agente-comunicaciones`,{
       method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`,"apikey":KEY},
-      body:JSON.stringify({prompt:JSON.stringify({tipo:"prompt_video",ejercicio,objetivo}),publicaciones:[],videosIA:[]}),
+      body:JSON.stringify({
+        prompt:JSON.stringify({tipo:"prompt_video",ejercicio,objetivo}),
+        imagenes,
+        publicaciones:[],videosIA:[],
+      }),
     });
     const data=await res.json();
     if(data.error)throw new Error(data.error);
     document.getElementById("video-prompt").value=data.respuesta||"";
-    toast("Prompt generado","ok");
+    toast("Prompt generado ✓","ok");
   }catch(e){toast("Error: "+e.message,"err");}
   btn.disabled=false;btn.textContent="✨ Generar prompt con IA";
 }
@@ -11682,9 +11735,21 @@ if('serviceWorker' in navigator){
       <div class="fg"><label class="fl">URL del video</label><input class="fi" id="video-url" placeholder="https://..."></div>
     </div>
     <div class="fg" style="margin-top:8px"><label class="fl">Notas</label><input class="fi" id="video-notas" placeholder="Observaciones..."></div>
+    <!-- Imágenes de referencia para la IA -->
+    <div style="margin-top:12px">
+      <label class="fl">📸 Fotos de referencia del simulador <span style="color:var(--tx3);font-weight:400">(opcional — la IA las usa para generar el prompt)</span></label>
+      <div id="video-img-drop" onclick="document.getElementById('video-img-input').click()" style="margin-top:6px;border:2px dashed var(--b2);border-radius:var(--r);padding:14px;text-align:center;cursor:pointer;transition:border-color .15s;font-size:12px;color:var(--tx3)"
+        ondragover="event.preventDefault();this.style.borderColor='var(--pu)'"
+        ondragleave="this.style.borderColor='var(--b2)'"
+        ondrop="event.preventDefault();this.style.borderColor='var(--b2)';handleVideoImgDrop(event)">
+        🖼️ Clic o arrastrá imágenes acá (JPG, PNG — máx 3)
+      </div>
+      <input type="file" id="video-img-input" accept="image/jpeg,image/png,image/webp" multiple style="display:none" onchange="handleVideoImgSelect(this)">
+      <div id="video-img-preview" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"></div>
+    </div>
     <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
       <button id="video-btn-del" class="btn" style="color:var(--re);border-color:var(--re);display:none" onclick="deleteVideoIA()">Eliminar</button>
-      <button class="btn sec" onclick="comGenerarPrompt()" style="margin-right:auto">✨ Generar prompt con IA</button>
+      <button class="btn sec" id="btn-gen-prompt" onclick="comGenerarPrompt()" style="margin-right:auto">✨ Generar prompt con IA</button>
       <button class="btn pri" onclick="saveVideoIA()">Guardar</button>
     </div>
   </div>
