@@ -3441,8 +3441,8 @@ async function selectCurso(id){
               </div>
               <div class="fg">
                 <label class="fl">Costo estimado ($)</label>
-                <input class="fi" type="number" id="curso-cos-${id}" value="${cos||""}" placeholder="${costoSugerido||0}" oninput="recalcCursoMargen('${id}')" onchange="updateCursoField('${id}','costo_estimado',this.value);recalcCursoMargen('${id}')">
-                ${ingDisplay&&!cos?`<div style="font-size:10px;color:var(--tx3);margin-top:3px">Sugerido: $${costoSugerido.toLocaleString("es-AR")} (${(tasa*100).toFixed(0)}% del ingreso)</div>`:""}
+                <input class="fi" type="number" id="curso-cos-${id}" value="${cos||costoSugerido||""}" placeholder="${costoSugerido||0}" oninput="recalcCursoMargen('${id}')" onchange="updateCursoField('${id}','costo_estimado',this.value);recalcCursoMargen('${id}')">
+                ${ingDisplay?`<div style="font-size:10px;color:var(--tx3);margin-top:3px">${cos?"Guardado":"Auto-calculado"}: $${costoSugerido.toLocaleString("es-AR")} (${(tasa*100).toFixed(0)}% del ingreso)</div>`:""}
               </div>
             </div>
             <div id="curso-margen-${id}" style="display:flex;gap:16px;margin-top:8px;font-size:12px;flex-wrap:wrap">
