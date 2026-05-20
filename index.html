@@ -3469,6 +3469,8 @@ async function selectCurso(id){
     </div>
   </div>`;
   det.scrollIntoView({behavior:"smooth",block:"start"});
+  // Garantizar que el costo estimado refleje la suma real de costos cargados
+  _sincronizarCostoPresup(id, costosCurso);
 }
 
 function showCdTab(btn,targetId){
