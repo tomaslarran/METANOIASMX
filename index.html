@@ -980,8 +980,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 <!-- ══ CURSOS ══ -->
 <div id="pg-cursos" style="display:none">
   <div class="pg-header">
-    <div><div class="pg-title">Cursos</div><div class="pg-title-sub" id="curso-filter-label">Todos los cursos</div></div>
+    <div><div class="pg-title">Cursos</div><div class="pg-title-sub" id="curso-filter-label">Cursos activos y próximos</div></div>
     <div style="display:flex;gap:8px">
+      <button class="btn sec" id="btn-realizados" onclick="setCursoFilter('completados')" title="Ver cursos ya realizados" style="opacity:.75">
+        🏁 Realizados
+      </button>
       <button class="btn sec" onclick="exportCursosPixelio()" title="Genera un CSV listo para importar en Pixelio">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Exportar para Pixelio
@@ -3033,7 +3036,7 @@ function renderNotifPage(){
   if(btn)selectNotifUser(targetId,btn);
 }
 function setTareaFilter(s){curF=s;document.querySelectorAll("#pg-tareas .fb").forEach(b=>b.classList.remove("on"));goPage("tareas",document.getElementById("nav-tareas"));renderTareas();}
-function setCursoFilter(f){cursoFilter=f;goPage("cursos",document.getElementById("nav-cursos"));document.getElementById("curso-filter-label").textContent=f==="activos"?"Cursos activos":f==="borrador"?"Borradores":f==="completados"?"Completados":"Todos los cursos";renderCursos();}
+function setCursoFilter(f){cursoFilter=f;goPage("cursos",document.getElementById("nav-cursos"));document.getElementById("curso-filter-label").textContent=f==="activos"?"Cursos activos":f==="borrador"?"Borradores":f==="completados"?"Cursos realizados":"Cursos activos y próximos";renderCursos();}
 function openNewModal(){
   if(curPage==="tareas")openModal("modal-tarea");
   else if(curPage==="cursos")openModal("modal-curso");
@@ -3311,16 +3314,21 @@ function estadoBadge(e){const m={"Borrador":"est-borrador","Convocatoria":"est-c
 
 function renderCursos(){
   const c=document.getElementById("curso-grid-container");
+  const realizados=cursos.filter(x=>x.estado==="Completado");
   let list=cursos;
-  if(cursoFilter==="activos")list=cursos.filter(c=>["Convocatoria","Inscripciones","En curso"].includes(c.estado));
-  else if(cursoFilter==="borrador")list=cursos.filter(c=>c.estado==="Borrador");
-  else if(cursoFilter==="completados")list=cursos.filter(c=>c.estado==="Completado");
+  if(cursoFilter==="activos")list=cursos.filter(x=>["Convocatoria","Inscripciones","En curso"].includes(x.estado));
+  else if(cursoFilter==="borrador")list=cursos.filter(x=>x.estado==="Borrador");
+  else if(cursoFilter==="completados")list=realizados;
+  else list=cursos.filter(x=>x.estado!=="Completado"); // vista "all": oculta completados
+  // Actualizar botón Realizados con conteo
+  const btnReal=document.getElementById("btn-realizados");
+  if(btnReal){btnReal.textContent=`🏁 Realizados (${realizados.length})`;btnReal.style.opacity=cursoFilter==="completados"?"1":".75";btnReal.style.fontWeight=cursoFilter==="completados"?"700":"400";}
   // Stats
   document.getElementById("cT").textContent=cursos.length;
-  document.getElementById("cA").textContent=cursos.filter(c=>["Convocatoria","Inscripciones","En curso"].includes(c.estado)).length;
-  document.getElementById("cI").textContent=cursos.reduce((a,c)=>a+(c.cupos_inscriptos||0),0);
-  document.getElementById("cC").textContent=cursos.filter(c=>c.estado==="Completado").length;
-  if(!list.length){c.innerHTML=`<div class="empty"><div class="ei">📚</div>No hay cursos en esta vista. Creá el primero.</div>`;return}
+  document.getElementById("cA").textContent=cursos.filter(x=>["Convocatoria","Inscripciones","En curso"].includes(x.estado)).length;
+  document.getElementById("cI").textContent=cursos.reduce((a,x)=>a+(x.cupos_inscriptos||0),0);
+  document.getElementById("cC").textContent=realizados.length;
+  if(!list.length){c.innerHTML=`<div class="empty"><div class="ei">${cursoFilter==="completados"?"🏁":"📚"}</div>${cursoFilter==="completados"?"No hay cursos realizados todavía.":"No hay cursos en esta vista. Creá el primero."}</div>`;return}
   c.innerHTML=`<div class="curso-grid">${list.map(curso=>{
     const prov=proveedores.find(p=>p.id===curso.proveedor_id);
     const pct=curso.progreso||0;
