@@ -9645,10 +9645,19 @@ function getIngreso(periodo,sociedad){
 }
 function getCreditoFiscal(periodo,sociedad){
   // Suma IVA de comprobantes del período/sociedad
+  // Usa c.iva si está cargado, sino lo calcula de los netos (21%, 10.5%, 27%)
   return comprobantes.filter(c=>{
     const fi=c.fecha_imputacion||c.fecha;
-    return fi&&fi.startsWith(periodo)&&c.sociedad===sociedad&&(c.iva||0)>0;
-  }).reduce((s,c)=>s+(parseFloat(c.iva)||0),0);
+    return fi&&fi.startsWith(periodo)&&c.sociedad===sociedad;
+  }).reduce((s,c)=>{
+    const ivaDirecto=parseFloat(c.iva)||0;
+    const ivaCalculado=
+      (parseFloat(c.neto_21)||0)*0.21+
+      (parseFloat(c.neto_105)||0)*0.105+
+      (parseFloat(c.neto_27)||0)*0.27;
+    const percIva=(parseFloat(c.percepcion_iva)||0)+(parseFloat(c.percepcion_iva_15)||0);
+    return s+(ivaDirecto||ivaCalculado)+percIva;
+  },0);
 }
 function fmtImp(n,showSign=false){
   if(!n&&n!==0)return"—";
