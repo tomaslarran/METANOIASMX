@@ -3426,7 +3426,8 @@ async function selectCurso(id){
           const ingDisplay=ing||arancelCalc||0;
           const tasa=curso.certificado?0.22:0.17;
           const costoSugerido=Math.round(ingDisplay*tasa);
-          const cosDisplay=cos||costoSugerido||0;
+          const totalCostos=costosCurso.filter(x=>x.aplica).reduce((s,x)=>s+(x.monto_estimado||0),0);
+          const cosDisplay=totalCostos||cos||costoSugerido||0;
           const margen=ingDisplay-cosDisplay;
           const margenPct=ingDisplay?((margen/ingDisplay)*100).toFixed(1):"0.0";
           const margenColor=margen>=0?"var(--gr)":"var(--re)";
@@ -3441,8 +3442,8 @@ async function selectCurso(id){
               </div>
               <div class="fg">
                 <label class="fl">Costo estimado ($)</label>
-                <input class="fi" type="number" id="curso-cos-${id}" value="${cos||costoSugerido||""}" placeholder="${costoSugerido||0}" oninput="recalcCursoMargen('${id}')" onchange="updateCursoField('${id}','costo_estimado',this.value);recalcCursoMargen('${id}')">
-                ${ingDisplay?`<div style="font-size:10px;color:var(--tx3);margin-top:3px">${cos?"Guardado":"Auto-calculado"}: $${costoSugerido.toLocaleString("es-AR")} (${(tasa*100).toFixed(0)}% del ingreso)</div>`:""}
+                <input class="fi" type="number" id="curso-cos-${id}" value="${cosDisplay||""}" placeholder="${costoSugerido||0}" oninput="recalcCursoMargen('${id}')" onchange="updateCursoField('${id}','costo_estimado',this.value);recalcCursoMargen('${id}')">
+                <div id="curso-cos-hint-${id}" style="font-size:10px;color:var(--tx3);margin-top:3px">${totalCostos?`📋 Suma de ítems en Costos: $${Math.round(totalCostos).toLocaleString("es-AR")}`:ingDisplay?`Auto-calculado: $${costoSugerido.toLocaleString("es-AR")} (${(tasa*100).toFixed(0)}% del ingreso)`:""}</div>
               </div>
             </div>
             <div id="curso-margen-${id}" style="display:flex;gap:16px;margin-top:8px;font-size:12px;flex-wrap:wrap">
@@ -4064,6 +4065,7 @@ async function toggleCursoCosto(id,cursoId,val){
     await sb(`curso_costos?id=eq.${id}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({aplica:val,updated_at:new Date().toISOString()})});
     const costos=await sb(`curso_costos?curso_id=eq.${cursoId}&select=*&order=orden`);
     document.getElementById(`cd-costos-${cursoId}`).innerHTML=buildCostosTabHtml(cursoId,costos);
+    _sincronizarCostoPresup(cursoId,costos);
   }catch(e){toast("Error","err");}
 }
 
@@ -4089,6 +4091,7 @@ async function updateCursoCosto(id,cursoId,value){
       <span style="font-size:13px;font-weight:700;color:var(--gr)">Total estimado: $${Math.round(total).toLocaleString("es-AR")}</span>
       ${sinMonto?`<span style="font-size:11px;color:var(--am)">⚠ ${sinMonto} ítem${sinMonto>1?"s":""} sin monto</span>`:""}
       ${sinPres?`<span style="font-size:11px;color:var(--tx3)">${sinPres} pres. pendiente${sinPres>1?"s":""}</span>`:""}`;
+    _sincronizarCostoPresup(cursoId,costos);
   }catch(e){toast("Error","err");}
 }
 
@@ -4097,6 +4100,7 @@ async function delCursoCosto(id,cursoId){
     await sb(`curso_costos?id=eq.${id}`,{method:"DELETE"});
     const costos=await sb(`curso_costos?curso_id=eq.${cursoId}&select=*&order=orden`);
     document.getElementById(`cd-costos-${cursoId}`).innerHTML=buildCostosTabHtml(cursoId,costos);
+    _sincronizarCostoPresup(cursoId,costos);
   }catch(e){toast("Error","err");}
 }
 
@@ -4171,6 +4175,13 @@ function recalcCursoMargen(id){
     const span=el.querySelector("span:first-child");
     if(span)span.innerHTML=`Margen: <strong style="color:${color}">${margen>=0?"+":""}$${Math.round(Math.abs(margen)).toLocaleString("es-AR")} (${margen>=0?"+":""}${margenPct}%)</strong>`;
   }
+}
+function _sincronizarCostoPresup(cursoId,costos){
+  const total=costos.filter(c=>c.aplica).reduce((s,c)=>s+(c.monto_estimado||0),0);
+  const cosEl=document.getElementById(`curso-cos-${cursoId}`);
+  const hint=document.getElementById(`curso-cos-hint-${cursoId}`);
+  if(cosEl){cosEl.value=total||"";recalcCursoMargen(cursoId);}
+  if(hint)hint.textContent=total?`📋 Suma de ítems en Costos: $${Math.round(total).toLocaleString("es-AR")}`:hint.textContent;
 }
 
 async function updateCursoField(id,field,val){
