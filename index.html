@@ -6023,21 +6023,27 @@ async function cfCeldaDesactivar(td,save){
   const inp=td.querySelector(".cf-inline-inp");
   const rawVal=inp?inp.value.trim():"";
   td.classList.remove("cf-editing");
-  if(save&&rawVal!==""){
-    const val=parseFloat(rawVal);
-    if(!isNaN(val))await cfCeldaSaveSingle(td.dataset.cid,td.dataset.period,val);
+  if(save){
+    if(rawVal===""){
+      // Input vacío → borrar el valor existente
+      await cfCeldaSaveSingle(td.dataset.cid,td.dataset.period,null);
+    }else{
+      const val=parseFloat(rawVal);
+      if(!isNaN(val))await cfCeldaSaveSingle(td.dataset.cid,td.dataset.period,val);
+    }
   }
   cfCeldaRefresh(td);
 }
 
 async function cfCeldaSaveSingle(cid,period,val){
+  // val===null → borrar el campo
   const payload=cfEditMode==="proy"?{monto:val}:{monto_real:val};
   const existing=cfValores.find(v=>v.concepto_id==cid&&v.periodo===period);
   try{
     if(existing){
       await sb(`cf_valores?id=eq.${existing.id}`,{method:"PATCH",body:JSON.stringify(payload)});
       Object.assign(existing,payload);
-    }else{
+    }else if(val!==null){
       const[created]=await sb("cf_valores",{method:"POST",body:JSON.stringify({concepto_id:cid,periodo:period,...payload})});
       cfValores.push(created);
     }
@@ -6102,7 +6108,9 @@ function cfFillStart(e,td){
   _cfFillDragging=true;
   _cfFillSourceTd=td;
   const inp=td.querySelector(".cf-inline-inp");
-  _cfFillSourceVal=inp?parseFloat(inp.value):null;
+  const raw=inp?inp.value.trim():"";
+  // Si el input está vacío, modo borrar (null); si tiene valor, modo copiar
+  _cfFillSourceVal=raw===""?null:parseFloat(raw);
   if(isNaN(_cfFillSourceVal))_cfFillSourceVal=null;
   document.addEventListener("mousemove",cfFillMove);
   document.addEventListener("mouseup",cfFillEnd,{once:true});
@@ -6127,16 +6135,22 @@ async function cfFillEnd(){
   _cfFillDragging=false;
   const targets=[...document.querySelectorAll("td.cf-fill-target")];
   targets.forEach(t=>t.classList.remove("cf-fill-target"));
-  if(!targets.length||_cfFillSourceVal==null){
+  if(!targets.length){
     if(_cfFillSourceTd)cfCeldaDesactivar(_cfFillSourceTd,true);
     return;
   }
-  // Guardar valor fuente
+  const esLimpiar=_cfFillSourceVal===null;
+  // Guardar/limpiar valor fuente
   if(_cfFillSourceTd)await cfCeldaDesactivar(_cfFillSourceTd,true);
-  // Guardar en todos los targets
+  // Aplicar a todos los targets
   await Promise.all(targets.map(td=>cfCeldaSaveSingle(td.dataset.cid,td.dataset.period,_cfFillSourceVal)));
   targets.forEach(td=>cfCeldaRefresh(td));
-  showToast(`✓ Valor copiado a ${targets.length} celda${targets.length>1?"s":""}`, "ok");
+  showToast(
+    esLimpiar
+      ?`🗑 ${targets.length} celda${targets.length>1?"s":""} limpiada${targets.length>1?"s":""}`
+      :`✓ Valor copiado a ${targets.length} celda${targets.length>1?"s":""}`,
+    "ok"
+  );
 }
 
 /* ── PRÉSTAMOS ── */
