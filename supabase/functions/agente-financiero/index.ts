@@ -21,7 +21,14 @@ serve(async (req) => {
     hace7dias.setDate(hace7dias.getDate() - 7);
     const fecha7dias = hace7dias.toISOString().split("T")[0];
 
-    const [conceptos, valores, cobranzas, prestamos, inversiones, invMovimientos, rendDiarios, inflacion] = await Promise.all([
+    // Período actual y anterior para comprobantes
+    const ahora = new Date();
+    const periodoActual = ahora.toISOString().slice(0, 7); // "YYYY-MM"
+    const hace3meses = new Date(ahora);
+    hace3meses.setMonth(hace3meses.getMonth() - 3);
+    const periodo3m = hace3meses.toISOString().slice(0, 7);
+
+    const [conceptos, valores, cobranzas, prestamos, inversiones, invMovimientos, rendDiarios, inflacion, empleados, pagosEmpleados, comprobantes] = await Promise.all([
       supabase.from("cf_conceptos").select("nombre,tipo,categoria,sociedad").eq("activo", true),
       supabase.from("cf_valores").select("concepto_id,periodo,monto,monto_real,cf_conceptos(nombre,tipo,sociedad)"),
       supabase.from("cf_cobranzas").select("descripcion,monto,fecha_vencimiento,estado,empresa").order("fecha_vencimiento"),
@@ -30,6 +37,9 @@ serve(async (req) => {
       supabase.from("cf_inversiones_movimientos").select("inversion_id,tipo,monto,fecha").order("fecha", { ascending: false }).limit(50),
       supabase.from("rendimientos_diarios").select("inversion_id,fecha,valor").gte("fecha", fecha7dias).order("fecha", { ascending: true }),
       supabase.from("inflacion_mensual").select("periodo,tasa,rend_cartera").order("periodo", { ascending: false }).limit(6),
+      supabase.from("cf_empleados").select("nombre,categoria,empresa,monto_mensual,activo").eq("activo", true),
+      supabase.from("cf_pagos_empleados").select("empleado_id,periodo,monto,pagado,cf_empleados(nombre,empresa)").order("periodo", { ascending: false }).limit(60),
+      supabase.from("comprobantes_compra").select("proveedor,total,monto_neto,fecha,fecha_imputacion,sociedad,estado,concepto").gte("fecha", periodo3m).order("fecha", { ascending: false }).limit(100),
     ]);
 
     const hoy = new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Salta" });
@@ -61,7 +71,16 @@ RENDIMIENTOS DIARIOS ÚLTIMOS 30 DÍAS:
 ${JSON.stringify(rendDiarios.data)}
 
 INFLACIÓN ÚLTIMOS 6 MESES (periodo=YYYY-MM, tasa=inflación mensual %, rend_cartera=rendimiento cartera % ese mes):
-${JSON.stringify(inflacion.data)}`;
+${JSON.stringify(inflacion.data)}
+
+EMPLEADOS Y HONORARIOS ACTIVOS (monto_mensual = honorario/sueldo mensual):
+${JSON.stringify(empleados.data)}
+
+PAGOS A EMPLEADOS ÚLTIMOS 5 MESES (pagado=true/false indica si fue abonado):
+${JSON.stringify(pagosEmpleados.data)}
+
+COMPROBANTES DE COMPRA ÚLTIMOS 3 MESES (facturas de proveedores):
+${JSON.stringify(comprobantes.data)}`;
 
     // Limitar historial para no exceder contexto (sistema prompt es grande)
     const historialReciente = historial.slice(-6);
