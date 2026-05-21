@@ -33,7 +33,26 @@ CAPTION:
 ${parsedPrompt.caption}`;
 
     } else if (parsedPrompt?.tipo === "prompt_video") {
-      const textoBase = `Generá un prompt optimizado para **Runway Gen-4.5** (modelo de video IA de alta calidad) que muestre visualmente el siguiente ejercicio de simulación médica laparoscópica.
+      const modo = parsedPrompt.modo || "txt2vid";
+      const textoBase = modo === "vid2vid"
+        ? `Generá un prompt optimizado para **video-to-video** en Runway Gen-4.5 o Kling 3.0. El usuario va a grabar el ejercicio médico con su celular (imperfecto, sin iluminación profesional) y subir ese video como referencia. La IA lo transformará manteniendo los movimientos originales pero mejorando la calidad visual.
+
+El prompt debe:
+- Estar en inglés
+- Describir la TRANSFORMACIÓN VISUAL deseada, no la escena desde cero
+- Indicar qué mantener del video original (los movimientos, la acción, el timing)
+- Indicar qué mejorar: iluminación, calidad, estética quirúrgica, suavidad del movimiento
+- Describir el estilo final: "professional surgical simulation aesthetic, clean studio lighting, smooth slow-motion, clinical environment"
+- Ser conciso y directo — entre 60 y 100 palabras
+- Terminar con: "preserve original hand movements and exercise steps, enhance visual quality only"
+${pdfEjercicio ? "- Leé el PDF adjunto para entender los pasos del ejercicio y mencionar qué movimientos clave deben preservarse" : ""}
+${imagenes?.length ? "- Analizá las fotos del simulador para describir los colores y materiales exactos que debe mantener la transformación" : ""}
+
+Ejercicio: ${parsedPrompt.ejercicio || ""}
+Objetivo: ${parsedPrompt.objetivo || ""}
+
+Devolvé SOLO el prompt en inglés, listo para usar en modo video-to-video. Entre 60 y 100 palabras.`
+        : `Generá un prompt optimizado para **Runway Gen-4.5** (modelo de video IA de alta calidad) que muestre visualmente el siguiente ejercicio de simulación médica laparoscópica.
 
 Runway Gen-4.5 genera clips cinematográficos de alta calidad a partir de un prompt de texto más una imagen de referencia del simulador real. El prompt debe:
 - Estar en inglés

@@ -11518,6 +11518,17 @@ async function deletePost(){
 // ── CRUD Videos IA ────────────────────────────────────────────────────
 let _videoImgs=[]; // base64 strings de imágenes de referencia
 let _videoPdf=null; // {data: base64, name: string} del PDF del ejercicio
+let _videoModo="txt2vid"; // 'txt2vid' | 'vid2vid'
+
+function setVideoModo(modo,btn){
+  _videoModo=modo;
+  document.querySelectorAll("#video-modo-toggle .fb").forEach(b=>b.classList.remove("on"));
+  if(btn)btn.classList.add("on");
+  const hint=document.getElementById("video-modo-hint");
+  if(hint)hint.textContent=modo==="vid2vid"
+    ?"Grabás el ejercicio con el celular (no importa si está imperfecto) y subís ese video en Runway/Kling. Este prompt le dice cómo transformarlo en algo profesional."
+    :"La IA genera el video desde cero usando el prompt de texto y las fotos de referencia.";
+}
 
 function _clearVideoPdf(){
   _videoPdf=null;
@@ -11604,6 +11615,10 @@ function openModalNuevoVideo(){
   document.getElementById("video-estado").value="script";
   _clearVideoImgs();
   _clearVideoPdf();
+  _videoModo="txt2vid";
+  document.querySelectorAll("#video-modo-toggle .fb").forEach((b,i)=>b.classList.toggle("on",i===0));
+  const hint=document.getElementById("video-modo-hint");
+  if(hint)hint.textContent="La IA genera el video desde cero usando el prompt de texto y las fotos de referencia.";
   openModal("modal-com-video");
 }
 
@@ -11706,7 +11721,7 @@ async function comGenerarPrompt(){
       method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`,"apikey":KEY},
       body:JSON.stringify({
-        prompt:JSON.stringify({tipo:"prompt_video",ejercicio,objetivo}),
+        prompt:JSON.stringify({tipo:"prompt_video",ejercicio,objetivo,modo:_videoModo}),
         imagenes,
         pdfEjercicio:_videoPdf||null,
         publicaciones:[],videosIA:[],
@@ -11999,6 +12014,17 @@ if('serviceWorker' in navigator){
       </div>
       <input type="file" id="video-img-input" accept="image/jpeg,image/png,image/webp" multiple style="display:none" onchange="handleVideoImgSelect(this)">
       <div id="video-img-preview" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"></div>
+    </div>
+    <!-- Modo de generación -->
+    <div style="margin-top:14px;padding:12px;background:var(--surf2);border-radius:var(--r);border:1px solid var(--b)">
+      <label class="fl" style="margin-bottom:8px">🎬 Modo de generación del prompt</label>
+      <div id="video-modo-toggle" class="fbar">
+        <button class="fb on" onclick="setVideoModo('txt2vid',this)" title="La IA genera el video desde cero con texto + fotos">🖼️ Texto a video</button>
+        <button class="fb" onclick="setVideoModo('vid2vid',this)" title="Grabás el ejercicio y la IA lo transforma">📹 Video a video</button>
+      </div>
+      <div id="video-modo-hint" style="margin-top:8px;font-size:11px;color:var(--tx3)">
+        La IA genera el video desde cero usando el prompt de texto y las fotos de referencia.
+      </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
       <button id="video-btn-del" class="btn" style="color:var(--re);border-color:var(--re);display:none" onclick="deleteVideoIA()">Eliminar</button>
