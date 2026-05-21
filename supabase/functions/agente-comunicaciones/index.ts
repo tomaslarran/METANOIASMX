@@ -33,21 +33,25 @@ CAPTION:
 ${parsedPrompt.caption}`;
 
     } else if (parsedPrompt?.tipo === "prompt_video") {
-      const textoBase = `Generá un prompt optimizado para **Runway Agent** (herramienta de video IA multi-shot) que muestre visualmente el siguiente ejercicio de simulación médica.
+      const textoBase = `Generá un prompt optimizado para **Runway Gen-4.5** (modelo de video IA de alta calidad) que muestre visualmente el siguiente ejercicio de simulación médica laparoscópica.
 
-Runway Agent funciona de forma conversacional y genera múltiples tomas editadas. El prompt debe:
+Runway Gen-4.5 genera clips cinematográficos de alta calidad a partir de un prompt de texto más una imagen de referencia del simulador real. El prompt debe:
 - Estar en inglés
-- Describir el video como una secuencia de 3-4 shots cortos (ej: "Shot 1: close-up of hands..., Shot 2: wide angle of simulator...")
-- Incluir: iluminación profesional, fondo limpio o quirúrgico, tono educativo
-- Terminar con: "educational medical simulation video, professional quality, smooth camera movement"
-- Ser específico sobre los instrumentos y movimientos del ejercicio
-${pdfEjercicio ? "- Leé el PDF adjunto del ejercicio y usá su contenido como referencia principal para describir con precisión los pasos, instrumentos y objetivos" : ""}
-${imagenes?.length ? "- Analizá las imágenes adjuntas del simulador para describir con precisión el equipo real (colores, materiales, forma)" : ""}
+- Describir UNA escena continua y cinematográfica (no múltiples shots separados)
+- Empezar describiendo el sujeto principal y el entorno: qué se ve, cómo está iluminado, qué hay en el fondo
+- Describir el movimiento de cámara: slow zoom in, gentle pan, static close-up, etc.
+- Describir la acción clave del ejercicio con precisión: qué hacen las manos, qué instrumentos se usan, qué objeto se manipula
+- Incluir: lighting (professional studio, clean surgical background), mood (educational, precise, clinical)
+- Terminar con el estilo: "cinematic, slow motion, 4K, educational medical simulation, professional quality"
+- NO usar formato Shot 1 / Shot 2 — es una sola toma fluida
+- Ser muy específico sobre colores, materiales y movimientos del instrumento
+${pdfEjercicio ? "- Leé el PDF adjunto y usá su contenido como referencia principal para describir con precisión los pasos, instrumentos y objetivos del ejercicio" : ""}
+${imagenes?.length ? "- Analizá las imágenes adjuntas del simulador: describí con exactitud los colores reales, materiales, forma del equipo — el modelo usará estas fotos como referencia visual" : ""}
 
 Ejercicio: ${parsedPrompt.ejercicio || ""}
 Objetivo: ${parsedPrompt.objetivo || ""}
 
-Devolvé SOLO el prompt en inglés, listo para pegar en Runway Agent. Entre 150 y 250 palabras.`;
+Devolvé SOLO el prompt en inglés, listo para pegar en Runway Gen-4.5. Entre 100 y 180 palabras.`;
 
       // Construir content blocks: PDF + imágenes + texto
       const contentBlocks: any[] = [];
