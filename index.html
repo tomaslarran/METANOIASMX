@@ -11517,6 +11517,44 @@ async function deletePost(){
 
 // ── CRUD Videos IA ────────────────────────────────────────────────────
 let _videoImgs=[]; // base64 strings de imágenes de referencia
+let _videoPdf=null; // {data: base64, name: string} del PDF del ejercicio
+
+function _clearVideoPdf(){
+  _videoPdf=null;
+  const lbl=document.getElementById("video-pdf-label");
+  const clr=document.getElementById("video-pdf-clear");
+  const drop=document.getElementById("video-pdf-drop");
+  const inp=document.getElementById("video-pdf-input");
+  if(lbl)lbl.textContent="Clic o arrastrá un PDF acá";
+  if(clr)clr.style.display="none";
+  if(drop)drop.style.borderColor="var(--b2)";
+  if(inp)inp.value="";
+}
+
+function handleVideoPdfSelect(input){
+  const file=input.files[0];
+  if(file)_loadVideoPdf(file);
+}
+function handleVideoPdfDrop(e){
+  const file=Array.from(e.dataTransfer.files).find(f=>f.type==="application/pdf");
+  if(file)_loadVideoPdf(file);
+}
+function _loadVideoPdf(file){
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const b64=ev.target.result; // data:application/pdf;base64,...
+    const match=b64.match(/^data:application\/pdf;base64,(.+)$/);
+    if(!match){toast("Archivo inválido","err");return;}
+    _videoPdf={data:match[1],name:file.name};
+    const lbl=document.getElementById("video-pdf-label");
+    const clr=document.getElementById("video-pdf-clear");
+    const drop=document.getElementById("video-pdf-drop");
+    if(lbl)lbl.innerHTML=`<span style="color:var(--tx)">📄 ${file.name}</span> <span style="color:var(--gr);font-size:10px">✓ Listo</span>`;
+    if(clr)clr.style.display="inline";
+    if(drop)drop.style.borderColor="var(--gr)";
+  };
+  reader.readAsDataURL(file);
+}
 
 function _clearVideoImgs(){
   _videoImgs=[];
@@ -11565,6 +11603,7 @@ function openModalNuevoVideo(){
   document.getElementById("video-herramienta").value="runway";
   document.getElementById("video-estado").value="script";
   _clearVideoImgs();
+  _clearVideoPdf();
   openModal("modal-com-video");
 }
 
@@ -11669,6 +11708,7 @@ async function comGenerarPrompt(){
       body:JSON.stringify({
         prompt:JSON.stringify({tipo:"prompt_video",ejercicio,objetivo}),
         imagenes,
+        pdfEjercicio:_videoPdf||null,
         publicaciones:[],videosIA:[],
       }),
     });
@@ -11932,8 +11972,24 @@ if('serviceWorker' in navigator){
       <div class="fg"><label class="fl">URL del video</label><input class="fi" id="video-url" placeholder="https://..."></div>
     </div>
     <div class="fg" style="margin-top:8px"><label class="fl">Notas</label><input class="fi" id="video-notas" placeholder="Observaciones..."></div>
-    <!-- Imágenes de referencia para la IA -->
+    <!-- PDF del ejercicio -->
     <div style="margin-top:12px">
+      <label class="fl">📄 PDF del ejercicio <span style="color:var(--tx3);font-weight:400">(opcional — la IA lo lee y usa para generar el prompt)</span></label>
+      <div id="video-pdf-drop" onclick="document.getElementById('video-pdf-input').click()" style="margin-top:6px;border:2px dashed var(--b2);border-radius:var(--r);padding:12px 14px;cursor:pointer;transition:border-color .15s;font-size:12px;color:var(--tx3);display:flex;align-items:center;gap:10px"
+        ondragover="event.preventDefault();this.style.borderColor='var(--pu)'"
+        ondragleave="this.style.borderColor='var(--b2)'"
+        ondrop="event.preventDefault();this.style.borderColor='var(--b2)';handleVideoPdfDrop(event)">
+        <span style="font-size:22px">📄</span>
+        <div>
+          <div id="video-pdf-label">Clic o arrastrá un PDF acá</div>
+          <div style="font-size:10px;color:var(--tx4);margin-top:2px">La IA leerá el contenido y lo usará como referencia</div>
+        </div>
+        <button id="video-pdf-clear" onclick="event.stopPropagation();_clearVideoPdf()" style="margin-left:auto;background:none;border:none;color:var(--re);cursor:pointer;font-size:13px;display:none" title="Quitar PDF">✕</button>
+      </div>
+      <input type="file" id="video-pdf-input" accept="application/pdf" style="display:none" onchange="handleVideoPdfSelect(this)">
+    </div>
+    <!-- Imágenes de referencia para la IA -->
+    <div style="margin-top:10px">
       <label class="fl">📸 Fotos de referencia del simulador <span style="color:var(--tx3);font-weight:400">(opcional — la IA las usa para generar el prompt)</span></label>
       <div id="video-img-drop" onclick="document.getElementById('video-img-input').click()" style="margin-top:6px;border:2px dashed var(--b2);border-radius:var(--r);padding:14px;text-align:center;cursor:pointer;transition:border-color .15s;font-size:12px;color:var(--tx3)"
         ondragover="event.preventDefault();this.style.borderColor='var(--pu)'"

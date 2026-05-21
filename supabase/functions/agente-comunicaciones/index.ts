@@ -9,7 +9,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
-    const { prompt, publicaciones, videosIA, imagenes } = await req.json();
+    const { prompt, publicaciones, videosIA, imagenes, pdfEjercicio } = await req.json();
     const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 
     let systemPrompt = `Sos el agente de comunicaciones de Metanoia SMX, empresa de capacitación médica en simulación de Salta, Argentina.
@@ -41,6 +41,7 @@ Runway Agent funciona de forma conversacional y genera múltiples tomas editadas
 - Incluir: iluminación profesional, fondo limpio o quirúrgico, tono educativo
 - Terminar con: "educational medical simulation video, professional quality, smooth camera movement"
 - Ser específico sobre los instrumentos y movimientos del ejercicio
+${pdfEjercicio ? "- Leé el PDF adjunto del ejercicio y usá su contenido como referencia principal para describir con precisión los pasos, instrumentos y objetivos" : ""}
 ${imagenes?.length ? "- Analizá las imágenes adjuntas del simulador para describir con precisión el equipo real (colores, materiales, forma)" : ""}
 
 Ejercicio: ${parsedPrompt.ejercicio || ""}
@@ -48,19 +49,40 @@ Objetivo: ${parsedPrompt.objetivo || ""}
 
 Devolvé SOLO el prompt en inglés, listo para pegar en Runway Agent. Entre 150 y 250 palabras.`;
 
-      // Si hay imágenes, construir content block con visión
+      // Construir content blocks: PDF + imágenes + texto
+      const contentBlocks: any[] = [];
+
+      // PDF del ejercicio (document block)
+      if (pdfEjercicio?.data) {
+        contentBlocks.push({
+          type: "document",
+          source: {
+            type: "base64",
+            media_type: "application/pdf",
+            data: pdfEjercicio.data,
+          },
+        });
+      }
+
+      // Imágenes de referencia
       if (imagenes?.length) {
-        userContent = [
-          ...imagenes.slice(0, 3).map((img: any) => ({
+        imagenes.slice(0, 3).forEach((img: any) => {
+          contentBlocks.push({
             type: "image",
             source: {
               type: "base64",
               media_type: img.mediaType || "image/jpeg",
               data: img.data,
             },
-          })),
-          { type: "text", text: textoBase },
-        ];
+          });
+        });
+      }
+
+      // Texto del prompt
+      contentBlocks.push({ type: "text", text: textoBase });
+
+      if (contentBlocks.length > 1) {
+        userContent = contentBlocks;
       } else {
         userMsg = textoBase;
       }
