@@ -217,6 +217,12 @@ body{font-family:var(--f);background:var(--bg);color:var(--tx);min-height:100vh;
 .cd-tab:hover{color:var(--tx)}
 .cd-tab.on{color:var(--tx);border-bottom-color:var(--pu)}
 .cd-body{padding:20px}
+/* Cash flow inline edit */
+td.cf-editing{padding:0!important;outline:2px solid var(--ac);outline-offset:-2px;background:color-mix(in srgb,var(--ac) 8%,var(--surf))!important;position:relative;z-index:5}
+td.cf-editing:hover{background:color-mix(in srgb,var(--ac) 8%,var(--surf))!important}
+td.cf-fill-target{outline:2px dashed var(--ac);outline-offset:-2px;background:color-mix(in srgb,var(--ac) 12%,var(--surf))!important}
+.cf-fill-handle{position:absolute;bottom:2px;right:2px;width:8px;height:8px;background:var(--ac);border:1.5px solid var(--surf);border-radius:1px;cursor:crosshair;z-index:10;transition:transform .1s}
+.cf-fill-handle:hover{transform:scale(1.4)}
 
 /* ── FORM GRID ── */
 .form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
@@ -1471,7 +1477,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <button class="fb on" onclick="setCFSociedad('SUDES',this)">SUDES</button>
         <button class="fb" onclick="setCFSociedad('POINTERS',this)">POINTERS</button>
       </div>
-      <span style="font-size:11px;color:var(--tx3);margin-left:8px">Hacé click en cualquier celda para editar el valor del mes</span>
+      <div id="cf-mode-toggle" class="fbar" style="margin-left:8px">
+        <button class="fb" onclick="setCFEditMode('proy',this)" title="Editar valores proyectados">📊 Proyectado</button>
+        <button class="fb on" onclick="setCFEditMode('real',this)" title="Editar valores ejecutados">✅ Real</button>
+      </div>
+      <span style="font-size:11px;color:var(--tx3);margin-left:8px">Tab ⇥ siguiente · Enter ↵ abajo · Arrastrá ↘ para copiar</span>
       <button class="btn sm pri" onclick="openAddConcepto()" style="margin-left:auto">+ Concepto</button>
     </div>
 
@@ -5531,6 +5541,7 @@ function renderCFResumen(){
     if(!m.pasado)return true;
     return getTotalTipo("Ingreso",m.key)>0||getTotalTipo("Egreso",m.key)>0;
   });
+  _cfNavCols=mesesFiltrados.length; // para navegación con Enter (bajar fila)
 
   // Stats del mes actual
   const mesActual=meses.find(m=>m.actual)||meses[3];
@@ -5603,9 +5614,10 @@ function renderCFResumen(){
           cellColor=monto?"var(--tx)":"var(--tx3)";
         }
         return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${cellColor};border-right:1px solid var(--b);cursor:pointer;transition:background .12s;${bgActual};${faded}"
-          onmouseenter="this.style.background='var(--surf2)'" onmouseleave="this.style.background='${m.actual?'rgba(124,58,237,.06)':''}'"
-          onclick="editCFCelda('${c.id}','${m.key}','${esc(c.nombre)}','${m.label}',${monto},${real!==null?real:'null'},'${tipo}')"
-          title="Click para editar">${display}</td>`;
+          data-cid="${c.id}" data-period="${m.key}" data-tipo="${tipo}"
+          onmouseenter="if(!this.classList.contains('cf-editing'))this.style.background='var(--surf2)'" onmouseleave="if(!this.classList.contains('cf-editing'))this.style.background='${m.actual?'rgba(124,58,237,.06)':''}'"
+          onclick="cfCeldaActivar(this)"
+          title="Click para editar · Tab=siguiente · Enter=abajo · Arrastrá ↘ para copiar">${display}</td>`;
       }).join("");
       const cat=c.categoria?`<span style="font-size:9px;color:var(--tx4);margin-left:4px">${esc(c.categoria)}</span>`:"";
       rows+=`<tr style="border-bottom:1px solid var(--b)">
@@ -5954,6 +5966,177 @@ function delCFConc(id){
     try{await sb(`cf_conceptos?id=eq.${id}`,{method:"DELETE"});cfConceptos=cfConceptos.filter(c=>c.id!==id);cfValores=cfValores.filter(v=>v.concepto_id!==id);renderCFResumen();toast("Concepto eliminado","ok")}
     catch(e){toast("Error","err")}
   });
+}
+
+/* ── CASH FLOW INLINE EDIT ── */
+let cfEditMode="real"; // 'proy' | 'real'
+let _cfNavCols=0;
+let _cfFillDragging=false,_cfFillSourceTd=null,_cfFillSourceVal=null;
+
+function setCFEditMode(mode,btn){
+  cfEditMode=mode;
+  document.querySelectorAll("#cf-mode-toggle .fb").forEach(b=>b.classList.remove("on"));
+  if(btn)btn.classList.add("on");
+}
+
+function cfCeldaActivar(td){
+  if(td.classList.contains("cf-editing"))return;
+  // Cerrar celda anterior
+  const prev=document.querySelector("td.cf-editing");
+  if(prev&&prev!==td)cfCeldaDesactivar(prev,true);
+
+  const cid=td.dataset.cid,period=td.dataset.period,tipo=td.dataset.tipo;
+  if(!cid||!period)return;
+  const v=cfValores.find(x=>x.concepto_id==cid&&x.periodo===period);
+  const curProy=v?.monto??null;
+  const curReal=v?.monto_real??null;
+  const editVal=cfEditMode==="proy"?curProy:curReal;
+  const otherLabel=cfEditMode==="proy"
+    ?(curReal!=null?`real $${Math.round(curReal).toLocaleString("es-AR")}`:"sin real")
+    :(curProy!=null?`proy $${Math.round(curProy).toLocaleString("es-AR")}`:"sin proyectado");
+
+  td.classList.add("cf-editing");
+  td.innerHTML=`<div style="position:relative;padding:3px 6px 10px">
+    <input class="cf-inline-inp" type="number" value="${editVal??""}" placeholder="0"
+      style="width:calc(100% - 4px);text-align:right;background:transparent;border:none;font-size:13px;color:var(--tx);outline:none;font-weight:700;min-width:70px"
+      onkeydown="cfCeldaKeyDown(event,this.closest('td'))">
+    <div style="font-size:9px;color:var(--tx4);text-align:right;line-height:1.2">${otherLabel}</div>
+    <div class="cf-fill-handle"
+      onmousedown="cfFillStart(event,this.closest('td'))"
+      onclick="event.stopPropagation()"></div>
+  </div>`;
+  const inp=td.querySelector(".cf-inline-inp");
+  inp.focus();inp.select();
+
+  // Guardar al hacer click fuera
+  const clickOutside=(e)=>{
+    if(!td.contains(e.target)){
+      document.removeEventListener("mousedown",clickOutside,true);
+      if(td.classList.contains("cf-editing"))cfCeldaDesactivar(td,true);
+    }
+  };
+  setTimeout(()=>document.addEventListener("mousedown",clickOutside,true),0);
+}
+
+async function cfCeldaDesactivar(td,save){
+  if(!td.classList.contains("cf-editing"))return;
+  const inp=td.querySelector(".cf-inline-inp");
+  const rawVal=inp?inp.value.trim():"";
+  td.classList.remove("cf-editing");
+  if(save&&rawVal!==""){
+    const val=parseFloat(rawVal);
+    if(!isNaN(val))await cfCeldaSaveSingle(td.dataset.cid,td.dataset.period,val);
+  }
+  cfCeldaRefresh(td);
+}
+
+async function cfCeldaSaveSingle(cid,period,val){
+  const payload=cfEditMode==="proy"?{monto:val}:{monto_real:val};
+  const existing=cfValores.find(v=>v.concepto_id==cid&&v.periodo===period);
+  try{
+    if(existing){
+      await sb(`cf_valores?id=eq.${existing.id}`,{method:"PATCH",body:JSON.stringify(payload)});
+      Object.assign(existing,payload);
+    }else{
+      const[created]=await sb("cf_valores",{method:"POST",body:JSON.stringify({concepto_id:cid,periodo:period,...payload})});
+      cfValores.push(created);
+    }
+  }catch(e){showToast("Error al guardar","err");}
+}
+
+function cfCeldaRefresh(td){
+  const cid=td.dataset.cid,period=td.dataset.period,tipo=td.dataset.tipo;
+  if(!cid||!period)return;
+  const v=cfValores.find(x=>x.concepto_id==cid&&x.periodo===period);
+  const monto=v?.monto||0,real=v?.monto_real??null;
+  let display,cellColor;
+  if(real!==null){
+    const delta=real-monto,isGood=tipo==="Ingreso"?delta>=0:delta<=0;
+    const deltaCol=delta===0?"var(--tx3)":isGood?"var(--gr)":"var(--re)";
+    const sign=delta>0?"+":"-";
+    display=`<div style="line-height:1.35">
+      <div style="font-weight:700;color:${deltaCol==="var(--tx3)"?"var(--tx)":deltaCol}">${real?"$"+Math.round(real).toLocaleString("es-AR"):"—"}</div>
+      ${monto?`<div style="font-size:10px;color:var(--tx4)">proy $${Math.round(monto).toLocaleString("es-AR")}</div>`:""}
+      ${delta!==0?`<div style="font-size:10px;color:${deltaCol}">${sign}$${Math.round(Math.abs(delta)).toLocaleString("es-AR")}</div>`:""}
+    </div>`;
+    cellColor="var(--tx)";
+  }else{
+    display=monto?"$"+Math.round(monto).toLocaleString("es-AR"):"—";
+    cellColor=monto?"var(--tx)":"var(--tx3)";
+  }
+  td.innerHTML=display;
+  td.style.color=cellColor;
+}
+
+function cfCeldaKeyDown(e,td){
+  if(e.key==="Escape"){
+    e.preventDefault();
+    td.classList.remove("cf-editing");
+    cfCeldaRefresh(td);
+    return;
+  }
+  if(e.key==="Enter"||e.key==="Tab"){
+    e.preventDefault();e.stopPropagation();
+    const allCells=[...document.querySelectorAll("#cf-grilla-wrap td[data-cid]")];
+    const idx=allCells.indexOf(td);
+    const nextCid=allCells[idx+1]?.dataset.cid;
+    const nextPeriod=allCells[idx+1]?.dataset.period;
+    const downCid=allCells[idx+_cfNavCols]?.dataset.cid;
+    const downPeriod=allCells[idx+_cfNavCols]?.dataset.period;
+    const goNext=e.key==="Tab"&&!e.shiftKey;
+    const goPrev=e.key==="Tab"&&e.shiftKey;
+    const goDown=e.key==="Enter";
+    cfCeldaDesactivar(td,true).then(()=>{
+      let target=null;
+      if(goNext&&nextCid)target=document.querySelector(`td[data-cid="${nextCid}"][data-period="${nextPeriod}"]`);
+      else if(goPrev&&idx>0){const pc=allCells[idx-1];if(pc)target=document.querySelector(`td[data-cid="${pc.dataset.cid}"][data-period="${pc.dataset.period}"]`);}
+      else if(goDown&&downCid)target=document.querySelector(`td[data-cid="${downCid}"][data-period="${downPeriod}"]`);
+      if(target)cfCeldaActivar(target);
+    });
+  }
+}
+
+/* Fill handle — arrastrar para copiar valor a celdas de la misma fila (→) */
+function cfFillStart(e,td){
+  e.preventDefault();e.stopPropagation();
+  _cfFillDragging=true;
+  _cfFillSourceTd=td;
+  const inp=td.querySelector(".cf-inline-inp");
+  _cfFillSourceVal=inp?parseFloat(inp.value):null;
+  if(isNaN(_cfFillSourceVal))_cfFillSourceVal=null;
+  document.addEventListener("mousemove",cfFillMove);
+  document.addEventListener("mouseup",cfFillEnd,{once:true});
+}
+
+function cfFillMove(e){
+  if(!_cfFillDragging)return;
+  document.querySelectorAll("td.cf-fill-target").forEach(t=>t.classList.remove("cf-fill-target"));
+  const el=document.elementFromPoint(e.clientX,e.clientY);
+  const targetTd=el?.closest?.("td[data-cid]");
+  if(!targetTd||targetTd===_cfFillSourceTd)return;
+  const row=_cfFillSourceTd.parentElement;
+  const cells=[...row.querySelectorAll("td[data-cid]")];
+  const srcIdx=cells.indexOf(_cfFillSourceTd);
+  const tgtIdx=cells.indexOf(targetTd);
+  if(tgtIdx>srcIdx)cells.slice(srcIdx+1,tgtIdx+1).forEach(c=>c.classList.add("cf-fill-target"));
+  else if(tgtIdx<srcIdx)cells.slice(tgtIdx,srcIdx).forEach(c=>c.classList.add("cf-fill-target"));
+}
+
+async function cfFillEnd(){
+  document.removeEventListener("mousemove",cfFillMove);
+  _cfFillDragging=false;
+  const targets=[...document.querySelectorAll("td.cf-fill-target")];
+  targets.forEach(t=>t.classList.remove("cf-fill-target"));
+  if(!targets.length||_cfFillSourceVal==null){
+    if(_cfFillSourceTd)cfCeldaDesactivar(_cfFillSourceTd,true);
+    return;
+  }
+  // Guardar valor fuente
+  if(_cfFillSourceTd)await cfCeldaDesactivar(_cfFillSourceTd,true);
+  // Guardar en todos los targets
+  await Promise.all(targets.map(td=>cfCeldaSaveSingle(td.dataset.cid,td.dataset.period,_cfFillSourceVal)));
+  targets.forEach(td=>cfCeldaRefresh(td));
+  showToast(`✓ Valor copiado a ${targets.length} celda${targets.length>1?"s":""}`, "ok");
 }
 
 /* ── PRÉSTAMOS ── */

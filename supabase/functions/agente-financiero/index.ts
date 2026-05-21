@@ -28,7 +28,7 @@ serve(async (req) => {
     hace3meses.setMonth(hace3meses.getMonth() - 3);
     const periodo3m = hace3meses.toISOString().slice(0, 7);
 
-    const [conceptos, valores, cobranzas, prestamos, inversiones, invMovimientos, rendDiarios, inflacion, empleados, pagosEmpleados, comprobantes] = await Promise.all([
+    const [conceptos, valores, cobranzas, prestamos, inversiones, invMovimientos, rendDiarios, inflacion, empleados, pagosEmpleados, comprobantes, inscripciones] = await Promise.all([
       supabase.from("cf_conceptos").select("nombre,tipo,categoria,sociedad").eq("activo", true),
       supabase.from("cf_valores").select("concepto_id,periodo,monto,monto_real,cf_conceptos(nombre,tipo,sociedad)"),
       supabase.from("cf_cobranzas").select("descripcion,monto,fecha_vencimiento,estado,empresa").order("fecha_vencimiento"),
@@ -40,6 +40,7 @@ serve(async (req) => {
       supabase.from("cf_empleados").select("nombre,categoria,empresa,monto_mensual,activo").eq("activo", true),
       supabase.from("cf_pagos_empleados").select("empleado_id,periodo,monto,pagado,cf_empleados(nombre,empresa)").order("periodo", { ascending: false }).limit(60),
       supabase.from("comprobantes_compra").select("proveedor,total,monto_neto,fecha,fecha_imputacion,sociedad,estado,concepto").gte("fecha", periodo3m).order("fecha", { ascending: false }).limit(100),
+      supabase.from("inscripciones").select("alumno_id,curso_id,estado,monto,fecha_pago,cuotas,cursos(nombre,arancel),alumnos(nombre,apellido)").order("created_at", { ascending: false }).limit(150),
     ]);
 
     const hoy = new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Salta" });
@@ -80,7 +81,10 @@ PAGOS A EMPLEADOS ÚLTIMOS 5 MESES (pagado=true/false indica si fue abonado):
 ${JSON.stringify(pagosEmpleados.data)}
 
 COMPROBANTES DE COMPRA ÚLTIMOS 3 MESES (facturas de proveedores):
-${JSON.stringify(comprobantes.data)}`;
+${JSON.stringify(comprobantes.data)}
+
+COBRANZAS DE CURSOS - INSCRIPCIONES (estado=pagado/pendiente/cuotas, monto=lo abonado, cuotas=cant. cuotas):
+${JSON.stringify(inscripciones.data)}`;
 
     // Limitar historial para no exceder contexto (sistema prompt es grande)
     const historialReciente = historial.slice(-6);
