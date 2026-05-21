@@ -70,7 +70,7 @@ Devolvé SOLO el prompt en inglés, listo para pegar en Runway Gen-4.5. Entre 10
 
       // Imágenes de referencia
       if (imagenes?.length) {
-        imagenes.slice(0, 3).forEach((img: any) => {
+        imagenes.slice(0, 6).forEach((img: any) => {
           contentBlocks.push({
             type: "image",
             source: {
