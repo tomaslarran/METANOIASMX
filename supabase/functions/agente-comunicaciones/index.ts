@@ -120,6 +120,66 @@ Historial de publicaciones registradas: ${publicaciones.length} posts.
 
 Planificá un calendario de contenido para las próximas 3 semanas (semana a semana), con qué publicar cada día, en qué plataforma, y el enfoque de cada post. Sé específico y accionable.`;
 
+    } else if (parsedPrompt?.tipo === "buscar_tendencias") {
+      const tema = parsedPrompt.tema || "simulación médica innovación";
+      const TAVILY_KEY = Deno.env.get("TAVILY_API_KEY")!;
+
+      // Búsqueda en Tavily
+      const queries = [
+        `${tema} 2025`,
+        `medical simulation advances laparoscopic training 2025`,
+        `simulación médica Argentina innovación`,
+      ];
+
+      const searchResults: string[] = [];
+      for (const q of queries) {
+        try {
+          const tRes = await fetch("https://api.tavily.com/search", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              api_key: TAVILY_KEY,
+              query: q,
+              search_depth: "basic",
+              max_results: 4,
+              include_answer: false,
+              include_raw_content: false,
+            }),
+          });
+          const tData = await tRes.json();
+          if (tData.results) {
+            tData.results.forEach((r: any) => {
+              searchResults.push(`TÍTULO: ${r.title}\nFUENTE: ${r.url}\nRESUMEN: ${r.content?.slice(0, 300) || ""}`);
+            });
+          }
+        } catch (_) { /* ignorar errores de búsqueda individual */ }
+      }
+
+      const resultadosBusqueda = searchResults.length
+        ? searchResults.join("\n\n---\n\n")
+        : "No se encontraron resultados en la búsqueda.";
+
+      userMsg = `Encontré los siguientes artículos y contenidos recientes sobre "${tema}":
+
+${resultadosBusqueda}
+
+Basándote en estos resultados, generá para el equipo de comunicaciones de Metanoia SMX:
+
+1. **RESUMEN DE TENDENCIAS** (3-4 párrafos): Qué está pasando en el mundo de la simulación médica e innovación que sea relevante para Metanoia.
+
+2. **IDEAS DE POSTS** (5 ideas concretas): Para cada una indicá:
+   - Tema del post
+   - Plataforma recomendada (Instagram/Facebook/LinkedIn)
+   - Tipo de contenido (foto, reel, carrusel)
+   - Angle o enfoque
+
+3. **CALENDARIO SUGERIDO** para esta semana (lunes a viernes):
+   - Qué publicar cada día
+   - En qué plataforma
+   - Por qué ese día/plataforma
+
+Usá un tono práctico y accionable. El contenido tiene que conectar lo que está pasando en el mundo con lo que hace Metanoia.`;
+
     } else {
       const resumen = publicaciones.length ? publicaciones.slice(0, 30).map((p: any) =>
         `[${p.plataforma}/${p.tipo}] ${p.fecha_publicacion || ""} "${p.tema || ""}" — likes:${p.likes || 0} alcance:${p.alcance || 0} guardados:${p.guardados || 0} comentarios:${p.comentarios || 0}`
