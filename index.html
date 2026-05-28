@@ -11357,72 +11357,182 @@ function renderPublicaciones(){
   }).join("")}</div>`;
 }
 
+let _metPeriodo=30; // días a mostrar: 30, 60, 0=todo
+
+function setMetPeriodo(dias,btn){
+  _metPeriodo=dias;
+  document.querySelectorAll("#met-periodo-toggle .fb").forEach(b=>b.classList.remove("on"));
+  if(btn)btn.classList.add("on");
+  renderComMetricas();
+}
+
 function renderComMetricas(){
   const el=document.getElementById("com-met-container");
   if(!publicaciones.length){el.innerHTML=`<div class="empty"><div class="ei">📈</div>Cargá publicaciones para ver métricas</div>`;return;}
 
+  // Filtrar por período
+  const hoy=new Date();
+  const pubs=_metPeriodo===0?publicaciones:publicaciones.filter(p=>{
+    if(!p.fecha_publicacion)return true;
+    const d=new Date(p.fecha_publicacion);
+    return(hoy-d)/(1000*60*60*24)<=_metPeriodo;
+  });
+
+  if(!pubs.length){el.innerHTML=`<div class="empty"><div class="ei">📅</div>Sin publicaciones en este período</div>`;return;}
+
+  // Helpers
+  const eng=p=>p.alcance&&p.alcance>0?(((p.likes||0)+(p.comentarios||0)+(p.guardados||0))/p.alcance*100):null;
+  const avgEng=list=>{const v=list.map(eng).filter(x=>x!==null);return v.length?(v.reduce((a,b)=>a+b,0)/v.length):null;};
+  const fmtEng=v=>v!=null?v.toFixed(1)+"%":"—";
+  const fmtN=v=>v!=null?Math.round(v).toLocaleString("es-AR"):"—";
+
+  // KPIs globales
+  const totalAlcance=pubs.reduce((s,p)=>s+(p.alcance||0),0);
+  const totalLikes=pubs.reduce((s,p)=>s+(p.likes||0),0);
+  const totalComentarios=pubs.reduce((s,p)=>s+(p.comentarios||0),0);
+  const totalGuardados=pubs.reduce((s,p)=>s+(p.guardados||0),0);
+  const engGlobal=avgEng(pubs);
+  const avgAlcance=pubs.length?Math.round(totalAlcance/pubs.length):0;
+
   // Por plataforma
-  const plats=["instagram","facebook","linkedin"];
-  const porPlat=plats.map(pl=>{
-    const pubs=publicaciones.filter(p=>p.plataforma===pl);
-    const avg=pubs.length?Math.round(pubs.reduce((s,p)=>s+(p.likes||0),0)/pubs.length):0;
-    const alcance=pubs.reduce((s,p)=>s+(p.alcance||0),0);
-    return{pl,n:pubs.length,avg,alcance};
+  const PLATS=["instagram","facebook","linkedin"];
+  const porPlat=PLATS.map(pl=>{
+    const list=pubs.filter(p=>p.plataforma===pl);
+    if(!list.length)return null;
+    const alcance=list.reduce((s,p)=>s+(p.alcance||0),0);
+    const likes=list.reduce((s,p)=>s+(p.likes||0),0);
+    const avgE=avgEng(list);
+    return{pl,n:list.length,alcance,likes,avgE};
+  }).filter(Boolean);
+
+  // Por tipo de contenido
+  const TIPOS=["foto","reel","carrusel","video","historia"];
+  const porTipo=TIPOS.map(t=>{
+    const list=pubs.filter(p=>p.tipo===t);
+    if(!list.length)return null;
+    const avgE=avgEng(list);
+    const avgL=Math.round(list.reduce((s,p)=>s+(p.likes||0),0)/list.length);
+    const avgA=Math.round(list.reduce((s,p)=>s+(p.alcance||0),0)/list.length);
+    return{t,n:list.length,avgE,avgL,avgA};
+  }).filter(Boolean).sort((a,b)=>(b.avgE||0)-(a.avgE||0));
+
+  // Mejor día de la semana
+  const DIAS=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+  const porDia=DIAS.map((d,i)=>{
+    const list=pubs.filter(p=>{if(!p.fecha_publicacion)return false;return new Date(p.fecha_publicacion).getDay()===i;});
+    return{d,n:list.length,avgE:avgEng(list),avgA:list.length?Math.round(list.reduce((s,p)=>s+(p.alcance||0),0)/list.length):0};
   }).filter(x=>x.n>0);
 
-  // Por tipo
-  const tipos=["foto","reel","carrusel","video","historia"];
-  const porTipo=tipos.map(t=>{
-    const pubs=publicaciones.filter(p=>p.tipo===t);
-    const avg=pubs.length?Math.round(pubs.reduce((s,p)=>s+(p.likes||0),0)/pubs.length):0;
-    return{t,n:pubs.length,avg};
-  }).filter(x=>x.n>0).sort((a,b)=>b.avg-a.avg);
+  // Top 5 por engagement rate
+  const top5=[...pubs].filter(p=>eng(p)!==null).sort((a,b)=>(eng(b)||0)-(eng(a)||0)).slice(0,5);
+  // Posts bajo el promedio
+  const bajos=engGlobal!=null?pubs.filter(p=>eng(p)!==null&&eng(p)<engGlobal*0.5).slice(0,5):[];
 
-  // Top 5 posts
-  const top5=[...publicaciones].sort((a,b)=>(b.likes||0)-(a.likes||0)).slice(0,5);
+  const maxAlcPlat=Math.max(...porPlat.map(x=>x.alcance),1);
+  const maxEngTipo=Math.max(...porTipo.map(x=>x.avgE||0),0.1);
+  const maxEngDia=Math.max(...porDia.map(x=>x.avgE||0),0.1);
 
-  const maxAlcance=Math.max(...porPlat.map(x=>x.alcance),1);
-  const maxLikes=Math.max(...porTipo.map(x=>x.avg),1);
+  const barH=(val,max,color)=>`<div style="height:6px;background:var(--bg3);border-radius:3px;margin-top:4px"><div style="height:6px;width:${Math.round((val/max)*100)}%;background:${color};border-radius:3px;transition:width .3s"></div></div>`;
 
   el.innerHTML=`
-  <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:12px">
-    <div class="met-block">
-      <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Alcance por plataforma</div>
+  <!-- Período -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+    <span style="font-size:12px;color:var(--tx3)">Período:</span>
+    <div id="met-periodo-toggle" class="fbar">
+      <button class="fb ${_metPeriodo===30?"on":""}" onclick="setMetPeriodo(30,this)">30 días</button>
+      <button class="fb ${_metPeriodo===60?"on":""}" onclick="setMetPeriodo(60,this)">60 días</button>
+      <button class="fb ${_metPeriodo===0?"on":""}" onclick="setMetPeriodo(0,this)">Todo</button>
+    </div>
+    <span style="font-size:11px;color:var(--tx4);margin-left:4px">${pubs.length} publicaciones</span>
+  </div>
+
+  <!-- KPIs -->
+  <div class="stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
+    <div class="sc"><div class="sc-l">Alcance total</div><div class="sc-v vb">${fmtN(totalAlcance)}</div><div class="sc-s">personas</div></div>
+    <div class="sc"><div class="sc-l">Engagement rate</div><div class="sc-v" style="color:${engGlobal!=null?(engGlobal>=3?"var(--gr)":engGlobal>=1?"var(--am)":"var(--re)"):"var(--tx3)"}">${fmtEng(engGlobal)}</div><div class="sc-s">promedio</div></div>
+    <div class="sc"><div class="sc-l">Likes totales</div><div class="sc-v va">${fmtN(totalLikes)}</div><div class="sc-s">❤️ ${fmtN(totalComentarios)} 💬 ${fmtN(totalGuardados)} 🔖</div></div>
+    <div class="sc"><div class="sc-l">Alcance promedio</div><div class="sc-v vg">${fmtN(avgAlcance)}</div><div class="sc-s">por post</div></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+    <!-- Por plataforma -->
+    <div class="met-block" style="margin-bottom:0">
+      <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px">📱 Por plataforma</div>
       ${porPlat.map(x=>`
-        <div style="margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--tx2);margin-bottom:4px">
-            <span>${PLAT_ICON[x.pl]||""} ${x.pl} <span style="color:var(--tx3)">(${x.n} posts)</span></span>
-            <span style="font-weight:600">${x.alcance.toLocaleString("es-AR")}</span>
+        <div style="margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--tx2);margin-bottom:2px">
+            <span style="font-weight:600">${PLAT_ICON[x.pl]||""} ${x.pl} <span style="color:var(--tx4);font-weight:400">${x.n} posts</span></span>
+            <span style="color:var(--tx3)">${x.alcance.toLocaleString("es-AR")} alcance</span>
           </div>
-          <div style="height:6px;background:var(--bg3);border-radius:3px"><div style="height:6px;width:${Math.round(x.alcance/maxAlcance*100)}%;background:${PLAT_COLOR[x.pl]||"var(--pu)"};border-radius:3px"></div></div>
+          ${barH(x.alcance,maxAlcPlat,PLAT_COLOR[x.pl]||"var(--pu)")}
+          <div style="font-size:11px;color:var(--tx4);margin-top:3px">Eng: <b style="color:${x.avgE!=null?(x.avgE>=3?"var(--gr)":x.avgE>=1?"var(--am)":"var(--re)"):"var(--tx3)"}">${fmtEng(x.avgE)}</b> · Likes prom: ${fmtN(x.likes/x.n)}</div>
         </div>`).join("")}
     </div>
-    <div class="met-block">
-      <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Promedio likes por tipo</div>
-      ${porTipo.map(x=>`
-        <div style="margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--tx2);margin-bottom:4px">
-            <span>${TIPO_ICON[x.t]||""} ${x.t} <span style="color:var(--tx3)">(${x.n})</span></span>
-            <span style="font-weight:600">${x.avg} ❤️</span>
+
+    <!-- Por tipo de contenido -->
+    <div class="met-block" style="margin-bottom:0">
+      <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px">🎨 Por tipo de contenido</div>
+      ${porTipo.map((x,i)=>`
+        <div style="margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--tx2);margin-bottom:2px">
+            <span style="font-weight:600">${i===0?"🏆 ":""}${TIPO_ICON[x.t]||""} ${x.t} <span style="color:var(--tx4);font-weight:400">${x.n} posts</span></span>
+            <span style="font-weight:700;color:${x.avgE!=null?(x.avgE>=3?"var(--gr)":x.avgE>=1?"var(--am)":"var(--re)"):"var(--tx3)"}">${fmtEng(x.avgE)}</span>
           </div>
-          <div style="height:6px;background:var(--bg3);border-radius:3px"><div style="height:6px;width:${Math.round(x.avg/maxLikes*100)}%;background:var(--pu);border-radius:3px"></div></div>
+          ${barH(x.avgE||0,maxEngTipo,"var(--pu)")}
+          <div style="font-size:11px;color:var(--tx4);margin-top:3px">Alcance prom: ${fmtN(x.avgA)} · Likes prom: ${fmtN(x.avgL)}</div>
         </div>`).join("")}
     </div>
   </div>
-  <div class="met-block">
-    <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Top 5 posts por likes</div>
-    ${top5.map((p,i)=>`
-      <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--b);cursor:pointer" onclick="editPost('${p.id}')">
-        <span style="font-size:18px;font-weight:800;color:var(--tx3);min-width:20px">${i+1}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:12px;color:var(--tx);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.tema||p.caption||"Sin título")}</div>
-          <div style="font-size:11px;color:var(--tx3)">${PLAT_ICON[p.plataforma]||""} ${p.plataforma} · ${p.fecha_publicacion?fmt(p.fecha_publicacion):""}</div>
-        </div>
-        <div style="text-align:right;font-size:12px">
-          <div style="color:var(--gr);font-weight:600">❤️ ${p.likes||0}</div>
-          ${p.alcance?`<div style="color:var(--tx3)">👁 ${p.alcance.toLocaleString("es-AR")}</div>`:""}
-        </div>
-      </div>`).join("")}
+
+  <!-- Mejor día -->
+  ${porDia.length>=2?`<div class="met-block">
+    <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px">📅 Engagement por día de la semana</div>
+    <div style="display:flex;gap:8px;align-items:flex-end;height:80px">
+      ${porDia.map(x=>{
+        const h=maxEngDia>0?Math.round((x.avgE||0)/maxEngDia*60):4;
+        const isBest=x.avgE===Math.max(...porDia.map(d=>d.avgE||0));
+        return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+          <div style="font-size:10px;color:${isBest?"var(--gr)":"var(--tx4)"};font-weight:${isBest?700:400}">${fmtEng(x.avgE)}</div>
+          <div style="width:100%;height:${Math.max(h,4)}px;background:${isBest?"var(--gr)":"var(--pu)"};border-radius:3px 3px 0 0;opacity:${isBest?1:.6};transition:height .3s" title="${x.d}: ${x.n} posts"></div>
+          <div style="font-size:11px;color:${isBest?"var(--gr)":"var(--tx3)"};font-weight:${isBest?700:400}">${x.d}</div>
+        </div>`;
+      }).join("")}
+    </div>
+    <div style="font-size:11px;color:var(--tx3);margin-top:10px">🏆 Mejor día: <b style="color:var(--gr)">${porDia.reduce((a,b)=>(b.avgE||0)>(a.avgE||0)?b:a).d}</b></div>
+  </div>`:""}
+
+  <!-- Top posts -->
+  <div style="display:grid;grid-template-columns:${bajos.length?"1fr 1fr":"1fr"};gap:12px">
+    <div class="met-block" style="margin-bottom:0">
+      <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">🏆 Top posts por engagement</div>
+      ${top5.length?top5.map((p,i)=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--b);cursor:pointer" onclick="editPost('${p.id}')">
+          <span style="font-size:16px;font-weight:800;color:var(--tx4);min-width:18px">${i+1}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;color:var(--tx);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.tema||p.caption||"Sin título")}</div>
+            <div style="font-size:11px;color:var(--tx3)">${PLAT_ICON[p.plataforma]||""} ${p.plataforma} · ${TIPO_ICON[p.tipo]||""} ${p.tipo||""} · ${p.fecha_publicacion?fmt(p.fecha_publicacion):""}</div>
+          </div>
+          <div style="text-align:right;font-size:12px;white-space:nowrap">
+            <div style="font-weight:700;color:var(--gr)">${fmtEng(eng(p))}</div>
+            <div style="color:var(--tx3)">👁 ${(p.alcance||0).toLocaleString("es-AR")}</div>
+          </div>
+        </div>`).join(""):`<div style="font-size:12px;color:var(--tx3);padding:8px 0">No hay posts con alcance cargado</div>`}
+    </div>
+
+    ${bajos.length?`<div class="met-block" style="margin-bottom:0">
+      <div style="font-size:12px;font-weight:700;color:var(--re);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">⚠️ Bajo rendimiento</div>
+      <div style="font-size:11px;color:var(--tx3);margin-bottom:10px">Posts con menos del 50% del engagement promedio (${fmtEng(engGlobal)})</div>
+      ${bajos.map(p=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--b);cursor:pointer" onclick="editPost('${p.id}')">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.tema||p.caption||"Sin título")}</div>
+            <div style="font-size:11px;color:var(--tx3)">${PLAT_ICON[p.plataforma]||""} ${p.plataforma} · ${p.fecha_publicacion?fmt(p.fecha_publicacion):""}</div>
+          </div>
+          <div style="text-align:right;font-size:12px">
+            <div style="font-weight:700;color:var(--re)">${fmtEng(eng(p))}</div>
+          </div>
+        </div>`).join("")}
+    </div>`:""}
   </div>`;
 }
 
