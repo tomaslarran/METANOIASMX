@@ -1223,11 +1223,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
   <!-- FILTROS -->
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
-    <button class="fb on" onclick="calSetFiltro('todo',this)">Todo</button>
-    <button class="fb" onclick="calSetFiltro('tareas',this)">Solo tareas</button>
-    <button class="fb" onclick="calSetFiltro('cursos',this)">Solo cursos</button>
-    <button class="fb" onclick="calSetFiltro('venc',this)">Solo vencimientos</button>
-    <button class="fb" onclick="calSetFiltro('finanzas',this)">💰 Finanzas</button>
+    <button class="fb on" id="cal-btn-todo" onclick="calSetFiltro('todo',this)">Todo</button>
+    <button class="fb" id="cal-btn-tareas" onclick="calSetFiltro('tareas',this)">Solo tareas</button>
+    <button class="fb" id="cal-btn-cursos" onclick="calSetFiltro('cursos',this)">Solo cursos</button>
+    <button class="fb" id="cal-btn-venc" onclick="calSetFiltro('venc',this)">Solo vencimientos</button>
+    <button class="fb" id="cal-btn-finanzas" onclick="calSetFiltro('finanzas',this)">💰 Finanzas</button>
   </div>
 
   <!-- GRID DEL CALENDARIO — un único grid para header + body -->
@@ -3131,7 +3131,18 @@ function goPage(name,el){
     if(!cfPrestamos.length||!cfInversiones.length)loads.push(loadCF());
     if(loads.length)Promise.all(loads).then(renderCharts);else renderCharts();
   }
-  if(name==="calendario"){Promise.all([loadCursoTareasCalendario(),loadCF()]).then(()=>renderCalendario())}
+  if(name==="calendario"){
+    // Rol comunicaciones: solo ve cursos en el calendario
+    if(loggedUser?.rol==="comunicaciones"){
+      calFiltro="cursos";
+      ["cal-btn-todo","cal-btn-tareas","cal-btn-venc","cal-btn-finanzas"].forEach(id=>{
+        const b=document.getElementById(id);if(b)b.style.display="none";
+      });
+      const bc=document.getElementById("cal-btn-cursos");
+      if(bc){bc.classList.add("on");bc.style.display="";}
+    }
+    Promise.all([loadCursoTareasCalendario(),loadCF()]).then(()=>renderCalendario());
+  }
   if(name==="rutinas"){
     // Recargar rutinas frescas al navegar
     sb("rutinas?select=*&order=dia_del_mes").then(data=>{rutinas=data;renderRutinas()}).catch(()=>renderRutinas());
@@ -3510,10 +3521,11 @@ async function selectCurso(id){
     </div>
     <div class="cd-tabs">
       <div class="cd-tab on" onclick="showCdTab(this,'cd-info-${id}')">Información</div>
+      ${loggedUser?.rol!=="comunicaciones"?`
       <div class="cd-tab" onclick="showCdTab(this,'cd-tareas-${id}')">Checklist (${tareasCurso.length})</div>
       <div class="cd-tab" onclick="showCdTab(this,'cd-costos-${id}')">💰 Costos (${costosCurso.filter(c=>c.aplica).length})</div>
       <div class="cd-tab" onclick="showCdTab(this,'cd-instmat-${id}');loadInstMat('${id}')">👥 Instructores y materiales</div>
-      <div class="cd-tab" onclick="showCdTab(this,'cd-inscriptos-${id}');loadInscriptos('${id}')">📋 Inscriptos</div>
+      <div class="cd-tab" onclick="showCdTab(this,'cd-inscriptos-${id}');loadInscriptos('${id}')">📋 Inscriptos</div>`:""}
     </div>
     <div class="cd-body">
       <div id="cd-info-${id}">
