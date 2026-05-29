@@ -9199,13 +9199,15 @@ function applyRoleUI(rol){
     });
   }
   if(rol==="comunicaciones"){
-    // Ocultar TODO el sidebar excepto Comunicaciones
+    // Ocultar TODO el sidebar
     document.querySelectorAll(".sitem,.ssub,.sgroup-label,.sgroup-items").forEach(el=>{
       el.style.display="none";
     });
-    // Mostrar solo Comunicaciones
-    const navCom=document.getElementById("nav-comunicaciones");
-    if(navCom)navCom.style.display="";
+    // Mostrar solo: Comunicaciones, Cursos (+ sub-items) y Calendario
+    ["nav-comunicaciones","nav-cursos","nav-cact","nav-cbor","nav-ccom","nav-calendario"].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el)el.style.display="";
+    });
   }
 }
 
