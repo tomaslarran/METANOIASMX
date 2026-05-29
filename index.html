@@ -9206,7 +9206,14 @@ function applyRoleUI(rol){
     // Mostrar solo: Comunicaciones, Cursos (+ sub-items) y Calendario
     ["nav-comunicaciones","nav-cursos","nav-cact","nav-cbor","nav-ccom","nav-calendario"].forEach(id=>{
       const el=document.getElementById(id);
-      if(el)el.style.display="";
+      if(!el)return;
+      el.style.display="";
+      // Mostrar el contenedor padre sgroup-items si está oculto
+      let p=el.parentElement;
+      while(p){
+        if(p.classList.contains("sgroup-items")){p.style.display="";break;}
+        p=p.parentElement;
+      }
     });
   }
 }
