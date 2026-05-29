@@ -9191,16 +9191,13 @@ function applyRoleUI(rol){
     });
   }
   if(rol==="comunicaciones"){
-    // Solo ve el módulo de Comunicaciones — todo lo demás oculto
-    const soloComun=["nav-alertas","nav-tareas","nav-ph","nav-ep","nav-bl",
-      "nav-reuniones","nav-cursos","nav-cact","nav-cbor","nav-ccom",
-      "nav-alumnos","nav-proveedores","nav-instructores","nav-inventario",
-      "nav-calendario","nav-graficos","nav-reportes","nav-rutinas",
-      "nav-cashflow","nav-sueldos","nav-impuestos","nav-comprobantes",
-      "nav-cuentas","nav-notif","nav-usuarios"];
-    soloComun.forEach(id=>hideEl(id));
-    // Ocultar labels de grupos del sidebar que quedan vacíos
-    document.querySelectorAll(".sgroup-label").forEach(el=>el.style.display="none");
+    // Ocultar TODO el sidebar excepto Comunicaciones
+    document.querySelectorAll(".sitem,.ssub,.sgroup-label,.sgroup-items").forEach(el=>{
+      el.style.display="none";
+    });
+    // Mostrar solo Comunicaciones
+    const navCom=document.getElementById("nav-comunicaciones");
+    if(navCom)navCom.style.display="";
   }
 }
 
