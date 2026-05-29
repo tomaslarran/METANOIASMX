@@ -3521,11 +3521,10 @@ async function selectCurso(id){
     </div>
     <div class="cd-tabs">
       <div class="cd-tab on" onclick="showCdTab(this,'cd-info-${id}')">Información</div>
-      ${loggedUser?.rol!=="comunicaciones"?`
-      <div class="cd-tab" onclick="showCdTab(this,'cd-tareas-${id}')">Checklist (${tareasCurso.length})</div>
-      <div class="cd-tab" onclick="showCdTab(this,'cd-costos-${id}')">💰 Costos (${costosCurso.filter(c=>c.aplica).length})</div>
-      <div class="cd-tab" onclick="showCdTab(this,'cd-instmat-${id}');loadInstMat('${id}')">👥 Instructores y materiales</div>
-      <div class="cd-tab" onclick="showCdTab(this,'cd-inscriptos-${id}');loadInscriptos('${id}')">📋 Inscriptos</div>`:""}
+      <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-tareas-${id}')">Checklist (${tareasCurso.length})</div>
+      <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-costos-${id}')">💰 Costos (${costosCurso.filter(c=>c.aplica).length})</div>
+      <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-instmat-${id}');loadInstMat('${id}')">👥 Instructores y materiales</div>
+      <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-inscriptos-${id}');loadInscriptos('${id}')">📋 Inscriptos</div>
     </div>
     <div class="cd-body">
       <div id="cd-info-${id}">
@@ -9227,6 +9226,11 @@ function applyRoleUI(rol){
         p=p.parentElement;
       }
     });
+    // Ocultar tabs internos de cursos que no corresponden
+    const style=document.getElementById("comu-role-style")||document.createElement("style");
+    style.id="comu-role-style";
+    style.textContent=".cd-tab-adm{display:none!important}";
+    document.head.appendChild(style);
   }
 }
 
