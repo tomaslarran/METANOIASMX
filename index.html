@@ -11656,9 +11656,9 @@ async function syncMeta(){
   icon.style.animation="spin 1s linear infinite";
   icon.style.display="inline-block";
   try{
-    const res=await fetch(`${SUPABASE_URL}/functions/v1/sync-instagram`,{
+    const res=await fetch(`${SB}/functions/v1/sync-instagram`,{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON_KEY}`},
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},
       body:JSON.stringify({})
     });
     const data=await res.json();
