@@ -1037,6 +1037,9 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <option value="carrusel">Carrusel</option>
         <option value="historia">Historia</option>
       </select>
+      <button class="btn" id="btn-sync-meta" onclick="syncMeta()" style="margin-left:auto;font-size:12px;padding:6px 14px;display:flex;align-items:center;gap:6px">
+        <span id="sync-meta-icon">🔄</span> Sincronizar
+      </button>
     </div>
     <div id="com-pub-lista"><div class="loading"><div class="loader"></div><div class="lt">Cargando publicaciones...</div></div></div>
   </div>
@@ -1696,6 +1699,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <select class="mi" id="nu-rol">
         <option value="instructor">Instructor</option>
         <option value="logistica">Logística</option>
+        <option value="comunicaciones">Comunicaciones</option>
         <option value="admin">Admin</option>
         <option value="proveedor">Proveedor externo</option>
       </select>
@@ -9179,13 +9183,24 @@ function applyRoleUI(rol){
       const el=document.getElementById(id);
       if(!el)return;
       el.style.display="none";
-      // Ocultar sub-items adyacentes
       let sib=el.nextElementSibling;
       while(sib&&(sib.classList.contains("ssub")||sib.classList.contains("sub"))){
         sib.style.display="none";
         sib=sib.nextElementSibling;
       }
     });
+  }
+  if(rol==="comunicaciones"){
+    // Solo ve el módulo de Comunicaciones — todo lo demás oculto
+    const soloComun=["nav-alertas","nav-tareas","nav-ph","nav-ep","nav-bl",
+      "nav-reuniones","nav-cursos","nav-cact","nav-cbor","nav-ccom",
+      "nav-alumnos","nav-proveedores","nav-instructores","nav-inventario",
+      "nav-calendario","nav-graficos","nav-reportes","nav-rutinas",
+      "nav-cashflow","nav-sueldos","nav-impuestos","nav-comprobantes",
+      "nav-cuentas","nav-notif","nav-usuarios"];
+    soloComun.forEach(id=>hideEl(id));
+    // Ocultar labels de grupos del sidebar que quedan vacíos
+    document.querySelectorAll(".sgroup-label").forEach(el=>el.style.display="none");
   }
 }
 
@@ -9463,7 +9478,7 @@ function enterPanel(user,isNewLogin){
   document.getElementById("main-layout").style.display="";
 
   const rol=user.rol||"instructor";
-  const rolColors={admin:"#7C3AED",instructor:"#3B82F6",logistica:"#10B981"};
+  const rolColors={admin:"#7C3AED",instructor:"#3B82F6",logistica:"#10B981",comunicaciones:"#EC4899"};
   const color=rolColors[rol]||"#7C3AED";
   const initials=(user.nombre||"?").split(" ").map(n=>n[0]).slice(0,2).join("").toUpperCase();
   document.getElementById("topbar-avatar").style.background=color;
@@ -9474,7 +9489,9 @@ function enterPanel(user,isNewLogin){
   initSGroups();
 
   if(isNewLogin)toast(`Bienvenido, ${user.nombre} 👋`,"ok");
-  goPage('alertas',document.getElementById('nav-alertas'));
+  const startPage=rol==="comunicaciones"?"comunicaciones":"alertas";
+  const startNav=document.getElementById(`nav-${startPage}`);
+  goPage(startPage,startNav);
   loadAll().then(()=>{if(curPage==="alertas")renderAlertas();syncMobileNavBadges();});
   requestPushPermission();
   loadNotificaciones();
@@ -9708,8 +9725,8 @@ async function loadUsuariosPage(){
 
 function renderUsuariosPage(users){
   const wrap=document.getElementById("usuarios-list");
-  const rolColors={admin:"#7C3AED",instructor:"#3B82F6",logistica:"#10B981"};
-  const rolLabels={admin:"Admin",instructor:"Instructor",logistica:"Logística"};
+  const rolColors={admin:"#7C3AED",instructor:"#3B82F6",logistica:"#10B981",comunicaciones:"#EC4899"};
+  const rolLabels={admin:"Admin",instructor:"Instructor",logistica:"Logística",comunicaciones:"Comunicaciones"};
   wrap.innerHTML=users.map(u=>{
     const initials=(u.nombre||"?").split(" ").map(n=>n[0]).slice(0,2).join("").toUpperCase();
     const rol=u.rol||"instructor";
@@ -9727,6 +9744,7 @@ function renderUsuariosPage(users){
           <option value="admin"${rol==="admin"?" selected":""}>Admin</option>
           <option value="instructor"${rol==="instructor"?" selected":""}>Instructor</option>
           <option value="logistica"${rol==="logistica"?" selected":""}>Logística</option>
+          <option value="comunicaciones"${rol==="comunicaciones"?" selected":""}>Comunicaciones</option>
           <option value="proveedor"${rol==="proveedor"?" selected":""}>Proveedor externo</option>
         </select>
         ${rol==="proveedor"?`<button class="btn sec" style="font-size:11px;padding:4px 10px" onclick="openCuentaCorriente('${u.id}','${esc(u.nombre)}')">📊 Cuenta corriente</button>`:""}
@@ -9747,8 +9765,8 @@ async function saveUsuarioRol(id,newRol,selectEl){
   selectEl.disabled=true;
   try{
     await sb(`usuarios?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({rol:newRol})});
-    const rolColors={admin:"#7C3AED",instructor:"#3B82F6",logistica:"#10B981"};
-    const rolLabels={admin:"Admin",instructor:"Instructor",logistica:"Logística"};
+    const rolColors={admin:"#7C3AED",instructor:"#3B82F6",logistica:"#10B981",comunicaciones:"#EC4899"};
+    const rolLabels={admin:"Admin",instructor:"Instructor",logistica:"Logística",comunicaciones:"Comunicaciones"};
     const card=document.getElementById("ucard-"+id);
     if(card){
       card.querySelector(".urol-avatar").style.background=rolColors[newRol]||"#7C3AED";
@@ -11622,6 +11640,30 @@ async function savePost(){
     renderPublicaciones();
     updateComStats();
   }catch(e){toast("Error al guardar","err");}
+}
+
+async function syncMeta(){
+  const btn=document.getElementById("btn-sync-meta");
+  const icon=document.getElementById("sync-meta-icon");
+  btn.disabled=true;
+  icon.style.animation="spin 1s linear infinite";
+  icon.style.display="inline-block";
+  try{
+    const res=await fetch(`${SUPABASE_URL}/functions/v1/sync-instagram`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON_KEY}`},
+      body:JSON.stringify({})
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error);
+    toast(`✅ Sincronizado: ${data.instagram||0} IG · ${data.facebook||0} FB`,"ok");
+    await loadComunicaciones();
+  }catch(e){
+    toast("Error al sincronizar: "+e.message,"err");
+  }finally{
+    btn.disabled=false;
+    icon.style.animation="";
+  }
 }
 
 async function deletePost(){
