@@ -9210,23 +9210,25 @@ function applyRoleUI(rol){
     });
   }
   if(rol==="comunicaciones"){
-    // Ocultar TODO el sidebar
-    document.querySelectorAll(".sitem,.ssub,.sgroup-label,.sgroup-items").forEach(el=>{
-      el.style.display="none";
+    // Ocultar items específicos — NO ocultar los contenedores sgroup-items
+    const ocultar=[
+      "nav-alertas","nav-tareas","nav-ph","nav-ep","nav-bl","nav-reuniones",
+      "nav-alumnos","nav-proveedores","nav-instructores","nav-inventario",
+      "nav-graficos","nav-reportes","nav-rutinas","nav-cashflow",
+      "nav-sueldos","nav-impuestos","nav-comprobantes","nav-cuentas",
+      "nav-notif","nav-usuarios"
+    ];
+    ocultar.forEach(id=>hideEl(id));
+    // Ocultar sub-items de secciones ocultas
+    document.querySelectorAll(".ssub").forEach(el=>{
+      const parent=el.closest(".sgroup-items");
+      if(!parent)return;
+      const visibleNav=parent.querySelector("[id^='nav-']:not([style*='none'])");
+      if(!visibleNav)el.style.display="none";
     });
-    // Mostrar solo: Comunicaciones, Cursos (+ sub-items) y Calendario
-    ["nav-comunicaciones","nav-cursos","nav-cact","nav-cbor","nav-ccom","nav-calendario"].forEach(id=>{
-      const el=document.getElementById(id);
-      if(!el)return;
-      el.style.display="";
-      // Mostrar el contenedor padre sgroup-items si está oculto
-      let p=el.parentElement;
-      while(p){
-        if(p.classList.contains("sgroup-items")){p.style.display="";break;}
-        p=p.parentElement;
-      }
-    });
-    // Ocultar tabs internos de cursos que no corresponden
+    // Ocultar todos los sgroup-labels (quedan vacíos o redundantes)
+    document.querySelectorAll(".sgroup-label").forEach(el=>el.style.display="none");
+    // Ocultar tabs internos de cursos via CSS
     const style=document.getElementById("comu-role-style")||document.createElement("style");
     style.id="comu-role-style";
     style.textContent=".cd-tab-adm{display:none!important}";
