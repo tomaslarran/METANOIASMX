@@ -3576,8 +3576,11 @@ async function selectCurso(id){
           </div>
         </div>
         ${curso.tiene_after?`<div class="fg" style="margin-top:8px"><label class="fl">Descripción del catering</label><input class="fi" value="${esc(curso.descripcion_after||"")}" onchange="updateCursoField('${id}','descripcion_after',this.value)" placeholder="Ej: Cena en Restaurante El Portal, 21hs"></div>`:""}
-
-        <!-- ── Presupuesto estimado ── -->
+      </div>
+      <div id="cd-tareas-${id}" style="display:none">
+        ${buildChecklistTabHtml(id,tareasCurso,curso)}
+      </div>
+      <div id="cd-costos-${id}" style="display:none">
         ${(()=>{
           const ing=curso.ingreso_estimado||0;
           const cos=curso.costo_estimado||0;
@@ -3590,8 +3593,7 @@ async function selectCurso(id){
           const margen=ingDisplay-cosDisplay;
           const margenPct=ingDisplay?((margen/ingDisplay)*100).toFixed(1):"0.0";
           const margenColor=margen>=0?"var(--gr)":"var(--re)";
-
-          return`<div style="background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:12px 14px;margin-top:12px">
+          return`<div style="background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:12px 14px;margin-bottom:14px">
             <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">💰 Presupuesto estimado · <span style="color:var(--pu);font-weight:600">${curso.certificado?"Certificado (22%)":"No certificado (17%)"}</span></div>
             <div class="form-grid">
               <div class="fg">
@@ -3612,11 +3614,6 @@ async function selectCurso(id){
             </div>
           </div>`;
         })()}
-      </div>
-      <div id="cd-tareas-${id}" style="display:none">
-        ${buildChecklistTabHtml(id,tareasCurso,curso)}
-      </div>
-      <div id="cd-costos-${id}" style="display:none">
         ${buildCostosTabHtml(id,costosCurso)}
       </div>
       <div id="cd-instmat-${id}" style="display:none">
