@@ -217,6 +217,11 @@ body{font-family:var(--f);background:var(--bg);color:var(--tx);min-height:100vh;
 .cd-tab:hover{color:var(--tx)}
 .cd-tab.on{color:var(--tx);border-bottom-color:var(--pu)}
 .cd-body{padding:20px}
+/* Rol comunicaciones: oculta todo el sidebar excepto items marcados */
+body.rol-comunicaciones .sitem:not(.comu-visible),
+body.rol-comunicaciones .ssub:not(.comu-visible),
+body.rol-comunicaciones .sgroup-label{display:none!important}
+body.rol-comunicaciones .cd-tab-adm{display:none!important}
 /* Cash flow inline edit */
 td.cf-editing{padding:0!important;outline:2px solid var(--ac);outline-offset:-2px;background:color-mix(in srgb,var(--ac) 8%,var(--surf))!important;position:relative;z-index:5}
 td.cf-editing:hover{background:color-mix(in srgb,var(--ac) 8%,var(--surf))!important}
@@ -807,7 +812,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         Reuniones
         <span class="sitem-badge" id="badge-reuniones" style="display:none"></span>
       </div>
-      <div class="sitem" onclick="goPage('comunicaciones',this)" id="nav-comunicaciones">
+      <div class="sitem comu-visible" onclick="goPage('comunicaciones',this)" id="nav-comunicaciones">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         Comunicaciones
       </div>
@@ -816,14 +821,14 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="sgroup" id="sg-cursos">
     <div class="sgroup-label" onclick="toggleSGroup('sg-cursos')">Cursos<svg class="sg-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
     <div class="sgroup-items">
-      <div class="sitem" onclick="goPage('cursos',this)" id="nav-cursos">
+      <div class="sitem comu-visible" onclick="goPage('cursos',this)" id="nav-cursos">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
         Cursos
         <span class="sitem-badge" id="badge-cursos">—</span>
       </div>
-      <div class="sitem ssub" onclick="setCursoFilter('activos')" id="nav-cact">Activos</div>
-      <div class="sitem ssub" onclick="setCursoFilter('borrador')" id="nav-cbor">Borradores</div>
-      <div class="sitem ssub" onclick="setCursoFilter('completados')" id="nav-ccom">Completados</div>
+      <div class="sitem ssub comu-visible" onclick="setCursoFilter('activos')" id="nav-cact">Activos</div>
+      <div class="sitem ssub comu-visible" onclick="setCursoFilter('borrador')" id="nav-cbor">Borradores</div>
+      <div class="sitem ssub comu-visible" onclick="setCursoFilter('completados')" id="nav-ccom">Completados</div>
       <div class="sitem" onclick="goPage('alumnos',this)" id="nav-alumnos">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Alumnos
@@ -849,7 +854,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="sgroup" id="sg-analisis">
     <div class="sgroup-label" onclick="toggleSGroup('sg-analisis')">Análisis<svg class="sg-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
     <div class="sgroup-items">
-      <div class="sitem" onclick="goPage('calendario',this)" id="nav-calendario">
+      <div class="sitem comu-visible" onclick="goPage('calendario',this)" id="nav-calendario">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         Calendario
       </div>
@@ -9210,29 +9215,8 @@ function applyRoleUI(rol){
     });
   }
   if(rol==="comunicaciones"){
-    // Ocultar items específicos — NO ocultar los contenedores sgroup-items
-    const ocultar=[
-      "nav-alertas","nav-tareas","nav-ph","nav-ep","nav-bl","nav-reuniones",
-      "nav-alumnos","nav-proveedores","nav-instructores","nav-inventario",
-      "nav-graficos","nav-reportes","nav-rutinas","nav-cashflow",
-      "nav-sueldos","nav-impuestos","nav-comprobantes","nav-cuentas",
-      "nav-notif","nav-usuarios"
-    ];
-    ocultar.forEach(id=>hideEl(id));
-    // Ocultar sub-items de secciones ocultas
-    document.querySelectorAll(".ssub").forEach(el=>{
-      const parent=el.closest(".sgroup-items");
-      if(!parent)return;
-      const visibleNav=parent.querySelector("[id^='nav-']:not([style*='none'])");
-      if(!visibleNav)el.style.display="none";
-    });
-    // Ocultar todos los sgroup-labels (quedan vacíos o redundantes)
-    document.querySelectorAll(".sgroup-label").forEach(el=>el.style.display="none");
-    // Ocultar tabs internos de cursos via CSS
-    const style=document.getElementById("comu-role-style")||document.createElement("style");
-    style.id="comu-role-style";
-    style.textContent=".cd-tab-adm{display:none!important}";
-    document.head.appendChild(style);
+    // Todo el control visual está en CSS via body.rol-comunicaciones
+    document.body.classList.add("rol-comunicaciones");
   }
 }
 
@@ -9534,6 +9518,7 @@ function logout(){
   if(!confirm(`¿Cerrar sesión de ${loggedUser?.nombre||""}?`))return;
   sessionStorage.removeItem("smx_session");
   stopNotifPoll();bellNotifs=[];renderBell();
+  document.body.classList.remove("rol-comunicaciones");
   loggedUser=null;authToken=null;
   curUser="";const usel=document.getElementById("usel");if(usel)usel.value="";
   // Restaurar nav items ocultos por rol
