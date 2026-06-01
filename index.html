@@ -5488,11 +5488,43 @@ async function renderConciliacion() {
             <td style="padding:8px 10px;text-align:right;font-weight:600;color:${impColor}">${fmt(imp)}</td>
             <td style="padding:8px 10px;text-align:right;color:var(--tx2)">$${Math.round(Math.abs(parseFloat(m.saldo)||0)).toLocaleString("es-AR")}</td>
             <td style="padding:8px 10px;color:var(--tx3);font-size:11px">${m.match_descripcion ? esc(m.match_descripcion) : '<span style="color:var(--tx4)">Sin match</span>'}</td>
-            <td style="padding:8px 10px;text-align:center">${estadoBadge}</td>
+            <td style="padding:8px 10px;text-align:center;white-space:nowrap">
+            ${estadoBadge}
+            ${m.conciliado ? `<button onclick="concAnularMatch('${m.id}')" style="margin-left:6px;background:none;border:1px solid var(--re);color:var(--re);border-radius:6px;font-size:10px;padding:2px 7px;cursor:pointer" title="Anular match">✕</button>` : `<button onclick="concMatchManual('${m.id}')" style="margin-left:6px;background:none;border:1px solid var(--tx4);color:var(--tx3);border-radius:6px;font-size:10px;padding:2px 7px;cursor:pointer" title="Match manual">+ Match</button>`}
+          </td>
           </tr>`;
         }).join("")}
       </tbody>
     </table>`;
+}
+
+async function concAnularMatch(id) {
+  if (!confirm("¿Anular este match?")) return;
+  try {
+    await sb(`banco_movimientos?id=eq.${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ conciliado: false, match_tipo: null, match_id: null, match_descripcion: null })
+    });
+    const m = bancMovimientos.find(x => x.id === id);
+    if (m) { m.conciliado = false; m.match_tipo = null; m.match_id = null; m.match_descripcion = null; }
+    renderConciliacion();
+    toast("Match anulado", "ok");
+  } catch (e) { toast("Error al anular", "err"); }
+}
+
+async function concMatchManual(id) {
+  const desc = prompt("Descripción del match manual (ej: Inscripción Juan Pérez):");
+  if (!desc) return;
+  try {
+    await sb(`banco_movimientos?id=eq.${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ conciliado: true, match_tipo: "manual", match_descripcion: desc })
+    });
+    const m = bancMovimientos.find(x => x.id === id);
+    if (m) { m.conciliado = true; m.match_tipo = "manual"; m.match_descripcion = desc; }
+    renderConciliacion();
+    toast("Match registrado", "ok");
+  } catch (e) { toast("Error al guardar", "err"); }
 }
 
 async function importarBancoXLS(input) {
