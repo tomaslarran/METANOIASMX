@@ -68,13 +68,16 @@ serve(async (req) => {
     } catch (_) {}
 
     // ==================== FACEBOOK ====================
+    let fbError: string | null = null;
     try {
       const fbRes = await fetch(
         `${FB_BASE}/${FB_PAGE_ID}/posts?fields=id,message,created_time,permalink_url,attachments{media_type}&limit=50&access_token=${FB_TOKEN}`
       );
       const fbData = await fbRes.json();
 
-      if (!fbData.error) {
+      if (fbData.error) {
+        fbError = `${fbData.error.code}: ${fbData.error.message}`;
+      } else if (!fbData.error) {
         for (const post of (fbData.data || [])) {
           let alcance = 0, likes = 0, impresiones = 0;
           try {
@@ -113,7 +116,7 @@ serve(async (req) => {
           });
         }
       }
-    } catch (_) {}
+    } catch (e: any) { fbError = e.message; }
 
     // ==================== UPSERT ====================
     if (registros.length > 0) {
@@ -131,6 +134,7 @@ serve(async (req) => {
       sincronizados: registros.length,
       instagram: igCount,
       facebook: fbCount,
+      ...(fbError ? { fb_error: fbError } : {}),
     }), {
       headers: { ...cors, "Content-Type": "application/json" },
     });
