@@ -218,6 +218,12 @@ body{font-family:var(--f);background:var(--bg);color:var(--tx);min-height:100vh;
 .cd-tab.on{color:var(--tx);border-bottom-color:var(--pu)}
 .cd-body{padding:20px}
 /* Rol comunicaciones: oculta todo el sidebar excepto items marcados */
+/* ── Notificaciones: filas por rol ── */
+.notif-row.nr-admin,.notif-row.nr-logi,.notif-row.nr-comu,.notif-row.nr-inst{display:none}
+body.rol-logistica .notif-row.nr-logi,
+body:not(.rol-comunicaciones):not(.rol-instructor):not(.rol-logistica) .notif-row.nr-admin,
+body.rol-comunicaciones .notif-row.nr-comu,
+body.rol-instructor .notif-row.nr-inst{display:flex}
 /* ── ROLES: control de sidebar por CSS ── */
 body.rol-comunicaciones .sitem:not(.comu-visible),
 body.rol-comunicaciones .ssub:not(.comu-visible),
@@ -1677,18 +1683,19 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="notif-row"><span class="notif-label">Día de envío</span><select class="notif-sel" id="n-dia"><option value="1">Lunes</option><option value="2">Martes</option><option value="3">Miércoles</option><option value="4">Jueves</option><option value="5">Viernes</option></select></div>
       <div class="notif-row"><span class="notif-label">Hora</span><input class="notif-input" type="time" id="n-hora" value="09:00" style="width:90px"></div>
       <div style="font-size:11px;color:var(--tx3);margin:10px 0 6px;font-weight:600;letter-spacing:.5px">INCLUIR EN EL RESUMEN</div>
-      <div class="notif-row"><span class="notif-label">📄 Comprobantes pendientes</span><label class="toggle"><input type="checkbox" id="n-rs-comp" checked><span class="tslider"></span></label></div>
-      <div class="notif-row"><span class="notif-label">📅 Facturas por vencer</span><label class="toggle"><input type="checkbox" id="n-rs-venc" checked><span class="tslider"></span></label></div>
-      <div class="notif-row"><span class="notif-label">💰 Cobranzas pendientes</span><label class="toggle"><input type="checkbox" id="n-rs-cobr" checked><span class="tslider"></span></label></div>
-      <div class="notif-row"><span class="notif-label">🏦 Cuotas de préstamos</span><label class="toggle"><input type="checkbox" id="n-rs-prest" checked><span class="tslider"></span></label></div>
-      <div class="notif-row"><span class="notif-label">👷 Sueldos a pagar</span><label class="toggle"><input type="checkbox" id="n-rs-sue" checked><span class="tslider"></span></label></div>
+      <div class="notif-row nr-admin nr-logi"><span class="notif-label">📄 Comprobantes pendientes</span><label class="toggle"><input type="checkbox" id="n-rs-comp" checked><span class="tslider"></span></label></div>
+      <div class="notif-row nr-admin nr-logi"><span class="notif-label">📅 Facturas por vencer</span><label class="toggle"><input type="checkbox" id="n-rs-venc" checked><span class="tslider"></span></label></div>
+      <div class="notif-row nr-admin"><span class="notif-label">💰 Cobranzas pendientes</span><label class="toggle"><input type="checkbox" id="n-rs-cobr" checked><span class="tslider"></span></label></div>
+      <div class="notif-row nr-admin"><span class="notif-label">🏦 Cuotas de préstamos</span><label class="toggle"><input type="checkbox" id="n-rs-prest" checked><span class="tslider"></span></label></div>
+      <div class="notif-row nr-admin"><span class="notif-label">👷 Sueldos a pagar</span><label class="toggle"><input type="checkbox" id="n-rs-sue" checked><span class="tslider"></span></label></div>
       <div class="notif-row"><span class="notif-label">✅ Tareas pendientes</span><label class="toggle"><input type="checkbox" id="n-rs-tareas" checked><span class="tslider"></span></label></div>
     </div>
     <div class="notif-card">
       <div class="notif-card-title">🚨 Alertas instantáneas</div>
       <div class="notif-row"><span class="notif-label">Tarea bloqueada</span><label class="toggle"><input type="checkbox" id="n-block" checked><span class="tslider"></span></label></div>
       <div class="notif-row"><span class="notif-label">Me asignan una tarea</span><label class="toggle"><input type="checkbox" id="n-asig" checked><span class="tslider"></span></label></div>
-      <div class="notif-row"><span class="notif-label">Curso sin responsable</span><label class="toggle"><input type="checkbox" id="n-curso" checked><span class="tslider"></span></label></div>
+      <div class="notif-row nr-admin nr-comu nr-inst"><span class="notif-label">Curso sin responsable</span><label class="toggle"><input type="checkbox" id="n-curso" checked><span class="tslider"></span></label></div>
+      <div class="notif-row nr-admin nr-comu nr-inst"><span class="notif-label">Nuevo curso / modificación</span><label class="toggle"><input type="checkbox" id="n-nuevo-curso"><span class="tslider"></span></label></div>
       <div class="notif-card-title" style="margin-top:14px">📧 Email</div>
       <div class="notif-row"><span class="notif-label">Dirección</span><input class="notif-input" type="email" id="n-email" placeholder="tu@email.com" style="width:180px"></div>
       <div class="notif-info">✅ Envíos automáticos activos. Cada usuario recibe el resumen en el día y hora que configure acá.</div>
@@ -4407,6 +4414,15 @@ async function createCurso(){
       }
     }
     closeModal("modal-curso");renderCursos();updateSideBadges();toast(`"${nombre}" creado`,"ok");
+    // Notificar a usuarios con alerta_nuevo_curso activa
+    try{
+      const destinos=notifConfigs.filter(c=>c.alerta_nuevo_curso&&c.usuario_id!==loggedUser?.id);
+      await Promise.all(destinos.map(c=>sb("notificaciones",{method:"POST",body:JSON.stringify({
+        usuario_id:c.usuario_id,tipo:"nuevo_curso",
+        mensaje:`Nuevo curso creado: "${nombre}" por ${loggedUser?.nombre||"el equipo"}`,
+        leida:false
+      })})));
+    }catch(_){}
   }catch(e){toast("Error: "+e.message,"err")}
   finally{cbtn.disabled=false;cbtn.textContent="Crear curso"}
 }
@@ -4890,6 +4906,7 @@ function selectNotifUser(id,btn){
   document.getElementById("n-block").checked=cfg.alerta_bloqueado!==false;
   document.getElementById("n-asig").checked=cfg.alerta_asignacion!==false;
   document.getElementById("n-curso").checked=cfg.alerta_curso!==false;
+  document.getElementById("n-nuevo-curso").checked=cfg.alerta_nuevo_curso===true;
   document.getElementById("n-rs-comp").checked=cfg.rs_comprobantes!==false;
   document.getElementById("n-rs-venc").checked=cfg.rs_vencimientos!==false;
   document.getElementById("n-rs-cobr").checked=cfg.rs_cobranzas!==false;
@@ -4901,7 +4918,7 @@ function selectNotifUser(id,btn){
 }
 async function saveNotif(){
   if(!curNotifUser){toast("Seleccioná un usuario","err");return}
-  const data={usuario_id:curNotifUser,email:document.getElementById("n-email").value,aviso_vencimiento:document.getElementById("n-venc").checked,dias_antes:parseInt(document.getElementById("n-dias").value)||3,resumen_semanal:document.getElementById("n-semanal").checked,dia_semana:parseInt(document.getElementById("n-dia").value)||1,hora_envio:document.getElementById("n-hora").value,alerta_bloqueado:document.getElementById("n-block").checked,alerta_asignacion:document.getElementById("n-asig").checked,alerta_curso:document.getElementById("n-curso").checked,rs_comprobantes:document.getElementById("n-rs-comp").checked,rs_vencimientos:document.getElementById("n-rs-venc").checked,rs_cobranzas:document.getElementById("n-rs-cobr").checked,rs_prestamos:document.getElementById("n-rs-prest").checked,rs_sueldos:document.getElementById("n-rs-sue").checked,rs_tareas:document.getElementById("n-rs-tareas").checked,updated_at:new Date().toISOString()};
+  const data={usuario_id:curNotifUser,email:document.getElementById("n-email").value,aviso_vencimiento:document.getElementById("n-venc").checked,dias_antes:parseInt(document.getElementById("n-dias").value)||3,resumen_semanal:document.getElementById("n-semanal").checked,dia_semana:parseInt(document.getElementById("n-dia").value)||1,hora_envio:document.getElementById("n-hora").value,alerta_bloqueado:document.getElementById("n-block").checked,alerta_asignacion:document.getElementById("n-asig").checked,alerta_curso:document.getElementById("n-curso").checked,alerta_nuevo_curso:document.getElementById("n-nuevo-curso").checked,rs_comprobantes:document.getElementById("n-rs-comp").checked,rs_vencimientos:document.getElementById("n-rs-venc").checked,rs_cobranzas:document.getElementById("n-rs-cobr").checked,rs_prestamos:document.getElementById("n-rs-prest").checked,rs_sueldos:document.getElementById("n-rs-sue").checked,rs_tareas:document.getElementById("n-rs-tareas").checked,updated_at:new Date().toISOString()};
   try{
     await sb(`notificaciones_config?usuario_id=eq.${curNotifUser}`,{method:"PATCH",body:JSON.stringify(data)});
     const idx=notifConfigs.findIndex(n=>n.usuario_id===curNotifUser);if(idx>=0)notifConfigs[idx]={...notifConfigs[idx],...data};else notifConfigs.push(data);
