@@ -2605,12 +2605,46 @@ const SB="https://jppxmdvddvbsvymogvcp.supabase.co";
 const KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwcHhtZHZkZHZic3Z5bW9ndmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMjcyODAsImV4cCI6MjA5MDgwMzI4MH0.KPAqCKfUteE3XK9QFqb_44Hm8jYQxfjVLkrlyGvaMhE";
 const H={"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json","Prefer":"return=representation"};
 
+async function sbRefreshToken(){
+  const saved=sessionStorage.getItem("smx_session");
+  if(!saved)return false;
+  try{
+    const s=JSON.parse(saved);
+    if(!s.refreshToken)return false;
+    const r=await fetch(`${SB}/auth/v1/token?grant_type=refresh_token`,{
+      method:"POST",
+      headers:{"apikey":KEY,"Content-Type":"application/json"},
+      body:JSON.stringify({refresh_token:s.refreshToken})
+    });
+    if(!r.ok)return false;
+    const d=await r.json();
+    authToken=d.access_token;
+    s.token=d.access_token;
+    s.loginTime=Date.now();
+    if(d.refresh_token)s.refreshToken=d.refresh_token;
+    sessionStorage.setItem("smx_session",JSON.stringify(s));
+    return true;
+  }catch(_){return false;}
+}
+
 async function sb(path,opts={},retry=2){
   const {headers:extraH,...restOpts}=opts;
   const bearer=authToken||KEY;
   try{
     const r=await fetch(SB+"/rest/v1/"+path,{mode:"cors",headers:{...H,"Authorization":"Bearer "+bearer,...(extraH||{})}, ...restOpts});
-    if(!r.ok){const e=await r.text();throw new Error(e)}
+    if(!r.ok){
+      const e=await r.text();
+      // Token vencido — intentar refresh automático
+      if((e.includes("expired")||e.includes("PGRST303")||r.status===401)&&retry>0){
+        const refreshed=await sbRefreshToken();
+        if(refreshed)return sb(path,opts,0);
+        // Si no se pudo refrescar, forzar logout
+        toast("Sesión vencida, iniciá sesión nuevamente","err");
+        setTimeout(()=>logout(),2000);
+        throw new Error("Sesión vencida");
+      }
+      throw new Error(e);
+    }
     const txt=await r.text();
     return txt?JSON.parse(txt):null;
   }catch(e){
