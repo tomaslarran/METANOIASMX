@@ -9497,6 +9497,7 @@ function enterPanel(user,isNewLogin){
 
   applyRoleUI(rol);
   initSGroups();
+  if(window.initChatForRole) window.initChatForRole(rol);
 
   if(isNewLogin)toast(`Bienvenido, ${user.nombre} 👋`,"ok");
   const startPage=rol==="comunicaciones"?"comunicaciones":"alertas";
@@ -11986,6 +11987,33 @@ if('serviceWorker' in navigator){
   let historial = [];
   let panelOpen = false;
   let iniciado = false;
+
+  window.initChatForRole = function(rol) {
+    const sel = document.getElementById('ai-agente-sel');
+    if (!sel) return;
+    // Definir agentes permitidos por rol
+    const permitidos = {
+      admin:          ['financiero','tareas','cursos'],
+      instructor:     ['tareas','cursos'],
+      comunicaciones: ['tareas','cursos'],
+      logistica:      ['tareas'],
+    };
+    const allowed = permitidos[rol] || ['tareas'];
+    // Ocultar/mostrar opciones
+    Array.from(sel.options).forEach(opt => {
+      opt.hidden = !allowed.includes(opt.value);
+    });
+    // Si el agente actual no está permitido, cambiar al primero permitido
+    if (!allowed.includes(agenteActual)) {
+      agenteActual = allowed[0];
+      sel.value = agenteActual;
+      const ag = AGENTES[agenteActual];
+      if (ag) {
+        document.getElementById('ai-header-title').textContent = ag.titulo;
+        document.getElementById('ai-input').placeholder = ag.placeholder;
+      }
+    }
+  };
 
   window.cambiarAgente = function(tipo) {
     if (tipo === agenteActual) return;
