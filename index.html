@@ -218,11 +218,29 @@ body{font-family:var(--f);background:var(--bg);color:var(--tx);min-height:100vh;
 .cd-tab.on{color:var(--tx);border-bottom-color:var(--pu)}
 .cd-body{padding:20px}
 /* Rol comunicaciones: oculta todo el sidebar excepto items marcados */
+/* ── ROLES: control de sidebar por CSS ── */
 body.rol-comunicaciones .sitem:not(.comu-visible),
 body.rol-comunicaciones .ssub:not(.comu-visible),
 body.rol-comunicaciones .sgroup-label{display:none!important}
+body.rol-comunicaciones .sitem.comu-visible,
+body.rol-comunicaciones .ssub.comu-visible{display:flex!important}
 body.rol-comunicaciones .sgroup-items{max-height:600px!important}
 body.rol-comunicaciones .cd-tab-adm{display:none!important}
+
+body.rol-instructor .sitem:not(.inst-visible),
+body.rol-instructor .ssub:not(.inst-visible),
+body.rol-instructor .sgroup-label{display:none!important}
+body.rol-instructor .sitem.inst-visible,
+body.rol-instructor .ssub.inst-visible{display:flex!important}
+body.rol-instructor .sgroup-items{max-height:600px!important}
+body.rol-instructor .cd-tab-adm{display:none!important}
+
+body.rol-logistica .sitem:not(.logi-visible),
+body.rol-logistica .ssub:not(.logi-visible),
+body.rol-logistica .sgroup-label{display:none!important}
+body.rol-logistica .sitem.logi-visible,
+body.rol-logistica .ssub.logi-visible{display:flex!important}
+body.rol-logistica .sgroup-items{max-height:600px!important}
 /* Cash flow inline edit */
 td.cf-editing{padding:0!important;outline:2px solid var(--ac);outline-offset:-2px;background:color-mix(in srgb,var(--ac) 8%,var(--surf))!important;position:relative;z-index:5}
 td.cf-editing:hover{background:color-mix(in srgb,var(--ac) 8%,var(--surf))!important}
@@ -800,14 +818,14 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="sgroup" id="sg-principal">
     <div class="sgroup-label" onclick="toggleSGroup('sg-principal')">Principal<svg class="sg-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
     <div class="sgroup-items">
-      <div class="sitem" onclick="goPage('tareas',this)" id="nav-tareas">
+      <div class="sitem comu-visible inst-visible logi-visible" onclick="goPage('tareas',this)" id="nav-tareas">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         Tareas
         <span class="sitem-badge" id="badge-tareas">—</span>
       </div>
-      <div class="sitem ssub" onclick="setTareaFilter('Por Hacer')" id="nav-ph">Por hacer <span class="sitem-badge" id="badge-ph">—</span></div>
-      <div class="sitem ssub" onclick="setTareaFilter('En Progreso')" id="nav-ep">En progreso <span class="sitem-badge" id="badge-ep">—</span></div>
-      <div class="sitem ssub" onclick="setTareaFilter('Bloqueado')" id="nav-bl">Bloqueadas <span class="sitem-badge" id="badge-bl">—</span></div>
+      <div class="sitem ssub comu-visible inst-visible logi-visible" onclick="setTareaFilter('Por Hacer')" id="nav-ph">Por hacer <span class="sitem-badge" id="badge-ph">—</span></div>
+      <div class="sitem ssub comu-visible inst-visible logi-visible" onclick="setTareaFilter('En Progreso')" id="nav-ep">En progreso <span class="sitem-badge" id="badge-ep">—</span></div>
+      <div class="sitem ssub comu-visible inst-visible logi-visible" onclick="setTareaFilter('Bloqueado')" id="nav-bl">Bloqueadas <span class="sitem-badge" id="badge-bl">—</span></div>
       <div class="sitem" onclick="goPage('reuniones',this)" id="nav-reuniones">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Reuniones
@@ -822,15 +840,15 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="sgroup" id="sg-cursos">
     <div class="sgroup-label" onclick="toggleSGroup('sg-cursos')">Cursos<svg class="sg-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
     <div class="sgroup-items">
-      <div class="sitem comu-visible" onclick="goPage('cursos',this)" id="nav-cursos">
+      <div class="sitem comu-visible inst-visible" onclick="goPage('cursos',this)" id="nav-cursos">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
         Cursos
         <span class="sitem-badge" id="badge-cursos">—</span>
       </div>
-      <div class="sitem ssub comu-visible" onclick="setCursoFilter('activos')" id="nav-cact">Activos</div>
-      <div class="sitem ssub comu-visible" onclick="setCursoFilter('borrador')" id="nav-cbor">Borradores</div>
-      <div class="sitem ssub comu-visible" onclick="setCursoFilter('completados')" id="nav-ccom">Completados</div>
-      <div class="sitem" onclick="goPage('alumnos',this)" id="nav-alumnos">
+      <div class="sitem ssub comu-visible inst-visible" onclick="setCursoFilter('activos')" id="nav-cact">Activos</div>
+      <div class="sitem ssub comu-visible inst-visible" onclick="setCursoFilter('borrador')" id="nav-cbor">Borradores</div>
+      <div class="sitem ssub comu-visible inst-visible" onclick="setCursoFilter('completados')" id="nav-ccom">Completados</div>
+      <div class="sitem inst-visible" onclick="goPage('alumnos',this)" id="nav-alumnos">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Alumnos
         <span class="sitem-badge" id="badge-alumnos">—</span>
@@ -855,7 +873,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="sgroup" id="sg-analisis">
     <div class="sgroup-label" onclick="toggleSGroup('sg-analisis')">Análisis<svg class="sg-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
     <div class="sgroup-items">
-      <div class="sitem comu-visible" onclick="goPage('calendario',this)" id="nav-calendario">
+      <div class="sitem comu-visible inst-visible" onclick="goPage('calendario',this)" id="nav-calendario">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         Calendario
       </div>
@@ -910,15 +928,15 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="sitem ssub" onclick="goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('iibb')">IIBB</div>
       <div class="sitem ssub" onclick="goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('autonomos')">Autónomos</div>
       <div class="sitem ssub" onclick="goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('ganancias')">Ganancias</div>
-      <div class="sitem" onclick="goPage('comprobantes',this)" id="nav-comprobantes">
+      <div class="sitem logi-visible" onclick="goPage('comprobantes',this)" id="nav-comprobantes">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
         Comprobantes
         <span class="sitem-badge" id="badge-comprobantes">—</span>
       </div>
-      <div class="sitem ssub" onclick="goPage('comprobantes',document.getElementById('nav-comprobantes'));setCompFilter('pendiente')">Pendientes</div>
-      <div class="sitem ssub" onclick="goPage('comprobantes',document.getElementById('nav-comprobantes'));setCompFilter('revisado')">Revisados</div>
-      <div class="sitem ssub" onclick="goPage('comprobantes',document.getElementById('nav-comprobantes'));setCompFilter('enviado_finnegans')">En Finnegans</div>
-      <div class="sitem" onclick="goPage('cuentas',this)" id="nav-cuentas">
+      <div class="sitem ssub logi-visible" onclick="goPage('comprobantes',document.getElementById('nav-comprobantes'));setCompFilter('pendiente')">Pendientes</div>
+      <div class="sitem ssub logi-visible" onclick="goPage('comprobantes',document.getElementById('nav-comprobantes'));setCompFilter('revisado')">Revisados</div>
+      <div class="sitem ssub logi-visible" onclick="goPage('comprobantes',document.getElementById('nav-comprobantes'));setCompFilter('enviado_finnegans')">En Finnegans</div>
+      <div class="sitem logi-visible" onclick="goPage('cuentas',this)" id="nav-cuentas">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         Cuentas Corrientes
       </div>
@@ -3139,7 +3157,7 @@ function goPage(name,el){
   }
   if(name==="calendario"){
     // Rol comunicaciones: solo ve cursos en el calendario
-    if(loggedUser?.rol==="comunicaciones"){
+    if(loggedUser?.rol==="comunicaciones"||loggedUser?.rol==="instructor"){
       calFiltro="cursos";
       ["cal-btn-todo","cal-btn-tareas","cal-btn-venc","cal-btn-finanzas"].forEach(id=>{
         const b=document.getElementById(id);if(b)b.style.display="none";
@@ -3200,7 +3218,8 @@ const BC={"Por Hacer":{cls:"st",label:"Por hacer"},"En Progreso":{cls:"sp",label
 function vis(){
   return tasks.filter(t=>{
     const ass=t.assignees||[];
-    const byU=!curUser||ass.includes(curUser);
+    const efectiveUser=(loggedUser?.rol&&loggedUser.rol!=="admin")?loggedUser.id:curUser;
+    const byU=!efectiveUser||ass.includes(efectiveUser);
     let byF=true;
     if(curF==="Alta")byF=t.prioridad==="Alta";
     else if(curF==="venc")byF=days(t.fecha_vencimiento)!==null&&days(t.fecha_vencimiento)<0&&t.status!=="Listo";
@@ -9190,35 +9209,12 @@ function applyRoleUI(rol){
     return;
   }
   const hideEl=id=>{const el=document.getElementById(id);if(el)el.style.display="none";};
-  // Filtro de usuario del topbar solo para admin
   hideEl("usel");
-  curUser=""; // sin filtro activo
-  // Usuarios y cuentas corrientes solo para admins
-  hideEl("nav-usuarios");
-  hideEl("nav-cuentas");
-  // Ocultar sección Finanzas para todos los no-admin
-  hideEl("sgroup-finanzas");
-  if(rol==="instructor"){
-    // Instructores tampoco ven Contabilidad
-    hideEl("sgroup-contabilidad");
-  }
-  if(rol==="logistica"){
-    // Logística no ve Gráficos, Rutinas, Cursos, Alumnos, Instructores, Inventario
-    ["nav-graficos","nav-rutinas","nav-cursos","nav-alumnos","nav-instructores","nav-inventario"].forEach(id=>{
-      const el=document.getElementById(id);
-      if(!el)return;
-      el.style.display="none";
-      let sib=el.nextElementSibling;
-      while(sib&&(sib.classList.contains("ssub")||sib.classList.contains("sub"))){
-        sib.style.display="none";
-        sib=sib.nextElementSibling;
-      }
-    });
-  }
-  if(rol==="comunicaciones"){
-    // Todo el control visual está en CSS via body.rol-comunicaciones
-    document.body.classList.add("rol-comunicaciones");
-  }
+  curUser="";
+  // Cada rol se maneja via clase CSS en body — robusta y no depende de timing
+  if(rol==="comunicaciones") document.body.classList.add("rol-comunicaciones");
+  if(rol==="instructor")     document.body.classList.add("rol-instructor");
+  if(rol==="logistica")      document.body.classList.add("rol-logistica");
 }
 
 async function enterPortalProveedor(user,isNewLogin){
@@ -9519,7 +9515,7 @@ function logout(){
   if(!confirm(`¿Cerrar sesión de ${loggedUser?.nombre||""}?`))return;
   sessionStorage.removeItem("smx_session");
   stopNotifPoll();bellNotifs=[];renderBell();
-  document.body.classList.remove("rol-comunicaciones");
+  document.body.classList.remove("rol-comunicaciones","rol-instructor","rol-logistica");
   loggedUser=null;authToken=null;
   curUser="";const usel=document.getElementById("usel");if(usel)usel.value="";
   // Restaurar nav items ocultos por rol
