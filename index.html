@@ -1510,6 +1510,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="cd-tab" id="cftab-cobranzas" onclick="setCFTab('cobranzas',this)">📥 Cobranzas</button>
     <button class="cd-tab" id="cftab-inversiones" onclick="setCFTab('inversiones',this)">📈 Inversiones</button>
     <button class="cd-tab" id="cftab-historial" onclick="setCFTab('historial',this)">📋 Historial pagos</button>
+    <button class="cd-tab" id="cftab-conciliacion" onclick="setCFTab('conciliacion',this)">🏦 Conciliación bancaria</button>
   </div>
 
   <!-- TAB: RESUMEN MENSUAL -->
@@ -1666,6 +1667,35 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="sc"><div class="sc-l">Total pagado</div><div class="sc-v" id="hist-total" style="color:var(--re)">—</div><div class="sc-s">en el período seleccionado</div></div>
     </div>
     <div id="hist-tabla"></div>
+  </div>
+
+  <!-- TAB: CONCILIACIÓN BANCARIA -->
+  <div id="cfpg-conciliacion" style="display:none">
+    <!-- Header con selector de sociedad y upload -->
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      <div class="fbar">
+        <button class="fb on" id="conc-soc-sudes" onclick="concSetSociedad('SUDES',this)">SUDES</button>
+        <button class="fb" id="conc-soc-ptr" onclick="concSetSociedad('POINTERS',this)">POINTERS</button>
+      </div>
+      <input type="month" id="conc-mes" style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:5px 10px;font-size:12px;color:var(--tx);outline:none" onchange="renderConciliacion()">
+      <label class="btn sm pri" style="cursor:pointer">
+        📂 Importar XLS
+        <input type="file" accept=".xls,.xlsx" style="display:none" onchange="importarBancoXLS(this)">
+      </label>
+      <button class="btn sm" onclick="concConciliarAuto()" id="btn-conc-auto">⚡ Auto-conciliar</button>
+      <span id="conc-stats" style="font-size:12px;color:var(--tx3);margin-left:auto"></span>
+    </div>
+
+    <!-- KPIs -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px" id="conc-kpis">
+      <div class="sc"><div class="sc-l">Saldo banco</div><div class="sc-v vb" id="conc-saldo-banco">—</div><div class="sc-s">último movimiento</div></div>
+      <div class="sc"><div class="sc-l">Movimientos</div><div class="sc-v" id="conc-total-mov">—</div><div class="sc-s">en el período</div></div>
+      <div class="sc"><div class="sc-l">Conciliados</div><div class="sc-v va" id="conc-conciliados">—</div><div class="sc-s">matcheados</div></div>
+      <div class="sc"><div class="sc-l">Pendientes</div><div class="sc-v vr" id="conc-pendientes">—</div><div class="sc-s">sin match</div></div>
+    </div>
+
+    <!-- Tabla -->
+    <div id="conc-tabla" style="overflow-x:auto"></div>
   </div>
 </div>
 
@@ -5374,7 +5404,7 @@ function setCFTab(tab,btn){
   document.querySelectorAll("#pg-cashflow .cd-tab").forEach(b=>b.classList.remove("on"));
   const tabBtn=btn||document.getElementById("cftab-"+tab);
   if(tabBtn)tabBtn.classList.add("on");
-  ["resumen","prestamos","cobranzas","inversiones","historial"].forEach(t=>{
+  ["resumen","prestamos","cobranzas","inversiones","historial","conciliacion"].forEach(t=>{
     const el=document.getElementById("cfpg-"+t);
     if(el)el.style.display=t===tab?"":"none";
   });
@@ -5383,6 +5413,219 @@ function setCFTab(tab,btn){
   if(tab==="cobranzas")renderCFCobranzas();
   if(tab==="inversiones")renderCFInversiones();
   if(tab==="historial")renderHistorial();
+  if(tab==="conciliacion")renderConciliacion();
+}
+
+// ══════════════════════════════════════════════
+// CONCILIACIÓN BANCARIA
+// ══════════════════════════════════════════════
+let bancMovimientos = [];
+let concSociedad = "SUDES";
+
+function concSetSociedad(s, btn) {
+  concSociedad = s;
+  document.querySelectorAll("#cfpg-conciliacion .fbar .fb").forEach(b => b.classList.remove("on"));
+  if (btn) btn.classList.add("on");
+  renderConciliacion();
+}
+
+async function loadBancoMovimientos() {
+  try {
+    const mes = document.getElementById("conc-mes")?.value || "";
+    let url = `banco_movimientos?sociedad=eq.${concSociedad}&order=fecha.desc`;
+    if (mes) url += `&fecha=gte.${mes}-01&fecha=lte.${mes}-31`;
+    bancMovimientos = await sb(url);
+  } catch (_) { bancMovimientos = []; }
+}
+
+async function renderConciliacion() {
+  await loadBancoMovimientos();
+  const movs = bancMovimientos;
+  const total = movs.length;
+  const conciliados = movs.filter(m => m.conciliado).length;
+  const pendientes = total - conciliados;
+  const saldo = movs.length ? movs[0].saldo : 0;
+
+  const fmt = v => (v >= 0 ? "+" : "") + "$" + Math.round(Math.abs(v)).toLocaleString("es-AR");
+
+  const el = id => document.getElementById(id);
+  if (el("conc-saldo-banco")) el("conc-saldo-banco").textContent = saldo ? "$" + Math.round(saldo).toLocaleString("es-AR") : "—";
+  if (el("conc-total-mov")) el("conc-total-mov").textContent = total || "—";
+  if (el("conc-conciliados")) el("conc-conciliados").textContent = conciliados || "—";
+  if (el("conc-pendientes")) el("conc-pendientes").textContent = pendientes || "—";
+  if (el("conc-stats")) el("conc-stats").textContent = total ? `${Math.round(conciliados/total*100)}% conciliado` : "";
+
+  const tabla = el("conc-tabla");
+  if (!tabla) return;
+
+  if (!total) {
+    tabla.innerHTML = `<div class="empty"><div class="ei">🏦</div><div>Importá el XLS del Banco Macro para empezar</div></div>`;
+    return;
+  }
+
+  tabla.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead>
+        <tr style="background:var(--surf2);color:var(--tx3);text-transform:uppercase;font-size:10px;letter-spacing:.5px">
+          <th style="padding:8px 10px;text-align:left;font-weight:600">Fecha</th>
+          <th style="padding:8px 10px;text-align:left;font-weight:600">Concepto</th>
+          <th style="padding:8px 10px;text-align:right;font-weight:600">Importe</th>
+          <th style="padding:8px 10px;text-align:right;font-weight:600">Saldo</th>
+          <th style="padding:8px 10px;text-align:left;font-weight:600">Match</th>
+          <th style="padding:8px 10px;text-align:center;font-weight:600">Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${movs.map(m => {
+          const imp = parseFloat(m.importe) || 0;
+          const impColor = imp >= 0 ? "var(--gr)" : "var(--re)";
+          const estadoBadge = m.conciliado
+            ? `<span style="background:color-mix(in srgb,var(--gr) 15%,var(--surf));color:var(--gr);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600">✓ Conciliado</span>`
+            : `<span style="background:color-mix(in srgb,var(--am) 15%,var(--surf));color:var(--am);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600">⏳ Pendiente</span>`;
+          return `<tr style="border-bottom:1px solid var(--b);cursor:pointer" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background=''">
+            <td style="padding:8px 10px;color:var(--tx2)">${m.fecha}</td>
+            <td style="padding:8px 10px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(m.concepto||'')}">${esc(m.concepto || "—")}</td>
+            <td style="padding:8px 10px;text-align:right;font-weight:600;color:${impColor}">${fmt(imp)}</td>
+            <td style="padding:8px 10px;text-align:right;color:var(--tx2)">$${Math.round(Math.abs(parseFloat(m.saldo)||0)).toLocaleString("es-AR")}</td>
+            <td style="padding:8px 10px;color:var(--tx3);font-size:11px">${m.match_descripcion ? esc(m.match_descripcion) : '<span style="color:var(--tx4)">Sin match</span>'}</td>
+            <td style="padding:8px 10px;text-align:center">${estadoBadge}</td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+    </table>`;
+}
+
+async function importarBancoXLS(input) {
+  const file = input.files[0];
+  if (!file) return;
+  toast("Procesando archivo...", "inf");
+
+  // Cargar xlsx desde CDN si no está disponible
+  if (!window.XLSX) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: "binary" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+
+      // Encontrar fila de datos (busca la fila con "Fecha" como encabezado)
+      let dataStart = -1;
+      for (let i = 0; i < rows.length; i++) {
+        if (String(rows[i][0]).includes("Fecha") || (rows[i][3] && String(rows[i][3]).includes("Referencia"))) {
+          dataStart = i + 1; break;
+        }
+      }
+      if (dataStart < 0) dataStart = 8; // fallback al formato conocido
+
+      const registros = [];
+      for (let i = dataStart; i < rows.length; i++) {
+        const r = rows[i];
+        const fechaRaw = r[0];
+        if (!fechaRaw) continue;
+
+        // Convertir fecha serial de Excel a fecha real
+        let fecha = "";
+        if (typeof fechaRaw === "number") {
+          const d = new Date(Math.round((fechaRaw - 25569) * 86400 * 1000));
+          fecha = d.toISOString().split("T")[0];
+        } else {
+          fecha = String(fechaRaw).split(" ")[0];
+        }
+
+        const concepto = String(r[5] || "").trim();
+        const importe = parseFloat(String(r[6]).replace(",", ".")) || 0;
+        const saldo = parseFloat(String(r[10]).replace(",", ".")) || 0;
+        const referencia = String(r[3] || "").trim();
+
+        if (!fecha || !concepto) continue;
+        registros.push({ sociedad: concSociedad, fecha, referencia, concepto, importe, saldo, conciliado: false });
+      }
+
+      if (!registros.length) { toast("No se encontraron movimientos en el archivo", "err"); return; }
+
+      // Insertar en Supabase (ignorar duplicados por fecha+concepto+importe)
+      let insertados = 0;
+      for (const reg of registros) {
+        try {
+          await sb("banco_movimientos", { method: "POST", headers: { "Prefer": "return=minimal" }, body: JSON.stringify(reg) });
+          insertados++;
+        } catch (_) {}
+      }
+
+      toast(`✅ ${insertados} movimientos importados`, "ok");
+      input.value = "";
+      renderConciliacion();
+    } catch (err) {
+      toast("Error al procesar el archivo: " + err.message, "err");
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+async function concConciliarAuto() {
+  const btn = document.getElementById("btn-conc-auto");
+  if (btn) { btn.disabled = true; btn.textContent = "⏳ Procesando..."; }
+  toast("Buscando matches automáticos...", "inf");
+
+  try {
+    const movsPend = bancMovimientos.filter(m => !m.conciliado);
+    if (!movsPend.length) { toast("No hay movimientos pendientes", "inf"); return; }
+
+    // Cargar datos para comparar
+    const [cobranzas, comprobantes] = await Promise.all([
+      sb(`cf_cobranzas?sociedad=eq.${concSociedad}&select=id,descripcion,monto,fecha_vencimiento`).catch(() => []),
+      sb(`comprobantes_compra?sociedad=eq.${concSociedad}&select=id,proveedor,total,fecha`).catch(() => []),
+    ]);
+
+    let matcheados = 0;
+    for (const mov of movsPend) {
+      const imp = Math.abs(parseFloat(mov.importe) || 0);
+      const fecha = new Date(mov.fecha);
+      let match = null;
+
+      // Buscar en cobranzas (ingresos)
+      if (parseFloat(mov.importe) > 0) {
+        match = cobranzas.find(c => {
+          const diff = Math.abs(parseFloat(c.monto) - imp);
+          const dias = Math.abs((new Date(c.fecha_vencimiento) - fecha) / 86400000);
+          return diff < 1 && dias <= 7;
+        });
+        if (match) {
+          await sb(`banco_movimientos?id=eq.${mov.id}`, { method: "PATCH", body: JSON.stringify({ conciliado: true, match_tipo: "cobranza", match_id: match.id, match_descripcion: match.descripcion }) });
+          matcheados++;
+        }
+      }
+
+      // Buscar en comprobantes (egresos)
+      if (!match && parseFloat(mov.importe) < 0) {
+        match = comprobantes.find(c => {
+          const diff = Math.abs(parseFloat(c.total) - imp);
+          const dias = Math.abs((new Date(c.fecha) - fecha) / 86400000);
+          return diff < 1 && dias <= 7;
+        });
+        if (match) {
+          await sb(`banco_movimientos?id=eq.${mov.id}`, { method: "PATCH", body: JSON.stringify({ conciliado: true, match_tipo: "comprobante", match_id: match.id, match_descripcion: match.proveedor }) });
+          matcheados++;
+        }
+      }
+    }
+
+    toast(`⚡ ${matcheados} matches encontrados de ${movsPend.length} pendientes`, "ok");
+    renderConciliacion();
+  } catch (err) {
+    toast("Error: " + err.message, "err");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "⚡ Auto-conciliar"; }
+  }
 }
 
 function setCFSociedad(s,btn){
