@@ -1683,6 +1683,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <input type="file" accept=".xls,.xlsx" style="display:none" onchange="importarBancoXLS(this)">
       </label>
       <button class="btn sm" onclick="concConciliarAuto()" id="btn-conc-auto">⚡ Auto-conciliar</button>
+      <button class="btn sm sec" onclick="concLimpiarMovimientos()" style="color:var(--re);border-color:var(--re)">🗑 Limpiar</button>
       <span id="conc-stats" style="font-size:12px;color:var(--tx3);margin-left:auto"></span>
     </div>
 
@@ -5532,7 +5533,6 @@ async function importarBancoXLS(input) {
   if (!file) return;
   toast("Procesando archivo...", "inf");
 
-  // Cargar xlsx desde CDN si no está disponible
   if (!window.XLSX) {
     await new Promise((resolve, reject) => {
       const s = document.createElement("script");
@@ -5549,14 +5549,13 @@ async function importarBancoXLS(input) {
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
 
-      // Encontrar fila de datos (busca la fila con "Fecha" como encabezado)
       let dataStart = -1;
       for (let i = 0; i < rows.length; i++) {
         if (String(rows[i][0]).includes("Fecha") || (rows[i][3] && String(rows[i][3]).includes("Referencia"))) {
           dataStart = i + 1; break;
         }
       }
-      if (dataStart < 0) dataStart = 8; // fallback al formato conocido
+      if (dataStart < 0) dataStart = 8;
 
       const registros = [];
       for (let i = dataStart; i < rows.length; i++) {
@@ -5564,7 +5563,6 @@ async function importarBancoXLS(input) {
         const fechaRaw = r[0];
         if (!fechaRaw) continue;
 
-        // Convertir fecha serial de Excel a fecha real
         let fecha = "";
         if (typeof fechaRaw === "number") {
           const d = new Date(Math.round((fechaRaw - 25569) * 86400 * 1000));
@@ -5584,16 +5582,23 @@ async function importarBancoXLS(input) {
 
       if (!registros.length) { toast("No se encontraron movimientos en el archivo", "err"); return; }
 
-      // Insertar en Supabase (ignorar duplicados por fecha+concepto+importe)
+      // Verificar duplicados contra los ya existentes
+      const existentes = bancMovimientos.map(m => `${m.fecha}|${m.concepto}|${m.importe}`);
+      const nuevos = registros.filter(r => !existentes.includes(`${r.fecha}|${r.concepto}|${r.importe}`));
+      const duplicados = registros.length - nuevos.length;
+
+      if (!nuevos.length) { toast(`Todos los movimientos ya estaban importados (${duplicados} duplicados)`, "inf"); input.value=""; return; }
+
       let insertados = 0;
-      for (const reg of registros) {
+      for (const reg of nuevos) {
         try {
           await sb("banco_movimientos", { method: "POST", headers: { "Prefer": "return=minimal" }, body: JSON.stringify(reg) });
           insertados++;
         } catch (_) {}
       }
 
-      toast(`✅ ${insertados} movimientos importados`, "ok");
+      const msg = duplicados > 0 ? `✅ ${insertados} nuevos · ${duplicados} ya existían` : `✅ ${insertados} movimientos importados`;
+      toast(msg, "ok");
       input.value = "";
       renderConciliacion();
     } catch (err) {
@@ -5603,55 +5608,85 @@ async function importarBancoXLS(input) {
   reader.readAsBinaryString(file);
 }
 
+async function concLimpiarMovimientos() {
+  const mes = document.getElementById("conc-mes")?.value;
+  const msg = mes ? `¿Eliminar todos los movimientos de ${mes} de ${concSociedad}?` : `¿Eliminar TODOS los movimientos de ${concSociedad}? Esta acción no se puede deshacer.`;
+  if (!confirm(msg)) return;
+  try {
+    let url = `banco_movimientos?sociedad=eq.${concSociedad}`;
+    if (mes) url += `&fecha=gte.${mes}-01&fecha=lte.${mes}-31`;
+    await sb(url, { method: "DELETE" });
+    toast("Movimientos eliminados", "ok");
+    renderConciliacion();
+  } catch (e) { toast("Error al eliminar", "err"); }
+}
+
 async function concConciliarAuto() {
   const btn = document.getElementById("btn-conc-auto");
   if (btn) { btn.disabled = true; btn.textContent = "⏳ Procesando..."; }
   toast("Buscando matches automáticos...", "inf");
 
+  // Tolerancia: mayor entre $100 o 1% del importe
+  const tolerancia = (imp) => Math.max(100, imp * 0.01);
+
   try {
     const movsPend = bancMovimientos.filter(m => !m.conciliado);
     if (!movsPend.length) { toast("No hay movimientos pendientes", "inf"); return; }
 
-    // Cargar datos para comparar
-    const [cobranzas, comprobantes] = await Promise.all([
+    // Cargar todas las fuentes de datos en paralelo
+    const [cobranzas, comprobantes, inscripciones] = await Promise.all([
       sb(`cf_cobranzas?sociedad=eq.${concSociedad}&select=id,descripcion,monto,fecha_vencimiento`).catch(() => []),
       sb(`comprobantes_compra?sociedad=eq.${concSociedad}&select=id,proveedor,total,fecha`).catch(() => []),
+      sb(`inscripciones?select=id,monto,fecha_pago,alumnos(nombre,apellido),cursos(nombre)&fecha_pago=not.is.null`).catch(() => []),
     ]);
 
     let matcheados = 0;
     for (const mov of movsPend) {
       const imp = Math.abs(parseFloat(mov.importe) || 0);
       const fecha = new Date(mov.fecha);
+      const tol = tolerancia(imp);
       let match = null;
+      let matchData = null;
 
-      // Buscar en cobranzas (ingresos)
       if (parseFloat(mov.importe) > 0) {
+        // 1. Buscar en cobranzas
         match = cobranzas.find(c => {
           const diff = Math.abs(parseFloat(c.monto) - imp);
           const dias = Math.abs((new Date(c.fecha_vencimiento) - fecha) / 86400000);
-          return diff < 1 && dias <= 7;
+          return diff <= tol && dias <= 7;
         });
-        if (match) {
-          await sb(`banco_movimientos?id=eq.${mov.id}`, { method: "PATCH", body: JSON.stringify({ conciliado: true, match_tipo: "cobranza", match_id: match.id, match_descripcion: match.descripcion }) });
-          matcheados++;
-        }
-      }
+        if (match) matchData = { match_tipo: "cobranza", match_id: match.id, match_descripcion: match.descripcion };
 
-      // Buscar en comprobantes (egresos)
-      if (!match && parseFloat(mov.importe) < 0) {
+        // 2. Buscar en inscripciones (pagos de alumnos)
+        if (!match) {
+          match = inscripciones.find(c => {
+            const diff = Math.abs(parseFloat(c.monto) - imp);
+            const dias = Math.abs((new Date(c.fecha_pago) - fecha) / 86400000);
+            return diff <= tol && dias <= 5;
+          });
+          if (match) {
+            const alumno = match.alumnos ? `${match.alumnos.apellido||""} ${match.alumnos.nombre||""}`.trim() : "Alumno";
+            const curso = match.cursos?.nombre || "Curso";
+            matchData = { match_tipo: "inscripcion", match_id: match.id, match_descripcion: `${alumno} — ${curso}` };
+          }
+        }
+      } else {
+        // 3. Buscar en comprobantes (egresos)
         match = comprobantes.find(c => {
           const diff = Math.abs(parseFloat(c.total) - imp);
           const dias = Math.abs((new Date(c.fecha) - fecha) / 86400000);
-          return diff < 1 && dias <= 7;
+          return diff <= tol && dias <= 7;
         });
-        if (match) {
-          await sb(`banco_movimientos?id=eq.${mov.id}`, { method: "PATCH", body: JSON.stringify({ conciliado: true, match_tipo: "comprobante", match_id: match.id, match_descripcion: match.proveedor }) });
-          matcheados++;
-        }
+        if (match) matchData = { match_tipo: "comprobante", match_id: match.id, match_descripcion: match.proveedor };
+      }
+
+      if (matchData) {
+        await sb(`banco_movimientos?id=eq.${mov.id}`, { method: "PATCH", body: JSON.stringify({ conciliado: true, ...matchData }) });
+        matcheados++;
       }
     }
 
-    toast(`⚡ ${matcheados} matches encontrados de ${movsPend.length} pendientes`, "ok");
+    toast(`⚡ ${matcheados} matches encontrados de ${movsPend.length} pendientes`, matcheados > 0 ? "ok" : "inf");
     renderConciliacion();
   } catch (err) {
     toast("Error: " + err.message, "err");
