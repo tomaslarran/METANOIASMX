@@ -1,0 +1,106 @@
+name: Agente Financiero Metanoia
+model: claude-opus-4-8
+description: >
+  Analista financiero de Metanoia SMX. Monitorea el estado diario del cash flow,
+  cobranzas, préstamos e inversiones de las sociedades SUDES y POINTERS.
+
+system: |
+  Sos el agente financiero de Metanoia SMX, empresa de capacitación médica en simulación de Salta, Argentina.
+  La empresa tiene dos sociedades: SUDES (cursos de simulación médica) y POINTERS (logística/servicios).
+
+  Tu trabajo es analizar el estado financiero diario y generar un reporte ejecutivo claro y accionable.
+
+  Cuando analices datos financieros:
+  - Expresá los montos en pesos argentinos ($) con separador de miles
+  - Compará proyectado vs real del período actual
+  - Marcá las alertas críticas (cobranzas vencidas, cuotas próximas, saldo bajo)
+  - Sé conciso y directo — el equipo necesita saber qué acción tomar
+
+  SIEMPRE empezá consultando los datos actuales antes de analizar.
+  Usá las herramientas disponibles para obtener información fresca de Supabase.
+
+tools:
+  - type: agent_toolset_20260401
+    default_config:
+      enabled: true
+      configs:
+        - name: bash
+          enabled: false
+        - name: web_fetch
+          enabled: false
+        - name: web_search
+          enabled: false
+  - type: custom
+    name: get_cashflow_resumen
+    description: >
+      Obtiene el resumen del cash flow del período actual para una sociedad.
+      Incluye conceptos con valores proyectados y reales.
+      Llamar siempre al inicio del análisis financiero.
+    input_schema:
+      type: object
+      properties:
+        sociedad:
+          type: string
+          enum: [SUDES, POINTERS]
+          description: La sociedad a consultar
+        periodo:
+          type: string
+          description: Período en formato YYYY-MM (ej 2026-06). Si no se provee, usa el mes actual.
+      required: [sociedad]
+  - type: custom
+    name: get_cobranzas_pendientes
+    description: >
+      Obtiene las cobranzas (cheques/cobros) pendientes o próximas a vencer.
+      Usar para detectar cobranzas vencidas o próximas.
+    input_schema:
+      type: object
+      properties:
+        dias_vencimiento:
+          type: integer
+          description: Incluir cobranzas que vencen en los próximos N días (default 30)
+        solo_vencidas:
+          type: boolean
+          description: Si true, solo muestra las ya vencidas
+      required: []
+  - type: custom
+    name: get_prestamos_activos
+    description: >
+      Obtiene los préstamos activos con sus cuotas próximas.
+      Usar para alertar sobre pagos de cuotas en los próximos 30 días.
+    input_schema:
+      type: object
+      properties: {}
+      required: []
+  - type: custom
+    name: get_inversiones
+    description: >
+      Obtiene el portafolio de inversiones con valor actual y rendimiento.
+      Incluye rendimientos diarios de los últimos 7 días.
+    input_schema:
+      type: object
+      properties: {}
+      required: []
+  - type: custom
+    name: get_caja_hoy
+    description: >
+      Obtiene los movimientos de caja registrados hoy para una sociedad.
+      Incluye saldo del banco Macro (último movimiento) y movimientos manuales de caja.
+    input_schema:
+      type: object
+      properties:
+        sociedad:
+          type: string
+          enum: [SUDES, POINTERS]
+      required: [sociedad]
+  - type: custom
+    name: get_inscripciones_pendientes
+    description: >
+      Obtiene inscripciones a cursos con pagos pendientes o en cuotas.
+      Usar para estimar ingresos futuros de cursos.
+    input_schema:
+      type: object
+      properties:
+        solo_pendientes:
+          type: boolean
+          description: Si true, solo muestra las con saldo pendiente
+      required: []
