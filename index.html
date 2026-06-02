@@ -1511,6 +1511,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="cd-tab" id="cftab-inversiones" onclick="setCFTab('inversiones',this)">📈 Inversiones</button>
     <button class="cd-tab" id="cftab-historial" onclick="setCFTab('historial',this)">📋 Historial pagos</button>
     <button class="cd-tab" id="cftab-conciliacion" onclick="setCFTab('conciliacion',this)">🏦 Conciliación bancaria</button>
+    <button class="cd-tab" id="cftab-caja" onclick="setCFTab('caja',this)">💰 Caja</button>
   </div>
 
   <!-- TAB: RESUMEN MENSUAL -->
@@ -1667,6 +1668,87 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="sc"><div class="sc-l">Total pagado</div><div class="sc-v" id="hist-total" style="color:var(--re)">—</div><div class="sc-s">en el período seleccionado</div></div>
     </div>
     <div id="hist-tabla"></div>
+  </div>
+
+  <!-- TAB: CAJA -->
+  <div id="cfpg-caja" style="display:none">
+    <!-- Selector sociedad -->
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      <div class="fbar">
+        <button class="fb on" id="caja-soc-sudes" onclick="cajaSetSociedad('SUDES',this)">SUDES</button>
+        <button class="fb" id="caja-soc-ptr" onclick="cajaSetSociedad('POINTERS',this)">POINTERS</button>
+      </div>
+      <input type="date" id="caja-fecha-filtro" style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:5px 10px;font-size:12px;color:var(--tx);outline:none" onchange="renderCaja()">
+      <button class="btn sm" onclick="document.getElementById('caja-fecha-filtro').value='';renderCaja()">Hoy</button>
+    </div>
+
+    <!-- KPIs posición actual -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px" id="caja-kpis">
+      <div class="sc"><div class="sc-l">Saldo banco</div><div class="sc-v vb" id="caja-k-banco">—</div><div class="sc-s">Banco Macro</div></div>
+      <div class="sc"><div class="sc-l">Efectivo caja</div><div class="sc-v va" id="caja-k-efectivo">—</div><div class="sc-s">registrado hoy</div></div>
+      <div class="sc"><div class="sc-l">Inversiones</div><div class="sc-v vp" id="caja-k-inversiones">—</div><div class="sc-s">valor actual</div></div>
+      <div class="sc" style="border:1px solid var(--ac)"><div class="sc-l">Total disponible</div><div class="sc-v" id="caja-k-total" style="color:var(--ac)">—</div><div class="sc-s">posición consolidada</div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <!-- Formulario ingreso rápido -->
+      <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">➕ Registrar movimiento</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div>
+            <label class="fl">Tipo</label>
+            <select class="fi" id="caja-form-tipo">
+              <option value="ingreso">💚 Ingreso</option>
+              <option value="egreso">🔴 Egreso</option>
+            </select>
+          </div>
+          <div>
+            <label class="fl">Monto ($)</label>
+            <input class="fi" type="number" id="caja-form-monto" placeholder="0">
+          </div>
+        </div>
+        <div style="margin-bottom:8px">
+          <label class="fl">Concepto</label>
+          <input class="fi" type="text" id="caja-form-concepto" placeholder="Ej: Pago inscripción curso...">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+          <div>
+            <label class="fl">Categoría</label>
+            <select class="fi" id="caja-form-cat">
+              <option value="">Sin categoría</option>
+              <option value="Inscripciones">Inscripciones</option>
+              <option value="Honorarios">Honorarios</option>
+              <option value="Proveedores">Proveedores</option>
+              <option value="Impuestos">Impuestos</option>
+              <option value="Servicios">Servicios</option>
+              <option value="Sueldos">Sueldos</option>
+              <option value="Otros">Otros</option>
+            </select>
+          </div>
+          <div>
+            <label class="fl">Fecha</label>
+            <input class="fi" type="date" id="caja-form-fecha">
+          </div>
+        </div>
+        <div style="margin-bottom:12px">
+          <label class="fl">Observaciones</label>
+          <input class="fi" type="text" id="caja-form-obs" placeholder="Opcional...">
+        </div>
+        <button class="btn pri" style="width:100%" onclick="saveCajaMovimiento()">Guardar movimiento</button>
+      </div>
+
+      <!-- Proyección 30 días -->
+      <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">📅 Proyección próximos 30 días</div>
+        <div id="caja-proyeccion" style="font-size:12px"></div>
+      </div>
+    </div>
+
+    <!-- Tabla de movimientos -->
+    <div style="margin-top:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">📋 Movimientos registrados</div>
+      <div id="caja-tabla"></div>
+    </div>
   </div>
 
   <!-- TAB: CONCILIACIÓN BANCARIA -->
@@ -5405,7 +5487,7 @@ function setCFTab(tab,btn){
   document.querySelectorAll("#pg-cashflow .cd-tab").forEach(b=>b.classList.remove("on"));
   const tabBtn=btn||document.getElementById("cftab-"+tab);
   if(tabBtn)tabBtn.classList.add("on");
-  ["resumen","prestamos","cobranzas","inversiones","historial","conciliacion"].forEach(t=>{
+  ["resumen","prestamos","cobranzas","inversiones","historial","conciliacion","caja"].forEach(t=>{
     const el=document.getElementById("cfpg-"+t);
     if(el)el.style.display=t===tab?"":"none";
   });
@@ -5415,6 +5497,7 @@ function setCFTab(tab,btn){
   if(tab==="inversiones")renderCFInversiones();
   if(tab==="historial")renderHistorial();
   if(tab==="conciliacion")renderConciliacion();
+  if(tab==="caja")renderCaja();
 }
 
 // ══════════════════════════════════════════════
@@ -5693,6 +5776,185 @@ async function concConciliarAuto() {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "⚡ Auto-conciliar"; }
   }
+}
+
+// ── MÓDULO CAJA ──────────────────────────────────────────────────────────────
+let cajaMovimientos=[];
+let cajaSociedad="SUDES";
+
+function cajaSetSociedad(s,btn){
+  cajaSociedad=s;
+  document.querySelectorAll("#cfpg-caja .fbar .fb").forEach(b=>b.classList.remove("on"));
+  if(btn)btn.classList.add("on");
+  renderCaja();
+}
+
+async function renderCaja(){
+  // Inicializar fecha de hoy si no está seteada
+  const fechaInput=document.getElementById("caja-fecha-filtro");
+  if(fechaInput&&!fechaInput.value){
+    fechaInput.value=new Date().toISOString().split("T")[0];
+  }
+  const hoy=fechaInput?.value||new Date().toISOString().split("T")[0];
+
+  // Cargar movimientos de caja
+  try{
+    cajaMovimientos=await sb(`caja_movimientos?sociedad=eq.${cajaSociedad}&fecha=eq.${hoy}&order=created_at.desc`)||[];
+  }catch(_){cajaMovimientos=[];}
+
+  // Inicializar fecha del formulario
+  const formFecha=document.getElementById("caja-form-fecha");
+  if(formFecha&&!formFecha.value)formFecha.value=hoy;
+
+  // Calcular KPIs
+  const fmtM=v=>"$"+(Math.round(Math.abs(v))).toLocaleString("es-AR");
+
+  // Saldo banco: último movimiento de banco_movimientos
+  let saldoBanco=0;
+  try{
+    const bm=await sb(`banco_movimientos?sociedad=eq.${cajaSociedad}&order=fecha.desc&limit=1`)||[];
+    if(bm.length)saldoBanco=parseFloat(bm[0].saldo)||0;
+  }catch(_){}
+
+  // Efectivo: suma de movimientos de caja del día
+  const efectivoHoy=cajaMovimientos.reduce((s,m)=>{
+    const v=parseFloat(m.monto)||0;
+    return m.tipo==="ingreso"?s+v:s-v;
+  },0);
+
+  // Inversiones: suma de valor_actual
+  const invTotal=cfInversiones.reduce((s,i)=>s+(parseFloat(i.valor_actual)||0),0);
+
+  const total=saldoBanco+efectivoHoy+invTotal;
+  const totalColor=total>=0?"var(--gr)":"var(--re)";
+
+  const el=id=>document.getElementById(id);
+  if(el("caja-k-banco"))el("caja-k-banco").textContent=fmtM(saldoBanco);
+  if(el("caja-k-efectivo")){
+    el("caja-k-efectivo").textContent=(efectivoHoy>=0?"+":"")+fmtM(efectivoHoy);
+    el("caja-k-efectivo").style.color=efectivoHoy>=0?"var(--gr)":"var(--re)";
+  }
+  if(el("caja-k-inversiones"))el("caja-k-inversiones").textContent=fmtM(invTotal);
+  if(el("caja-k-total")){el("caja-k-total").textContent=(total>=0?"+":"")+fmtM(total);el("caja-k-total").style.color=totalColor;}
+
+  // Proyección 30 días
+  renderCajaProyeccion();
+
+  // Tabla de movimientos
+  const tabla=el("caja-tabla");
+  if(!tabla)return;
+  if(!cajaMovimientos.length){
+    tabla.innerHTML=`<div style="text-align:center;padding:24px;color:var(--tx3);font-size:13px">Sin movimientos registrados para hoy.<br>Usá el formulario para agregar.</div>`;
+    return;
+  }
+  let ingresos=0,egresos=0;
+  tabla.innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:var(--surf2);color:var(--tx3);font-size:10px;text-transform:uppercase;letter-spacing:.5px">
+      <th style="padding:8px 10px;text-align:left">Tipo</th>
+      <th style="padding:8px 10px;text-align:left">Concepto</th>
+      <th style="padding:8px 10px;text-align:left">Categoría</th>
+      <th style="padding:8px 10px;text-align:right">Monto</th>
+      <th style="padding:8px 10px;text-align:center">Acción</th>
+    </tr></thead>
+    <tbody>
+    ${cajaMovimientos.map(m=>{
+      const ing=m.tipo==="ingreso";
+      if(ing)ingresos+=parseFloat(m.monto)||0;
+      else egresos+=parseFloat(m.monto)||0;
+      return`<tr style="border-bottom:1px solid var(--b)">
+        <td style="padding:8px 10px"><span style="background:${ing?"color-mix(in srgb,var(--gr) 15%,var(--surf))":"color-mix(in srgb,var(--re) 15%,var(--surf));"};color:${ing?"var(--gr)":"var(--re)"};padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600">${ing?"↑ Ingreso":"↓ Egreso"}</span></td>
+        <td style="padding:8px 10px;color:var(--tx)">${esc(m.concepto)}</td>
+        <td style="padding:8px 10px;color:var(--tx3)">${esc(m.categoria||"—")}</td>
+        <td style="padding:8px 10px;text-align:right;font-weight:600;color:${ing?"var(--gr)":"var(--re)"}">${ing?"+":"-"}${fmtM(m.monto)}</td>
+        <td style="padding:8px 10px;text-align:center"><button onclick="deleteCajaMovimiento('${m.id}')" style="background:none;border:none;color:var(--re);cursor:pointer;font-size:13px" title="Eliminar">🗑</button></td>
+      </tr>`;
+    }).join("")}
+    <tr style="background:var(--surf2);font-weight:700;font-size:12px">
+      <td colspan="3" style="padding:8px 10px;color:var(--tx3)">Balance del día</td>
+      <td style="padding:8px 10px;text-align:right;color:${ingresos-egresos>=0?"var(--gr)":"var(--re)"}">${ingresos-egresos>=0?"+":""}${fmtM(ingresos-egresos)}</td>
+      <td></td>
+    </tr>
+    </tbody></table>`;
+}
+
+function renderCajaProyeccion(){
+  const el=document.getElementById("caja-proyeccion");
+  if(!el)return;
+  const fmtM=v=>"$"+(Math.round(Math.abs(v))).toLocaleString("es-AR");
+
+  // Próximas cobranzas pendientes
+  const cobrPend=(cfCobranzas||[]).filter(c=>c.estado!=="cobrado"&&c.fecha_vencimiento).map(c=>({
+    fecha:c.fecha_vencimiento,
+    concepto:c.descripcion||"Cobranza",
+    monto:parseFloat(c.monto)||0,
+    tipo:"ingreso"
+  }));
+
+  // Próximas cuotas de préstamos
+  const cuotasPend=(cfPrestCuotas||[]).filter(c=>!c.pagada&&c.fecha_vencimiento).slice(0,5).map(c=>{
+    const p=cfPrestamos.find(x=>x.id===c.prestamo_id);
+    return{fecha:c.fecha_vencimiento,concepto:`Cuota ${p?.nombre||"Préstamo"}`,monto:parseFloat(c.monto_total||c.capital)||0,tipo:"egreso"};
+  });
+
+  const eventos=[...cobrPend,...cuotasPend]
+    .filter(e=>e.fecha>=new Date().toISOString().split("T")[0])
+    .sort((a,b)=>a.fecha.localeCompare(b.fecha))
+    .slice(0,8);
+
+  if(!eventos.length){
+    el.innerHTML=`<div style="color:var(--tx3);text-align:center;padding:20px">Sin vencimientos próximos registrados</div>`;
+    return;
+  }
+
+  let acum=0;
+  el.innerHTML=eventos.map(e=>{
+    const ing=e.tipo==="ingreso";
+    acum+=ing?e.monto:-e.monto;
+    return`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--b);font-size:11px">
+      <div>
+        <span style="color:var(--tx3)">${e.fecha}</span>
+        <span style="margin-left:8px;color:var(--tx)">${esc(e.concepto)}</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <span style="color:${ing?"var(--gr)":"var(--re)"};font-weight:600">${ing?"+":"-"}${fmtM(e.monto)}</span>
+        <span style="color:var(--tx3);font-size:10px">${fmtM(acum)}</span>
+      </div>
+    </div>`;
+  }).join("")+`<div style="margin-top:8px;font-size:11px;color:var(--tx3);text-align:right">Acumulado proyectado: <strong style="color:${acum>=0?"var(--gr)":"var(--re)"}">${acum>=0?"+":""}${fmtM(acum)}</strong></div>`;
+}
+
+async function saveCajaMovimiento(){
+  const tipo=document.getElementById("caja-form-tipo")?.value;
+  const monto=parseFloat(document.getElementById("caja-form-monto")?.value)||0;
+  const concepto=document.getElementById("caja-form-concepto")?.value?.trim();
+  const cat=document.getElementById("caja-form-cat")?.value;
+  const fecha=document.getElementById("caja-form-fecha")?.value||new Date().toISOString().split("T")[0];
+  const obs=document.getElementById("caja-form-obs")?.value?.trim();
+
+  if(!concepto){toast("Ingresá un concepto","err");return;}
+  if(!monto||monto<=0){toast("Ingresá un monto válido","err");return;}
+
+  try{
+    await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
+      sociedad:cajaSociedad,fecha,tipo,concepto,categoria:cat||null,
+      monto,observaciones:obs||null,creado_por:loggedUser?.nombre||null
+    })});
+    // Limpiar formulario
+    document.getElementById("caja-form-monto").value="";
+    document.getElementById("caja-form-concepto").value="";
+    document.getElementById("caja-form-obs").value="";
+    toast(`${tipo==="ingreso"?"Ingreso":"Egreso"} registrado`,"ok");
+    renderCaja();
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function deleteCajaMovimiento(id){
+  if(!confirm("¿Eliminar este movimiento?"))return;
+  try{
+    await sb(`caja_movimientos?id=eq.${id}`,{method:"DELETE"});
+    toast("Eliminado","ok");
+    renderCaja();
+  }catch(e){toast("Error","err");}
 }
 
 function setCFSociedad(s,btn){
