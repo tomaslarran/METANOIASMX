@@ -12030,12 +12030,31 @@ async function syncMeta(){
     const data=await res.json();
     if(data.error)throw new Error(data.error);
     toast(`✅ Sincronizado: ${data.instagram||0} IG · ${data.facebook||0} FB`,"ok");
+    // También sincronizar LinkedIn
+    syncLinkedIn(true);
     await loadComunicaciones();
   }catch(e){
     toast("Error al sincronizar: "+e.message,"err");
   }finally{
     btn.disabled=false;
     icon.style.animation="";
+  }
+}
+
+async function syncLinkedIn(silencioso=false){
+  try{
+    const res=await fetch(`${SB}/functions/v1/sync-linkedin`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},
+      body:JSON.stringify({})
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error);
+    if(!silencioso)toast(`✅ LinkedIn: ${data.linkedin||0} posts sincronizados`,"ok");
+    if(!silencioso)await loadComunicaciones();
+  }catch(e){
+    if(!silencioso)toast("Error LinkedIn: "+e.message,"err");
+    console.warn("LinkedIn sync error:",e.message);
   }
 }
 
