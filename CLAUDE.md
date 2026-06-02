@@ -50,7 +50,7 @@ Panel web interno para **Metanoia SMX**, empresa de capacitación médica en sim
 | Inventario | `pg-inventario` | Control de stock |
 | Calendario | `pg-calendario` | Calendario unificado |
 | Gráficos | `pg-graficos` | Analytics y reportes |
-| Cash Flow | `pg-cashflow` | Finanzas: resumen, préstamos, cobranzas, inversiones, conciliación bancaria |
+| Cash Flow | `pg-cashflow` | Finanzas: resumen, préstamos, cobranzas, inversiones, conciliación bancaria, caja |
 | Sueldos | `pg-sueldos` | Gestión de honorarios |
 | Impuestos | `pg-impuestos` | IVA, IIBB, autónomos, ganancias |
 | Comprobantes | `pg-comprobantes` | Facturas de proveedores |
@@ -85,6 +85,7 @@ Panel web interno para **Metanoia SMX**, empresa de capacitación médica en sim
 | `agente-tareas` | Agente IA para gestión de tareas |
 | `agente-ejecutivo` | Agente ejecutivo general |
 | `sync-instagram` | Sincroniza posts de Instagram (@metanoiasmx) y Facebook (Metanoiasme.ok, ID: 478694861999786) con Supabase |
+| `sync-linkedin` | Sincroniza posts de LinkedIn (org ID: 105737703) — **pendiente aprobación Community Management API** |
 | `iniciar-reunion` | Inicia reunión con agente IA |
 | `verificar-reunion` | Verifica estado de reunión |
 | `leer-factura` | Lee facturas con visión de Claude |
@@ -95,6 +96,7 @@ Panel web interno para **Metanoia SMX**, empresa de capacitación médica en sim
 - `META_ACCESS_TOKEN` — Instagram (@metanoiasmx, ID: 17841470857318268)
 - `META_FB_PAGE_TOKEN` — Facebook Page (Metanoiasme.ok, ID: 478694861999786) — **vence periódicamente, renovar en Graph API Explorer**
 - `TAVILY_API_KEY` — búsqueda web para agente comunicaciones
+- `LINKEDIN_ACCESS_TOKEN` — LinkedIn OAuth token (app "Panel Metanoia", vence en 2 meses)
 
 ---
 
@@ -127,6 +129,7 @@ Panel web interno para **Metanoia SMX**, empresa de capacitación médica en sim
 - `rendimientos_diarios` — rendimientos diarios de inversiones
 - `inflacion_mensual` — inflación mensual
 - `banco_movimientos` — movimientos del Banco Macro para conciliación (sociedad, fecha, concepto, importe, saldo, conciliado, match_*)
+- `caja_movimientos` — movimientos diarios de caja (sociedad, fecha, tipo, concepto, categoria, monto, observaciones)
 - `comprobantes_compra` — facturas de proveedores (cargado_por, proveedor, total, fecha, sociedad, estado)
 - `cuenta_corriente` — cuentas corrientes de proveedores
 
@@ -196,16 +199,18 @@ git push
 - **Amparo** (avirasoro@metanoiasmx.com) — Admin
 - **Flor** (florencia.i.bustamante@gmail.com) — Comunicaciones
 - **Dani** (danielaspostigo@gmail.com) — Comunicaciones
+- **Octavio Marquez** (octavio.marquez@getdarwin.ai) — Comunicaciones (Darwin AI)
 
 ---
 
 ## Pendientes / Roadmap
 
-- [ ] LinkedIn sync (tercera plataforma en módulo comunicaciones)
-- [ ] Conciliación bancaria: completar lógica de auto-matching con cash flow
-- [ ] Integración E-learning — transmisión automática de cursos a plataforma
-- [ ] Agentes cloud autónomos para automatizaciones
+- [ ] LinkedIn sync — esperando aprobación Community Management API (app "Metanoia CMS", enviado 2 Jun 2026)
+- [ ] Darwin integration — hub de comunicaciones (WhatsApp/consultas), esperando APIs de Octavio
+- [ ] Integración E-learning — transmisión automática de cursos a plataforma metanoiasme.com
+- [ ] Agentes cloud autónomos para automatizaciones (gstack instalado)
 - [ ] Conciliación bancaria POINTERS (actualmente solo SUDES)
+- [ ] Mejoras Cash Flow — gráficos de evolución de caja
 
 ---
 
@@ -220,3 +225,11 @@ git push
 4. **index.html monolítico:** Todo el código está en un solo archivo. Buscar secciones con `<!-- ══ NOMBRE ══ -->` comentarios. Las funciones JS están al final del archivo.
 
 5. **GitHub Actions:** No hay CI/CD automático — deploy manual via `git push`.
+
+6. **LinkedIn apps:** Hay DOS apps en LinkedIn Developers:
+   - "Panel Metanoia" (Client ID: 777fx285cpfz1s) — Share on LinkedIn, para posting futuro
+   - "Metanoia CMS" (Client ID: 77fn5v3ziq376h) — Community Management API (pendiente aprobación)
+
+7. **Darwin AI:** Integración futura con api.getdarwin.ai — contacto: Octavio Marquez. Objetivo: hub de comunicaciones (ver y responder consultas desde el panel).
+
+8. **gstack:** Instalado en `~/.claude/skills/gstack/`. Comandos disponibles: `/gstack-review`, `/gstack-qa`, `/gstack-investigate`, `/gstack-health`.
