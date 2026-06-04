@@ -3930,13 +3930,14 @@ async function loadInscriptos(cursoId){
     const esCert=curso.certificado;
     let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
       <span style="font-size:13px;color:var(--tx2)">${insc.length} inscripto${insc.length!==1?"s":""}</span>
-      ${alumnosDisp.length?`<div style="display:flex;gap:8px;align-items:center">
-        <select id="sel-insc-alumno-${cursoId}" class="fs" style="font-size:12px;padding:4px 8px">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        ${esCert&&insc.length?`<button id="btn-dipl-todos-${cursoId}" class="btn sm pri" style="font-size:12px" onclick="enviarTodosLosDiplomas('${cursoId}')">📧 Enviar diplomas a todos</button>`:""}
+        ${alumnosDisp.length?`<select id="sel-insc-alumno-${cursoId}" class="fs" style="font-size:12px;padding:4px 8px">
           <option value="">— Agregar alumno —</option>
           ${alumnosDisp.map(a=>`<option value="${a.id}">${a.apellido}, ${a.nombre}</option>`).join("")}
         </select>
-        <button class="btn btn-sm" onclick="addInscripto('${cursoId}')">+ Agregar</button>
-      </div>`:""}
+        <button class="btn btn-sm" onclick="addInscripto('${cursoId}')">+ Agregar</button>`:""}
+      </div>
     </div>`;
     if(!insc.length){
       h+=`<p style="color:var(--tx3);font-size:13px;padding:12px 0">No hay inscriptos todavía.</p>`;
@@ -3967,9 +3968,12 @@ async function loadInscriptos(cursoId){
           </td>
           <td style="padding:8px;color:var(--tx2)">${i.monto_abonado?"$"+Number(i.monto_abonado).toLocaleString("es-AR"):"—"}</td>
           ${esCert?`<td style="padding:8px;text-align:center">
-            ${i.certificado_emitido
-              ?`<span style="color:var(--gr);font-size:11px">✓ Emitido</span>&nbsp;<button class="btn btn-xs" title="Descargar de nuevo" onclick="generarCertificado('${i.id}','${cursoId}')">↓</button>`
-              :`<button class="btn btn-sm" onclick="generarCertificado('${i.id}','${cursoId}')">📄 Generar</button>`}
+            <div style="display:flex;gap:4px;justify-content:center;align-items:center">
+              ${i.certificado_emitido
+                ?`<span style="color:var(--gr);font-size:11px;white-space:nowrap">✓ Emitido</span>&nbsp;<button class="btn btn-xs" title="Imprimir de nuevo" onclick="generarCertificado('${i.id}','${cursoId}')">🖨</button>`
+                :`<button class="btn btn-xs" title="Imprimir" onclick="generarCertificado('${i.id}','${cursoId}')">🖨 PDF</button>`}
+              <button class="btn btn-xs pri" title="Enviar por email" onclick="enviarDiplomaEmail('${i.id}','${cursoId}',this)">📧 Enviar</button>
+            </div>
           </td>`:""}
           <td style="padding:8px;text-align:right"><button class="btn btn-xs" style="color:var(--re)" onclick="removeInscripcion('${i.id}','${cursoId}')">✕</button></td>
         </tr>`;
@@ -4098,6 +4102,120 @@ async function generarCertificado(inscId,cursoId){
     toast("Diploma generado ✓","ok");
     loadInscriptos(cursoId);
   }catch(e){toast("Error al generar: "+e.message,"err")}
+}
+
+// ── DIPLOMAS POR EMAIL (Canvas + Resend) ─────────────────────────────────────
+async function diplomaCanvasBase64(datos){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.crossOrigin="anonymous";
+    img.onload=()=>{
+      const W=3508,H=2480;
+      const canvas=document.createElement("canvas");
+      canvas.width=W;canvas.height=H;
+      const ctx=canvas.getContext("2d");
+      ctx.drawImage(img,0,0,W,H);
+      ctx.fillStyle="rgb(52,48,90)";
+      const CAR=50;
+
+      // Nombre — center/middle, 105px bold
+      ctx.font="bold 105px Arial,sans-serif";
+      ctx.textAlign="center";ctx.textBaseline="middle";
+      ctx.fillText(datos.nombre,1748,760);
+
+      // DNI — left/middle, 80px
+      ctx.font="80px Arial,sans-serif";
+      ctx.textAlign="left";ctx.textBaseline="middle";
+      ctx.fillText(datos.dni||"",954,960+CAR);
+
+      // Matrícula — left/middle, 80px
+      ctx.fillText(datos.matricula||"",2004,960+CAR);
+
+      // Curso — center/middle, 82px bold (con wrapping)
+      ctx.font="bold 82px Arial,sans-serif";
+      ctx.textAlign="center";
+      const maxW=2200;
+      const words=(datos.curso||"").split(" ");
+      let line="",lines=[];
+      words.forEach(w=>{
+        const test=line+(line?" ":"")+w;
+        if(ctx.measureText(test).width>maxW&&line){lines.push(line);line=w;}
+        else line=test;
+      });
+      lines.push(line);
+      const cursoY=1250+CAR;
+      lines.forEach((l,i)=>ctx.fillText(l,1748,cursoY+i*95));
+
+      // Instructores — center/middle, 80px
+      ctx.font="80px Arial,sans-serif";
+      ctx.fillText(datos.instructores||"",1748,1590);
+
+      // Fecha — left/middle, 72px
+      ctx.textAlign="left";
+      ctx.font="72px Arial,sans-serif";
+      ctx.fillText(datos.fecha,2740,1810);
+
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror=reject;
+    img.src="./diploma-fondo.png";
+  });
+}
+
+async function enviarDiplomaEmail(inscId,cursoId,btnEl){
+  if(btnEl){btnEl.disabled=true;btnEl.textContent="Enviando...";}
+  try{
+    const [insc]=await sb(`inscripciones?id=eq.${inscId}&select=*,alumnos(id,nombre,apellido,dni,matricula,email)`);
+    const curso=cursos.find(c=>c.id===cursoId)||{};
+    const a=insc?.alumnos||{};
+    if(!a.email)throw new Error(`${a.nombre} ${a.apellido} no tiene email registrado`);
+    let instructor=curso.instructor_nombre||"";
+    try{const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(nombre,apellido)&limit=1`);if(ci[0]){const ins=ci[0].instructores;instructor=`${ins.nombre||""} ${ins.apellido||""}`.trim();}}catch(_){}
+    const fecha=new Date().toLocaleDateString("es-AR",{day:"numeric",month:"long",year:"numeric"});
+    const nombre=`${a.nombre||""} ${a.apellido||""}`.trim();
+    toast("Generando diploma...","inf");
+    const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha});
+    toast("Enviando email...","inf");
+    const res=await fetch(`${SB}/functions/v1/enviar-diplomas`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},body:JSON.stringify({email:a.email,nombre,curso:curso.nombre||"",instructores:instructor,fecha,diploma_base64:base64})});
+    const data=await res.json();
+    if(data.error)throw new Error(data.error);
+    await sb(`inscripciones?id=eq.${inscId}`,{method:"PATCH",body:JSON.stringify({certificado_emitido:true})});
+    toast(`✅ Diploma enviado a ${a.email}`,"ok");
+    loadInscriptos(cursoId);
+  }catch(e){toast("Error: "+e.message,"err");}
+  finally{if(btnEl){btnEl.disabled=false;btnEl.textContent="📧 Enviar";}}
+}
+
+async function enviarTodosLosDiplomas(cursoId){
+  const curso=cursos.find(c=>c.id===cursoId)||{};
+  if(!confirm(`¿Enviar diplomas por email a todos los inscriptos de "${curso.nombre}"?\nSolo se enviarán a quienes tienen email registrado.`))return;
+  const btn=document.getElementById(`btn-dipl-todos-${cursoId}`);
+  if(btn){btn.disabled=true;btn.textContent="Enviando 0/...";}
+  try{
+    const insc=await sb(`inscripciones?curso_id=eq.${cursoId}&estado=neq.Baja&select=*,alumnos(id,nombre,apellido,dni,matricula,email)`);
+    const conEmail=insc.filter(i=>i.alumnos?.email);
+    const sinEmail=insc.filter(i=>!i.alumnos?.email);
+    if(!conEmail.length){toast("Ningún inscripto tiene email registrado","err");return;}
+    let instructor=curso.instructor_nombre||"";
+    const fecha=new Date().toLocaleDateString("es-AR",{day:"numeric",month:"long",year:"numeric"});
+    let enviados=0;
+    for(const i of conEmail){
+      try{
+        const a=i.alumnos;
+        const nombre=`${a.nombre||""} ${a.apellido||""}`.trim();
+        if(btn)btn.textContent=`Enviando ${enviados+1}/${conEmail.length}...`;
+        const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha});
+        const res=await fetch(`${SB}/functions/v1/enviar-diplomas`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},body:JSON.stringify({email:a.email,nombre,curso:curso.nombre,instructores:instructor,fecha,diploma_base64:base64})});
+        const data=await res.json();
+        if(!data.error){await sb(`inscripciones?id=eq.${i.id}`,{method:"PATCH",body:JSON.stringify({certificado_emitido:true})});enviados++;}
+      }catch(e){console.warn("Error con",i.alumnos?.nombre,e.message);}
+    }
+    let msg=`✅ ${enviados} diploma${enviados!==1?"s":""} enviado${enviados!==1?"s":""}`;
+    if(sinEmail.length)msg+=` · ${sinEmail.length} sin email`;
+    toast(msg,"ok");
+    loadInscriptos(cursoId);
+  }catch(e){toast("Error: "+e.message,"err");}
+  finally{if(btn){btn.disabled=false;btn.textContent="📧 Enviar diplomas a todos";}}
 }
 
 // (código jsPDF reemplazado por HTML print)
