@@ -4119,34 +4119,30 @@ async function diplomaCanvasBase64(datos){
   return new Promise((resolve,reject)=>{
     const img=new Image();
     img.onload=()=>{
-      // 50% del original: 1754x1240 — igual calidad suficiente para email
+      // Canvas al 50%: todas las coordenadas multiplicadas por SCALE
       const SCALE=0.5;
-      const W=Math.round(3508*SCALE),H=Math.round(2480*SCALE);
+      const s=v=>Math.round(v*SCALE);
+      const W=s(3508),H=s(2480);
       const canvas=document.createElement("canvas");
       canvas.width=W;canvas.height=H;
       const ctx=canvas.getContext("2d");
       ctx.drawImage(img,0,0,W,H);
       ctx.fillStyle="rgb(52,48,90)";
-      ctx.scale(SCALE,SCALE);
-      const CAR=50;
+      const CAR=s(50);
 
-      // Nombre — center/middle, 105px bold
-      ctx.font="bold 105px Arial,sans-serif";
+      // Todas las coordenadas escaladas al 50%
+      ctx.font=`bold ${s(105)}px Arial,sans-serif`;
       ctx.textAlign="center";ctx.textBaseline="middle";
-      ctx.fillText(datos.nombre,1748,760);
+      ctx.fillText(datos.nombre,s(1748),s(760));
 
-      // DNI — left/middle, 80px
-      ctx.font="80px Arial,sans-serif";
+      ctx.font=`${s(80)}px Arial,sans-serif`;
       ctx.textAlign="left";ctx.textBaseline="middle";
-      ctx.fillText(datos.dni||"",954,960+CAR);
+      ctx.fillText(datos.dni||"",s(954),s(960)+CAR);
+      ctx.fillText(datos.matricula||"",s(2004),s(960)+CAR);
 
-      // Matrícula — left/middle, 80px
-      ctx.fillText(datos.matricula||"",2004,960+CAR);
-
-      // Curso — center/middle, 82px bold (con wrapping)
-      ctx.font="bold 82px Arial,sans-serif";
+      ctx.font=`bold ${s(82)}px Arial,sans-serif`;
       ctx.textAlign="center";
-      const maxW=2200;
+      const maxW=s(2200);
       const words=(datos.curso||"").split(" ");
       let line="",lines=[];
       words.forEach(w=>{
@@ -4155,19 +4151,17 @@ async function diplomaCanvasBase64(datos){
         else line=test;
       });
       lines.push(line);
-      const cursoY=1250+CAR;
-      lines.forEach((l,i)=>ctx.fillText(l,1748,cursoY+i*95));
+      const cursoY=s(1250)+CAR;
+      lines.forEach((l,i)=>ctx.fillText(l,s(1748),cursoY+i*s(95)));
 
-      // Instructores — center/middle, 80px
-      ctx.font="80px Arial,sans-serif";
-      ctx.fillText(datos.instructores||"",1748,1590);
+      ctx.font=`${s(80)}px Arial,sans-serif`;
+      ctx.fillText(datos.instructores||"",s(1748),s(1590));
 
-      // Fecha — left/middle, 72px
       ctx.textAlign="left";
-      ctx.font="72px Arial,sans-serif";
-      ctx.fillText(datos.fecha,2740,1810);
+      ctx.font=`${s(72)}px Arial,sans-serif`;
+      ctx.fillText(datos.fecha,s(2740),s(1810));
 
-      resolve(canvas.toDataURL("image/png"));
+      resolve(canvas.toDataURL("image/png",0.85));
     };
     img.onerror=()=>reject(new Error("Error al procesar imagen de fondo"));
     img.src=bgDataUrl;
