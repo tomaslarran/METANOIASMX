@@ -3952,11 +3952,19 @@ async function loadInscriptos(cursoId){
       <span style="font-size:13px;color:var(--tx2)">${insc.length} inscripto${insc.length!==1?"s":""}</span>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         ${esCert&&insc.length?`<button id="btn-dipl-todos-${cursoId}" class="btn sm pri" style="font-size:12px" onclick="enviarTodosLosDiplomas('${cursoId}')">📧 Enviar diplomas a todos</button>`:""}
-        ${alumnosDisp.length?`<select id="sel-insc-alumno-${cursoId}" class="fs" style="font-size:12px;padding:4px 8px">
-          <option value="">— Agregar alumno —</option>
-          ${alumnosDisp.map(a=>`<option value="${a.id}">${a.apellido}, ${a.nombre}</option>`).join("")}
-        </select>
-        <button class="btn btn-sm" onclick="addInscripto('${cursoId}')">+ Agregar</button>`:""}
+        ${alumnosDisp.length?`<div style="position:relative;display:flex;gap:8px;align-items:center">
+          <div style="position:relative">
+            <input id="insc-search-${cursoId}" class="fi" type="text" placeholder="Buscar alumno..." style="font-size:12px;padding:5px 10px;width:220px"
+              oninput="filtrarAlumnosInsc('${cursoId}',this.value)"
+              onfocus="document.getElementById('insc-drop-${cursoId}').style.display='block'"
+              onblur="setTimeout(()=>{const d=document.getElementById('insc-drop-${cursoId}');if(d)d.style.display='none'},200)">
+            <div id="insc-drop-${cursoId}" style="display:none;position:absolute;top:100%;left:0;width:280px;max-height:200px;overflow-y:auto;background:var(--surf);border:1px solid var(--b2);border-radius:8px;z-index:999;box-shadow:var(--shadow-md);margin-top:2px">
+              ${alumnosDisp.map(a=>`<div class="insc-opt" data-id="${a.id}" data-nombre="${esc(a.apellido+', '+a.nombre)}" style="padding:8px 12px;cursor:pointer;font-size:12px;color:var(--tx)" onmousedown="selAlumnoInsc('${cursoId}','${a.id}','${esc(a.apellido+', '+a.nombre)}')">${esc(a.apellido)}, ${esc(a.nombre)}</div>`).join("")}
+            </div>
+          </div>
+          <input type="hidden" id="sel-insc-alumno-${cursoId}" value="">
+          <button class="btn btn-sm" onclick="addInscripto('${cursoId}')">+ Agregar</button>
+        </div>`:""}
       </div>
     </div>`;
     if(!insc.length){
@@ -4004,9 +4012,28 @@ async function loadInscriptos(cursoId){
   }catch(e){el.innerHTML=`<p style="color:var(--re)">Error: ${e.message}</p>`}
 }
 
+function filtrarAlumnosInsc(cursoId,q){
+  const drop=document.getElementById(`insc-drop-${cursoId}`);
+  if(!drop)return;
+  drop.style.display="block";
+  const opts=drop.querySelectorAll(".insc-opt");
+  const ql=q.toLowerCase();
+  opts.forEach(o=>{
+    o.style.display=o.dataset.nombre.toLowerCase().includes(ql)?"":"none";
+  });
+}
+function selAlumnoInsc(cursoId,id,nombre){
+  const hidden=document.getElementById(`sel-insc-alumno-${cursoId}`);
+  const input=document.getElementById(`insc-search-${cursoId}`);
+  const drop=document.getElementById(`insc-drop-${cursoId}`);
+  if(hidden)hidden.value=id;
+  if(input)input.value=nombre;
+  if(drop)drop.style.display="none";
+}
+
 async function addInscripto(cursoId){
   const sel=document.getElementById(`sel-insc-alumno-${cursoId}`);
-  if(!sel||!sel.value){toast("Seleccioná un alumno","err");return;}
+  if(!sel||!sel.value){toast("Seleccioná un alumno de la lista","err");return;}
   try{
     await sb("inscripciones",{method:"POST",body:JSON.stringify({alumno_id:sel.value,curso_id:cursoId,estado:"Inscripto"})});
     toast("Alumno inscripto","ok");
