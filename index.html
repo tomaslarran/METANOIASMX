@@ -4118,7 +4118,7 @@ async function diplomaCanvasBase64(datos){
   }
   return new Promise((resolve,reject)=>{
     const img=new Image();
-    img.onload=()=>{
+    img.onload=()=>{try{
       // Canvas al 50%: todas las coordenadas multiplicadas por SCALE
       const SCALE=0.5;
       const s=v=>Math.round(v*SCALE);
@@ -4162,8 +4162,8 @@ async function diplomaCanvasBase64(datos){
       ctx.fillText(datos.fecha,s(2740),s(1810));
 
       resolve(canvas.toDataURL("image/png",0.85));
-    };
-    img.onerror=()=>reject(new Error("Error al procesar imagen de fondo"));
+    }catch(err){reject(err);}};
+    img.onerror=()=>reject(new Error("Error al cargar imagen de fondo del diploma"));
     img.src=bgDataUrl;
   });
 }
