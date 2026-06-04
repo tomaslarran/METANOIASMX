@@ -4213,10 +4213,16 @@ async function enviarTodosLosDiplomas(cursoId){
         const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha});
         const res=await fetch(`${SB}/functions/v1/enviar-diplomas`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},body:JSON.stringify({email:a.email,nombre,curso:curso.nombre,instructores:instructor,fecha,diploma_base64:base64})});
         const data=await res.json();
-        if(!data.error){await sb(`inscripciones?id=eq.${i.id}`,{method:"PATCH",body:JSON.stringify({certificado_emitido:true})});enviados++;}
+        if(!data.error){
+          await sb(`inscripciones?id=eq.${i.id}`,{method:"PATCH",body:JSON.stringify({certificado_emitido:true})});
+          enviados++;
+        }else{
+          throw new Error("Edge function: "+data.error);
+        }
       }catch(e){
         console.error("Error diploma",i.alumnos?.nombre,e.message);
         toast(`Error con ${i.alumnos?.nombre||"alumno"}: ${e.message}`,"err");
+        await new Promise(r=>setTimeout(r,2000)); // pausa para ver el toast
       }
     }
     let msg=`✅ ${enviados} diploma${enviados!==1?"s":""} enviado${enviados!==1?"s":""}`;
