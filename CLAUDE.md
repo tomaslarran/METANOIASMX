@@ -203,9 +203,71 @@ git push
 
 ---
 
+## Estrategia y modelo de negocio (Documento Base v4)
+
+### Estructura legal
+- **SUDES S.A.S.** (fundada 19/10/2020, Salta) → Proyecto Metanoia SMX → COFRADIA EMC
+- HQ: España 1440 (propiedad Colmedsa, comodato acoplado al convenio — perder uno = perder el otro)
+
+### Misión aprobada
+Formar profesionales de salud via simulación médica con rigor académico certificable, construyendo autoridad académica regional + negocio sostenible (ninguna fuente de ingresos > 40% del total).
+
+### 4 Líneas de negocio
+| Línea | Descripción | Estado |
+|---|---|---|
+| **A — MSP Convenio** | $80M/mes contrato gobierno (ancla, genera dependencia) | Activo — firmar 1/7/2026 |
+| **B — Colmedsa** | Sin pago directo; da espacio, certificación y legitimidad | Activo hasta 16/12/2029 |
+| **C — Cursos** | Cursos comerciales (motor real de autonomía) | Escalar a 4 cursos/mes en 2027 |
+| **D — COFRADIA** | Comunidad de suscripción médica (3 capas, 5 planes: Free → Expert) | En desarrollo |
+
+### Metodología PEV (Kaizen-PDCA)
+PEV1 → PEV2 → PEV3 → aprobación plenaria. Solo PROTOTIPO/APROBADO puede comercializarse.
+
+### Roles
+| Rol | Función |
+|---|---|
+| **Mario** | Visión y originación de oportunidades |
+| **Amparo** | Puente humano: decodifica a Mario, coordina ejecución |
+| **Tomás** | Puente sistemas: procesos, herramientas, APIs |
+| **Valentina** | Coordinación de instructores |
+| **Director Médico** | Autoridad clínica/editorial (independiente) |
+
+### Flujo operativo
+Mario (ideas crudas) → Amparo (decodifica con Plantilla Intake) → Ejecución / Tomás (sistematiza)
+- Sync semanal 30min coordinado por Amparo
+- Revisión mensual vs targets por línea de negocio
+
+### Plantilla Intake de oportunidades
+12 campos para filtrar ideas antes de llegar al equipo ejecutor:
+idea cruda → definición concreta → línea de negocio → a quién sirve → fit estratégico → primer paso testeable → ejecutor → recursos/costo → criterio de éxito → riesgos → estado → metadata
+
+### Modelo financiero (4 años, pesos constantes TC $1.450)
+- Dependencia MSP: 76% Año1 → 62% Año2 → 52% Año3 → 50% Año4 (objetivo <40%)
+- **COFRADIA sola no alcanza autonomía** — escalar cursos (Línea C) es el driver real
+- Con 4 cursos/mes desde 2027: dependencia MSP baja a ~23% Año4
+- **Dato crítico pendiente:** costo real de entrega MSP (hoy 50% placeholder — AUREN debe confirmar)
+
+### Instrumentos legales clave
+- Acta constitutiva SUDES S.A.S.
+- Convenio Colmedsa (hasta 16/12/2029)
+- Comodato España 1440 (acoplado al convenio — riesgo crítico)
+- Decreto 447
+- Contrato MSP (a firmar 1/7/2026)
+
+### Riesgos principales
+1. Pagador estatal único con horizonte contractual corto
+2. Costo real MSP desconocido (mueve la rentabilidad más que cualquier otro factor)
+3. Dependencia del par Mario+Amparo
+4. Tomás como segundo cuello de botella (sistemas + procesos + admin)
+
+---
+
 ## Pendientes / Roadmap
 
 - [ ] LinkedIn sync — esperando aprobación Community Management API (app "Metanoia CMS", enviado 2 Jun 2026)
+- [ ] Módulo COFRADIA — gestión de planes, suscriptores y contenido (Línea D)
+- [ ] Intake de oportunidades en el panel — Mario carga ideas, Amparo las procesa
+- [ ] Dashboard de autonomía — KPI dependencia MSP vs privado en tiempo real
 - [ ] Darwin integration — hub de comunicaciones (WhatsApp/consultas), esperando APIs de Octavio
 - [ ] Integración E-learning — transmisión automática de cursos a plataforma metanoiasme.com
 - [ ] Agentes cloud autónomos para automatizaciones (gstack instalado)
