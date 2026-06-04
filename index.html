@@ -804,6 +804,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <option value="">Todo el equipo</option>
     </select>
     <button class="btn" id="theme-toggle" onclick="toggleTheme()" title="Cambiar tema" style="padding:6px 10px;font-size:16px;border:none">🌙</button>
+    <button id="btn-token-alert" onclick="goPage('alertas',document.getElementById('nav-alertas'))" title="Tokens API por vencer" style="display:none;background:var(--am);color:#000;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">🔑 Token</button>
     <button class="btn" id="rbtn" onclick="loadAll()">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
       Actualizar
@@ -3131,6 +3132,25 @@ async function renderAlertas(){
           onclick:`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('autonomos')`});
     });
   }
+
+  // ── Alertas de tokens API ──
+  try{
+    const tokens=await sb("tokens_api?select=*");
+    tokens.forEach(t=>{
+      if(!t.ultima_renovacion||!t.dias_vida)return;
+      const venc=new Date(t.ultima_renovacion);
+      venc.setDate(venc.getDate()+t.dias_vida);
+      const vencStr=venc.toISOString().split("T")[0];
+      const d=days(vencStr);
+      if(d===null||d>30)return;
+      alertas.push({tipo:"token",icon:"🔑",urgencia:d<0?"critica":d===0?"hoy":d<=7?"semana":"mes",d,
+        titulo:`Token vencido: ${t.nombre}`,
+        sub:d<0?`Venció hace ${Math.abs(d)} días — ${t.descripcion}`:`Vence en ${d} días — ${t.descripcion}`,
+        fecha:vencStr,
+        onclick:t.url_renovar?`window.open('${t.url_renovar}','_blank')`:`toast('Renovar en Supabase Secrets','inf')`
+      });
+    });
+  }catch(_){}
 
   alertas.sort((a,b)=>(a.d??999)-(b.d??999));
 
@@ -10310,6 +10330,26 @@ function enterPanel(user,isNewLogin){
   requestPushPermission();
   loadNotificaciones();
   startNotifPoll();
+  checkTokensExpiry();
+}
+
+async function checkTokensExpiry(){
+  try{
+    const tokens=await sb("tokens_api?select=*");
+    const now=new Date();
+    const criticos=tokens.filter(t=>{
+      if(!t.ultima_renovacion||!t.dias_vida)return false;
+      const venc=new Date(t.ultima_renovacion);
+      venc.setDate(venc.getDate()+t.dias_vida);
+      const diff=Math.floor((venc-now)/86400000);
+      return diff<=10;
+    });
+    const btn=document.getElementById("btn-token-alert");
+    if(btn){
+      btn.style.display=criticos.length?"":"none";
+      if(criticos.length)btn.textContent=`🔑 ${criticos.length} token${criticos.length>1?"s":""} por vencer`;
+    }
+  }catch(_){}
 }
 
 function toggleTheme(){
