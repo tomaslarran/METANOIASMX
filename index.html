@@ -39,6 +39,25 @@
   --shadow-glow:0 0 40px -10px rgba(124,58,237,.35);
   --gradient-brand:linear-gradient(135deg,#7C3AED,#A855F7);
 }
+/* ── MODO CLARO ── */
+body.light-mode{
+  --bg:#F4F5F7;--bg2:#ECEDF0;--bg3:#E4E6EB;--surf:#FFFFFF;--surf2:#F0F1F4;
+  --b:rgba(0,0,0,.08);--b2:rgba(0,0,0,.15);--b3:rgba(0,0,0,.25);
+  --tx:#111827;--tx2:#4B5563;--tx3:#9CA3AF;--tx4:#D1D5DB;
+  --pl:rgba(124,58,237,.12);--pll:rgba(124,58,237,.06);
+  --gl:rgba(16,185,129,.1);--al:rgba(245,158,11,.1);
+  --rl2:rgba(239,68,68,.1);--bll:rgba(59,130,246,.1);
+  --shadow-sm:0 1px 3px rgba(0,0,0,.1);
+  --shadow-md:0 4px 12px -2px rgba(0,0,0,.12);
+  --shadow-lg:0 10px 30px -5px rgba(0,0,0,.15);
+  --shadow-glow:0 0 40px -10px rgba(124,58,237,.2);
+  background-image:radial-gradient(circle at 50% 0%,rgba(124,58,237,.06),transparent 65%);
+}
+body.light-mode .topbar{background:rgba(255,255,255,.97)}
+body.light-mode .sidebar{background:#F8F9FB}
+body.light-mode .sitem:hover{background:rgba(0,0,0,.04)}
+body.light-mode .sitem.on{background:rgba(124,58,237,.1)}
+body.light-mode .login-box{background:#fff;border-color:rgba(0,0,0,.1)}
 *{box-sizing:border-box;margin:0;padding:0}
 html{overflow-x:clip}
 body{font-family:var(--f);background:var(--bg);color:var(--tx);min-height:100vh;font-size:14px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;display:flex;flex-direction:column;overflow-x:hidden;background-image:radial-gradient(circle at 50% 0%,rgba(124,58,237,.12),transparent 65%);background-attachment:fixed;background-repeat:no-repeat}
@@ -784,6 +803,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <select class="sel" id="usel" onchange="onUser()" title="Filtrar por persona">
       <option value="">Todo el equipo</option>
     </select>
+    <button class="btn" id="theme-toggle" onclick="toggleTheme()" title="Cambiar tema" style="padding:6px 10px;font-size:16px;border:none">🌙</button>
     <button class="btn" id="rbtn" onclick="loadAll()">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
       Actualizar
@@ -10264,6 +10284,20 @@ function enterPanel(user,isNewLogin){
   loadNotificaciones();
   startNotifPoll();
 }
+
+function toggleTheme(){
+  const isLight=document.body.classList.toggle("light-mode");
+  localStorage.setItem("smx_theme",isLight?"light":"dark");
+  const btn=document.getElementById("theme-toggle");
+  if(btn)btn.textContent=isLight?"☀️":"🌙";
+}
+function initTheme(){
+  const saved=localStorage.getItem("smx_theme");
+  const prefersDark=window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+  const useDark=saved?saved==="dark":prefersDark!==false;
+  if(!useDark){document.body.classList.add("light-mode");const btn=document.getElementById("theme-toggle");if(btn)btn.textContent="☀️";}
+}
+initTheme();
 
 function logout(){
   if(!confirm(`¿Cerrar sesión de ${loggedUser?.nombre||""}?`))return;
