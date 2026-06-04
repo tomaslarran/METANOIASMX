@@ -4157,8 +4157,9 @@ async function diplomaCanvasBase64(datos){
 
       resolve(canvas.toDataURL("image/png"));
     };
-    img.onerror=reject;
-    img.src="./diploma-fondo.png";
+    img.onerror=(e)=>reject(new Error("No se pudo cargar la imagen de fondo del diploma: "+e));
+    // URL absoluta para evitar problemas de CORS con canvas
+    img.src="https://tomaslarran.github.io/METANOIASMX/diploma-fondo.png";
   });
 }
 
@@ -4208,11 +4209,14 @@ async function enviarTodosLosDiplomas(cursoId){
         const res=await fetch(`${SB}/functions/v1/enviar-diplomas`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},body:JSON.stringify({email:a.email,nombre,curso:curso.nombre,instructores:instructor,fecha,diploma_base64:base64})});
         const data=await res.json();
         if(!data.error){await sb(`inscripciones?id=eq.${i.id}`,{method:"PATCH",body:JSON.stringify({certificado_emitido:true})});enviados++;}
-      }catch(e){console.warn("Error con",i.alumnos?.nombre,e.message);}
+      }catch(e){
+        console.error("Error diploma",i.alumnos?.nombre,e.message);
+        toast(`Error con ${i.alumnos?.nombre||"alumno"}: ${e.message}`,"err");
+      }
     }
     let msg=`✅ ${enviados} diploma${enviados!==1?"s":""} enviado${enviados!==1?"s":""}`;
     if(sinEmail.length)msg+=` · ${sinEmail.length} sin email`;
-    toast(msg,"ok");
+    toast(msg,enviados>0?"ok":"err");
     loadInscriptos(cursoId);
   }catch(e){toast("Error: "+e.message,"err");}
   finally{if(btn){btn.disabled=false;btn.textContent="📧 Enviar diplomas a todos";}}
