@@ -1533,6 +1533,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="cd-tab" id="cftab-historial" onclick="setCFTab('historial',this)">📋 Historial pagos</button>
     <button class="cd-tab" id="cftab-conciliacion" onclick="setCFTab('conciliacion',this)">🏦 Conciliación bancaria</button>
     <button class="cd-tab" id="cftab-caja" onclick="setCFTab('caja',this)">💰 Caja</button>
+    <button class="cd-tab" id="cftab-resumen-sem" onclick="setCFTab('resumen-sem',this)">📊 Resumen semanal</button>
   </div>
 
   <!-- TAB: RESUMEN MENSUAL -->
@@ -1689,6 +1690,20 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="sc"><div class="sc-l">Total pagado</div><div class="sc-v" id="hist-total" style="color:var(--re)">—</div><div class="sc-s">en el período seleccionado</div></div>
     </div>
     <div id="hist-tabla"></div>
+  </div>
+
+  <!-- TAB: RESUMEN SEMANAL -->
+  <div id="cfpg-resumen-sem" style="display:none">
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      <div class="fbar">
+        <button class="fb on" id="rsem-soc-todas" onclick="rsemSetSoc('',this)">Todas</button>
+        <button class="fb" id="rsem-soc-sudes" onclick="rsemSetSoc('SUDES',this)">SUDES</button>
+        <button class="fb" id="rsem-soc-ptr" onclick="rsemSetSoc('POINTERS',this)">POINTERS</button>
+      </div>
+      <button class="btn sm pri" onclick="renderResumenSemanal()">🔄 Actualizar</button>
+      <span style="font-size:11px;color:var(--tx3);margin-left:auto" id="rsem-timestamp"></span>
+    </div>
+    <div id="rsem-content"><div style="text-align:center;padding:40px;color:var(--tx3)">Cargando resumen...</div></div>
   </div>
 
   <!-- TAB: CAJA -->
@@ -5687,7 +5702,7 @@ function setCFTab(tab,btn){
   document.querySelectorAll("#pg-cashflow .cd-tab").forEach(b=>b.classList.remove("on"));
   const tabBtn=btn||document.getElementById("cftab-"+tab);
   if(tabBtn)tabBtn.classList.add("on");
-  ["resumen","prestamos","cobranzas","inversiones","historial","conciliacion","caja"].forEach(t=>{
+  ["resumen","prestamos","cobranzas","inversiones","historial","conciliacion","caja","resumen-sem"].forEach(t=>{
     const el=document.getElementById("cfpg-"+t);
     if(el)el.style.display=t===tab?"":"none";
   });
@@ -5698,6 +5713,7 @@ function setCFTab(tab,btn){
   if(tab==="historial")renderHistorial();
   if(tab==="conciliacion")renderConciliacion();
   if(tab==="caja")renderCaja();
+  if(tab==="resumen-sem")renderResumenSemanal();
 }
 
 // ══════════════════════════════════════════════
@@ -5976,6 +5992,152 @@ async function concConciliarAuto() {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "⚡ Auto-conciliar"; }
   }
+}
+
+// ── RESUMEN SEMANAL CASH FLOW ─────────────────────────────────────────────────
+let rsemSociedad="";
+function rsemSetSoc(s,btn){
+  rsemSociedad=s;
+  document.querySelectorAll("#cfpg-resumen-sem .fbar .fb").forEach(b=>b.classList.remove("on"));
+  if(btn)btn.classList.add("on");
+  renderResumenSemanal();
+}
+
+async function renderResumenSemanal(){
+  const el=document.getElementById("rsem-content");
+  if(!el)return;
+  el.innerHTML=`<div style="text-align:center;padding:40px;color:var(--tx3)"><div class="loader" style="margin:0 auto 12px"></div>Cargando...</div>`;
+  const ts=document.getElementById("rsem-timestamp");
+  if(ts)ts.textContent="Actualizado: "+new Date().toLocaleTimeString("es-AR");
+
+  const fmtM=v=>{
+    const n=parseFloat(v)||0;
+    const color=n>=0?"var(--gr)":"var(--re)";
+    return `<span style="color:${color};font-weight:600">${n>=0?"+":""}$${Math.round(Math.abs(n)).toLocaleString("es-AR")}</span>`;
+  };
+  const hoy=new Date().toISOString().split("T")[0];
+  const sf=rsemSociedad?`&sociedad=eq.${rsemSociedad}`:"";
+
+  try{
+    const [cajaMovs,bancoMovs,cobranzas,prestamos,inversiones]=await Promise.all([
+      sb(`caja_movimientos?select=sociedad,tipo,monto,concepto,fecha${sf}&order=fecha.desc&limit=50`).catch(()=>[]),
+      sb(`banco_movimientos?select=fecha,concepto,importe,sociedad,conciliado${sf}&order=fecha.desc&limit=10`).catch(()=>[]),
+      sb(`cf_cobranzas?select=descripcion,monto,fecha_vencimiento,estado,empresa&order=fecha_vencimiento.asc`).catch(()=>[]),
+      sb(`cf_prestamos?select=nombre,sociedad,saldo_pendiente,cuota_mensual&activo=eq.true`).catch(()=>[]),
+      sb(`cf_inversiones?select=nombre,sociedad,capital,valor_actual,tna&order=valor_actual.desc`).catch(()=>[]),
+    ]);
+
+    // Saldos de caja
+    const saldos={SUDES:0,POINTERS:0};
+    cajaMovs.forEach(m=>{
+      const s=m.sociedad||"?";
+      if(saldos[s]!==undefined){
+        const v=parseFloat(m.monto)||0;
+        saldos[s]+=m.tipo==="ingreso"?v:-v;
+      }
+    });
+
+    // Saldo banco (último por sociedad)
+    const bancoSaldo={};
+    bancoMovs.forEach(m=>{if(!bancoSaldo[m.sociedad])bancoSaldo[m.sociedad]=m.importe;});
+
+    // Cobranzas pendientes/vencidas
+    const cobPend=cobranzas.filter(c=>c.estado!=="cobrado"&&c.estado!=="acreditado");
+    const cobVenc=cobPend.filter(c=>c.fecha_vencimiento&&c.fecha_vencimiento<hoy);
+    const cobProx=cobPend.filter(c=>{
+      if(!c.fecha_vencimiento||c.fecha_vencimiento<hoy)return false;
+      const d=Math.floor((new Date(c.fecha_vencimiento)-new Date())/86400000);
+      return d<=30;
+    });
+    const totalCobPend=cobPend.reduce((s,c)=>s+(parseFloat(c.monto)||0),0);
+
+    // Préstamos
+    const totalDeuda=prestamos.reduce((s,p)=>s+(parseFloat(p.saldo_pendiente)||0),0);
+    const totalCuota=prestamos.reduce((s,p)=>s+(parseFloat(p.cuota_mensual)||0),0);
+
+    // Inversiones
+    const totalInv=inversiones.reduce((s,i)=>s+(parseFloat(i.valor_actual)||0),0);
+    const totalCapInv=inversiones.reduce((s,i)=>s+(parseFloat(i.capital)||0),0);
+
+    const socList=rsemSociedad?[rsemSociedad]:["SUDES","POINTERS"];
+
+    let h=`<div style="display:grid;gap:16px">`;
+
+    // ── Posición de caja ──
+    h+=`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:16px">
+      <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px">💰 Posición de caja</div>
+      <div style="display:grid;grid-template-columns:repeat(${socList.length},1fr);gap:12px">
+        ${socList.map(soc=>`<div style="text-align:center">
+          <div style="font-size:11px;color:var(--tx3);margin-bottom:4px">${soc}</div>
+          <div style="font-size:22px;font-weight:700;color:${(saldos[soc]||0)>=0?"var(--gr)":"var(--re)"}">$${Math.round(Math.abs(saldos[soc]||0)).toLocaleString("es-AR")}</div>
+          <div style="font-size:10px;color:var(--tx3)">efectivo hoy</div>
+          ${bancoSaldo[soc]!==undefined?`<div style="font-size:11px;color:var(--tx2);margin-top:4px">Banco: <strong>$${Math.round(Math.abs(parseFloat(bancoSaldo[soc])||0)).toLocaleString("es-AR")}</strong></div>`:""}
+        </div>`).join("")}
+      </div>
+    </div>`;
+
+    // ── Últimos movimientos banco ──
+    if(bancoMovs.length){
+      h+=`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">🏦 Últimos movimientos bancarios</div>
+        <table style="width:100%;font-size:11px;border-collapse:collapse">
+          ${bancoMovs.map(m=>{
+            const imp=parseFloat(m.importe)||0;
+            const color=imp>=0?"var(--gr)":"var(--re)";
+            return`<tr style="border-bottom:1px solid var(--b)">
+              <td style="padding:5px 6px;color:var(--tx3)">${m.fecha||""}</td>
+              <td style="padding:5px 6px;color:var(--tx);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.concepto||"")}</td>
+              <td style="padding:5px 6px;color:var(--tx3);font-size:10px">${m.sociedad||""}</td>
+              <td style="padding:5px 6px;text-align:right;font-weight:600;color:${color}">${imp>=0?"+":""}$${Math.round(Math.abs(imp)).toLocaleString("es-AR")}</td>
+              <td style="padding:5px 6px;text-align:center">${m.conciliado?`<span style="color:var(--gr);font-size:10px">✓</span>`:`<span style="color:var(--am);font-size:10px">⚠</span>`}</td>
+            </tr>`;
+          }).join("")}
+        </table>
+      </div>`;
+    }
+
+    // ── Alertas de cobranzas ──
+    if(cobVenc.length||cobProx.length){
+      h+=`<div style="background:var(--surf);border:1px solid ${cobVenc.length?"var(--re)":"var(--am)"};border-radius:var(--rl);padding:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">📋 Cobranzas pendientes — Total: ${fmtM(totalCobPend)}</div>
+        ${cobVenc.length?`<div style="font-size:10px;font-weight:700;color:var(--re);margin-bottom:6px">VENCIDAS (${cobVenc.length})</div>`:""}
+        ${[...cobVenc,...cobProx].map(c=>{
+          const dias=c.fecha_vencimiento?Math.floor((new Date(c.fecha_vencimiento)-new Date())/86400000):null;
+          const badge=dias===null?"":(dias<0?`<span style="background:var(--re);color:#fff;padding:1px 6px;border-radius:8px;font-size:9px">${Math.abs(dias)}d vencido</span>`:`<span style="background:var(--am);color:#000;padding:1px 6px;border-radius:8px;font-size:9px">${dias}d</span>`);
+          return`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--b);font-size:11px">
+            <span style="color:var(--tx)">${esc(c.descripcion||c.empresa||"Cobranza")}</span>
+            <span style="display:flex;gap:8px;align-items:center">${badge} ${fmtM(c.monto)}</span>
+          </div>`;
+        }).join("")}
+      </div>`;
+    }
+
+    // ── Préstamos ──
+    if(prestamos.length){
+      h+=`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">💳 Préstamos — Deuda total: ${fmtM(totalDeuda)} · Cuota mensual: ${fmtM(totalCuota)}</div>
+        ${prestamos.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--b);font-size:11px">
+          <span style="color:var(--tx)">${esc(p.nombre||"")} <span style="color:var(--tx3)">${p.sociedad||""}</span></span>
+          <span style="color:var(--re);font-weight:600">$${Math.round(parseFloat(p.saldo_pendiente)||0).toLocaleString("es-AR")}</span>
+        </div>`).join("")}
+      </div>`;
+    }
+
+    // ── Inversiones ──
+    if(inversiones.length){
+      const ganancia=totalInv-totalCapInv;
+      h+=`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">📈 Inversiones — Valor actual: ${fmtM(totalInv)} · Ganancia: ${fmtM(ganancia)}</div>
+        ${inversiones.map(i=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--b);font-size:11px">
+          <span style="color:var(--tx)">${esc(i.nombre||"")} <span style="color:var(--tx3)">${i.sociedad||""}</span></span>
+          <span style="color:var(--gr);font-weight:600">$${Math.round(parseFloat(i.valor_actual)||0).toLocaleString("es-AR")}</span>
+        </div>`).join("")}
+      </div>`;
+    }
+
+    h+=`</div>`;
+    el.innerHTML=h;
+  }catch(e){el.innerHTML=`<p style="color:var(--re);padding:20px">Error: ${e.message}</p>`;}
 }
 
 // ── MÓDULO CAJA ──────────────────────────────────────────────────────────────
