@@ -2637,6 +2637,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendCursoIA()}">
       <button class="btn pri" onclick="sendCursoIA()" id="btn-curso-ia-send" style="padding:8px 16px">Enviar</button>
     </div>
+    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap" id="curso-ia-actions" style="display:none">
+      <button class="btn sm" onclick="generarCursoArchivo('ppt')" title="Generar presentación PPT">📊 Generar PPT</button>
+      <button class="btn sm" onclick="generarCursoArchivo('examen')" title="Generar examen PDF">📋 Examen PDF</button>
+      <button class="btn sm" onclick="generarCursoArchivo('programa')" title="Generar programa del curso">📝 Programa PDF</button>
+    </div>
   </div>
 </div>
 
@@ -4811,6 +4816,178 @@ async function createCurso(){
 
 function openPlantillaModal(){toast("Plantillas: podés editar la plantilla base directamente en Supabase > curso_tareas","inf")}
 
+// ── GENERAR ARCHIVOS CURSO IA ─────────────────────────────────────────────────
+async function generarCursoArchivo(tipo){
+  if(!cursoIAHistorial.length){toast("Primero charlá con el agente sobre el curso","inf");return;}
+
+  const prompts={
+    ppt:`Basándote en nuestra conversación, generá el contenido completo para una presentación PPT de este curso. Devolvé SOLO JSON válido sin texto adicional, con esta estructura exacta:
+{"titulo":"nombre del curso","subtitulo":"subtítulo descriptivo","slides":[{"titulo":"Slide 1","puntos":["punto 1","punto 2","punto 3"]},{"titulo":"Slide 2","puntos":["punto 1","punto 2"]}]}
+Incluí al menos 8 slides: portada, objetivos, metodología, programa por módulos (1 slide por módulo), evaluación, cierre.`,
+    examen:`Basándote en el curso de nuestra conversación, generá 10 preguntas de opción múltiple para evaluarlo. Devolvé SOLO JSON válido:
+{"titulo":"Evaluación — [nombre del curso]","preguntas":[{"n":1,"pregunta":"texto de la pregunta","opciones":["A) opción","B) opción","C) opción","D) opción"],"correcta":"A"}]}`,
+    programa:`Generá el programa académico completo del curso de nuestra conversación en texto estructurado con estas secciones: NOMBRE DEL CURSO, DESCRIPCIÓN, OBJETIVOS GENERALES, OBJETIVOS ESPECÍFICOS, NIVEL DE SIMULACIÓN, METODOLOGÍA, CONTENIDO (módulos detallados), SISTEMA DE EVALUACIÓN, DURACIÓN, DIRIGIDO A, INSTRUCTOR/REFERENTE SUGERIDO.`
+  };
+
+  const labels={ppt:"📊 Generando PPT...",examen:"📋 Generando examen...",programa:"📝 Generando programa..."};
+  toast(labels[tipo],"inf");
+
+  try{
+    const res=await fetch(`${SB}/functions/v1/agente-cursos`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},
+      body:JSON.stringify({message:prompts[tipo],historial:cursoIAHistorial.slice(-10),canal:"panel"})
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error);
+    const content=data.respuesta||"";
+
+    if(tipo==="ppt") await _generarPPTCurso(content);
+    else _generarPDFCurso(content,tipo);
+  }catch(e){toast("Error al generar: "+e.message,"err");}
+}
+
+async function _generarPPTCurso(jsonStr){
+  // Cargar pptxgenjs desde CDN si no está
+  if(!window.PptxGenJS){
+    await new Promise((res,rej)=>{
+      const s=document.createElement("script");
+      s.src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/libs/pptxgen.bundle.js";
+      s.onload=res;s.onerror=rej;
+      document.head.appendChild(s);
+    });
+  }
+  let data;
+  try{
+    const match=jsonStr.match(/\{[\s\S]*\}/);
+    data=JSON.parse(match?.[0]||jsonStr);
+  }catch(e){toast("No pude parsear la respuesta del agente","err");return;}
+
+  const pres=new PptxGenJS();
+  pres.layout="LAYOUT_16x9";
+  pres.theme={headFontFace:"Arial",bodyFontFace:"Arial"};
+  const PU="#7C3AED", WHITE="#FFFFFF", LIGHT="#F5F3FF", DARK="#1A0A3E";
+
+  // Portada
+  const portada=pres.addSlide();
+  portada.background={color:DARK};
+  portada.addShape(pres.shapes.RECTANGLE,{x:0,y:4.5,w:10,h:1.1,fill:{color:PU}});
+  portada.addText(data.titulo||"Curso Metanoia SMX",{x:.5,y:1.2,w:9,h:1.5,fontSize:36,bold:true,color:WHITE,fontFace:"Arial"});
+  portada.addText(data.subtitulo||"",{x:.5,y:2.9,w:9,h:.8,fontSize:18,color:"#C4B5FD",fontFace:"Arial"});
+  portada.addText("Metanoia SMX · Simulación Médica · Salta, Argentina",{x:.5,y:4.6,w:9,h:.6,fontSize:11,color:WHITE,align:"center"});
+
+  // Slides de contenido
+  (data.slides||[]).forEach((slide)=>{
+    const s=pres.addSlide();
+    s.background={color:LIGHT};
+    s.addShape(pres.shapes.RECTANGLE,{x:0,y:0,w:10,h:.9,fill:{color:PU}});
+    s.addText(slide.titulo||"",{x:.3,y:0,w:9.4,h:.9,fontSize:20,bold:true,color:WHITE,valign:"middle"});
+    const puntos=(slide.puntos||[]).map(p=>({text:"• "+p,options:{breakLine:true,fontSize:15,color:DARK}}));
+    if(puntos.length)s.addText(puntos,{x:.5,y:1.1,w:9,h:4,valign:"top",fontFace:"Arial"});
+    s.addText("Metanoia SMX",{x:.3,y:5.1,w:9.4,h:.3,fontSize:9,color:"#9CA3AF",align:"right"});
+  });
+
+  await pres.writeFile({fileName:`Curso_${(data.titulo||"Metanoia").replace(/[^a-zA-Z0-9]/g,"_")}.pptx`});
+  toast("✅ PPT generado y descargado","ok");
+}
+
+function _generarPDFCurso(content,tipo){
+  // Cargar jsPDF si no está
+  const generarPDF=()=>{
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+    const PU=[124,58,237], DARK=[26,10,62], GRAY=[100,100,100];
+    const W=doc.internal.pageSize.getWidth();
+    let y=20;
+
+    // Header
+    doc.setFillColor(...PU);
+    doc.rect(0,0,W,16,"F");
+    doc.setTextColor(255,255,255);
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(12);
+    doc.text("Metanoia SMX · Simulación Médica",W/2,10,{align:"center"});
+
+    // Título
+    y=28;
+    doc.setTextColor(...DARK);
+    doc.setFontSize(tipo==="examen"?16:14);
+    doc.setFont("helvetica","bold");
+    const titulo=tipo==="examen"?"Evaluación del Curso":"Programa Académico";
+    doc.text(titulo,W/2,y,{align:"center"});
+    y+=10;
+
+    // Contenido
+    doc.setFontSize(10);
+    doc.setFont("helvetica","normal");
+    doc.setTextColor(...DARK);
+
+    if(tipo==="examen"){
+      // Intentar parsear JSON de examen
+      try{
+        const match=content.match(/\{[\s\S]*\}/);
+        const data=JSON.parse(match?.[0]||content);
+        doc.setFontSize(13);doc.setFont("helvetica","bold");
+        doc.text(data.titulo||"Evaluación",W/2,y,{align:"center"});
+        y+=10;
+        (data.preguntas||[]).forEach((p,i)=>{
+          if(y>260){doc.addPage();y=20;}
+          doc.setFontSize(10);doc.setFont("helvetica","bold");doc.setTextColor(...DARK);
+          const qLines=doc.splitTextToSize(`${p.n||i+1}. ${p.pregunta}`,W-30);
+          doc.text(qLines,15,y);y+=qLines.length*5+2;
+          doc.setFont("helvetica","normal");doc.setTextColor(...GRAY);
+          (p.opciones||[]).forEach(op=>{
+            if(y>265){doc.addPage();y=20;}
+            const oLines=doc.splitTextToSize("   "+op,W-35);
+            doc.text(oLines,18,y);y+=oLines.length*4.5;
+          });
+          y+=4;
+        });
+      }catch(e){
+        // Fallback a texto plano
+        const lines=doc.splitTextToSize(content,W-30);
+        doc.text(lines,15,y);
+      }
+    }else{
+      // Programa: texto formateado
+      const lines=content.split("\n");
+      lines.forEach(line=>{
+        if(y>270){doc.addPage();y=20;}
+        if(line.trim().match(/^[A-Z\s]{4,}:?$/)||line.startsWith("##")){
+          doc.setFont("helvetica","bold");doc.setFontSize(11);doc.setTextColor(...PU);
+          doc.text(line.replace(/#+/g,"").trim(),15,y);y+=7;
+        }else if(line.startsWith("-")||line.startsWith("•")){
+          doc.setFont("helvetica","normal");doc.setFontSize(9.5);doc.setTextColor(...DARK);
+          const ls=doc.splitTextToSize(line,W-35);doc.text(ls,20,y);y+=ls.length*5;
+        }else if(line.trim()){
+          doc.setFont("helvetica","normal");doc.setFontSize(9.5);doc.setTextColor(...DARK);
+          const ls=doc.splitTextToSize(line,W-30);doc.text(ls,15,y);y+=ls.length*5;
+        }else{y+=3;}
+      });
+    }
+
+    // Footer
+    const pages=doc.getNumberOfPages();
+    for(let i=1;i<=pages;i++){
+      doc.setPage(i);
+      doc.setFillColor(...PU);doc.rect(0,doc.internal.pageSize.getHeight()-10,W,10,"F");
+      doc.setTextColor(255,255,255);doc.setFontSize(8);
+      doc.text(`Metanoia SMX · Página ${i} de ${pages}`,W/2,doc.internal.pageSize.getHeight()-3,{align:"center"});
+    }
+
+    const nombre=tipo==="examen"?"Examen_Curso":"Programa_Curso";
+    doc.save(`${nombre}_Metanoia.pdf`);
+    toast("✅ PDF generado y descargado","ok");
+  };
+
+  if(window.jspdf){generarPDF();}
+  else{
+    const s=document.createElement("script");
+    s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+    s.onload=generarPDF;document.head.appendChild(s);
+  }
+}
+
 // ── CREAR CURSO CON IA ────────────────────────────────────────────────────────
 let cursoIAHistorial=[];
 function openCrearCursoIA(){
@@ -4856,6 +5033,11 @@ async function sendCursoIA(){
     const data=await res.json();
     const respuesta=data.respuesta||(data.error?"Hubo un problema al procesar tu consulta. Intentá de nuevo en un momento.":"Sin respuesta");
     cursoIAHistorial.push({role:"assistant",content:respuesta});
+    // Mostrar botones de generación después del primer intercambio
+    if(cursoIAHistorial.length>=2){
+      const actions=document.getElementById("curso-ia-actions");
+      if(actions)actions.style.display="flex";
+    }
 
     // Reemplazar loading con respuesta
     const loadEl=document.getElementById(loadId);
