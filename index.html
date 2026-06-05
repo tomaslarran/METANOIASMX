@@ -836,7 +836,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div id="sidebar-close-btn" onclick="closeSidebar()" style="display:none;align-items:center;justify-content:flex-end;padding:8px 14px 4px;cursor:pointer;touch-action:manipulation">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
   </div>
-  <div class="sitem on comu-visible inst-visible logi-visible" onclick="goPage('alertas',this)" id="nav-alertas">
+  <div class="sitem on" onclick="goPage('alertas',this)" id="nav-alertas">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
     Dashboard
     <span class="sitem-badge" id="badge-alertas" style="display:none"></span>
@@ -3379,20 +3379,9 @@ function expandGroupOf(el){
   }
 }
 function goPage(name,el){
-  // Verificar permisos antes de navegar
-  if(loggedUser&&!puedeVerPagina(name)){
-    mostrarNoAutorizado(name);
-    curPage=name;
-    closeSidebar();
-    updateMobileNav(name);
-    return;
-  }
   curPage=name;
   closeSidebar();
   updateMobileNav(name);
-  // Ocultar pantalla de no autorizado si estaba visible
-  const noAuth=document.getElementById("pg-no-autorizado");
-  if(noAuth)noAuth.style.display="none";
   document.querySelectorAll(".content>div").forEach(d=>d.style.display="none");
   const pg=document.getElementById("pg-"+name);
   if(pg)pg.style.display="block";
@@ -10812,7 +10801,6 @@ function enterPanel(user,isNewLogin){
   loadNotificaciones();
   startNotifPoll();
   checkTokensExpiry();
-  adaptarMobileNavPorRol(rol);
 }
 
 async function checkTokensExpiry(){
@@ -10834,55 +10822,6 @@ async function checkTokensExpiry(){
   }catch(_){}
 }
 
-// ── PERMISOS POR ROL ─────────────────────────────────────────────────────────
-const PAGINAS_POR_ROL={
-  admin:null, // null = acceso total
-  comunicaciones:["alertas","tareas","comunicaciones","cursos","calendario","notif"],
-  instructor:["alertas","tareas","cursos","calendario","alumnos","notif"],
-  logistica:["alertas","tareas","comprobantes","cuentas","notif"],
-  proveedor:[]
-};
-
-function puedeVerPagina(pagina){
-  if(!loggedUser)return true;
-  const rol=loggedUser.rol||"admin";
-  if(rol==="admin")return true; // admin accede a todo
-  const permitidas=PAGINAS_POR_ROL[rol];
-  if(!permitidas||!permitidas.length)return true; // rol desconocido → acceso total
-  // Ignorar sub-tabs y páginas internas (cashflow, resumen, etc.)
-  const paginaBase=pagina.split("-")[0];
-  return permitidas.includes(pagina)||permitidas.includes(paginaBase);
-}
-
-function mostrarNoAutorizado(pagina){
-  document.querySelectorAll(".content>div:not(#pg-no-autorizado)").forEach(d=>d.style.display="none");
-  let pg=document.getElementById("pg-no-autorizado");
-  if(!pg){
-    pg=document.createElement("div");
-    pg.id="pg-no-autorizado";
-    pg.style.cssText="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center;min-height:60vh";
-    document.querySelector(".content")?.appendChild(pg);
-  }
-  pg.style.display="flex";
-  pg.innerHTML=`
-    <div style="font-size:56px;margin-bottom:16px">🔒</div>
-    <div style="font-size:20px;font-weight:700;color:var(--tx);margin-bottom:8px">Acceso restringido</div>
-    <div style="font-size:14px;color:var(--tx3);max-width:320px;line-height:1.6">
-      No tenés permisos para ver esta sección.<br>
-      Contactá a un administrador si necesitás acceso.
-    </div>
-    <button class="btn sec" style="margin-top:24px" onclick="goPage('alertas',document.getElementById('nav-alertas'))">← Volver al inicio</button>
-  `;
-}
-
-function adaptarMobileNavPorRol(rol){
-  // Admin: mostrar todo
-  document.querySelectorAll(".mn-admin-only").forEach(el=>el.style.display=rol==="admin"?"":"none");
-  document.querySelectorAll(".mn-comu-inst").forEach(el=>el.style.display=(rol==="comunicaciones"||rol==="instructor")?"":"none");
-  document.querySelectorAll(".mn-comu-only").forEach(el=>el.style.display=rol==="comunicaciones"?"":"none");
-  document.querySelectorAll(".mn-logi-only").forEach(el=>el.style.display=rol==="logistica"?"":"none");
-}
-
 function toggleTheme(){
   const isLight=document.body.classList.toggle("light-mode");
   localStorage.setItem("smx_theme",isLight?"light":"dark");
@@ -10902,9 +10841,6 @@ function logout(){
   sessionStorage.removeItem("smx_session");
   stopNotifPoll();bellNotifs=[];renderBell();
   document.body.classList.remove("rol-comunicaciones","rol-instructor","rol-logistica");
-  // Limpiar pantalla de no autorizado
-  const noAuth=document.getElementById("pg-no-autorizado");
-  if(noAuth)noAuth.remove();
   loggedUser=null;authToken=null;
   curUser="";const usel=document.getElementById("usel");if(usel)usel.value="";
   // Restaurar nav items ocultos por rol
@@ -13676,21 +13612,12 @@ if('serviceWorker' in navigator){
     <span class="mn-icon">✅</span><span>Tareas</span>
     <span class="mn-badge" id="mn-badge-tareas" style="display:none"></span>
   </div>
-  <div class="mn-item mn-admin-only" id="mn-cashflow" onclick="goTo('cashflow',document.getElementById('nav-cashflow'));updateMobileNav('cashflow')">
+  <div class="mn-item" id="mn-cashflow" onclick="goTo('cashflow',document.getElementById('nav-cashflow'));updateMobileNav('cashflow')">
     <span class="mn-icon">💰</span><span>Cash Flow</span>
     <span class="mn-badge" id="mn-badge-cf" style="display:none"></span>
   </div>
-  <div class="mn-item mn-admin-only" id="mn-impuestos" onclick="goPage('impuestos',document.getElementById('nav-impuestos'));updateMobileNav('impuestos')">
+  <div class="mn-item" id="mn-impuestos" onclick="goPage('impuestos',document.getElementById('nav-impuestos'));updateMobileNav('impuestos')">
     <span class="mn-icon">🏛</span><span>Impuestos</span>
-  </div>
-  <div class="mn-item mn-comu-inst" id="mn-cursos" style="display:none" onclick="goPage('cursos',document.getElementById('nav-cursos'));updateMobileNav('cursos')">
-    <span class="mn-icon">🎓</span><span>Cursos</span>
-  </div>
-  <div class="mn-item mn-comu-only" id="mn-comunicaciones" style="display:none" onclick="goPage('comunicaciones',document.getElementById('nav-comunicaciones'));updateMobileNav('comunicaciones')">
-    <span class="mn-icon">📱</span><span>Redes</span>
-  </div>
-  <div class="mn-item mn-logi-only" id="mn-comprobantes" style="display:none" onclick="goPage('comprobantes',document.getElementById('nav-comprobantes'));updateMobileNav('comprobantes')">
-    <span class="mn-icon">📄</span><span>Facturas</span>
   </div>
   <div class="mn-item" id="mn-menu" onclick="toggleSidebar()">
     <span class="mn-icon">☰</span><span>Menú</span>
