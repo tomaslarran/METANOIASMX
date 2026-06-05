@@ -10902,6 +10902,9 @@ function logout(){
   sessionStorage.removeItem("smx_session");
   stopNotifPoll();bellNotifs=[];renderBell();
   document.body.classList.remove("rol-comunicaciones","rol-instructor","rol-logistica");
+  // Limpiar pantalla de no autorizado
+  const noAuth=document.getElementById("pg-no-autorizado");
+  if(noAuth)noAuth.remove();
   loggedUser=null;authToken=null;
   curUser="";const usel=document.getElementById("usel");if(usel)usel.value="";
   // Restaurar nav items ocultos por rol
