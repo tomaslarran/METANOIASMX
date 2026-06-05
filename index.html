@@ -39,6 +39,14 @@
   --shadow-glow:0 0 40px -10px rgba(124,58,237,.35);
   --gradient-brand:linear-gradient(135deg,#7C3AED,#A855F7);
 }
+/* ── MOBILE NAV POR ROL ── */
+body.rol-comunicaciones #mn-cashflow,
+body.rol-comunicaciones #mn-impuestos,
+body.rol-instructor #mn-cashflow,
+body.rol-instructor #mn-impuestos,
+body.rol-logistica #mn-cashflow,
+body.rol-logistica #mn-impuestos{display:none!important}
+
 /* ── MODO CLARO ── */
 body.light-mode{
   --bg:#F4F5F7;--bg2:#ECEDF0;--bg3:#E4E6EB;--surf:#FFFFFF;--surf2:#F0F1F4;
@@ -3382,6 +3390,33 @@ function goPage(name,el){
   curPage=name;
   closeSidebar();
   updateMobileNav(name);
+
+  // Verificar acceso: si el nav item está oculto por CSS de rol = no autorizado
+  // Solo para roles no-admin y solo si hay un nav item para esa página
+  const rol=loggedUser?.rol;
+  if(rol&&rol!=="admin"&&rol!=="proveedor"){
+    const navItem=document.getElementById("nav-"+name);
+    if(navItem&&window.getComputedStyle(navItem).display==="none"){
+      document.querySelectorAll(".content>div").forEach(d=>d.style.display="none");
+      let noAuth=document.getElementById("pg-no-autorizado");
+      if(!noAuth){
+        noAuth=document.createElement("div");
+        noAuth.id="pg-no-autorizado";
+        noAuth.style.cssText="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center;min-height:60vh";
+        document.querySelector(".content")?.appendChild(noAuth);
+      }
+      noAuth.style.display="flex";
+      noAuth.innerHTML=`<div style="font-size:56px;margin-bottom:16px">🔒</div>
+        <div style="font-size:20px;font-weight:700;color:var(--tx);margin-bottom:8px">Acceso restringido</div>
+        <div style="font-size:14px;color:var(--tx3);max-width:320px;line-height:1.6">No tenés permisos para ver esta sección.<br>Contactá a un administrador si necesitás acceso.</div>
+        <button class="btn sec" style="margin-top:24px" onclick="goPage('alertas',document.getElementById('nav-alertas'))">← Volver al inicio</button>`;
+      return;
+    }
+  }
+  // Limpiar cartel si estaba visible
+  const noAuth=document.getElementById("pg-no-autorizado");
+  if(noAuth)noAuth.style.display="none";
+
   document.querySelectorAll(".content>div").forEach(d=>d.style.display="none");
   const pg=document.getElementById("pg-"+name);
   if(pg)pg.style.display="block";
