@@ -4854,7 +4854,7 @@ async function sendCursoIA(){
       body:JSON.stringify({message:texto,historial:cursoIAHistorial.slice(-10),canal:"panel"})
     });
     const data=await res.json();
-    const respuesta=data.respuesta||data.error||"Error al conectar con el agente";
+    const respuesta=data.respuesta||(data.error?"Hubo un problema al procesar tu consulta. Intentá de nuevo en un momento.":"Sin respuesta");
     cursoIAHistorial.push({role:"assistant",content:respuesta});
 
     // Reemplazar loading con respuesta
@@ -4869,7 +4869,7 @@ async function sendCursoIA(){
     }
   }catch(e){
     const loadEl=document.getElementById(loadId);
-    if(loadEl){loadEl.style.color="var(--re)";loadEl.textContent="Error: "+e.message;}
+    if(loadEl){loadEl.style.color="var(--tx3)";loadEl.textContent="No pude conectarme al agente. Intentá de nuevo.";}
   }finally{
     if(btn)btn.disabled=false;
     msgs.scrollTop=msgs.scrollHeight;

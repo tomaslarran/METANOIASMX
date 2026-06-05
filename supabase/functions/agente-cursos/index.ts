@@ -85,12 +85,13 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const [cursos, inscripciones, alumnos, instructores] = await Promise.all([
+    const [cursos, inscripciones, alumnos, instructoresRes] = await Promise.all([
       supabase.from("cursos").select("*").order("fecha_inicio", { ascending: true }),
       supabase.from("inscripciones").select("alumno_id,curso_id,estado,monto,cuotas"),
       supabase.from("alumnos").select("id,nombre,apellido,email,especialidad"),
-      supabase.from("instructores").select("id,nombre,apellido,especialidad").catch(() => ({ data: [] })),
+      supabase.from("instructores").select("id,nombre,apellido,especialidad"),
     ]);
+    const instructores = { data: instructoresRes.data ?? [] };
 
     const hoy = new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Salta" });
 
