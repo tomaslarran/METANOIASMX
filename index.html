@@ -4839,10 +4839,11 @@ Incluí al menos 8 slides: portada, objetivos, metodología, programa por módul
   toast(labels[tipo],"inf");
 
   try{
+    // Usar solo los últimos 6 mensajes y canal "generacion" para prompt liviano
     const res=await fetch(`${SB}/functions/v1/agente-cursos`,{
       method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},
-      body:JSON.stringify({message:prompts[tipo],historial:cursoIAHistorial.slice(-10),canal:"panel"})
+      body:JSON.stringify({message:prompts[tipo],historial:cursoIAHistorial.slice(-6),canal:"generacion"})
     });
     const data=await res.json();
     if(data.error)throw new Error(data.error);
