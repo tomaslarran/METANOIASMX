@@ -3379,6 +3379,14 @@ function expandGroupOf(el){
   }
 }
 function goPage(name,el){
+  // Verificar permisos antes de navegar
+  if(loggedUser&&!puedeVerPagina(name)){
+    mostrarNoAutorizado(name);
+    curPage=name;
+    closeSidebar();
+    updateMobileNav(name);
+    return;
+  }
   curPage=name;
   closeSidebar();
   updateMobileNav(name);
@@ -10801,6 +10809,7 @@ function enterPanel(user,isNewLogin){
   loadNotificaciones();
   startNotifPoll();
   checkTokensExpiry();
+  adaptarMobileNavPorRol(rol);
 }
 
 async function checkTokensExpiry(){
@@ -10820,6 +10829,51 @@ async function checkTokensExpiry(){
       if(criticos.length)btn.textContent=`🔑 ${criticos.length} token${criticos.length>1?"s":""} por vencer`;
     }
   }catch(_){}
+}
+
+// ── PERMISOS POR ROL ─────────────────────────────────────────────────────────
+const PAGINAS_POR_ROL={
+  admin:null, // null = acceso total
+  comunicaciones:["alertas","tareas","comunicaciones","cursos","calendario","notif"],
+  instructor:["alertas","tareas","cursos","calendario","alumnos","notif"],
+  logistica:["alertas","tareas","comprobantes","cuentas","notif"],
+  proveedor:[]
+};
+
+function puedeVerPagina(pagina){
+  const rol=loggedUser?.rol||"instructor";
+  const permitidas=PAGINAS_POR_ROL[rol];
+  if(permitidas===null||!permitidas)return true; // admin
+  return permitidas.includes(pagina);
+}
+
+function mostrarNoAutorizado(pagina){
+  document.querySelectorAll(".content>div").forEach(d=>d.style.display="none");
+  let pg=document.getElementById("pg-no-autorizado");
+  if(!pg){
+    pg=document.createElement("div");
+    pg.id="pg-no-autorizado";
+    pg.style.cssText="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center;min-height:60vh";
+    document.querySelector(".content")?.appendChild(pg);
+  }
+  pg.style.display="flex";
+  pg.innerHTML=`
+    <div style="font-size:56px;margin-bottom:16px">🔒</div>
+    <div style="font-size:20px;font-weight:700;color:var(--tx);margin-bottom:8px">Acceso restringido</div>
+    <div style="font-size:14px;color:var(--tx3);max-width:320px;line-height:1.6">
+      No tenés permisos para ver esta sección.<br>
+      Contactá a un administrador si necesitás acceso.
+    </div>
+    <button class="btn sec" style="margin-top:24px" onclick="goPage('alertas',document.getElementById('nav-alertas'))">← Volver al inicio</button>
+  `;
+}
+
+function adaptarMobileNavPorRol(rol){
+  // Admin: mostrar todo
+  document.querySelectorAll(".mn-admin-only").forEach(el=>el.style.display=rol==="admin"?"":"none");
+  document.querySelectorAll(".mn-comu-inst").forEach(el=>el.style.display=(rol==="comunicaciones"||rol==="instructor")?"":"none");
+  document.querySelectorAll(".mn-comu-only").forEach(el=>el.style.display=rol==="comunicaciones"?"":"none");
+  document.querySelectorAll(".mn-logi-only").forEach(el=>el.style.display=rol==="logistica"?"":"none");
 }
 
 function toggleTheme(){
@@ -13612,12 +13666,21 @@ if('serviceWorker' in navigator){
     <span class="mn-icon">✅</span><span>Tareas</span>
     <span class="mn-badge" id="mn-badge-tareas" style="display:none"></span>
   </div>
-  <div class="mn-item" id="mn-cashflow" onclick="goTo('cashflow',document.getElementById('nav-cashflow'));updateMobileNav('cashflow')">
+  <div class="mn-item mn-admin-only" id="mn-cashflow" onclick="goTo('cashflow',document.getElementById('nav-cashflow'));updateMobileNav('cashflow')">
     <span class="mn-icon">💰</span><span>Cash Flow</span>
     <span class="mn-badge" id="mn-badge-cf" style="display:none"></span>
   </div>
-  <div class="mn-item" id="mn-impuestos" onclick="goPage('impuestos',document.getElementById('nav-impuestos'));updateMobileNav('impuestos')">
+  <div class="mn-item mn-admin-only" id="mn-impuestos" onclick="goPage('impuestos',document.getElementById('nav-impuestos'));updateMobileNav('impuestos')">
     <span class="mn-icon">🏛</span><span>Impuestos</span>
+  </div>
+  <div class="mn-item mn-comu-inst" id="mn-cursos" style="display:none" onclick="goPage('cursos',document.getElementById('nav-cursos'));updateMobileNav('cursos')">
+    <span class="mn-icon">🎓</span><span>Cursos</span>
+  </div>
+  <div class="mn-item mn-comu-only" id="mn-comunicaciones" style="display:none" onclick="goPage('comunicaciones',document.getElementById('nav-comunicaciones'));updateMobileNav('comunicaciones')">
+    <span class="mn-icon">📱</span><span>Redes</span>
+  </div>
+  <div class="mn-item mn-logi-only" id="mn-comprobantes" style="display:none" onclick="goPage('comprobantes',document.getElementById('nav-comprobantes'));updateMobileNav('comprobantes')">
+    <span class="mn-icon">📄</span><span>Facturas</span>
   </div>
   <div class="mn-item" id="mn-menu" onclick="toggleSidebar()">
     <span class="mn-icon">☰</span><span>Menú</span>
