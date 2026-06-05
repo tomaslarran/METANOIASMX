@@ -2632,8 +2632,14 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       Describí tu idea de curso. El agente te guiará por la Plantilla Intake y la metodología PEV.
     </div>
     <div id="curso-ia-msgs" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:4px 2px;min-height:0"></div>
-    <div style="display:flex;gap:8px;margin-top:12px">
-      <input id="curso-ia-input" class="fi" type="text" placeholder="Ej: quiero hacer un curso de vía aérea difícil para anestesiólogos..." style="flex:1"
+    <!-- Archivos adjuntos -->
+    <div id="curso-ia-adjuntos" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;min-height:0"></div>
+    <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+      <label class="btn sm sec" style="cursor:pointer;padding:7px 10px" title="Adjuntar PDF, Word o imagen">
+        📎
+        <input type="file" multiple accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg" style="display:none" onchange="adjuntarArchivoCursoIA(this)">
+      </label>
+      <input id="curso-ia-input" class="fi" type="text" placeholder="Describí tu idea o preguntá sobre los archivos adjuntos..." style="flex:1"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendCursoIA()}">
       <button class="btn pri" onclick="sendCursoIA()" id="btn-curso-ia-send" style="padding:8px 16px">Enviar</button>
     </div>
@@ -4990,8 +4996,33 @@ function _generarPDFCurso(content,tipo){
 
 // ── CREAR CURSO CON IA ────────────────────────────────────────────────────────
 let cursoIAHistorial=[];
+let cursoIAArchivos=[];  // [{nombre, tipo, base64}]
+
+async function adjuntarArchivoCursoIA(input){
+  const adjDiv=document.getElementById("curso-ia-adjuntos");
+  if(!adjDiv)return;
+  for(const file of input.files){
+    toast(`Cargando ${file.name}...`,"inf");
+    const base64=await new Promise(res=>{
+      const rd=new FileReader();
+      rd.onload=e=>res(e.target.result.split(",")[1]);
+      rd.readAsDataURL(file);
+    });
+    const tipo=file.type||"application/octet-stream";
+    cursoIAArchivos.push({nombre:file.name,tipo,base64});
+    // Chip visual
+    adjDiv.innerHTML+=`<span style="background:var(--pl);color:var(--pu);border:1px solid var(--pu);border-radius:12px;padding:3px 10px;font-size:11px;display:flex;align-items:center;gap:5px">
+      📎 ${esc(file.name)}
+      <button onclick="this.parentElement.remove();cursoIAArchivos=cursoIAArchivos.filter(a=>a.nombre!=='${esc(file.name)}')" style="background:none;border:none;color:var(--tx3);cursor:pointer;font-size:13px;line-height:1">×</button>
+    </span>`;
+    toast(`✅ ${file.name} adjuntado`,"ok");
+  }
+  input.value="";
+}
+
 function openCrearCursoIA(){
   cursoIAHistorial=[];
+  cursoIAArchivos=[];
   const msgs=document.getElementById("curso-ia-msgs");
   if(msgs){
     msgs.innerHTML=`<div style="background:var(--surf2);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--tx2);max-width:90%">
@@ -4999,6 +5030,10 @@ function openCrearCursoIA(){
       Te voy a guiar por la <strong>Plantilla Intake</strong> y la <strong>metodología PEV</strong> para estructurarla bien antes de que llegue a ejecución.
     </div>`;
   }
+  const adjDiv=document.getElementById("curso-ia-adjuntos");
+  if(adjDiv)adjDiv.innerHTML="";
+  const actions=document.getElementById("curso-ia-actions");
+  if(actions)actions.style.display="none";
   openModal("modal-curso-ia");
   setTimeout(()=>document.getElementById("curso-ia-input")?.focus(),200);
 }
@@ -5028,7 +5063,12 @@ async function sendCursoIA(){
     const res=await fetch(`${SB}/functions/v1/agente-cursos`,{
       method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},
-      body:JSON.stringify({message:texto,historial:cursoIAHistorial.slice(-10),canal:"panel"})
+      body:JSON.stringify({
+        message:texto,
+        historial:cursoIAHistorial.slice(-10),
+        canal:"panel",
+        archivos:cursoIAArchivos.length?cursoIAArchivos:undefined
+      })
     });
     const data=await res.json();
     const respuesta=data.respuesta||(data.error?"Hubo un problema al procesar tu consulta. Intentá de nuevo en un momento.":"Sin respuesta");

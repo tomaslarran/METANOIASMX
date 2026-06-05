@@ -78,7 +78,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
-    const { message, historial = [], canal = "panel" } = await req.json();
+    const { message, historial = [], canal = "panel", archivos = [] } = await req.json();
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -120,6 +120,29 @@ INSTRUCTORES: ${JSON.stringify(instructores.data)}`;
 
     const historialReciente = historial.slice(-8);
 
+    // Construir content con archivos adjuntos si los hay
+    let userContent: any = message;
+    if (archivos && archivos.length > 0) {
+      const contentBlocks: any[] = [];
+      archivos.forEach((a: any) => {
+        if (a.tipo === "application/pdf" || a.nombre?.endsWith(".pdf")) {
+          contentBlocks.push({
+            type: "document",
+            source: { type: "base64", media_type: "application/pdf", data: a.base64 },
+            title: a.nombre,
+          });
+        } else if (a.tipo?.startsWith("image/")) {
+          contentBlocks.push({
+            type: "image",
+            source: { type: "base64", media_type: a.tipo, data: a.base64 },
+          });
+        }
+        // Word/TXT: Claude no los lee directamente, incluir como texto del mensaje
+      });
+      contentBlocks.push({ type: "text", text: message });
+      userContent = contentBlocks;
+    }
+
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -131,7 +154,7 @@ INSTRUCTORES: ${JSON.stringify(instructores.data)}`;
         model: "claude-sonnet-4-6",
         max_tokens: 2048,
         system: sistema,
-        messages: [...historialReciente, { role: "user", content: message }],
+        messages: [...historialReciente, { role: "user", content: userContent }],
       }),
     });
 
