@@ -3390,6 +3390,9 @@ function goPage(name,el){
   curPage=name;
   closeSidebar();
   updateMobileNav(name);
+  // Ocultar pantalla de no autorizado si estaba visible
+  const noAuth=document.getElementById("pg-no-autorizado");
+  if(noAuth)noAuth.style.display="none";
   document.querySelectorAll(".content>div").forEach(d=>d.style.display="none");
   const pg=document.getElementById("pg-"+name);
   if(pg)pg.style.display="block";
@@ -10841,14 +10844,18 @@ const PAGINAS_POR_ROL={
 };
 
 function puedeVerPagina(pagina){
-  const rol=loggedUser?.rol||"instructor";
+  if(!loggedUser)return true;
+  const rol=loggedUser.rol||"admin";
+  if(rol==="admin")return true; // admin accede a todo
   const permitidas=PAGINAS_POR_ROL[rol];
-  if(permitidas===null||!permitidas)return true; // admin
-  return permitidas.includes(pagina);
+  if(!permitidas||!permitidas.length)return true; // rol desconocido → acceso total
+  // Ignorar sub-tabs y páginas internas (cashflow, resumen, etc.)
+  const paginaBase=pagina.split("-")[0];
+  return permitidas.includes(pagina)||permitidas.includes(paginaBase);
 }
 
 function mostrarNoAutorizado(pagina){
-  document.querySelectorAll(".content>div").forEach(d=>d.style.display="none");
+  document.querySelectorAll(".content>div:not(#pg-no-autorizado)").forEach(d=>d.style.display="none");
   let pg=document.getElementById("pg-no-autorizado");
   if(!pg){
     pg=document.createElement("div");
