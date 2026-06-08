@@ -3477,7 +3477,19 @@ function setTareaFilter(s){curF=s;document.querySelectorAll("#pg-tareas .fb").fo
 function setCursoFilter(f){cursoFilter=f;goPage("cursos",document.getElementById("nav-cursos"));document.getElementById("curso-filter-label").textContent=f==="activos"?"Cursos activos":f==="borrador"?"Borradores":f==="completados"?"Cursos realizados":"Cursos activos y próximos";renderCursos();}
 function openNewModal(){
   if(curPage==="tareas")openModal("modal-tarea");
-  else if(curPage==="cursos")openModal("modal-curso");
+  else if(curPage==="cursos"){
+    // Limpiar todos los campos antes de abrir
+    ["c-nombre","c-instructor","c-respaldo","c-desc","c-inicio","c-fin","c-after-desc"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+    ["c-horas","c-cupos","c-arancel","c-descuento"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+    document.getElementById("c-tipo").value="Mixto";
+    document.getElementById("c-modalidad").value="Presencial";
+    document.getElementById("c-estado").value="Borrador";
+    document.getElementById("c-proveedor").value="";
+    document.getElementById("c-plantilla").value="";
+    const cb=document.getElementById("c-after");if(cb)cb.checked=false;
+    document.getElementById("c-after-desc-wrap").style.display="none";
+    openModal("modal-curso");
+  }
   else if(curPage==="alumnos"){document.getElementById("alum-edit-id").value="";document.getElementById("modal-alum-title").textContent="Nuevo Alumno";["a-nombre","a-apellido","a-dni","a-matricula","a-esp","a-inst","a-email","a-tel","a-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("alum-cursos-section").style.display="none";openModal("modal-alumno")}
   else if(curPage==="proveedores"){document.getElementById("prov-edit-id").value="";document.getElementById("modal-prov-title").textContent="Nuevo Proveedor";["p-nombre","p-email","p-tel","p-esp","p-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("p-tipo").value="Empresa";openModal("modal-proveedor")}
   else if(curPage==="instructores"){document.getElementById("inst-edit-id").value="";document.getElementById("modal-inst-title").textContent="Nuevo Instructor";["i-nombre","i-apellido","i-esp","i-matricula","i-email","i-tel","i-inst","i-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("i-activo").checked=true;document.getElementById("ibtn-del").style.display="none";openModal("modal-instructor")}
@@ -4835,6 +4847,8 @@ async function createCurso(){
     descripcion_after:afterChecked?document.getElementById("c-after-desc").value||null:null,
     plantilla_usada:plantillaId||null,progreso:0,
     creado_por:loggedUser?.nombre||null,
+    // Si el curso se crea después de una sesión con el agente IA, guardar la conversación
+    conversacion_ia:cursoIAHistorial.length>0?cursoIAHistorial:null,
     updated_at:new Date().toISOString()
   };
   try{
