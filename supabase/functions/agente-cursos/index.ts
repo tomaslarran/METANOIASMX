@@ -105,6 +105,15 @@ serve(async (req) => {
       ? "Respondé MUY CONCISO (máximo 4 párrafos cortos, sin tablas largas). Usá emojis para claridad."
       : "Podés usar listas y formato markdown. Sé detallado cuando diseñes cursos.";
 
+    // Resumen compacto de cursos para el agente (evitar tokens innecesarios)
+    const cursosResumen = (cursos.data || []).map((c: any) => ({
+      nombre: c.nombre,
+      fecha_inicio: c.fecha_inicio,
+      fecha_fin: c.fecha_fin,
+      estado: c.estado,
+      instructor: c.instructor_nombre,
+    }));
+
     const sistema = `Sos el agente de cursos de Metanoia SMX. Hoy es ${hoy}.
 Metanoia dicta cursos de capacitación médica en simulación en Salta, Argentina.
 Respondé siempre en español. ${conciso}
@@ -117,11 +126,19 @@ Cuando alguien presente una idea de curso nuevo, guialo por la Plantilla Intake 
 Cuando pidan estructurar el programa de un curso, usá los 7 niveles de simulación y las categorías de objetivos.
 Cuando pidan generar contenido para presentación, producí estructura modular, progresiva y clínicamente rigurosa.
 
+## Reglas de calendario y disponibilidad
+SIEMPRE que se proponga o confirme una fecha para un curso nuevo:
+1. Verificá que no sea sábado ni domingo. Si lo es, sugerí el lunes o viernes más cercano.
+2. Verificá si coincide con algún curso ya programado (ver CURSOS ACTUALES). Si hay superposición de fechas, avisá explícitamente: qué curso ocupa esas fechas y si puede haber conflicto de instructor o recursos.
+3. Verificá que no caiga en un feriado nacional argentino 2026:
+   - 1 ene, 16-17 feb (Carnaval), 24 mar, 2 abr, 3 abr (Viernes Santo), 1 may, 25 may,
+   - 20 jun, 9 jul, 17 ago, 12 oct, 20 nov, 8 dic, 25 dic.
+4. Si la fecha es válida, confirmala. Si no, proponé alternativas concretas (día hábil libre).
+Sé proactivo: si el instructor dice "el 15" calculá qué día de la semana es y verificá todo antes de aceptar.
+
 ${SKILL_CURSOS}
 
-CURSOS ACTUALES: ${JSON.stringify(cursos.data)}
-INSCRIPCIONES: ${JSON.stringify(inscripciones.data)}
-ALUMNOS: ${JSON.stringify(alumnos.data?.slice(0, 50))}
+CURSOS ACTUALES (fechas y estado): ${JSON.stringify(cursosResumen)}
 INSTRUCTORES: ${JSON.stringify(instructores.data)}`;
 
     const historialReciente = historial.slice(-8);
@@ -142,8 +159,14 @@ INSTRUCTORES: ${JSON.stringify(instructores.data)}`;
             type: "image",
             source: { type: "base64", media_type: a.tipo, data: a.base64 },
           });
+        } else if (a.tipo === "text/plain" || a.nombre?.endsWith(".txt") || a.nombre?.endsWith(".docx")) {
+          // Texto extraído (ej: docx convertido por mammoth en el browser)
+          try {
+            const bytes = Uint8Array.from(atob(a.base64), (c: string) => c.charCodeAt(0));
+            const text = new TextDecoder("utf-8").decode(bytes);
+            contentBlocks.push({ type: "text", text: `[Archivo adjunto: ${a.nombre}]\n\n${text}` });
+          } catch (_) {}
         }
-        // Word/TXT: Claude no los lee directamente, incluir como texto del mensaje
       });
       contentBlocks.push({ type: "text", text: message });
       userContent = contentBlocks;

@@ -5147,17 +5147,46 @@ function _generarPDFCurso(content,tipo){
 let cursoIAHistorial=[];
 let cursoIAArchivos=[];  // [{nombre, tipo, base64}]
 
+async function _loadMammoth(){
+  if(window.mammoth)return;
+  await new Promise((res,rej)=>{
+    const s=document.createElement("script");
+    s.src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js";
+    s.onload=res;s.onerror=rej;
+    document.head.appendChild(s);
+  });
+}
+
 async function adjuntarArchivoCursoIA(input){
   const adjDiv=document.getElementById("curso-ia-adjuntos");
   if(!adjDiv)return;
   for(const file of input.files){
     toast(`Cargando ${file.name}...`,"inf");
-    const base64=await new Promise(res=>{
-      const rd=new FileReader();
-      rd.onload=e=>res(e.target.result.split(",")[1]);
-      rd.readAsDataURL(file);
-    });
-    const tipo=file.type||"application/octet-stream";
+    const isDocx=file.name.toLowerCase().endsWith(".docx")||file.type==="application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    let tipo,base64;
+    if(isDocx){
+      try{
+        await _loadMammoth();
+        const buf=await file.arrayBuffer();
+        const result=await mammoth.extractRawText({arrayBuffer:buf});
+        const text=result.value||"(sin contenido)";
+        // Codificar texto como base64 UTF-8
+        const bytes=new TextEncoder().encode(text);
+        const binStr=Array.from(bytes,b=>String.fromCharCode(b)).join("");
+        base64=btoa(binStr);
+        tipo="text/plain";
+      }catch(e){
+        toast(`No se pudo leer ${file.name}: ${e.message}`,"err");
+        continue;
+      }
+    }else{
+      base64=await new Promise(res=>{
+        const rd=new FileReader();
+        rd.onload=e=>res(e.target.result.split(",")[1]);
+        rd.readAsDataURL(file);
+      });
+      tipo=file.type||"application/octet-stream";
+    }
     cursoIAArchivos.push({nombre:file.name,tipo,base64});
     // Chip visual
     adjDiv.innerHTML+=`<span style="background:var(--pl);color:var(--pu);border:1px solid var(--pu);border-radius:12px;padding:3px 10px;font-size:11px;display:flex;align-items:center;gap:5px">
