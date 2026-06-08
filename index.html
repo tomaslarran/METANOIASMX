@@ -2661,6 +2661,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <button class="btn sm" onclick="generarCursoArchivo('ppt')" title="Generar presentación PPT">📊 Generar PPT</button>
       <button class="btn sm" onclick="generarCursoArchivo('examen')" title="Generar examen PDF">📋 Examen PDF</button>
       <button class="btn sm" onclick="generarCursoArchivo('programa')" title="Generar programa del curso">📝 Programa PDF</button>
+      <button class="btn sm pri" onclick="crearCursoDesdeIA()" id="btn-crear-desde-ia" title="Crear el curso en el panel con los datos de la conversación">💾 Crear curso</button>
     </div>
   </div>
 </div>
@@ -4878,6 +4879,71 @@ async function createCurso(){
 function openPlantillaModal(){toast("Plantillas: podés editar la plantilla base directamente en Supabase > curso_tareas","inf")}
 
 // ── GENERAR ARCHIVOS CURSO IA ─────────────────────────────────────────────────
+async function crearCursoDesdeIA(){
+  if(!cursoIAHistorial.length){toast("Primero charlá con el agente sobre el curso","inf");return;}
+  const btn=document.getElementById("btn-crear-desde-ia");
+  if(btn){btn.disabled=true;btn.textContent="Extrayendo datos...";}
+  try{
+    const extractPrompt=`Basándote en toda la conversación, extraé los datos del curso en formato JSON. Devolvé SOLO el JSON sin texto adicional, sin markdown, sin bloques de código. Campos a completar (dejá null si no se mencionó):
+{
+  "nombre": "Nombre completo del curso",
+  "tipo": "Mixto|Teórico|Práctico",
+  "modalidad": "Presencial|Virtual|Híbrido",
+  "fecha_inicio": "YYYY-MM-DD o null",
+  "fecha_fin": "YYYY-MM-DD o null",
+  "duracion_horas": número o null,
+  "cupos_max": número o null,
+  "arancel": número o null,
+  "instructor_nombre": "nombre o null",
+  "respaldo_institucional": "institución o null",
+  "descripcion": "descripción breve o null"
+}`;
+    const res=await fetch(`${SB}/functions/v1/agente-cursos`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},
+      body:JSON.stringify({message:extractPrompt,historial:cursoIAHistorial.slice(-10),canal:"generacion"})
+    });
+    const data=await res.json();
+    let texto=data.respuesta||"{}";
+    // Limpiar posibles bloques de código markdown
+    texto=texto.replace(/```json?/gi,"").replace(/```/g,"").trim();
+    let curso={};
+    try{curso=JSON.parse(texto);}catch(e){toast("No pude extraer los datos — completá el formulario manualmente","inf");}
+
+    // Limpiar y pre-llenar el formulario
+    ["c-nombre","c-instructor","c-respaldo","c-desc","c-inicio","c-fin","c-after-desc"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+    ["c-horas","c-cupos","c-arancel","c-descuento"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+    document.getElementById("c-tipo").value="Mixto";
+    document.getElementById("c-modalidad").value="Presencial";
+    document.getElementById("c-estado").value="Borrador";
+    document.getElementById("c-proveedor").value="";
+    document.getElementById("c-plantilla").value="";
+    const cb=document.getElementById("c-after");if(cb)cb.checked=false;
+    document.getElementById("c-after-desc-wrap").style.display="none";
+
+    // Poblar con los datos extraídos
+    if(curso.nombre)document.getElementById("c-nombre").value=curso.nombre;
+    if(curso.tipo)document.getElementById("c-tipo").value=curso.tipo;
+    if(curso.modalidad)document.getElementById("c-modalidad").value=curso.modalidad;
+    if(curso.fecha_inicio)document.getElementById("c-inicio").value=curso.fecha_inicio;
+    if(curso.fecha_fin)document.getElementById("c-fin").value=curso.fecha_fin;
+    if(curso.duracion_horas)document.getElementById("c-horas").value=curso.duracion_horas;
+    if(curso.cupos_max)document.getElementById("c-cupos").value=curso.cupos_max;
+    if(curso.arancel)document.getElementById("c-arancel").value=curso.arancel;
+    if(curso.instructor_nombre)document.getElementById("c-instructor").value=curso.instructor_nombre;
+    if(curso.respaldo_institucional)document.getElementById("c-respaldo").value=curso.respaldo_institucional;
+    if(curso.descripcion)document.getElementById("c-desc").value=curso.descripcion;
+
+    closeModal("modal-curso-ia");
+    openModal("modal-curso");
+    toast("✅ Datos extraídos — revisá y confirmá para crear el curso","inf");
+  }catch(e){
+    toast("Error al extraer datos: "+e.message,"err");
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent="💾 Crear curso";}
+  }
+}
+
 async function generarCursoArchivo(tipo){
   if(!cursoIAHistorial.length){toast("Primero charlá con el agente sobre el curso","inf");return;}
 
