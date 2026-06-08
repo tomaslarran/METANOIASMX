@@ -148,6 +148,9 @@ body{font-family:var(--f);background:var(--bg);color:var(--tx);min-height:100vh;
 /* ── PAGE TITLE ── */
 .pg-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
 .pg-header-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.pgh{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:8px;flex-wrap:wrap}
+.pgh-left{flex:1;min-width:0}
+.pgh-right{display:flex;gap:8px;align-items:center;flex-shrink:0}
 @media(max-width:480px){.hide-xs{display:none}}
 .pg-title{font-family:var(--fc);font-size:22px;font-weight:700;letter-spacing:-0.02em}
 .pg-title-sub{font-size:12px;color:var(--tx3);margin-top:2px}
@@ -480,8 +483,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   #rbtn,#newBtn,#usel{display:none!important}
   .topbar{padding-left:12px;padding-right:12px;gap:8px}
   /* Botones de cabecera de página: scroll horizontal en mobile */
-  .pg-header-actions{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-shrink:0;padding-bottom:2px}
-  .pg-header-actions::-webkit-scrollbar{display:none}
+  .pg-header-actions,.pgh-right{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-shrink:0;padding-bottom:2px}
+  .pg-header-actions::-webkit-scrollbar,.pgh-right::-webkit-scrollbar{display:none}
   /* Notif panel: ancho completo */
   .np{width:calc(100vw - 16px);right:8px;left:8px}
   /* Toast: centrado abajo */
@@ -1066,7 +1069,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="pg-title">Comunicaciones</div>
       <div class="pg-title-sub" id="com-subtitulo">Publicaciones y contenido</div>
     </div>
-    <div style="display:flex;gap:8px">
+    <div class="pg-header-actions">
       <button class="btn" onclick="openModalNuevoPost()">+ Nueva publicación</button>
     </div>
   </div>
@@ -1267,11 +1270,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 <div id="pg-calendario" style="display:none">
   <div class="pg-header">
     <div><div class="pg-title">Calendario</div><div class="pg-title-sub">Tareas, cursos y vencimientos unificados</div></div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn" onclick="calPrev()">‹ Anterior</button>
-      <span id="cal-mes-label" style="font-family:var(--fc);font-size:15px;font-weight:600;letter-spacing:.5px;min-width:160px;text-align:center"></span>
-      <button class="btn" onclick="calNext()">Siguiente ›</button>
-      <button class="btn" onclick="calHoy()" style="margin-left:4px">Hoy</button>
+    <div class="pg-header-actions cal-nav">
+      <button class="btn" onclick="calPrev()">‹</button>
+      <span id="cal-mes-label" style="font-family:var(--fc);font-size:14px;font-weight:600;letter-spacing:.5px;min-width:120px;text-align:center;white-space:nowrap"></span>
+      <button class="btn" onclick="calNext()">›</button>
+      <button class="btn" onclick="calHoy()">Hoy</button>
     </div>
   </div>
 
@@ -1872,7 +1875,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="pg-title">Usuarios</div>
       <div class="pg-title-sub">Gestión de roles del equipo</div>
     </div>
-    <div style="display:flex;gap:8px">
+    <div class="pg-header-actions">
       <button class="btn sec" onclick="loadUsuariosPage()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
         Actualizar
@@ -1977,7 +1980,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="pgt">Comprobantes de Compra</div>
       <div class="pgs">Facturas recibidas · registro y envío a Finnegans</div>
     </div>
-    <div class="pgh-right" style="display:flex;gap:8px">
+    <div class="pgh-right">
       <button class="btn sec" onclick="exportarFinnegans()" title="Exporta los comprobantes Revisados en formato Finnegans">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Exportar XLS
