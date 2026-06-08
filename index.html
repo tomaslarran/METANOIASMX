@@ -4934,9 +4934,36 @@ async function crearCursoDesdeIA(){
     if(curso.respaldo_institucional)document.getElementById("c-respaldo").value=curso.respaldo_institucional;
     if(curso.descripcion)document.getElementById("c-desc").value=curso.descripcion;
 
+    // ── Validaciones de calendario ──
+    const avisos=[];
+    const feriados2026=["2026-01-01","2026-02-16","2026-02-17","2026-03-24","2026-04-02","2026-04-03","2026-05-01","2026-05-25","2026-06-20","2026-07-09","2026-08-17","2026-10-12","2026-11-20","2026-12-08","2026-12-25"];
+    const diasSemana=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+    [curso.fecha_inicio, curso.fecha_fin].filter(Boolean).forEach(f=>{
+      const d=new Date(f+"T12:00:00");
+      const dow=d.getDay();
+      if(dow===0||dow===6) avisos.push(`⚠️ ${f} es ${diasSemana[dow]} — considerá cambiarlo a un día hábil`);
+      if(feriados2026.includes(f)) avisos.push(`🚫 ${f} es feriado nacional`);
+    });
+    // Verificar solapamiento con cursos existentes
+    if(curso.fecha_inicio){
+      const ini=new Date(curso.fecha_inicio);
+      const fin=curso.fecha_fin?new Date(curso.fecha_fin):ini;
+      const conflictos=(cursos||[]).filter(c=>{
+        if(!c.fecha_inicio)return false;
+        const ci=new Date(c.fecha_inicio);
+        const cf=c.fecha_fin?new Date(c.fecha_fin):ci;
+        return ini<=cf&&fin>=ci&&c.estado!=="Completado";
+      });
+      if(conflictos.length) avisos.push(`📅 Hay ${conflictos.length} curso(s) en esas fechas: ${conflictos.map(c=>c.nombre).join(", ")}`);
+    }
+
     closeModal("modal-curso-ia");
     openModal("modal-curso");
-    toast("✅ Datos extraídos — revisá y confirmá para crear el curso","inf");
+    if(avisos.length){
+      setTimeout(()=>avisos.forEach(a=>toast(a,"inf")),300);
+    } else {
+      toast("✅ Datos extraídos — revisá y confirmá para crear el curso","inf");
+    }
   }catch(e){
     toast("Error al extraer datos: "+e.message,"err");
   }finally{
