@@ -147,6 +147,8 @@ body{font-family:var(--f);background:var(--bg);color:var(--tx);min-height:100vh;
 
 /* ── PAGE TITLE ── */
 .pg-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.pg-header-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
+@media(max-width:480px){.hide-xs{display:none}}
 .pg-title{font-family:var(--fc);font-size:22px;font-weight:700;letter-spacing:-0.02em}
 .pg-title-sub{font-size:12px;color:var(--tx3);margin-top:2px}
 
@@ -475,10 +477,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   .pf-2col{grid-template-columns:1fr !important}
   /* Topbar: ocultar elementos secundarios para ganar espacio */
   .topbar-user-name,.logo-sep,.logo-sub{display:none}
-  #rbtn,#newBtn{display:none!important}
+  #rbtn,#newBtn,#usel{display:none!important}
   .topbar{padding-left:12px;padding-right:12px;gap:8px}
-  /* Select de usuario: más compacto */
-  #usel{max-width:130px;font-size:11px;padding:4px 6px}
+  /* Botones de cabecera de página: scroll horizontal en mobile */
+  .pg-header-actions{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-shrink:0;padding-bottom:2px}
+  .pg-header-actions::-webkit-scrollbar{display:none}
   /* Notif panel: ancho completo */
   .np{width:calc(100vw - 16px);right:8px;left:8px}
   /* Toast: centrado abajo */
@@ -1156,16 +1159,16 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 <div id="pg-cursos" style="display:none">
   <div class="pg-header">
     <div><div class="pg-title">Cursos</div><div class="pg-title-sub" id="curso-filter-label">Cursos activos y próximos</div></div>
-    <div style="display:flex;gap:8px">
-      <button class="btn sec" id="btn-realizados" onclick="setCursoFilter('completados')" title="Ver cursos ya realizados" style="opacity:.75">
+    <div class="pg-header-actions">
+      <button class="btn sec" id="btn-realizados" onclick="setCursoFilter('completados')" title="Ver cursos ya realizados" style="opacity:.75;white-space:nowrap">
         🏁 Realizados
       </button>
-      <button class="btn sec" onclick="exportCursosPixelio()" title="Genera un CSV listo para importar en Pixelio">
+      <button class="btn sec" onclick="exportCursosPixelio()" title="Exportar para Pixelio" style="white-space:nowrap">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Exportar para Pixelio
+        <span class="hide-xs">Exportar para </span>Pixelio
       </button>
-      <button class="btn" onclick="openPlantillaModal()">📋 Plantillas</button>
-      <button class="btn pri" onclick="openCrearCursoIA()" style="gap:6px">✨ Crear curso con IA</button>
+      <button class="btn" onclick="openPlantillaModal()" style="white-space:nowrap">📋 Plantillas</button>
+      <button class="btn pri" onclick="openCrearCursoIA()" style="gap:6px;white-space:nowrap">✨ <span class="hide-xs">Crear curso con </span>IA</button>
     </div>
   </div>
   <div class="stats">
@@ -1209,7 +1212,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 <div id="pg-instructores" style="display:none">
   <div class="pg-header">
     <div><div class="pg-title">Instructores</div><div class="pg-title-sub">Docentes y facilitadores de simulación</div></div>
-    <div style="display:flex;gap:8px">
+    <div class="pg-header-actions">
       <button class="btn sec" onclick="exportInstructoresPixelio()" title="Genera un CSV listo para importar en Pixelio">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Exportar para Pixelio
