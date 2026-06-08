@@ -10942,7 +10942,8 @@ function enterPanel(user,isNewLogin){
   if(window.initChatForRole) window.initChatForRole(rol);
 
   if(isNewLogin)toast(`Bienvenido, ${user.nombre} 👋`,"ok");
-  const startPage=rol==="comunicaciones"?"comunicaciones":"alertas";
+  const startPageMap={admin:"alertas",comunicaciones:"comunicaciones",instructor:"cursos",logistica:"comprobantes"};
+  const startPage=startPageMap[rol]||"tareas";
   const startNav=document.getElementById(`nav-${startPage}`);
   goPage(startPage,startNav);
   loadAll().then(()=>{if(curPage==="alertas")renderAlertas();syncMobileNavBadges();});
