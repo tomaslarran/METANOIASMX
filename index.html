@@ -13038,6 +13038,15 @@ async function syncMeta(){
     const data=await res.json();
     if(data.error)throw new Error(data.error);
     toast(`✅ Sincronizado: ${data.instagram||0} IG · ${data.facebook||0} FB`,"ok");
+    // Mostrar errores de insights si los hay
+    if(data.ig_insight_errors?.length){
+      console.warn("IG Insights errors:",data.ig_insight_errors);
+      toast(`⚠️ IG alcance: ${data.ig_insight_errors[0]}`,"inf");
+    }
+    if(data.fb_insight_errors?.length){
+      console.warn("FB Insights errors:",data.fb_insight_errors);
+      toast(`⚠️ FB alcance: ${data.fb_insight_errors[0]}`,"inf");
+    }
     // También sincronizar LinkedIn
     syncLinkedIn(true);
     await loadComunicaciones();
