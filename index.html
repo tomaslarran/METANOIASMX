@@ -3834,7 +3834,12 @@ async function selectCurso(id){
         <div style="font-size:11px;color:var(--tx3);margin-top:3px">${curso.creado_por?`👤 Cargado por <strong style="color:var(--tx2)">${esc(curso.creado_por)}</strong>`:"👤 Sin registro de autor"}${curso.created_at?` · ${new Date(curso.created_at).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"})}`:""}</div>
       </div>
       <div style="display:flex;gap:6px">
-        <button class="btn" onclick="editCursoEstado('${id}')">Cambiar estado</button>
+        <div style="position:relative;display:inline-block" id="estado-dd-wrap-${id}">
+          <button class="btn" onclick="toggleEstadoDD('${id}')">Cambiar estado ▾</button>
+          <div id="estado-dd-${id}" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--surf);border:1px solid var(--b);border-radius:8px;padding:4px;z-index:999;min-width:150px;box-shadow:0 4px 16px rgba(0,0,0,.25)">
+            ${["Borrador","Convocatoria","Inscripciones","En curso","Completado","Cancelado"].map(e=>`<div onclick="setEstadoCurso('${id}','${e}')" style="padding:7px 12px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--tx);white-space:nowrap" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background=''">${estadoBadge(e)} ${e}</div>`).join("")}
+          </div>
+        </div>
         <button class="btn" onclick="confirmDel('¿Eliminar el curso &quot;${esc(curso.nombre)}&quot;?',()=>delCurso('${id}'))"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
       </div>
     </div>
@@ -4813,14 +4818,27 @@ async function updateCursoField(id,field,val){
   }catch(e){toast("Error","err")}
 }
 
-async function editCursoEstado(id){
-  const c=cursos.find(c=>c.id===id);if(!c)return;
-  const estados=["Borrador","Convocatoria","Inscripciones","En curso","Completado","Cancelado"];
-  const nuevo=estados[(estados.indexOf(c.estado)+1)%estados.length];
-  await updateCursoField(id,"estado",nuevo);renderCursos();
-  // Actualizar badge sin scroll
-  const badgeEl=document.querySelector("#curso-detail-container .cd-header .estado-badge");
-  if(badgeEl)badgeEl.outerHTML=estadoBadge(nuevo);
+function toggleEstadoDD(id){
+  const dd=document.getElementById(`estado-dd-${id}`);
+  if(!dd)return;
+  const visible=dd.style.display!=="none";
+  // Cerrar todos los otros dropdowns abiertos
+  document.querySelectorAll("[id^='estado-dd-']").forEach(el=>el.style.display="none");
+  if(!visible){
+    dd.style.display="block";
+    // Click fuera cierra
+    setTimeout(()=>document.addEventListener("click",function _close(e){
+      if(!dd.contains(e.target)&&!dd.previousElementSibling?.contains(e.target)){
+        dd.style.display="none";document.removeEventListener("click",_close);
+      }
+    }),50);
+  }
+}
+
+async function setEstadoCurso(id,nuevo){
+  document.querySelectorAll("[id^='estado-dd-']").forEach(el=>el.style.display="none");
+  await updateCursoField(id,"estado",nuevo);
+  renderCursos();
 }
 
 async function delCurso(id){
