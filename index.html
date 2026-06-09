@@ -12448,7 +12448,7 @@ async function analizarConIA(){
     if(!res.ok)throw new Error(await res.text());
     const d=await res.json();
     // Rellenar form con datos extraídos
-    if(d.fecha)document.getElementById("comp-fecha").value=d.fecha;
+    const fechaISO=toISODate(d.fecha);if(fechaISO)document.getElementById("comp-fecha").value=fechaISO;
     if(d.tipo)document.getElementById("comp-tipo").value=d.tipo;
     if(d.numero)document.getElementById("comp-numero").value=d.numero;
     if(d.proveedor)document.getElementById("comp-prov").value=d.proveedor;
@@ -12466,7 +12466,7 @@ async function analizarConIA(){
     if(d.impuesto_interno!=null)document.getElementById("comp-imp-int").value=d.impuesto_interno;
     if(d.otros_impuestos!=null)document.getElementById("comp-otros").value=d.otros_impuestos;
     if(d.sociedad)document.getElementById("comp-sociedad").value=d.sociedad;
-    if(d.fecha_vencimiento)document.getElementById("comp-venc").value=d.fecha_vencimiento;
+    const vencISO=toISODate(d.fecha_vencimiento);if(vencISO)document.getElementById("comp-venc").value=vencISO;
     recalcDesdeDesglose();
     sugerirProductosFinn();
     if(d.total!=null)document.getElementById("comp-total").value=d.total;
@@ -12569,6 +12569,19 @@ function sugerirProductosFinn(){
 }
 
 // Cuando se completa el desglose por alícuota, recalcula neto e IVA automáticamente
+// Normaliza fecha al formato YYYY-MM-DD que espera <input type="date">
+function toISODate(v){
+  if(!v||v==="null"||v==="undefined")return null;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(v))return v; // ya está bien
+  // DD/MM/YYYY o D/M/YYYY
+  const m=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(m)return `${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`;
+  // DD-MM-YYYY
+  const m2=v.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if(m2)return `${m2[3]}-${m2[2].padStart(2,"0")}-${m2[1].padStart(2,"0")}`;
+  return null;
+}
+
 function recalcDesdeDesglose(){
   const n21=parseFloat(document.getElementById("comp-neto21").value)||0;
   const n105=parseFloat(document.getElementById("comp-neto105").value)||0;
