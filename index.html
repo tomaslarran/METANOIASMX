@@ -12416,9 +12416,11 @@ async function handleCompFile(file){
     const fname=`${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
     const SUPA_URL="https://jppxmdvddvbsvymogvcp.supabase.co";
     const KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwcHhtZHZkZHZic3Z5bW9ndmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMjcyODAsImV4cCI6MjA5MDgwMzI4MH0.KPAqCKfUteE3XK9QFqb_44Hm8jYQxfjVLkrlyGvaMhE";
+    const sess=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
+    const authToken=sess.access_token||KEY;
     const res=await fetch(`${SUPA_URL}/storage/v1/object/Facturas/${fname}`,{
       method:"POST",
-      headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":file.type,"x-upsert":"true"},
+      headers:{"apikey":KEY,"Authorization":"Bearer "+authToken,"Content-Type":file.type,"x-upsert":"true"},
       body:file
     });
     if(!res.ok){const t=await res.text();throw new Error(t);}
