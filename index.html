@@ -10808,9 +10808,11 @@ async function handlePFFile(input){
     if(!file.type.includes("pdf"))file=await comprimirImagen(file);
     const ext=file.type.includes("pdf")?"pdf":"jpg";
     const fname=`${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const sessPF=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
+    const authTokenPF=sessPF.token||KEY;
     const res=await fetch(`${SB}/storage/v1/object/Facturas/${fname}`,{
       method:"POST",
-      headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":file.type,"x-upsert":"true"},
+      headers:{"apikey":KEY,"Authorization":"Bearer "+authTokenPF,"Content-Type":file.type,"x-upsert":"true"},
       body:file
     });
     if(!res.ok){const t=await res.text();throw new Error(t);}
@@ -10836,14 +10838,14 @@ async function analizarPFConIA(){
     });
     if(!res.ok)throw new Error(await res.text());
     const d=await res.json();
-    if(d.fecha){const el=document.getElementById("pf-fecha");if(el)el.value=d.fecha;}
+    const pfFechaISO=toISODate(d.fecha);if(pfFechaISO){const el=document.getElementById("pf-fecha");if(el)el.value=pfFechaISO;}
     if(d.tipo){const el=document.getElementById("pf-tipo");if(el)el.value=d.tipo;}
     if(d.numero){const el=document.getElementById("pf-numero");if(el)el.value=d.numero;}
     if(d.monto_neto!=null){const el=document.getElementById("pf-neto");if(el)el.value=d.monto_neto;}
     if(d.iva!=null){const el=document.getElementById("pf-iva");if(el)el.value=d.iva;}
     if(d.total!=null){const el=document.getElementById("pf-total");if(el)el.value=d.total;}
     else calcPFTotal();
-    if(d.fecha_vencimiento){const el=document.getElementById("pf-venc");if(el)el.value=d.fecha_vencimiento;}
+    const pfVencISO=toISODate(d.fecha_vencimiento);if(pfVencISO){const el=document.getElementById("pf-venc");if(el)el.value=pfVencISO;}
     // Guardar desglose para cuenta corriente (en notas si hay)
     if(d.concepto&&!document.getElementById("pf-notas").value){
       document.getElementById("pf-notas").value=d.concepto;
