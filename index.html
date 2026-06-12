@@ -981,6 +981,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         Cuentas Corrientes
       </div>
+      <div class="sitem" onclick="goPage('cotizaciones',this)" id="nav-cotizaciones">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="2"/><path d="m9 14 2 2 4-4"/></svg>
+        Cotizaciones
+      </div>
     </div>
   </div>
   <div class="sgroup" id="sg-config">
@@ -1924,6 +1928,123 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
   <div id="cuentas-list" style="max-width:640px">
     <div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>
+  </div>
+</div>
+
+<!-- ══ COTIZACIONES ══ -->
+<div id="pg-cotizaciones" style="display:none">
+  <div class="pgh">
+    <div class="pgh-left">
+      <div class="pgt">Cotizaciones</div>
+      <div class="pgs">Presupuestos Vía A y Vía B · Nomenclador v1.1</div>
+    </div>
+    <div class="pgh-right">
+      <button class="btn pri" onclick="openNuevaCotizacion()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nueva cotización
+      </button>
+    </div>
+  </div>
+  <div class="stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
+    <div class="sc"><div class="sc-l">Este mes</div><div class="sc-v" id="cot-stat-total">—</div><div class="sc-s">cotizaciones</div></div>
+    <div class="sc"><div class="sc-l">Aceptadas</div><div class="sc-v vg" id="cot-stat-acept">—</div><div class="sc-s">confirmadas</div></div>
+    <div class="sc"><div class="sc-l">Enviadas</div><div class="sc-v va" id="cot-stat-env">—</div><div class="sc-s">esperando respuesta</div></div>
+    <div class="sc"><div class="sc-l">Total ARS</div><div class="sc-v vb" id="cot-stat-ars">—</div><div class="sc-s">aceptadas este mes</div></div>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+    <div class="fbar">
+      <button class="fb on" onclick="setCotizFilter('all',this)">Todas</button>
+      <button class="fb" onclick="setCotizFilter('borrador',this)">Borrador</button>
+      <button class="fb" onclick="setCotizFilter('enviada',this)">Enviada</button>
+      <button class="fb" onclick="setCotizFilter('aceptada',this)">Aceptada</button>
+      <button class="fb" onclick="setCotizFilter('rechazada',this)">Rechazada</button>
+    </div>
+    <input id="cot-search" class="fi" type="search" placeholder="Buscar cliente..." style="width:160px;margin-left:auto" oninput="renderCotizaciones()">
+  </div>
+  <div id="cotiz-lista"><div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div></div>
+</div>
+
+<!-- MODAL COTIZACIÓN -->
+<div class="mov" id="modal-cotizacion" onclick="if(event.target===this)closeModal('modal-cotizacion')">
+  <div class="mbox" style="width:min(900px,96vw);max-height:92vh;overflow-y:auto">
+    <div class="mhdr">
+      <div class="mt" id="cot-modal-title">Nueva Cotización</div>
+      <button class="mcl" onclick="closeModal('modal-cotizacion')">✕</button>
+    </div>
+    <div style="padding:20px">
+      <!-- Via selector -->
+      <div style="display:flex;gap:8px;margin-bottom:20px">
+        <button class="fb on" id="cot-via-a-btn" onclick="setCotizVia('A')" style="flex:1;padding:8px 0;font-size:13px;font-weight:600">Vía A — CM avala curso</button>
+        <button class="fb" id="cot-via-b-btn" onclick="setCotizVia('B')" style="flex:1;padding:8px 0;font-size:13px;font-weight:600">Vía B — SUDES presta servicio a CM</button>
+      </div>
+      <!-- Via desc compact -->
+      <div id="cot-via-desc" style="font-size:11px;color:var(--tx3);margin-bottom:14px;padding:6px 10px;background:var(--bg2);border-radius:var(--r);line-height:1.5;border-left:3px solid var(--bl)"></div>
+      <!-- Fila 1: cliente + contacto -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div><div class="fl">Cliente / Institución *</div><input class="fi" id="cot-cliente" placeholder="Hospital, clínica o persona"></div>
+        <div><div class="fl">Contacto</div><input class="fi" id="cot-contacto" placeholder="Nombre, email o teléfono"></div>
+      </div>
+      <!-- Fila 2: parámetros según vía -->
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;padding:12px;background:var(--bg2);border-radius:var(--rlg)">
+        <div><div class="fl">TC USD/ARS</div><input class="fi" id="cot-tc" type="number" style="width:100px" oninput="cotizCalc()"></div>
+        <!-- Via A: afiliados + externos -->
+        <div id="cot-via-a-extra" style="display:flex;gap:10px">
+          <div><div class="fl">Afiliados CM</div><input class="fi" id="cot-afl" type="number" min="0" value="0" style="width:80px" oninput="cotizCalc()"></div>
+          <div><div class="fl">Externos</div><input class="fi" id="cot-ext" type="number" min="0" value="0" style="width:80px" oninput="cotizCalc()"></div>
+        </div>
+        <!-- Via B: participantes + insumos -->
+        <div id="cot-via-b-extra" style="display:none;gap:10px">
+          <div><div class="fl">Participantes</div><input class="fi" id="cot-participantes" type="number" min="0" value="0" style="width:80px" oninput="cotizCalc()"></div>
+          <div><div class="fl">Grupos / estaciones</div><input class="fi" id="cot-grupos" type="number" min="1" value="1" style="width:80px" title="Cantidad de grupos simultáneos o estaciones de simulación" oninput="cotizCalc()"></div>
+          <div><div class="fl">Insumos adicionales (USD)</div><input class="fi" id="cot-insumos" type="number" min="0" value="0" style="width:110px" oninput="cotizCalc()"></div>
+        </div>
+      </div>
+      <!-- Agregar item del catálogo -->
+      <div style="margin-bottom:8px;display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <div class="fl">Actividad del catálogo</div>
+          <select class="sel" id="cot-item-sel" style="width:100%" onchange="cotizPreviewItem()">
+            <option value="">— Seleccionar —</option>
+          </select>
+        </div>
+        <div><div class="fl">Horas</div><input class="fi" id="cot-item-horas" type="number" min="0.5" step="0.5" value="1" style="width:75px" oninput="cotizPreviewItem()"></div>
+        <button class="btn pri" onclick="cotizAddItem()" style="padding:8px 16px">+ Agregar</button>
+      </div>
+      <!-- Preview del item seleccionado -->
+      <div id="cot-item-preview" style="display:none;margin-bottom:12px;padding:8px 12px;background:var(--bg2);border-radius:var(--r);font-size:12px;color:var(--tx2);border:1px solid var(--b)"></div>
+      <!-- Tabla items -->
+      <div id="cotiz-items-table" style="margin-bottom:14px"></div>
+      <!-- Totales -->
+      <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:14px 16px;margin-bottom:14px">
+        <div style="display:flex;gap:0;flex-wrap:wrap">
+          <div style="flex:1;min-width:120px;padding:4px 12px 4px 0;border-right:1px solid var(--b)">
+            <div class="sc-l">Subtotal USD</div>
+            <div style="font-size:15px;font-weight:600;color:var(--tx)" id="cot-total-usd">USD 0.00</div>
+          </div>
+          <div id="cot-canon-wrap" style="flex:1;min-width:120px;padding:4px 12px;border-right:1px solid var(--b)">
+            <div class="sc-l">Canon CM (10%)</div>
+            <div style="font-size:15px;font-weight:600;color:var(--am)" id="cot-canon-usd">USD 0.00</div>
+          </div>
+          <div style="flex:1;min-width:120px;padding:4px 12px;border-right:1px solid var(--b)">
+            <div class="sc-l">Total USD</div>
+            <div style="font-size:16px;font-weight:700;color:var(--bl)" id="cot-total-usd-fin">USD 0.00</div>
+          </div>
+          <div style="flex:1;min-width:140px;padding:4px 0 4px 12px;text-align:right">
+            <div class="sc-l">Total ARS <span style="font-weight:400" id="cot-tc-display"></span></div>
+            <div style="font-size:22px;font-weight:700;color:var(--ve)" id="cot-total-ars">$ 0</div>
+          </div>
+        </div>
+      </div>
+      <!-- Notas -->
+      <div style="margin-bottom:16px"><div class="fl">Notas / condiciones</div><textarea class="fi" id="cot-notas" rows="2" placeholder="Condiciones de pago, vigencia..." style="resize:vertical"></textarea></div>
+      <input type="hidden" id="cot-edit-id">
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+        <button class="btn sec" onclick="closeModal('modal-cotizacion')">Cancelar</button>
+        <button class="btn sec" id="cot-btn-pdf" onclick="exportarCotizPDF(document.getElementById('cot-edit-id').value)" style="display:none">↓ PDF</button>
+        <button class="btn sec" onclick="saveCotizacion('borrador')">Guardar borrador</button>
+        <button class="btn pri" onclick="saveCotizacion('enviada')">Guardar y marcar enviada</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -3465,6 +3586,7 @@ function goPage(name,el){
   if(name==="comunicaciones")loadComunicaciones();
   if(name==="usuarios")loadUsuariosPage();
   if(name==="cuentas")loadCuentasPage();
+  if(name==="cotizaciones")loadCotizacionesPage();
   if(name==="reportes")initReportesPage();
 }
 function goTo(name,el){goPage(name,el)}
@@ -13498,6 +13620,490 @@ async function comGenerarPrompt(){
     toast("Prompt generado ✓","ok");
   }catch(e){toast("Error: "+e.message,"err");}
   btn.disabled=false;btn.textContent="✨ Generar prompt con IA";
+}
+
+// ══ COTIZACIONES ══
+let cotizaciones=[], nomParams={}, nomCatalogo=[], cotizFilter='all', cotizVia='A', cotizItems=[];
+
+async function loadCotizacionesPage(){
+  try{
+    const [params,catalogo,cotz]=await Promise.all([
+      sb("nomenclador_params?select=variable,valor"),
+      sb("nomenclador_catalogo?select=*&order=nivel,codigo&activo=eq.true"),
+      sb("cotizaciones?select=*&order=created_at.desc")
+    ]);
+    nomParams={};
+    (params||[]).forEach(p=>nomParams[p.variable]=parseFloat(p.valor));
+    nomCatalogo=catalogo||[];
+    cotizaciones=cotz||[];
+    renderCotizaciones();
+    updateCotizStats();
+    const sel=document.getElementById("cot-item-sel");
+    if(sel){
+      sel.innerHTML='<option value="">— Seleccionar del catálogo —</option>';
+      nomCatalogo.forEach(item=>{
+        const o=document.createElement("option");
+        o.value=item.codigo;
+        o.textContent=`${item.codigo} — ${item.descripcion} (${item.modalidad})`;
+        sel.appendChild(o);
+      });
+    }
+  }catch(e){console.error(e);toast("Error cargando cotizaciones","err");}
+}
+
+function updateCotizStats(){
+  const ahora=new Date();
+  const mesAct=`${ahora.getFullYear()}-${String(ahora.getMonth()+1).padStart(2,"0")}`;
+  const mes=cotizaciones.filter(c=>(c.created_at||"").startsWith(mesAct));
+  const el=id=>document.getElementById(id);
+  el("cot-stat-total").textContent=mes.length||"0";
+  el("cot-stat-acept").textContent=mes.filter(c=>c.estado==="aceptada").length||"0";
+  el("cot-stat-env").textContent=mes.filter(c=>c.estado==="enviada").length||"0";
+  const arsAcept=mes.filter(c=>c.estado==="aceptada").reduce((s,c)=>s+(c.total_ars||0),0);
+  el("cot-stat-ars").textContent=arsAcept>0?"$"+arsAcept.toLocaleString("es-AR",{maximumFractionDigits:0}):"—";
+}
+
+function setCotizFilter(f,el){
+  cotizFilter=f;
+  document.querySelectorAll("#pg-cotizaciones .fbar .fb").forEach(b=>b.classList.remove("on"));
+  if(el)el.classList.add("on");
+  renderCotizaciones();
+}
+
+function renderCotizaciones(){
+  const list=document.getElementById("cotiz-lista");
+  if(!list)return;
+  const q=(document.getElementById("cot-search")?.value||"").toLowerCase();
+  const rows=cotizaciones.filter(c=>{
+    if(cotizFilter!=="all"&&c.estado!==cotizFilter)return false;
+    if(q&&!c.cliente?.toLowerCase().includes(q))return false;
+    return true;
+  });
+  if(!rows.length){list.innerHTML='<div class="empty-state" style="padding:40px;text-align:center;color:var(--tx3)">No hay cotizaciones</div>';return;}
+  const col={borrador:"var(--tx3)",enviada:"var(--am)",aceptada:"var(--ve)",rechazada:"var(--re)"};
+  list.innerHTML=`<div class="tbl-wrap"><table class="tbl"><thead><tr>
+    <th>N°</th><th>Cliente</th><th>Vía</th><th>Total USD</th><th>Total ARS</th><th>Estado</th><th>Fecha</th><th></th>
+  </tr></thead><tbody>${rows.map(c=>`<tr>
+    <td style="font-family:monospace;font-size:12px">${c.numero||"—"}</td>
+    <td><strong>${c.cliente||"—"}</strong>${c.contacto?`<br><span style="font-size:11px;color:var(--tx3)">${c.contacto}</span>`:""}</td>
+    <td><span style="font-size:11px;font-weight:700;color:var(--bl)">VÍA ${c.via||"A"}</span></td>
+    <td>USD ${(c.total_usd||0).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+    <td>$${(c.total_ars||0).toLocaleString("es-AR",{maximumFractionDigits:0})}</td>
+    <td><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:8px;background:${col[c.estado]||"var(--tx3)"}22;color:${col[c.estado]||"var(--tx3)"}">${c.estado||"—"}</span></td>
+    <td style="font-size:12px;color:var(--tx3)">${c.created_at?new Date(c.created_at).toLocaleDateString("es-AR"):""}</td>
+    <td><div style="display:flex;gap:4px">
+      <button class="btn sm sec" onclick="openEditCotizacion('${c.id}')">Editar</button>
+      <button class="btn sm sec" onclick="exportarCotizPDF('${c.id}')" title="PDF">PDF</button>
+      <button class="btn sm sec" onclick="rotarEstadoCotiz('${c.id}')" style="color:var(--am)" title="Cambiar estado">⋯</button>
+      <button class="btn sm sec" onclick="deleteCotizacion('${c.id}')" style="color:var(--re)" title="Eliminar">✕</button>
+    </div></td>
+  </tr>`).join("")}</tbody></table></div>`;
+}
+
+function openNuevaCotizacion(){
+  cotizItems=[];
+  document.getElementById("cot-modal-title").textContent="Nueva Cotización";
+  document.getElementById("cot-edit-id").value="";
+  ["cot-cliente","cot-contacto","cot-notas"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("cot-tc").value=nomParams.TC_USD_ARS||1400;
+  document.getElementById("cot-afl").value=0;
+  document.getElementById("cot-ext").value=0;
+  document.getElementById("cot-insumos").value=0;
+  document.getElementById("cot-participantes").value=0;
+  document.getElementById("cot-grupos").value=1;
+  document.getElementById("cot-item-horas").value=1;
+  document.getElementById("cot-item-preview").style.display="none";
+  document.getElementById("cot-btn-pdf").style.display="none";
+  setCotizVia("A");
+  renderCotizItemsTable();
+  cotizCalc();
+  openModal("modal-cotizacion");
+}
+
+function openEditCotizacion(id){
+  const c=cotizaciones.find(x=>x.id===id);
+  if(!c)return;
+  cotizItems=JSON.parse(JSON.stringify(c.items||[]));
+  document.getElementById("cot-modal-title").textContent=`Cotización ${c.numero||""}`;
+  document.getElementById("cot-edit-id").value=id;
+  document.getElementById("cot-cliente").value=c.cliente||"";
+  document.getElementById("cot-contacto").value=c.contacto||"";
+  document.getElementById("cot-notas").value=c.notas||"";
+  document.getElementById("cot-tc").value=nomParams.TC_USD_ARS||1400;
+  document.getElementById("cot-afl").value=c.alumnos_afiliados||0;
+  document.getElementById("cot-ext").value=c.alumnos_externos||0;
+  document.getElementById("cot-insumos").value=c.insumos_usd||0;
+  document.getElementById("cot-participantes").value=c.participantes||0;
+  document.getElementById("cot-grupos").value=c.grupos||1;
+  document.getElementById("cot-item-preview").style.display="none";
+  document.getElementById("cot-btn-pdf").style.display="";
+  setCotizVia(c.via||"A");
+  renderCotizItemsTable();
+  cotizCalc();
+  openModal("modal-cotizacion");
+}
+
+function setCotizVia(via){
+  cotizVia=via;
+  document.getElementById("cot-via-a-btn").classList.toggle("on",via==="A");
+  document.getElementById("cot-via-b-btn").classList.toggle("on",via==="B");
+  document.getElementById("cot-via-a-extra").style.display=via==="A"?"flex":"none";
+  document.getElementById("cot-via-b-extra").style.display=via==="B"?"flex":"none";
+  document.getElementById("cot-canon-wrap").style.display=via==="A"?"":"none";
+  const desc=via==="A"
+    ?"<strong>Vía A</strong>: Colmedsa organiza y avala el curso. SUDES actúa como proveedor de simulación. El precio para alumnos afiliados tiene descuento; los externos pagan canon del 10% a CM. Usá cuando el cliente es el propio Colegio Médico."
+    :"<strong>Vía B</strong>: SUDES organiza el curso y presta el servicio directamente a Colmedsa. La tarifa por hora incluye instructor, amortización de equipos, overhead (15%) y margen (40%). Usá cuando facturás a CM por horas de servicio.";
+  document.getElementById("cot-via-desc").innerHTML=desc;
+  renderCotizItemsTable();
+  cotizCalc();
+}
+
+function cotizTarifaViaB(nivel){
+  const p=nomParams;
+  let instr=p.HORA_INSTRUCTOR_BASICO||22, amort=p.AMORT_BOX_BASICO||5;
+  if(nivel===2){instr=p.HORA_INSTRUCTOR_BASICO||22;amort=p.AMORT_BOX_LAPARO||12;}
+  else if(nivel===3){instr=p.HORA_INSTRUCTOR_AVANZADO||45;amort=p.AMORT_BOX_LAPARO||12;}
+  else if(nivel===4){instr=p.HORA_INSTRUCTOR_AVANZADO||45;amort=p.AMORT_BOX_AVANZADO||25;}
+  else if(nivel>=5){instr=p.HORA_INSTRUCTOR_EXPERTO||80;amort=p.AMORT_BOX_AVANZADO||25;}
+  return (instr+amort)*(1+(p.OVERHEAD_PCT||0.15))*(1+(p.MARGEN_VIA_B||0.40));
+}
+
+function cotizAddItem(){
+  const codigo=document.getElementById("cot-item-sel").value;
+  const horas=parseFloat(document.getElementById("cot-item-horas").value)||1;
+  if(!codigo){toast("Seleccioná una actividad del catálogo","err");return;}
+  const item=nomCatalogo.find(x=>x.codigo===codigo);
+  if(!item)return;
+  cotizItems.push({codigo:item.codigo,descripcion:item.descripcion,nivel:item.nivel,
+    modalidad:item.modalidad,horas,
+    precio_afiliado_usd:item.precio_afiliado_usd,
+    precio_externo_usd:item.precio_externo_usd,
+    precio_base_usd:item.precio_base_usd});
+  document.getElementById("cot-item-sel").value="";
+  document.getElementById("cot-item-horas").value=1;
+  renderCotizItemsTable();
+  cotizCalc();
+}
+
+function cotizRemoveItem(i){
+  cotizItems.splice(i,1);
+  renderCotizItemsTable();
+  cotizCalc();
+}
+
+function cotizPreviewItem(){
+  const codigo=document.getElementById("cot-item-sel")?.value;
+  const horas=parseFloat(document.getElementById("cot-item-horas")?.value)||1;
+  const prev=document.getElementById("cot-item-preview");
+  if(!prev)return;
+  if(!codigo){prev.style.display="none";return;}
+  const item=nomCatalogo.find(x=>x.codigo===codigo);
+  if(!item){prev.style.display="none";return;}
+  const p=nomParams;
+  if(cotizVia==="A"){
+    const afl=parseInt(document.getElementById("cot-afl")?.value)||0;
+    const ext=parseInt(document.getElementById("cot-ext")?.value)||0;
+    const subAfl=(item.precio_afiliado_usd||0)*horas*afl;
+    const subExt=(item.precio_externo_usd||0)*horas*ext*(1+(p.CANON_CM_PCT||0.10));
+    prev.style.display="block";
+    prev.innerHTML=`<strong>${item.codigo}</strong> · Nivel ${item.nivel} · ${item.modalidad}
+      <span style="margin-left:12px;color:var(--ve)">Afiliado: $${(item.precio_afiliado_usd||0).toFixed(0)}/h</span>
+      <span style="margin-left:12px;color:var(--am)">Externo: $${(item.precio_externo_usd||0).toFixed(0)}/h + canon 10%</span>
+      ${afl||ext?`<br><strong>Subtotal estimado (${horas}h · ${afl} afil + ${ext} ext):</strong> <span style="color:var(--ve);font-weight:700">USD ${(subAfl+subExt).toFixed(2)}</span>`:"<br><span style='color:var(--tx3)'>Completá la cantidad de alumnos para ver el subtotal</span>"}`;
+  } else {
+    const grupos=parseInt(document.getElementById("cot-grupos")?.value)||1;
+    const tarifa=cotizTarifaViaB(item.nivel);
+    prev.style.display="block";
+    prev.innerHTML=`<strong>${item.codigo}</strong> · Nivel ${item.nivel} · Tarifa/h: <strong style="color:var(--bl)">USD ${tarifa.toFixed(2)}</strong>
+      <span style="font-size:11px;color:var(--tx3)"> (instructor + amort + overhead 15% + margen 40%)</span>
+      <br>Subtotal (${horas}h × ${grupos} grupo${grupos>1?"s":""}): <span style="color:var(--ve);font-weight:700">USD ${(tarifa*horas*grupos).toFixed(2)}</span>`;
+  }
+}
+
+function renderCotizItemsTable(){
+  const el=document.getElementById("cotiz-items-table");
+  if(!el)return;
+  if(!cotizItems.length){
+    el.innerHTML='<div style="text-align:center;padding:20px;color:var(--tx3);font-size:13px;border:1px dashed var(--b);border-radius:var(--rlg)">Seleccioná una actividad del catálogo y hacé clic en "+ Agregar"</div>';
+    return;
+  }
+  const p=nomParams;
+  const afl=parseInt(document.getElementById("cot-afl")?.value)||0;
+  const ext=parseInt(document.getElementById("cot-ext")?.value)||0;
+  const grupos=parseInt(document.getElementById("cot-grupos")?.value)||1;
+  const isA=cotizVia==="A";
+  const head=isA
+    ?`<tr><th>Código</th><th>Actividad</th><th>Horas</th><th>Afl/h (×${afl})</th><th>Ext/h (×${ext})</th><th>Subtotal USD</th><th></th></tr>`
+    :`<tr><th>Código</th><th>Actividad</th><th>Nv</th><th>Horas</th><th>Grupos (×${grupos})</th><th>Tarifa/h</th><th>Subtotal USD</th><th></th></tr>`;
+  const rows=cotizItems.map((it,i)=>{
+    if(isA){
+      const subAfl=(it.precio_afiliado_usd||0)*it.horas*afl;
+      const extBase=(it.precio_externo_usd||0)*it.horas*ext;
+      const sub=subAfl+extBase*(1+(p.CANON_CM_PCT||0.10));
+      return `<tr>
+        <td style="font-family:monospace;font-size:11px">${it.codigo}</td>
+        <td style="font-size:12px">${it.descripcion}</td>
+        <td><input type="number" value="${it.horas}" min="0.5" step="0.5" style="width:58px" class="fi" onchange="cotizItems[${i}].horas=parseFloat(this.value)||1;cotizCalc()"></td>
+        <td style="color:var(--ve);font-size:12px">$${(it.precio_afiliado_usd||0).toFixed(0)}</td>
+        <td style="color:var(--am);font-size:12px">$${(it.precio_externo_usd||0).toFixed(0)}</td>
+        <td style="font-weight:700;color:var(--tx)">$${sub.toFixed(2)}</td>
+        <td><button class="btn sm sec" onclick="cotizRemoveItem(${i})" style="color:var(--re);padding:2px 5px;font-size:12px">✕</button></td>
+      </tr>`;
+    } else {
+      const tarifa=cotizTarifaViaB(it.nivel);
+      const sub=tarifa*it.horas*grupos;
+      return `<tr>
+        <td style="font-family:monospace;font-size:11px">${it.codigo}</td>
+        <td style="font-size:12px">${it.descripcion}</td>
+        <td style="text-align:center;font-size:11px;color:var(--bl);font-weight:700">N${it.nivel}</td>
+        <td><input type="number" value="${it.horas}" min="0.5" step="0.5" style="width:58px" class="fi" onchange="cotizItems[${i}].horas=parseFloat(this.value)||1;cotizCalc()"></td>
+        <td style="color:var(--tx2);font-size:12px;text-align:center">${grupos}</td>
+        <td style="color:var(--bl);font-size:12px">$${tarifa.toFixed(2)}</td>
+        <td style="font-weight:700;color:var(--tx)">$${sub.toFixed(2)}</td>
+        <td><button class="btn sm sec" onclick="cotizRemoveItem(${i})" style="color:var(--re);padding:2px 5px;font-size:12px">✕</button></td>
+      </tr>`;
+    }
+  });
+  el.innerHTML=`<div class="tbl-wrap"><table class="tbl"><thead>${head}</thead><tbody>${rows.join("")}</tbody></table></div>`;
+}
+
+function cotizCalc(){
+  const p=nomParams;
+  const tc=parseFloat(document.getElementById("cot-tc")?.value)||(p.TC_USD_ARS||1400);
+  const afl=parseInt(document.getElementById("cot-afl")?.value)||0;
+  const ext=parseInt(document.getElementById("cot-ext")?.value)||0;
+  const grupos=parseInt(document.getElementById("cot-grupos")?.value)||1;
+  const insumos=parseFloat(document.getElementById("cot-insumos")?.value)||0;
+  let subtotal=0,canon=0;
+  if(cotizVia==="A"){
+    cotizItems.forEach(it=>{
+      subtotal+=(it.precio_afiliado_usd||0)*it.horas*afl;
+      const extBase=(it.precio_externo_usd||0)*it.horas*ext;
+      canon+=extBase*(p.CANON_CM_PCT||0.10);
+      subtotal+=extBase;
+    });
+  } else {
+    cotizItems.forEach(it=>subtotal+=cotizTarifaViaB(it.nivel)*it.horas*grupos);
+  }
+  const total=subtotal+canon+(cotizVia==="B"?insumos:0);
+  if(!document.activeElement?.closest("#cotiz-items-table")) renderCotizItemsTable();
+  document.getElementById("cot-total-usd").textContent=`USD ${subtotal.toFixed(2)}`;
+  document.getElementById("cot-canon-usd").textContent=`USD ${canon.toFixed(2)}`;
+  document.getElementById("cot-total-usd-fin").textContent=`USD ${total.toFixed(2)}`;
+  document.getElementById("cot-total-ars").textContent=`$ ${(total*tc).toLocaleString("es-AR",{maximumFractionDigits:0})}`;
+  document.getElementById("cot-tc-display").textContent=`· TC $${tc.toLocaleString("es-AR")}`;
+  cotizPreviewItem();
+}
+
+async function saveCotizacion(estado){
+  const id=document.getElementById("cot-edit-id").value;
+  const cliente=document.getElementById("cot-cliente").value.trim();
+  if(!cliente){toast("Ingresá el nombre del cliente","err");return;}
+  const p=nomParams;
+  const tc=parseFloat(document.getElementById("cot-tc").value)||(p.TC_USD_ARS||1400);
+  const afl=parseInt(document.getElementById("cot-afl").value)||0;
+  const ext=parseInt(document.getElementById("cot-ext").value)||0;
+  const grupos=parseInt(document.getElementById("cot-grupos").value)||1;
+  const participantes=parseInt(document.getElementById("cot-participantes").value)||0;
+  const insumos=parseFloat(document.getElementById("cot-insumos").value)||0;
+  let subtotal=0,canon=0;
+  if(cotizVia==="A"){
+    cotizItems.forEach(it=>{
+      subtotal+=(it.precio_afiliado_usd||0)*it.horas*afl;
+      const extBase=(it.precio_externo_usd||0)*it.horas*ext;
+      canon+=extBase*(p.CANON_CM_PCT||0.10);
+      subtotal+=extBase;
+    });
+  } else {
+    cotizItems.forEach(it=>subtotal+=cotizTarifaViaB(it.nivel)*it.horas*grupos);
+  }
+  const total=subtotal+canon+(cotizVia==="B"?insumos:0);
+  const payload={
+    cliente,contacto:document.getElementById("cot-contacto").value.trim(),
+    via:cotizVia,items:cotizItems,
+    alumnos_afiliados:afl,alumnos_externos:ext,
+    participantes,grupos,insumos_usd:insumos,
+    subtotal_usd:parseFloat(subtotal.toFixed(2)),
+    canon_cm_usd:parseFloat(canon.toFixed(2)),
+    total_usd:parseFloat(total.toFixed(2)),
+    total_ars:parseFloat((total*tc).toFixed(0)),
+    estado,notas:document.getElementById("cot-notas").value.trim(),
+    updated_at:new Date().toISOString(),
+  };
+  try{
+    if(id){
+      await sb(`cotizaciones?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(payload)});
+      const idx=cotizaciones.findIndex(c=>c.id===id);
+      if(idx>=0)cotizaciones[idx]={...cotizaciones[idx],...payload};
+      toast("Cotización actualizada","ok");
+    } else {
+      const num=`COT-${new Date().getFullYear()}-${String((cotizaciones.length+1)).padStart(3,"0")}`;
+      payload.numero=num;
+      payload.creado_por=loggedUser?.id;
+      const [created]=await sb("cotizaciones",{method:"POST",body:JSON.stringify(payload)});
+      if(created)cotizaciones.unshift(created);
+      toast("Cotización guardada","ok");
+    }
+    closeModal("modal-cotizacion");
+    renderCotizaciones();
+    updateCotizStats();
+  }catch(e){toast("Error al guardar: "+e.message,"err");}
+}
+
+async function rotarEstadoCotiz(id){
+  const c=cotizaciones.find(x=>x.id===id);
+  if(!c)return;
+  const estados=["borrador","enviada","aceptada","rechazada"];
+  const next=estados[(estados.indexOf(c.estado)+1)%estados.length];
+  try{
+    await sb(`cotizaciones?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado:next,updated_at:new Date().toISOString()})});
+    c.estado=next;
+    renderCotizaciones();
+    updateCotizStats();
+    toast(`Estado: ${next}`,"ok");
+  }catch(e){toast("Error","err");}
+}
+
+async function deleteCotizacion(id){
+  const c=cotizaciones.find(x=>x.id===id);
+  if(!c)return;
+  if(!confirm(`¿Eliminar cotización ${c.numero||""} de "${c.cliente}"?\nEsta acción no se puede deshacer.`))return;
+  try{
+    await sb(`cotizaciones?id=eq.${id}`,{method:"DELETE"});
+    cotizaciones=cotizaciones.filter(x=>x.id!==id);
+    renderCotizaciones();
+    updateCotizStats();
+    toast("Cotización eliminada","ok");
+  }catch(e){toast("Error al eliminar: "+e.message,"err");}
+}
+
+function exportarCotizPDF(id){
+  const c=cotizaciones.find(x=>x.id===id);
+  if(!c&&id){toast("Guardá la cotización primero","err");return;}
+  if(!c){toast("Guardá la cotización antes de exportar","err");return;}
+  const p=nomParams;
+  const items=c.items||[];
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:"mm",format:"a4"});
+  const W=210,ML=15,MR=15,CW=W-ML-MR;
+  // Header
+  doc.setFillColor(25,50,100);
+  doc.rect(0,0,W,28,"F");
+  doc.setFont("helvetica","bold");
+  doc.setFontSize(16);
+  doc.setTextColor(255,255,255);
+  doc.text("METANOIA SMX",ML,12);
+  doc.setFont("helvetica","normal");
+  doc.setFontSize(9);
+  doc.setTextColor(180,200,240);
+  doc.text("Centro de Entrenamiento en Simulación Médica · Salta, Argentina",ML,19);
+  doc.setFontSize(10);
+  doc.setTextColor(255,255,255);
+  doc.text(`COTIZACIÓN ${c.numero||""}`,W-MR,12,{align:"right"});
+  doc.setFontSize(9);
+  doc.setTextColor(180,200,240);
+  doc.text(`Vía ${c.via} · ${new Date(c.created_at||Date.now()).toLocaleDateString("es-AR")}`,W-MR,19,{align:"right"});
+  // Cliente
+  let y=38;
+  doc.setFont("helvetica","bold");doc.setFontSize(10);doc.setTextColor(30,30,30);
+  doc.text("PARA:",ML,y);
+  doc.setFont("helvetica","normal");
+  doc.text(c.cliente||"",ML+18,y);
+  if(c.contacto){y+=6;doc.setFontSize(9);doc.setTextColor(80,80,80);doc.text("Contacto: "+c.contacto,ML,y);}
+  // Descripción vía
+  y+=10;
+  const viaDesc=c.via==="A"
+    ?"Presupuesto Vía A: Colmedsa organiza y avala. SUDES presta servicio de simulación."
+    :"Presupuesto Vía B: SUDES organiza y presta el servicio directamente a Colmedsa.";
+  doc.setFontSize(9);doc.setTextColor(60,80,120);
+  doc.setFillColor(235,240,255);
+  doc.rect(ML,y-4,CW,8,"F");
+  doc.text(viaDesc,ML+4,y+1);
+  // Tabla items
+  y+=14;
+  doc.setFillColor(25,50,100);
+  doc.rect(ML,y-4,CW,7,"F");
+  doc.setFont("helvetica","bold");doc.setFontSize(8.5);doc.setTextColor(255,255,255);
+  if(c.via==="A"){
+    doc.text("Código",ML+1,y);doc.text("Actividad",ML+22,y);doc.text("Hs",ML+107,y);
+    doc.text("P.Afl/h",ML+117,y);doc.text("P.Ext/h",ML+133,y);doc.text("Subtotal",ML+150,y);
+  } else {
+    doc.text("Código",ML+1,y);doc.text("Actividad",ML+22,y);doc.text("Nv",ML+107,y);
+    doc.text("Horas",ML+115,y);doc.text("Tarifa/h",ML+132,y);doc.text("Subtotal",ML+150,y);
+  }
+  y+=7;
+  doc.setFont("helvetica","normal");doc.setFontSize(8.5);
+  items.forEach((it,i)=>{
+    if(i%2===0){doc.setFillColor(245,247,255);doc.rect(ML,y-4,CW,6.5,"F");}
+    doc.setTextColor(30,30,30);
+    doc.text(it.codigo||"",ML+1,y);
+    const dmax=doc.splitTextToSize(it.descripcion||"",78);
+    doc.text(dmax[0],ML+22,y);
+    if(c.via==="A"){
+      doc.text(String(it.horas||1),ML+108,y);
+      doc.text("$"+(it.precio_afiliado_usd||0).toFixed(0),ML+117,y);
+      doc.text("$"+(it.precio_externo_usd||0).toFixed(0),ML+133,y);
+      const sub=(it.precio_afiliado_usd||0)*it.horas*(c.alumnos_afiliados||0)
+               +(it.precio_externo_usd||0)*it.horas*(c.alumnos_externos||0)*(1+(p.CANON_CM_PCT||0.10));
+      doc.text("$"+sub.toFixed(0),ML+150,y);
+    } else {
+      const tarifa=cotizTarifaViaB(it.nivel);
+      doc.text("N"+it.nivel,ML+108,y);
+      doc.text(String(it.horas||1),ML+117,y);
+      doc.text("$"+tarifa.toFixed(0),ML+132,y);
+      doc.text("$"+(tarifa*it.horas).toFixed(0),ML+150,y);
+    }
+    y+=6.5;
+  });
+  // Parámetros Vía A
+  if(c.via==="A"&&(c.alumnos_afiliados||c.alumnos_externos)){
+    y+=3;
+    doc.setFontSize(8);doc.setTextColor(80,80,80);
+    doc.text(`Alumnos afiliados CM: ${c.alumnos_afiliados||0} · Alumnos externos: ${c.alumnos_externos||0}`,ML,y);
+    y+=5;
+  }
+  // Totales
+  y+=4;
+  doc.setDrawColor(200,210,240);
+  doc.line(ML,y,W-MR,y);
+  y+=6;
+  const totCol=W-MR-40;
+  doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(60,60,60);
+  doc.text("Subtotal:",totCol,y,{align:"right"});
+  doc.text("USD "+(c.subtotal_usd||0).toFixed(2),W-MR,y,{align:"right"});
+  if(c.via==="A"&&(c.canon_cm_usd||0)>0){
+    y+=5.5;
+    doc.text("Canon CM (10%):",totCol,y,{align:"right"});
+    doc.text("USD "+(c.canon_cm_usd||0).toFixed(2),W-MR,y,{align:"right"});
+  }
+  if(c.via==="B"&&(c.insumos_usd||0)>0){
+    y+=5.5;
+    doc.text("Insumos adicionales:",totCol,y,{align:"right"});
+    doc.text("USD "+(c.insumos_usd||0).toFixed(2),W-MR,y,{align:"right"});
+  }
+  y+=7;
+  doc.setFont("helvetica","bold");doc.setFontSize(11);doc.setTextColor(25,50,100);
+  doc.text("TOTAL USD:",totCol,y,{align:"right"});
+  doc.text("USD "+(c.total_usd||0).toFixed(2),W-MR,y,{align:"right"});
+  y+=6;
+  doc.setFontSize(12);doc.setTextColor(0,130,80);
+  doc.text("TOTAL ARS:",totCol,y,{align:"right"});
+  doc.text("$ "+(c.total_ars||0).toLocaleString("es-AR",{maximumFractionDigits:0}),W-MR,y,{align:"right"});
+  // Notas
+  if(c.notas){
+    y+=10;
+    doc.setFillColor(245,245,245);
+    const notasLines=doc.splitTextToSize("Notas: "+c.notas,CW-8);
+    doc.rect(ML,y-4,CW,notasLines.length*5+6,"F");
+    doc.setFont("helvetica","normal");doc.setFontSize(8.5);doc.setTextColor(60,60,60);
+    doc.text(notasLines,ML+4,y);
+  }
+  // Footer
+  doc.setFont("helvetica","normal");doc.setFontSize(7.5);doc.setTextColor(150,150,150);
+  doc.text("Metanoia SMX · SUDES S.A.S. · España 1440, Salta · tlarran@metanoiasmx.com",ML,288);
+  doc.text("Los precios en USD se calculan según TC vigente. Vigencia: 10 días corridos.",W-MR,288,{align:"right"});
+  doc.save(`${c.numero||"cotizacion"}.pdf`);
+  toast("PDF generado","ok");
 }
 </script>
 
