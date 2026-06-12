@@ -10313,7 +10313,7 @@ async function reunChatEnviar(event){
   try{
     const r=await fetch(`${SB}/functions/v1/agente-reuniones`,{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${smxSession?.access_token||KEY}`},
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},
       body:JSON.stringify({message:msg,historial:reunChatHistorial.slice(-10)}),
     });
     const d=await r.json();
@@ -14161,7 +14161,7 @@ async function oportSubirArchivos(oportId){
       const path=`${oportId}/${Date.now()}_${a.nombre}`;
       const resp=await fetch(`${window.SUPA_URL||'https://jppxmdvddvbsvymogvcp.supabase.co'}/storage/v1/object/oportunidades/${path}`,{
         method:"POST",
-        headers:{"Authorization":`Bearer ${smxSession?.access_token}`,"Content-Type":a.tipo||"application/octet-stream","x-upsert":"true"},
+        headers:{"Authorization":`Bearer ${KEY}`,"Content-Type":a.tipo||"application/octet-stream","x-upsert":"true"},
         body:a.file,
       });
       if(resp.ok){
@@ -14237,7 +14237,7 @@ async function oportChatEnviar(){
   try{
     const r=await fetch(`${SB}/functions/v1/agente-oportunidades`,{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${smxSession?.access_token||KEY}`},
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},
       body:JSON.stringify({message:msg,historial:oportChatHistorial,oportunidad:oportOportunidadActual(),archivos:archivosParaAgente}),
     });
     const resp=await r.json();
