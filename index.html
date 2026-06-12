@@ -1974,9 +1974,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div style="padding:20px">
       <!-- Via selector -->
       <div style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--rlg);padding:12px;margin-bottom:14px">
-        <div style="display:flex;gap:8px;margin-bottom:10px">
-          <button class="fb on" id="cot-via-a-btn" onclick="setCotizVia('A')" style="flex:1;padding:8px 0;font-size:13px;font-weight:600">Vía A — Cursos</button>
-          <button class="fb" id="cot-via-b-btn" onclick="setCotizVia('B')" style="flex:1;padding:8px 0;font-size:13px;font-weight:600">Vía B — Servicio</button>
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+          <button class="fb on" id="cot-via-a-btn" onclick="setCotizVia('A')" style="flex:1;min-width:120px;padding:8px 0;font-size:13px;font-weight:600">Vía A — Cursos</button>
+          <button class="fb" id="cot-via-b-btn" onclick="setCotizVia('B')" style="flex:1;min-width:120px;padding:8px 0;font-size:13px;font-weight:600">Vía B — Servicio</button>
+          <button class="fb" id="cot-via-pev-btn" onclick="setCotizVia('PEV')" style="flex:1;min-width:120px;padding:8px 0;font-size:13px;font-weight:600">Vía PEV — Actividad nueva</button>
         </div>
         <div id="cot-via-desc" style="font-size:11px;color:var(--tx3);padding:6px 10px;background:var(--bg);border-radius:var(--r);line-height:1.5;border-left:3px solid var(--bl)"></div>
       </div>
@@ -2001,7 +2002,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         </div>
       </div>
       <!-- Selector de catálogo estilo cards -->
-      <div style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--rlg);padding:12px;margin-bottom:10px">
+      <div id="cot-catalogo-section" style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--rlg);padding:12px;margin-bottom:10px">
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
           <input class="fi" id="cot-item-search" placeholder="Buscar actividad..." autocomplete="off"
             style="flex:1;min-width:140px" oninput="cotizFiltrarCatalogo(this.value)">
@@ -2018,19 +2019,44 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div id="cot-item-preview" style="display:none;margin-bottom:12px;padding:8px 12px;background:var(--surf2);border-radius:var(--r);font-size:12px;color:var(--tx2);border:1px solid var(--b)"></div>
       <!-- Tabla items -->
       <div id="cotiz-items-table" style="margin-bottom:14px"></div>
+      <!-- PEV section -->
+      <div id="cot-pev-section" style="display:none;margin-bottom:14px">
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;padding:12px;background:var(--bg2);border-radius:var(--rlg)">
+          <div>
+            <div class="fl">Etapa PEV</div>
+            <select class="fi" id="cot-pev-etapa" style="width:170px">
+              <option value="PEV1">PEV1 — Prueba mínima</option>
+              <option value="PEV2">PEV2 — Piloto real</option>
+              <option value="PEV3">PEV3 — Validación completa</option>
+              <option value="PROTOTIPO">Prototipo</option>
+              <option value="APROBADO">Aprobado</option>
+            </select>
+          </div>
+          <div>
+            <div class="fl" style="margin-bottom:4px">Template base</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn sec" onclick="cotizPevTemplate('basico')" style="font-size:11px;padding:5px 10px">Básico N1-2</button>
+              <button class="btn sec" onclick="cotizPevTemplate('intermedio')" style="font-size:11px;padding:5px 10px">Intermedio N3-4</button>
+              <button class="btn sec" onclick="cotizPevTemplate('avanzado')" style="font-size:11px;padding:5px 10px">Avanzado N5-7</button>
+              <button class="btn sec" onclick="if(confirm('¿Limpiar todos los ítems?')){cotizPevItems=[];renderPevBlocks();cotizPevCalc();}" style="font-size:11px;padding:5px 10px;color:var(--re)">✕ Limpiar</button>
+            </div>
+          </div>
+        </div>
+        <div id="cot-pev-blocks"></div>
+      </div>
       <!-- Totales -->
       <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:14px 16px;margin-bottom:14px">
         <div style="display:flex;gap:0;flex-wrap:wrap">
           <div style="flex:1;min-width:120px;padding:4px 12px 4px 0;border-right:1px solid var(--b)">
-            <div class="sc-l">Subtotal USD</div>
+            <div class="sc-l" id="cot-lbl-subtotal">Subtotal USD</div>
             <div style="font-size:15px;font-weight:600;color:var(--tx)" id="cot-total-usd">USD 0.00</div>
           </div>
           <div id="cot-canon-wrap" style="flex:1;min-width:120px;padding:4px 12px;border-right:1px solid var(--b)">
-            <div class="sc-l">Canon CM (10%)</div>
+            <div class="sc-l" id="cot-lbl-canon">Canon CM (10%)</div>
             <div style="font-size:15px;font-weight:600;color:var(--am)" id="cot-canon-usd">USD 0.00</div>
           </div>
           <div style="flex:1;min-width:120px;padding:4px 12px;border-right:1px solid var(--b)">
-            <div class="sc-l">Total USD</div>
+            <div class="sc-l" id="cot-lbl-total">Total USD</div>
             <div style="font-size:16px;font-weight:700;color:var(--bl)" id="cot-total-usd-fin">USD 0.00</div>
           </div>
           <div style="flex:1;min-width:140px;padding:4px 0 4px 12px;text-align:right">
@@ -13627,7 +13653,48 @@ async function comGenerarPrompt(){
 }
 
 // ══ COTIZACIONES ══
-let cotizaciones=[], nomParams={}, nomCatalogo=[], cotizFilter='all', cotizVia='A', cotizItems=[];
+let cotizaciones=[], nomParams={}, nomCatalogo=[], cotizFilter='all', cotizVia='A', cotizItems=[], cotizPevItems=[];
+const COT_PEV_BLOQUES=[
+  {key:"pedagogico",label:"Bloque 1 — Pedagógico",icon:"📚"},
+  {key:"procedimental",label:"Bloque 2 — Procedimental",icon:"🔬"},
+  {key:"insumos",label:"Bloque 3 — Insumos y equipamiento",icon:"📦"},
+  {key:"informatizacion",label:"Bloque 4 — Informatización",icon:"💻"},
+  {key:"aprobacion",label:"Bloque 5 — Aprobación y certificación",icon:"✅"},
+];
+const COT_PEV_TEMPLATES={
+  basico:[
+    {bloque:"pedagogico",descripcion:"Diseño instruccional",cantidad:4,precio:15},
+    {bloque:"pedagogico",descripcion:"Validación de contenido",cantidad:2,precio:25},
+    {bloque:"procedimental",descripcion:"Instructor N1-2",cantidad:4,precio:22},
+    {bloque:"procedimental",descripcion:"Amortización equipos básicos",cantidad:4,precio:5},
+    {bloque:"insumos",descripcion:"Consumibles",cantidad:10,precio:5},
+    {bloque:"informatizacion",descripcion:"Material digital (plataforma)",cantidad:1,precio:30},
+    {bloque:"aprobacion",descripcion:"Coordinación y logística",cantidad:1,precio:80},
+  ],
+  intermedio:[
+    {bloque:"pedagogico",descripcion:"Diseño instruccional",cantidad:8,precio:15},
+    {bloque:"pedagogico",descripcion:"Validación clínica",cantidad:4,precio:30},
+    {bloque:"procedimental",descripcion:"Instructor N3-4",cantidad:8,precio:45},
+    {bloque:"procedimental",descripcion:"Amortización laparoscopía",cantidad:8,precio:12},
+    {bloque:"insumos",descripcion:"Consumibles",cantidad:15,precio:12},
+    {bloque:"informatizacion",descripcion:"Materiales y guías",cantidad:1,precio:100},
+    {bloque:"informatizacion",descripcion:"E-learning básico",cantidad:1,precio:80},
+    {bloque:"aprobacion",descripcion:"Comité editorial",cantidad:2,precio:40},
+    {bloque:"aprobacion",descripcion:"Coordinación y logística",cantidad:1,precio:120},
+  ],
+  avanzado:[
+    {bloque:"pedagogico",descripcion:"Diseño instruccional avanzado",cantidad:16,precio:20},
+    {bloque:"pedagogico",descripcion:"Revisión por pares",cantidad:4,precio:40},
+    {bloque:"procedimental",descripcion:"Instructor experto N5-7",cantidad:16,precio:80},
+    {bloque:"procedimental",descripcion:"Amortización equipos avanzados",cantidad:16,precio:25},
+    {bloque:"insumos",descripcion:"Consumibles especializados",cantidad:20,precio:25},
+    {bloque:"insumos",descripcion:"Equipamiento específico",cantidad:1,precio:300},
+    {bloque:"informatizacion",descripcion:"Plataforma de simulación",cantidad:1,precio:200},
+    {bloque:"informatizacion",descripcion:"Desarrollo multimedia",cantidad:8,precio:40},
+    {bloque:"aprobacion",descripcion:"Director médico",cantidad:4,precio:60},
+    {bloque:"aprobacion",descripcion:"Arancel de certificación",cantidad:1,precio:200},
+  ],
+};
 
 async function loadCotizacionesPage(){
   try{
@@ -13681,7 +13748,7 @@ function renderCotizaciones(){
   </tr></thead><tbody>${rows.map(c=>`<tr>
     <td style="font-family:monospace;font-size:12px">${c.numero||"—"}</td>
     <td><strong>${c.cliente||"—"}</strong>${c.contacto?`<br><span style="font-size:11px;color:var(--tx3)">${c.contacto}</span>`:""}</td>
-    <td><span style="font-size:11px;font-weight:700;color:var(--bl)">VÍA ${c.via||"A"}</span></td>
+    <td><span style="font-size:11px;font-weight:700;color:${c.via==="PEV"?"var(--am)":"var(--bl)"}">${c.via==="PEV"?"PEV "+(c.pev_etapa||""):"VÍA "+(c.via||"A")}</span></td>
     <td>USD ${(c.total_usd||0).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
     <td>$${(c.total_ars||0).toLocaleString("es-AR",{maximumFractionDigits:0})}</td>
     <td><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:8px;background:${col[c.estado]||"var(--tx3)"}22;color:${col[c.estado]||"var(--tx3)"}">${c.estado||"—"}</span></td>
@@ -13697,6 +13764,7 @@ function renderCotizaciones(){
 
 function openNuevaCotizacion(){
   cotizItems=[];
+  cotizPevItems=[];
   document.getElementById("cot-modal-title").textContent="Nueva Cotización";
   document.getElementById("cot-edit-id").value="";
   ["cot-cliente","cot-contacto","cot-notas"].forEach(id=>document.getElementById(id).value="");
@@ -13722,6 +13790,7 @@ function openEditCotizacion(id){
   const c=cotizaciones.find(x=>x.id===id);
   if(!c)return;
   cotizItems=JSON.parse(JSON.stringify(c.items||[]));
+  cotizPevItems=JSON.parse(JSON.stringify(c.pev_items||[]));
   document.getElementById("cot-modal-title").textContent=`Cotización ${c.numero||""}`;
   document.getElementById("cot-edit-id").value=id;
   document.getElementById("cot-cliente").value=c.cliente||"";
@@ -13738,9 +13807,11 @@ function openEditCotizacion(id){
   document.getElementById("cot-item-preview").style.display="none";
   document.getElementById("cot-btn-pdf").style.display="";
   setCotizVia(c.via||"A");
-  cotizFiltrarCatalogo("");
-  renderCotizItemsTable();
-  cotizCalc();
+  if(c.via==="PEV"&&c.pev_etapa){
+    const sel=document.getElementById("cot-pev-etapa");
+    if(sel)sel.value=c.pev_etapa;
+  }
+  if(c.via!=="PEV"){cotizFiltrarCatalogo("");renderCotizItemsTable();cotizCalc();}
   openModal("modal-cotizacion");
 }
 
@@ -13748,16 +13819,129 @@ function setCotizVia(via){
   cotizVia=via;
   document.getElementById("cot-via-a-btn").classList.toggle("on",via==="A");
   document.getElementById("cot-via-b-btn").classList.toggle("on",via==="B");
+  document.getElementById("cot-via-pev-btn").classList.toggle("on",via==="PEV");
   document.getElementById("cot-via-a-extra").style.display=via==="A"?"flex":"none";
   document.getElementById("cot-via-b-extra").style.display=via==="B"?"flex":"none";
   document.getElementById("cot-canon-wrap").style.display=via==="A"?"":"none";
+  document.getElementById("cot-catalogo-section").style.display=via==="PEV"?"none":"";
+  document.getElementById("cotiz-items-table").style.display=via==="PEV"?"none":"";
+  document.getElementById("cot-pev-section").style.display=via==="PEV"?"block":"none";
+  const lblS=document.getElementById("cot-lbl-subtotal");
+  const lblC=document.getElementById("cot-lbl-canon");
+  const lblT=document.getElementById("cot-lbl-total");
+  if(lblS)lblS.textContent=via==="PEV"?"Costo base":"Subtotal USD";
+  if(lblC)lblC.textContent=via==="PEV"?"Overhead + Margen (15%+40%)":"Canon CM (10%)";
+  if(lblT)lblT.textContent=via==="PEV"?"Precio sugerido":"Total USD";
   const desc=via==="A"
     ?"<strong>Vía A</strong>: Colmedsa organiza y avala el curso. SUDES actúa como proveedor de simulación. El precio para alumnos afiliados tiene descuento; los externos pagan canon del 10% a CM. Usá cuando el cliente es el propio Colegio Médico."
-    :"<strong>Vía B</strong>: SUDES organiza el curso y presta el servicio directamente a Colmedsa. La tarifa por hora incluye instructor, amortización de equipos, overhead (15%) y margen (40%). Usá cuando facturás a CM por horas de servicio.";
+    :via==="B"
+    ?"<strong>Vía B</strong>: SUDES organiza el curso y presta el servicio directamente a Colmedsa. La tarifa por hora incluye instructor, amortización de equipos, overhead (15%) y margen (40%). Usá cuando facturás a CM por horas de servicio."
+    :"<strong>Vía PEV</strong>: Cotización para una actividad nueva en desarrollo. Estimá los costos por bloque (pedagógico, procedimental, insumos, informatización, aprobación). El precio sugerido aplica overhead 15% y margen 40% automáticamente.";
   document.getElementById("cot-via-desc").innerHTML=desc;
-  cotizFiltrarCatalogo(document.getElementById("cot-item-search")?.value||"");
-  renderCotizItemsTable();
-  cotizCalc();
+  if(via==="PEV"){renderPevBlocks();cotizPevCalc();}
+  else{cotizFiltrarCatalogo(document.getElementById("cot-item-search")?.value||"");renderCotizItemsTable();cotizCalc();}
+}
+
+function cotizPevTemplate(tipo){
+  if(!COT_PEV_TEMPLATES[tipo])return;
+  cotizPevItems=JSON.parse(JSON.stringify(COT_PEV_TEMPLATES[tipo]));
+  renderPevBlocks();
+  cotizPevCalc();
+}
+
+function renderPevBlocks(){
+  const cont=document.getElementById("cot-pev-blocks");
+  if(!cont)return;
+  cont.innerHTML=COT_PEV_BLOQUES.map(bloque=>{
+    const items=cotizPevItems.map((it,i)=>({...it,_idx:i})).filter(it=>it.bloque===bloque.key);
+    const bloqueTotal=items.reduce((s,it)=>s+(parseFloat(it.cantidad)||0)*(parseFloat(it.precio)||0),0);
+    return `<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:12px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:700;color:var(--tx2)">${bloque.icon} ${bloque.label}</div>
+        <div style="font-size:12px;color:var(--tx3)">USD ${bloqueTotal.toFixed(2)}</div>
+      </div>
+      ${items.length?`<table style="width:100%;border-collapse:collapse;margin-bottom:6px">
+        <thead><tr>
+          <th style="text-align:left;font-size:11px;color:var(--tx3);padding:2px 4px;font-weight:500">Descripción</th>
+          <th style="text-align:right;font-size:11px;color:var(--tx3);padding:2px 4px;font-weight:500;width:70px">Cant/h</th>
+          <th style="text-align:right;font-size:11px;color:var(--tx3);padding:2px 4px;font-weight:500;width:80px">USD/u</th>
+          <th style="text-align:right;font-size:11px;color:var(--tx3);padding:2px 4px;font-weight:500;width:80px">Total</th>
+          <th style="width:28px"></th>
+        </tr></thead>
+        <tbody>${items.map(it=>`<tr>
+          <td style="padding:2px 4px"><input class="fi" style="width:100%;font-size:12px;padding:3px 6px" value="${it.descripcion||""}" oninput="cotizPevUpdateItem(${it._idx},'descripcion',this.value)"></td>
+          <td style="padding:2px 4px"><input class="fi" type="number" min="0" style="width:60px;font-size:12px;padding:3px 6px;text-align:right" value="${it.cantidad||0}" oninput="cotizPevUpdateItem(${it._idx},'cantidad',this.value)"></td>
+          <td style="padding:2px 4px"><input class="fi" type="number" min="0" style="width:70px;font-size:12px;padding:3px 6px;text-align:right" value="${it.precio||0}" oninput="cotizPevUpdateItem(${it._idx},'precio',this.value)"></td>
+          <td style="padding:2px 4px;text-align:right;font-size:12px;font-weight:600;color:var(--tx)">$${((parseFloat(it.cantidad)||0)*(parseFloat(it.precio)||0)).toFixed(2)}</td>
+          <td style="padding:2px 4px;text-align:center"><button onclick="cotizPevRemoveItem(${it._idx})" style="background:none;border:none;cursor:pointer;color:var(--re);font-size:13px;padding:0 2px" title="Eliminar">✕</button></td>
+        </tr>`).join("")}</tbody>
+      </table>`:""}
+      <button class="btn sm sec" onclick="cotizPevAddItem('${bloque.key}')" style="font-size:11px;padding:3px 10px">+ Ítem</button>
+    </div>`;
+  }).join("");
+}
+
+function cotizPevUpdateItem(idx,field,val){
+  if(!cotizPevItems[idx])return;
+  cotizPevItems[idx][field]=val;
+  // Re-render just the totals without full re-render to avoid losing focus
+  cotizPevCalc();
+  // Update the row total display
+  const it=cotizPevItems[idx];
+  const row=document.getElementById("cot-pev-blocks")?.querySelectorAll("tbody tr")[idx];
+  if(row){
+    const totalCell=row.cells[3];
+    if(totalCell)totalCell.textContent="$"+((parseFloat(it.cantidad)||0)*(parseFloat(it.precio)||0)).toFixed(2);
+  }
+  // Update block totals
+  renderPevBlockTotals();
+}
+
+function renderPevBlockTotals(){
+  const blockDivs=document.getElementById("cot-pev-blocks")?.children;
+  if(!blockDivs)return;
+  COT_PEV_BLOQUES.forEach((bloque,bi)=>{
+    const total=cotizPevItems.filter(it=>it.bloque===bloque.key).reduce((s,it)=>s+(parseFloat(it.cantidad)||0)*(parseFloat(it.precio)||0),0);
+    const header=blockDivs[bi]?.querySelector("div>div:last-child");
+    if(header)header.textContent="USD "+total.toFixed(2);
+  });
+}
+
+function cotizPevAddItem(bloqueKey){
+  cotizPevItems.push({bloque:bloqueKey,descripcion:"",cantidad:1,precio:0});
+  renderPevBlocks();
+  cotizPevCalc();
+}
+
+function cotizPevRemoveItem(idx){
+  cotizPevItems.splice(idx,1);
+  renderPevBlocks();
+  cotizPevCalc();
+}
+
+function cotizPevCalc(){
+  const subtotal=cotizPevItems.reduce((s,it)=>s+(parseFloat(it.cantidad)||0)*(parseFloat(it.precio)||0),0);
+  const overhead=subtotal*0.15;
+  const margen=(subtotal+overhead)*0.40;
+  const total=subtotal+overhead+margen;
+  const tc=parseFloat(document.getElementById("cot-tc")?.value)||1400;
+  const elS=document.getElementById("cot-total-usd");
+  const elC=document.getElementById("cot-canon-usd");
+  const elT=document.getElementById("cot-total-usd-fin");
+  const elA=document.getElementById("cot-total-ars");
+  const elTc=document.getElementById("cot-tc-display");
+  if(elS)elS.textContent="USD "+subtotal.toFixed(2);
+  if(elC)elC.textContent="USD "+(overhead+margen).toFixed(2);
+  if(elT)elT.textContent="USD "+total.toFixed(2);
+  if(elA)elA.textContent="$ "+(total*tc).toLocaleString("es-AR",{maximumFractionDigits:0});
+  if(elTc)elTc.textContent="TC $"+tc.toLocaleString("es-AR");
+  // Show overhead details
+  const wrap=document.getElementById("cot-canon-wrap");
+  if(wrap&&cotizVia==="PEV"){
+    wrap.style.display="";
+    const lbl=document.getElementById("cot-lbl-canon");
+    if(lbl)lbl.innerHTML=`Overhead 15% + Margen 40%<br><span style="font-size:10px;color:var(--tx3)">$${overhead.toFixed(0)} + $${margen.toFixed(0)}</span>`;
+  }
 }
 
 function cotizTarifaViaB(nivel){
@@ -13954,8 +14138,14 @@ async function saveCotizacion(estado){
   const grupos=parseInt(document.getElementById("cot-grupos").value)||1;
   const participantes=parseInt(document.getElementById("cot-participantes").value)||0;
   const insumos=parseFloat(document.getElementById("cot-insumos").value)||0;
-  let subtotal=0,canon=0;
-  if(cotizVia==="A"){
+  let subtotal=0,canon=0,pev_etapa=null;
+  if(cotizVia==="PEV"){
+    cotizPevItems.forEach(it=>subtotal+=(parseFloat(it.cantidad)||0)*(parseFloat(it.precio)||0));
+    const overhead=subtotal*0.15;
+    const margen=(subtotal+overhead)*0.40;
+    canon=overhead+margen;
+    pev_etapa=document.getElementById("cot-pev-etapa")?.value||"PEV1";
+  } else if(cotizVia==="A"){
     cotizItems.forEach(it=>{
       subtotal+=(it.precio_afiliado_usd||0)*it.horas*afl;
       const extBase=(it.precio_externo_usd||0)*it.horas*ext;
@@ -13968,7 +14158,9 @@ async function saveCotizacion(estado){
   const total=subtotal+canon+(cotizVia==="B"?insumos:0);
   const payload={
     cliente,contacto:document.getElementById("cot-contacto").value.trim(),
-    via:cotizVia,items:cotizItems,
+    via:cotizVia,items:cotizVia==="PEV"?[]:cotizItems,
+    pev_items:cotizVia==="PEV"?cotizPevItems:[],
+    pev_etapa,
     alumnos_afiliados:afl,alumnos_externos:ext,
     participantes,grupos,insumos_usd:insumos,
     subtotal_usd:parseFloat(subtotal.toFixed(2)),
