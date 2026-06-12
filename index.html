@@ -1569,75 +1569,84 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
 <!-- Modal oportunidad -->
 <div class="mov" id="modal-oportunidad" onclick="if(event.target===this)closeModal('modal-oportunidad')">
-  <div class="mbox" style="width:min(780px,96vw);max-height:92vh;overflow-y:auto;background:var(--bg2);border-radius:var(--rl);border:1px solid var(--b2)">
+  <div class="mbox" style="width:min(860px,96vw);max-height:94vh;overflow-y:auto;background:var(--bg2);border-radius:var(--rl);border:1px solid var(--b2)">
     <div class="mh"><div class="mt" id="oport-modal-title">Nueva Oportunidad</div><button class="mc" onclick="closeModal('modal-oportunidad')">✕</button></div>
     <div class="mb">
       <input type="hidden" id="oport-edit-id">
-      <!-- Sección 1: La idea -->
-      <div style="font-size:11px;font-weight:700;color:var(--bl);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">La idea</div>
-      <div style="margin-bottom:10px">
-        <div class="fl">1. Idea en crudo <span style="color:var(--re)">*</span></div>
-        <textarea class="fta" id="oport-idea" placeholder="Texto literal de cómo llegó la idea, sin filtrar..." rows="3"></textarea>
+      <!-- Tipo + Idea -->
+      <div style="display:grid;grid-template-columns:180px 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <div class="fl">Tipo</div>
+          <select class="fi" id="oport-tipo">
+            <option value="Proyecto">Proyecto</option>
+            <option value="Inversión">Inversión</option>
+            <option value="Producto">Producto</option>
+            <option value="Alianza">Alianza</option>
+            <option value="Servicio">Servicio</option>
+            <option value="Curso">Curso</option>
+            <option value="Otro">Otro</option>
+          </select>
+        </div>
+        <div>
+          <div class="fl">1. Idea en crudo <span style="color:var(--re)">*</span></div>
+          <textarea class="fta" id="oport-idea" placeholder="Texto literal de cómo llegó la idea, sin filtrar..." rows="2" style="margin-bottom:0"></textarea>
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
         <div>
           <div class="fl">2. ¿Qué es concretamente?</div>
-          <input class="fi" id="oport-definicion" placeholder="Curso / contenido / alianza / producto / mixto">
+          <input class="fi" id="oport-definicion" placeholder="Una oración: qué es exactamente">
         </div>
         <div>
-          <div class="fl">3. Línea de negocio</div>
+          <div class="fl">3. Contexto / línea interna <span style="font-size:10px;color:var(--tx3)">(opcional)</span></div>
           <select class="fi" id="oport-linea">
-            <option value="">— Seleccioná —</option>
+            <option value="">— Sin clasificar —</option>
             <option value="A">A — MSP Convenio</option>
             <option value="B">B — Colmedsa</option>
             <option value="C">C — Cursos comerciales</option>
             <option value="D">D — COFRADIA</option>
             <option value="Transversal">Transversal</option>
+            <option value="Externo">Externo / ajeno a líneas</option>
           </select>
         </div>
       </div>
       <div style="margin-bottom:10px">
-        <div class="fl">4. ¿A quién sirve?</div>
-        <input class="fi" id="oport-audiencia" placeholder="Residentes, especialistas, equipos, instituciones...">
+        <div class="fl">4. ¿A quién sirve / mercado objetivo?</div>
+        <input class="fi" id="oport-audiencia" placeholder="Cliente, segmento, usuario final...">
       </div>
-      <!-- Sección 2: Encaje -->
-      <div style="font-size:11px;font-weight:700;color:var(--bl);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px">Encaje estratégico</div>
+      <!-- Encaje -->
+      <div style="font-size:11px;font-weight:700;color:var(--bl);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 8px">Encaje y validación</div>
       <div style="margin-bottom:10px">
-        <div class="fl">5. Encaje estratégico <span style="font-size:10px;color:var(--tx3)">(autoridad académica / autonomía financiera / comunidad)</span></div>
-        <textarea class="fta" id="oport-encaje" placeholder="¿A qué objetivo suma? Si no suma a ninguno → descartar." rows="2"></textarea>
+        <div class="fl">5. Encaje estratégico</div>
+        <textarea class="fta" id="oport-encaje" placeholder="¿Por qué tiene sentido hacerlo? ¿Qué problema real resuelve?" rows="2"></textarea>
       </div>
       <div style="margin-bottom:10px">
         <div class="fl">6. Primer paso testeable</div>
         <input class="fi" id="oport-primer-paso" placeholder="Acción mínima y barata para validar antes de comprometer recursos">
       </div>
-      <!-- Sección 3: Ejecución -->
-      <div style="font-size:11px;font-weight:700;color:var(--bl);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px">Ejecución</div>
+      <!-- Ejecución -->
+      <div style="font-size:11px;font-weight:700;color:var(--bl);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 8px">Ejecución</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-        <div>
-          <div class="fl">7. ¿Quién ejecuta?</div>
-          <input class="fi" id="oport-ejecutor" placeholder="Executor responsable">
-        </div>
-        <div>
-          <div class="fl">7b. ¿Quién decide?</div>
-          <input class="fi" id="oport-decisor" placeholder="Decisor final">
-        </div>
+        <div><div class="fl">7. ¿Quién ejecuta?</div><input class="fi" id="oport-ejecutor" placeholder="Responsable de ejecución"></div>
+        <div><div class="fl">7b. ¿Quién decide?</div><input class="fi" id="oport-decisor" placeholder="Decisor final"></div>
       </div>
       <div style="margin-bottom:10px">
         <div class="fl">8. Recursos y costo estimado</div>
-        <textarea class="fta" id="oport-recursos" placeholder="Tiempo, dinero, equipamiento, instructores necesarios..." rows="2"></textarea>
+        <textarea class="fta" id="oport-recursos" placeholder="Tiempo, dinero, equipamiento, personas necesarias..." rows="2"></textarea>
       </div>
-      <!-- Sección 4: Validación -->
-      <div style="font-size:11px;font-weight:700;color:var(--bl);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px">Validación y riesgos</div>
-      <div style="margin-bottom:10px">
-        <div class="fl">9. Criterio de éxito</div>
-        <input class="fi" id="oport-criterio" placeholder="Una métrica concreta y medible">
-      </div>
-      <div style="margin-bottom:10px">
-        <div class="fl">10. Riesgos</div>
-        <textarea class="fta" id="oport-riesgos" placeholder="Lo que podría salir mal — honestidad brutal..." rows="2"></textarea>
-      </div>
-      <!-- Estado -->
+      <!-- Riesgos -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <div class="fl">9. Criterio de éxito</div>
+          <input class="fi" id="oport-criterio" placeholder="Métrica concreta y medible">
+        </div>
+        <div>
+          <div class="fl">10. Riesgos principales</div>
+          <input class="fi" id="oport-riesgos" placeholder="Lo que podría salir mal">
+        </div>
+      </div>
+      <!-- Estado + Intake -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
         <div>
           <div class="fl">11. Estado</div>
           <select class="fi" id="oport-estado">
@@ -1653,7 +1662,34 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
           <input class="fi" id="oport-intake-por" placeholder="Nombre de quien procesó">
         </div>
       </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+
+      <!-- Archivos adjuntos -->
+      <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:12px;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:var(--tx2);margin-bottom:8px">📎 Archivos adjuntos <span style="font-weight:400;color:var(--tx3)">(PDF, Word, Excel, imágenes)</span></div>
+        <div id="oport-archivos-lista" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+        <label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--bl);padding:5px 10px;border:1px dashed var(--bl);border-radius:var(--r)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Agregar archivo
+          <input type="file" id="oport-file-input" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg" style="display:none" onchange="oportAgregarArchivos(this.files)">
+        </label>
+      </div>
+
+      <!-- Panel IA -->
+      <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);overflow:hidden;margin-bottom:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--b)">
+          <div style="font-size:12px;font-weight:600;color:var(--tx)">🤖 Agente analista</div>
+          <button class="btn sec" style="font-size:11px;padding:4px 12px" onclick="oportAnalizarAhora()">Analizar esta oportunidad</button>
+        </div>
+        <div id="oport-chat-msgs" style="max-height:320px;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:11px;color:var(--tx3);text-align:center;padding:20px">El agente conoce el estado financiero, los proyectos activos y el resto del pipeline. Pedile un análisis o hacé preguntas específicas.</div>
+        </div>
+        <div style="padding:8px 12px;border-top:1px solid var(--b);display:flex;gap:6px">
+          <input class="fi" id="oport-chat-input" placeholder="Preguntá algo o pedí un análisis completo..." style="flex:1;font-size:12px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();oportChatEnviar()}">
+          <button class="btn" style="font-size:12px;padding:6px 14px" onclick="oportChatEnviar()">Enviar</button>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end">
         <button class="btn sec" onclick="closeModal('modal-oportunidad')">Cancelar</button>
         <button class="btn" onclick="saveOportunidad()">Guardar</button>
       </div>
@@ -3135,7 +3171,7 @@ async function sb(path,opts={},retry=2){
 
 // ── STATE ──
 let tasks=[],users=[],cursos=[],alumnos=[],proveedores=[],instructores=[],plantillas=[],notifConfigs=[],oportunidades=[];
-let oportFilter='all';
+let oportFilter='all', oportArchivosTemp=[], oportChatHistorial=[];
 let inventario=[],invFilter="all",invSearch="",editInvId=null;
 let instSearch="",instActivo="";
 let curUser="",curF="all",curCat="",q="",aq="",cursoFilter="all";
@@ -13866,7 +13902,9 @@ function renderOportunidades(){
   }
   lista.innerHTML=rows.map(o=>{
     const est=OPORT_ESTADOS[o.estado]||OPORT_ESTADOS['Crudo'];
-    const linea=o.linea_negocio?`<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:6px;background:var(--bl)22;color:var(--bl)">Línea ${o.linea_negocio} — ${OPORT_LINEAS[o.linea_negocio]||o.linea_negocio}</span>`:"";
+    const linea=o.linea_negocio?`<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:6px;background:var(--bl)22;color:var(--bl)">${o.linea_negocio!=="Externo"?"Línea "+o.linea_negocio+" — ":""}${OPORT_LINEAS[o.linea_negocio]||o.linea_negocio}</span>`:"";
+    const tipo=o.tipo?`<span style="font-size:10px;padding:1px 7px;border-radius:6px;background:var(--surf2);color:var(--tx2);border:1px solid var(--b)">${o.tipo}</span>`:"";
+    const archivos=(o.archivos||[]).length?`<span style="font-size:10px;color:var(--tx3)">📎 ${(o.archivos||[]).length}</span>`:"";
     const fecha=o.created_at?new Date(o.created_at).toLocaleDateString("es-AR"):"";
     return `<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:14px 16px;margin-bottom:8px;cursor:pointer" onclick="openEditOportunidad('${o.id}')">
       <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">
@@ -13874,8 +13912,8 @@ function renderOportunidades(){
           <div style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:4px;line-height:1.4">${o.idea_cruda||"(sin descripción)"}</div>
           ${o.definicion?`<div style="font-size:11px;color:var(--tx2);margin-bottom:4px">${o.definicion}</div>`:""}
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-            ${linea}
-            ${o.ejecutor?`<span style="font-size:10px;color:var(--tx3)">Ejecutor: ${o.ejecutor}</span>`:""}
+            ${tipo}${linea}${archivos}
+            ${o.ejecutor?`<span style="font-size:10px;color:var(--tx3)">→ ${o.ejecutor}</span>`:""}
             ${fecha?`<span style="font-size:10px;color:var(--tx3)">${fecha}</span>`:""}
           </div>
         </div>
@@ -13888,14 +13926,25 @@ function renderOportunidades(){
   }).join("");
 }
 
-function openNuevaOportunidad(){
-  document.getElementById("oport-modal-title").textContent="Nueva Oportunidad";
-  document.getElementById("oport-edit-id").value="";
+function oportResetModal(){
+  oportArchivosTemp=[];
+  oportChatHistorial=[];
   ["oport-idea","oport-definicion","oport-audiencia","oport-encaje","oport-primer-paso",
    "oport-ejecutor","oport-decisor","oport-recursos","oport-criterio","oport-riesgos","oport-intake-por"]
     .forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
   document.getElementById("oport-linea").value="";
+  document.getElementById("oport-tipo").value="Proyecto";
   document.getElementById("oport-estado").value="Crudo";
+  document.getElementById("oport-archivos-lista").innerHTML="";
+  document.getElementById("oport-chat-msgs").innerHTML='<div style="font-size:11px;color:var(--tx3);text-align:center;padding:20px">El agente conoce el estado financiero, los proyectos activos y el resto del pipeline. Pedile un análisis o hacé preguntas específicas.</div>';
+  document.getElementById("oport-chat-input").value="";
+  const fi=document.getElementById("oport-file-input");if(fi)fi.value="";
+}
+
+function openNuevaOportunidad(){
+  document.getElementById("oport-modal-title").textContent="Nueva Oportunidad";
+  document.getElementById("oport-edit-id").value="";
+  oportResetModal();
   openModal("modal-oportunidad");
 }
 
@@ -13904,8 +13953,10 @@ function openEditOportunidad(id){
   if(!o)return;
   document.getElementById("oport-modal-title").textContent="Editar Oportunidad";
   document.getElementById("oport-edit-id").value=id;
+  oportResetModal();
   document.getElementById("oport-idea").value=o.idea_cruda||"";
   document.getElementById("oport-definicion").value=o.definicion||"";
+  document.getElementById("oport-tipo").value=o.tipo||"Proyecto";
   document.getElementById("oport-linea").value=o.linea_negocio||"";
   document.getElementById("oport-audiencia").value=o.audiencia||"";
   document.getElementById("oport-encaje").value=o.encaje_estrategico||"";
@@ -13917,6 +13968,9 @@ function openEditOportunidad(id){
   document.getElementById("oport-riesgos").value=o.riesgos||"";
   document.getElementById("oport-estado").value=o.estado||"Crudo";
   document.getElementById("oport-intake-por").value=o.intake_por||"";
+  // Mostrar archivos guardados
+  oportArchivosTemp=(o.archivos||[]).map(a=>({...a,isNew:false}));
+  oportRenderArchivos();
   openModal("modal-oportunidad");
 }
 
@@ -13924,8 +13978,11 @@ async function saveOportunidad(){
   const id=document.getElementById("oport-edit-id").value;
   const idea=document.getElementById("oport-idea").value.trim();
   if(!idea){toast("La idea en crudo es obligatoria","err");return;}
+  // Subir archivos nuevos al Storage
+  const archivosGuardados=await oportSubirArchivos(id||"tmp");
   const payload={
     idea_cruda:idea,
+    tipo:document.getElementById("oport-tipo").value||"Proyecto",
     definicion:document.getElementById("oport-definicion").value.trim(),
     linea_negocio:document.getElementById("oport-linea").value||null,
     audiencia:document.getElementById("oport-audiencia").value.trim(),
@@ -13938,6 +13995,7 @@ async function saveOportunidad(){
     riesgos:document.getElementById("oport-riesgos").value.trim(),
     estado:document.getElementById("oport-estado").value||"Crudo",
     intake_por:document.getElementById("oport-intake-por").value.trim(),
+    archivos:archivosGuardados,
     updated_at:new Date().toISOString(),
   };
   try{
@@ -13958,6 +14016,162 @@ async function saveOportunidad(){
     const activas=oportunidades.filter(o=>o.estado!=="Descartado"&&o.estado!=="Pausado").length;
     if(badge)badge.textContent=activas||"—";
   }catch(e){toast("Error: "+e.message,"err");}
+}
+
+// ── Archivos ──────────────────────────────────────────────────────────────────
+function oportAgregarArchivos(files){
+  for(const f of files){
+    oportArchivosTemp.push({nombre:f.nombre||f.name,tipo:f.type,tamaño:f.size,file:f,isNew:true,id:Date.now()+Math.random()});
+  }
+  oportRenderArchivos();
+  const fi=document.getElementById("oport-file-input");if(fi)fi.value="";
+}
+
+function oportRenderArchivos(){
+  const cont=document.getElementById("oport-archivos-lista");
+  if(!cont)return;
+  if(!oportArchivosTemp.length){cont.innerHTML="";return;}
+  cont.innerHTML=oportArchivosTemp.map((a,i)=>`
+    <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--bg);border:1px solid var(--b);border-radius:var(--r);font-size:11px">
+      <span style="color:var(--tx2)">${oportIconoArchivo(a.tipo||a.nombre)}</span>
+      <span style="color:var(--tx);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.nombre}</span>
+      ${a.isNew?'<span style="color:var(--ve);font-size:9px">nuevo</span>':''}
+      <button onclick="oportRemoveArchivo(${i})" style="background:none;border:none;cursor:pointer;color:var(--re);font-size:12px;padding:0 2px;line-height:1">✕</button>
+    </div>`).join("");
+}
+
+function oportIconoArchivo(tipoONombre){
+  const n=(tipoONombre||"").toLowerCase();
+  if(n.includes("pdf"))return "📄";
+  if(n.includes("word")||n.includes("docx")||n.includes("doc"))return "📝";
+  if(n.includes("excel")||n.includes("xlsx")||n.includes("xls")||n.includes("sheet"))return "📊";
+  if(n.includes("image")||n.includes("png")||n.includes("jpg")||n.includes("jpeg"))return "🖼️";
+  return "📎";
+}
+
+function oportRemoveArchivo(idx){
+  oportArchivosTemp.splice(idx,1);
+  oportRenderArchivos();
+}
+
+async function oportSubirArchivos(oportId){
+  // Archivos existentes (ya guardados, no isNew)
+  const existentes=oportArchivosTemp.filter(a=>!a.isNew).map(({nombre,tipo,tamaño,url})=>({nombre,tipo,tamaño,url}));
+  const nuevos=oportArchivosTemp.filter(a=>a.isNew&&a.file);
+  const subidos=[];
+  for(const a of nuevos){
+    try{
+      const path=`${oportId}/${Date.now()}_${a.nombre}`;
+      const resp=await fetch(`${window.SUPA_URL||'https://jppxmdvddvbsvymogvcp.supabase.co'}/storage/v1/object/oportunidades/${path}`,{
+        method:"POST",
+        headers:{"Authorization":`Bearer ${smxSession?.access_token}`,"Content-Type":a.tipo||"application/octet-stream","x-upsert":"true"},
+        body:a.file,
+      });
+      if(resp.ok){
+        const url=`https://jppxmdvddvbsvymogvcp.supabase.co/storage/v1/object/oportunidades/${path}`;
+        subidos.push({nombre:a.nombre,tipo:a.tipo,tamaño:a.tamaño,url});
+      }
+    }catch(_){}
+  }
+  return [...existentes,...subidos];
+}
+
+// ── Chat con agente ───────────────────────────────────────────────────────────
+function oportOportunidadActual(){
+  return {
+    id:document.getElementById("oport-edit-id").value||null,
+    idea_cruda:document.getElementById("oport-idea")?.value,
+    tipo:document.getElementById("oport-tipo")?.value,
+    definicion:document.getElementById("oport-definicion")?.value,
+    linea_negocio:document.getElementById("oport-linea")?.value,
+    audiencia:document.getElementById("oport-audiencia")?.value,
+    encaje_estrategico:document.getElementById("oport-encaje")?.value,
+    primer_paso:document.getElementById("oport-primer-paso")?.value,
+    ejecutor:document.getElementById("oport-ejecutor")?.value,
+    decisor:document.getElementById("oport-decisor")?.value,
+    recursos:document.getElementById("oport-recursos")?.value,
+    criterio_exito:document.getElementById("oport-criterio")?.value,
+    riesgos:document.getElementById("oport-riesgos")?.value,
+    estado:document.getElementById("oport-estado")?.value,
+  };
+}
+
+function oportAnalizarAhora(){
+  const idea=document.getElementById("oport-idea")?.value?.trim();
+  if(!idea){toast("Completá al menos la idea antes de analizar","err");return;}
+  document.getElementById("oport-chat-input").value="Dame un análisis completo de esta oportunidad.";
+  oportChatEnviar();
+}
+
+async function oportChatEnviar(){
+  const input=document.getElementById("oport-chat-input");
+  const msg=input.value.trim();
+  if(!msg)return;
+  input.value="";
+  const msgs=document.getElementById("oport-chat-msgs");
+
+  // Agregar mensaje del usuario
+  msgs.innerHTML+=`<div style="align-self:flex-end;background:var(--bl);color:#fff;border-radius:10px 10px 2px 10px;padding:7px 12px;font-size:12px;max-width:85%">${msg}</div>`;
+  const loading=document.createElement("div");
+  loading.style.cssText="align-self:flex-start;background:var(--surf2);border:1px solid var(--b);border-radius:10px 10px 10px 2px;padding:7px 12px;font-size:12px;color:var(--tx3)";
+  loading.textContent="Analizando...";
+  msgs.appendChild(loading);
+  msgs.scrollTop=msgs.scrollHeight;
+
+  // Leer archivos nuevos como base64/texto para el agente
+  const archivosParaAgente=[];
+  for(const a of oportArchivosTemp){
+    if(!a.file)continue;
+    try{
+      if(a.tipo==="application/pdf"||a.nombre?.toLowerCase().endsWith(".pdf")){
+        const b64=await oportLeerBase64(a.file);
+        archivosParaAgente.push({nombre:a.nombre,tipo:a.tipo,base64:b64});
+      } else if(a.tipo?.startsWith("image/")){
+        const b64=await oportLeerBase64(a.file);
+        archivosParaAgente.push({nombre:a.nombre,tipo:a.tipo,base64:b64});
+      } else {
+        // Intentar leer como texto
+        const texto=await oportLeerTexto(a.file);
+        archivosParaAgente.push({nombre:a.nombre,tipo:a.tipo,contenido_texto:texto});
+      }
+    }catch(_){}
+  }
+
+  try{
+    const r=await fetch(`${SB}/functions/v1/agente-oportunidades`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${smxSession?.access_token||KEY}`},
+      body:JSON.stringify({message:msg,historial:oportChatHistorial,oportunidad:oportOportunidadActual(),archivos:archivosParaAgente}),
+    });
+    const resp=await r.json();
+    const texto=resp.respuesta||resp.error||"Sin respuesta";
+    oportChatHistorial.push({role:"user",content:msg});
+    oportChatHistorial.push({role:"assistant",content:texto});
+    loading.style.cssText="align-self:flex-start;background:var(--surf2);border:1px solid var(--b);border-radius:10px 10px 10px 2px;padding:8px 12px;font-size:12px;color:var(--tx);max-width:90%;line-height:1.5";
+    loading.innerHTML=typeof marked!=="undefined"?marked.parse(texto):texto.replace(/\n/g,"<br>");
+  }catch(e){
+    loading.style.color="var(--re)";
+    loading.textContent="Error: "+e.message;
+  }
+  msgs.scrollTop=msgs.scrollHeight;
+}
+
+function oportLeerBase64(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=e=>res(e.target.result.split(",")[1]);
+    r.onerror=rej;
+    r.readAsDataURL(file);
+  });
+}
+
+function oportLeerTexto(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=e=>res(e.target.result);
+    r.onerror=rej;
+    r.readAsText(file,"utf-8");
+  });
 }
 
 // ══ COTIZACIONES ══

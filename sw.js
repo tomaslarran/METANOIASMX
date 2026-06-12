@@ -1,4 +1,4 @@
-const CACHE = 'metanoia-v17';
+const CACHE = 'metanoia-v18';
 const ASSETS = [
   '/',
   '/index.html'
