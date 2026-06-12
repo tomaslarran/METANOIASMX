@@ -1981,10 +1981,16 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         </div>
         <div id="cot-via-desc" style="font-size:11px;color:var(--tx3);padding:6px 10px;background:var(--bg);border-radius:var(--r);line-height:1.5;border-left:3px solid var(--bl)"></div>
       </div>
-      <!-- Fila 1: cliente + contacto -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <!-- Fila 1: cliente + contacto + curso -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
         <div><div class="fl">Cliente / Institución *</div><input class="fi" id="cot-cliente" placeholder="Hospital, clínica o persona"></div>
         <div><div class="fl">Contacto</div><input class="fi" id="cot-contacto" placeholder="Nombre, email o teléfono"></div>
+      </div>
+      <div style="margin-bottom:12px">
+        <div class="fl">Curso asociado <span style="color:var(--tx3);font-weight:400">(opcional)</span></div>
+        <select class="fi" id="cot-curso-sel" style="width:100%">
+          <option value="">— Sin curso asociado —</option>
+        </select>
       </div>
       <!-- Fila 2: parámetros según vía -->
       <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;padding:12px;background:var(--bg2);border-radius:var(--rlg)">
@@ -4001,6 +4007,7 @@ async function selectCurso(id){
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-costos-${id}')">💰 Costos (${costosCurso.filter(c=>c.aplica).length})</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-instmat-${id}');loadInstMat('${id}')">👥 Instructores y materiales</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-inscriptos-${id}');loadInscriptos('${id}')">📋 Inscriptos</div>
+      <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-cotiz-${id}');loadCursoCotizaciones('${id}')">💼 Cotizaciones</div>
     </div>
     <div class="cd-body">
       <div id="cd-info-${id}">
@@ -4073,6 +4080,9 @@ async function selectCurso(id){
       <div id="cd-inscriptos-${id}" style="display:none">
         <div id="inscriptos-content-${id}" style="padding:4px 0"></div>
       </div>
+      <div id="cd-cotiz-${id}" style="display:none">
+        <div id="cotiz-curso-content-${id}" style="padding:4px 0"><div style="color:var(--tx3);padding:24px;text-align:center">Cargando...</div></div>
+      </div>
     </div>
   </div>`;
   det.scrollIntoView({behavior:"smooth",block:"start"});
@@ -4086,6 +4096,44 @@ function showCdTab(btn,targetId){
   document.getElementById(targetId).style.display="block";
   btn.closest(".cd-tabs").querySelectorAll(".cd-tab").forEach(t=>t.classList.remove("on"));
   btn.classList.add("on");
+}
+
+async function loadCursoCotizaciones(cursoId){
+  const cont=document.getElementById(`cotiz-curso-content-${cursoId}`);
+  if(!cont)return;
+  try{
+    const rows=await sb(`cotizaciones?curso_id=eq.${cursoId}&select=*&order=created_at.desc`);
+    if(!rows.length){
+      cont.innerHTML='<div style="color:var(--tx3);padding:24px;text-align:center">No hay cotizaciones asociadas a este curso</div>'+
+        `<div style="text-align:center;margin-top:8px"><button class="btn" onclick="openNuevaCotizacionParaCurso('${cursoId}')">+ Nueva cotización</button></div>`;
+      return;
+    }
+    const col={borrador:"var(--tx3)",enviada:"var(--am)",aceptada:"var(--ve)",rechazada:"var(--re)"};
+    cont.innerHTML=`<div style="margin-bottom:10px;text-align:right"><button class="btn" onclick="openNuevaCotizacionParaCurso('${cursoId}')">+ Nueva cotización</button></div>`+
+      `<div class="tbl-wrap"><table class="tbl"><thead><tr>
+        <th>N°</th><th>Vía</th><th>Cliente</th><th>Total USD</th><th>Total ARS</th><th>Estado</th><th></th>
+      </tr></thead><tbody>${rows.map(c=>`<tr>
+        <td style="font-family:monospace;font-size:12px">${c.numero||"—"}</td>
+        <td><span style="font-size:11px;font-weight:700;color:${c.via==="PEV"?"var(--am)":"var(--bl)"}">${c.via==="PEV"?"PEV "+(c.pev_etapa||""):"Vía "+(c.via||"A")}</span></td>
+        <td>${c.cliente||"—"}</td>
+        <td>USD ${(c.total_usd||0).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+        <td>$${(c.total_ars||0).toLocaleString("es-AR",{maximumFractionDigits:0})}</td>
+        <td><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:8px;background:${col[c.estado]||"var(--tx3)"}22;color:${col[c.estado]||"var(--tx3)"}">${c.estado||"—"}</span></td>
+        <td><div style="display:flex;gap:4px">
+          <button class="btn sm sec" onclick="exportarCotizPDF('${c.id}')">PDF</button>
+          <button class="btn sm sec" onclick="goPage('cotizaciones',document.getElementById('nav-cotizaciones'))">Ver en módulo</button>
+        </div></td>
+      </tr>`).join("")}</tbody></table></div>`;
+  }catch(e){cont.innerHTML=`<div style="color:var(--re);padding:16px">Error: ${e.message}</div>`;}
+}
+
+function openNuevaCotizacionParaCurso(cursoId){
+  goPage('cotizaciones',document.getElementById('nav-cotizaciones'));
+  setTimeout(()=>{
+    openNuevaCotizacion();
+    const sel=document.getElementById("cot-curso-sel");
+    if(sel)sel.value=cursoId;
+  },150);
 }
 
 // ── INSTRUCTORES Y MATERIALES DE CURSO ──────────────────────────────
@@ -13762,12 +13810,20 @@ function renderCotizaciones(){
   </tr>`).join("")}</tbody></table></div>`;
 }
 
+function cotizPopularCursos(selectedId=""){
+  const sel=document.getElementById("cot-curso-sel");
+  if(!sel)return;
+  sel.innerHTML='<option value="">— Sin curso asociado —</option>'+
+    cursos.map(c=>`<option value="${c.id}"${c.id===selectedId?" selected":""}>${c.nombre||"(sin nombre)"}</option>`).join("");
+}
+
 function openNuevaCotizacion(){
   cotizItems=[];
   cotizPevItems=[];
   document.getElementById("cot-modal-title").textContent="Nueva Cotización";
   document.getElementById("cot-edit-id").value="";
   ["cot-cliente","cot-contacto","cot-notas"].forEach(id=>document.getElementById(id).value="");
+  cotizPopularCursos("");
   document.getElementById("cot-tc").value=nomParams.TC_USD_ARS||1400;
   document.getElementById("cot-afl").value=0;
   document.getElementById("cot-ext").value=0;
@@ -13793,6 +13849,7 @@ function openEditCotizacion(id){
   cotizPevItems=JSON.parse(JSON.stringify(c.pev_items||[]));
   document.getElementById("cot-modal-title").textContent=`Cotización ${c.numero||""}`;
   document.getElementById("cot-edit-id").value=id;
+  cotizPopularCursos(c.curso_id||"");
   document.getElementById("cot-cliente").value=c.cliente||"";
   document.getElementById("cot-contacto").value=c.contacto||"";
   document.getElementById("cot-notas").value=c.notas||"";
@@ -14161,6 +14218,7 @@ async function saveCotizacion(estado){
     via:cotizVia,items:cotizVia==="PEV"?[]:cotizItems,
     pev_items:cotizVia==="PEV"?cotizPevItems:[],
     pev_etapa,
+    curso_id:document.getElementById("cot-curso-sel")?.value||null,
     alumnos_afiliados:afl,alumnos_externos:ext,
     participantes,grupos,insumos_usd:insumos,
     subtotal_usd:parseFloat(subtotal.toFixed(2)),
