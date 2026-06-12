@@ -934,6 +934,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="sitem ssub" onclick="goTo('rutinas',document.getElementById('nav-rutinas'));setRutinaFilter('Mensual')">Mensuales</div>
       <div class="sitem ssub" onclick="goTo('rutinas',document.getElementById('nav-rutinas'));setRutinaFilter('Semanal')">Semanales</div>
       <div class="sitem ssub" onclick="goTo('rutinas',document.getElementById('nav-rutinas'));setRutinaFilter('Anual')">Anuales</div>
+      <div class="sitem" onclick="goPage('oportunidades',this)" id="nav-oportunidades">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        Oportunidades
+        <span class="sitem-badge" id="badge-oportunidades">—</span>
+      </div>
     </div>
   </div>
   <div class="sgroup" id="sg-finanzas">
@@ -1534,6 +1539,126 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
   <!-- Lista de rutinas -->
   <div id="rutinas-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando rutinas...</div></div></div>
+</div>
+
+<!-- ══ OPORTUNIDADES ══ -->
+<div id="pg-oportunidades" style="display:none">
+  <div class="pgh">
+    <div class="pgh-left">
+      <div class="pgt">Intake de Oportunidades</div>
+      <div class="pgs">Ideas y proyectos nuevos — Mario origina, Amparo procesa</div>
+    </div>
+    <div class="pgh-right">
+      <button class="btn" onclick="openNuevaOportunidad()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nueva oportunidad
+      </button>
+    </div>
+  </div>
+  <!-- Filtros estado -->
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
+    <button class="fb on" onclick="setOportFilter('all',this)">Todas</button>
+    <button class="fb" onclick="setOportFilter('Crudo',this)" style="--c:var(--tx3)">Crudo</button>
+    <button class="fb" onclick="setOportFilter('En estructuración',this)" style="--c:var(--am)">En estructuración</button>
+    <button class="fb" onclick="setOportFilter('En ejecución',this)" style="--c:var(--ve)">En ejecución</button>
+    <button class="fb" onclick="setOportFilter('Pausado',this)" style="--c:var(--bl)">Pausado</button>
+    <button class="fb" onclick="setOportFilter('Descartado',this)" style="--c:var(--re)">Descartado</button>
+  </div>
+  <div id="oport-lista"></div>
+</div>
+
+<!-- Modal oportunidad -->
+<div class="mov" id="modal-oportunidad" onclick="if(event.target===this)closeModal('modal-oportunidad')">
+  <div class="mbox" style="width:min(780px,96vw);max-height:92vh;overflow-y:auto;background:var(--bg2);border-radius:var(--rl);border:1px solid var(--b2)">
+    <div class="mh"><div class="mt" id="oport-modal-title">Nueva Oportunidad</div><button class="mc" onclick="closeModal('modal-oportunidad')">✕</button></div>
+    <div class="mb">
+      <input type="hidden" id="oport-edit-id">
+      <!-- Sección 1: La idea -->
+      <div style="font-size:11px;font-weight:700;color:var(--bl);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">La idea</div>
+      <div style="margin-bottom:10px">
+        <div class="fl">1. Idea en crudo <span style="color:var(--re)">*</span></div>
+        <textarea class="fta" id="oport-idea" placeholder="Texto literal de cómo llegó la idea, sin filtrar..." rows="3"></textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <div class="fl">2. ¿Qué es concretamente?</div>
+          <input class="fi" id="oport-definicion" placeholder="Curso / contenido / alianza / producto / mixto">
+        </div>
+        <div>
+          <div class="fl">3. Línea de negocio</div>
+          <select class="fi" id="oport-linea">
+            <option value="">— Seleccioná —</option>
+            <option value="A">A — MSP Convenio</option>
+            <option value="B">B — Colmedsa</option>
+            <option value="C">C — Cursos comerciales</option>
+            <option value="D">D — COFRADIA</option>
+            <option value="Transversal">Transversal</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <div class="fl">4. ¿A quién sirve?</div>
+        <input class="fi" id="oport-audiencia" placeholder="Residentes, especialistas, equipos, instituciones...">
+      </div>
+      <!-- Sección 2: Encaje -->
+      <div style="font-size:11px;font-weight:700;color:var(--bl);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px">Encaje estratégico</div>
+      <div style="margin-bottom:10px">
+        <div class="fl">5. Encaje estratégico <span style="font-size:10px;color:var(--tx3)">(autoridad académica / autonomía financiera / comunidad)</span></div>
+        <textarea class="fta" id="oport-encaje" placeholder="¿A qué objetivo suma? Si no suma a ninguno → descartar." rows="2"></textarea>
+      </div>
+      <div style="margin-bottom:10px">
+        <div class="fl">6. Primer paso testeable</div>
+        <input class="fi" id="oport-primer-paso" placeholder="Acción mínima y barata para validar antes de comprometer recursos">
+      </div>
+      <!-- Sección 3: Ejecución -->
+      <div style="font-size:11px;font-weight:700;color:var(--bl);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px">Ejecución</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <div class="fl">7. ¿Quién ejecuta?</div>
+          <input class="fi" id="oport-ejecutor" placeholder="Executor responsable">
+        </div>
+        <div>
+          <div class="fl">7b. ¿Quién decide?</div>
+          <input class="fi" id="oport-decisor" placeholder="Decisor final">
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <div class="fl">8. Recursos y costo estimado</div>
+        <textarea class="fta" id="oport-recursos" placeholder="Tiempo, dinero, equipamiento, instructores necesarios..." rows="2"></textarea>
+      </div>
+      <!-- Sección 4: Validación -->
+      <div style="font-size:11px;font-weight:700;color:var(--bl);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px">Validación y riesgos</div>
+      <div style="margin-bottom:10px">
+        <div class="fl">9. Criterio de éxito</div>
+        <input class="fi" id="oport-criterio" placeholder="Una métrica concreta y medible">
+      </div>
+      <div style="margin-bottom:10px">
+        <div class="fl">10. Riesgos</div>
+        <textarea class="fta" id="oport-riesgos" placeholder="Lo que podría salir mal — honestidad brutal..." rows="2"></textarea>
+      </div>
+      <!-- Estado -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <div class="fl">11. Estado</div>
+          <select class="fi" id="oport-estado">
+            <option value="Crudo">Crudo</option>
+            <option value="En estructuración">En estructuración</option>
+            <option value="En ejecución">En ejecución</option>
+            <option value="Pausado">Pausado</option>
+            <option value="Descartado">Descartado</option>
+          </select>
+        </div>
+        <div>
+          <div class="fl">12. ¿Quién hizo el intake?</div>
+          <input class="fi" id="oport-intake-por" placeholder="Nombre de quien procesó">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+        <button class="btn sec" onclick="closeModal('modal-oportunidad')">Cancelar</button>
+        <button class="btn" onclick="saveOportunidad()">Guardar</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ══ CASH FLOW ══ -->
@@ -3009,7 +3134,8 @@ async function sb(path,opts={},retry=2){
 }
 
 // ── STATE ──
-let tasks=[],users=[],cursos=[],alumnos=[],proveedores=[],instructores=[],plantillas=[],notifConfigs=[];
+let tasks=[],users=[],cursos=[],alumnos=[],proveedores=[],instructores=[],plantillas=[],notifConfigs=[],oportunidades=[];
+let oportFilter='all';
 let inventario=[],invFilter="all",invSearch="",editInvId=null;
 let instSearch="",instActivo="";
 let curUser="",curF="all",curCat="",q="",aq="",cursoFilter="all";
@@ -3624,6 +3750,7 @@ function goPage(name,el){
   if(name==="cuentas")loadCuentasPage();
   if(name==="cotizaciones")loadCotizacionesPage();
   if(name==="reportes")initReportesPage();
+  if(name==="oportunidades")loadOportunidades();
 }
 function goTo(name,el){goPage(name,el)}
 function renderNotifPage(){
@@ -13698,6 +13825,139 @@ async function comGenerarPrompt(){
     toast("Prompt generado ✓","ok");
   }catch(e){toast("Error: "+e.message,"err");}
   btn.disabled=false;btn.textContent="✨ Generar prompt con IA";
+}
+
+// ══ OPORTUNIDADES ══
+const OPORT_ESTADOS={
+  'Crudo':          {color:'var(--tx3)',  bg:'var(--tx3)22'},
+  'En estructuración':{color:'var(--am)', bg:'var(--am)22'},
+  'En ejecución':   {color:'var(--ve)',   bg:'var(--ve)22'},
+  'Pausado':        {color:'var(--bl)',   bg:'var(--bl)22'},
+  'Descartado':     {color:'var(--re)',   bg:'var(--re)22'},
+};
+const OPORT_LINEAS={A:'MSP Convenio',B:'Colmedsa',C:'Cursos',D:'COFRADIA',Transversal:'Transversal'};
+
+async function loadOportunidades(){
+  try{
+    oportunidades=await sb("oportunidades?select=*&order=created_at.desc");
+    renderOportunidades();
+    const badge=document.getElementById("badge-oportunidades");
+    const activas=oportunidades.filter(o=>o.estado!=="Descartado"&&o.estado!=="Pausado").length;
+    if(badge)badge.textContent=activas||"—";
+  }catch(e){
+    document.getElementById("oport-lista").innerHTML=`<div style="color:var(--re);padding:24px">Error al cargar: ${e.message}</div>`;
+  }
+}
+
+function setOportFilter(f,btn){
+  oportFilter=f;
+  document.querySelectorAll("#pg-oportunidades .fb").forEach(b=>b.classList.remove("on"));
+  if(btn)btn.classList.add("on");
+  renderOportunidades();
+}
+
+function renderOportunidades(){
+  const lista=document.getElementById("oport-lista");
+  if(!lista)return;
+  const rows=oportFilter==="all"?oportunidades:oportunidades.filter(o=>o.estado===oportFilter);
+  if(!rows.length){
+    lista.innerHTML='<div style="color:var(--tx3);padding:40px;text-align:center">No hay oportunidades en este estado</div>';
+    return;
+  }
+  lista.innerHTML=rows.map(o=>{
+    const est=OPORT_ESTADOS[o.estado]||OPORT_ESTADOS['Crudo'];
+    const linea=o.linea_negocio?`<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:6px;background:var(--bl)22;color:var(--bl)">Línea ${o.linea_negocio} — ${OPORT_LINEAS[o.linea_negocio]||o.linea_negocio}</span>`:"";
+    const fecha=o.created_at?new Date(o.created_at).toLocaleDateString("es-AR"):"";
+    return `<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:14px 16px;margin-bottom:8px;cursor:pointer" onclick="openEditOportunidad('${o.id}')">
+      <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:4px;line-height:1.4">${o.idea_cruda||"(sin descripción)"}</div>
+          ${o.definicion?`<div style="font-size:11px;color:var(--tx2);margin-bottom:4px">${o.definicion}</div>`:""}
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            ${linea}
+            ${o.ejecutor?`<span style="font-size:10px;color:var(--tx3)">Ejecutor: ${o.ejecutor}</span>`:""}
+            ${fecha?`<span style="font-size:10px;color:var(--tx3)">${fecha}</span>`:""}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+          <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;background:${est.bg};color:${est.color};white-space:nowrap">${o.estado||"Crudo"}</span>
+          ${o.primer_paso?`<span style="font-size:10px;color:var(--tx3);text-align:right;max-width:180px">→ ${o.primer_paso}</span>`:""}
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function openNuevaOportunidad(){
+  document.getElementById("oport-modal-title").textContent="Nueva Oportunidad";
+  document.getElementById("oport-edit-id").value="";
+  ["oport-idea","oport-definicion","oport-audiencia","oport-encaje","oport-primer-paso",
+   "oport-ejecutor","oport-decisor","oport-recursos","oport-criterio","oport-riesgos","oport-intake-por"]
+    .forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  document.getElementById("oport-linea").value="";
+  document.getElementById("oport-estado").value="Crudo";
+  openModal("modal-oportunidad");
+}
+
+function openEditOportunidad(id){
+  const o=oportunidades.find(x=>x.id===id);
+  if(!o)return;
+  document.getElementById("oport-modal-title").textContent="Editar Oportunidad";
+  document.getElementById("oport-edit-id").value=id;
+  document.getElementById("oport-idea").value=o.idea_cruda||"";
+  document.getElementById("oport-definicion").value=o.definicion||"";
+  document.getElementById("oport-linea").value=o.linea_negocio||"";
+  document.getElementById("oport-audiencia").value=o.audiencia||"";
+  document.getElementById("oport-encaje").value=o.encaje_estrategico||"";
+  document.getElementById("oport-primer-paso").value=o.primer_paso||"";
+  document.getElementById("oport-ejecutor").value=o.ejecutor||"";
+  document.getElementById("oport-decisor").value=o.decisor||"";
+  document.getElementById("oport-recursos").value=o.recursos||"";
+  document.getElementById("oport-criterio").value=o.criterio_exito||"";
+  document.getElementById("oport-riesgos").value=o.riesgos||"";
+  document.getElementById("oport-estado").value=o.estado||"Crudo";
+  document.getElementById("oport-intake-por").value=o.intake_por||"";
+  openModal("modal-oportunidad");
+}
+
+async function saveOportunidad(){
+  const id=document.getElementById("oport-edit-id").value;
+  const idea=document.getElementById("oport-idea").value.trim();
+  if(!idea){toast("La idea en crudo es obligatoria","err");return;}
+  const payload={
+    idea_cruda:idea,
+    definicion:document.getElementById("oport-definicion").value.trim(),
+    linea_negocio:document.getElementById("oport-linea").value||null,
+    audiencia:document.getElementById("oport-audiencia").value.trim(),
+    encaje_estrategico:document.getElementById("oport-encaje").value.trim(),
+    primer_paso:document.getElementById("oport-primer-paso").value.trim(),
+    ejecutor:document.getElementById("oport-ejecutor").value.trim(),
+    decisor:document.getElementById("oport-decisor").value.trim(),
+    recursos:document.getElementById("oport-recursos").value.trim(),
+    criterio_exito:document.getElementById("oport-criterio").value.trim(),
+    riesgos:document.getElementById("oport-riesgos").value.trim(),
+    estado:document.getElementById("oport-estado").value||"Crudo",
+    intake_por:document.getElementById("oport-intake-por").value.trim(),
+    updated_at:new Date().toISOString(),
+  };
+  try{
+    if(id){
+      await sb(`oportunidades?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(payload)});
+      const idx=oportunidades.findIndex(o=>o.id===id);
+      if(idx>=0)oportunidades[idx]={...oportunidades[idx],...payload};
+      toast("Oportunidad actualizada","ok");
+    } else {
+      payload.cargado_por=loggedUser?.id;
+      const [created]=await sb("oportunidades",{method:"POST",body:JSON.stringify(payload)});
+      if(created)oportunidades.unshift(created);
+      toast("Oportunidad guardada","ok");
+    }
+    closeModal("modal-oportunidad");
+    renderOportunidades();
+    const badge=document.getElementById("badge-oportunidades");
+    const activas=oportunidades.filter(o=>o.estado!=="Descartado"&&o.estado!=="Pausado").length;
+    if(badge)badge.textContent=activas||"—";
+  }catch(e){toast("Error: "+e.message,"err");}
 }
 
 // ══ COTIZACIONES ══
