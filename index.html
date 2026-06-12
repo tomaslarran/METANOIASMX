@@ -1999,21 +1999,19 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
           <div><div class="fl">Insumos adicionales (USD)</div><input class="fi" id="cot-insumos" type="number" min="0" value="0" style="width:110px" oninput="cotizCalc()"></div>
         </div>
       </div>
-      <!-- Agregar item del catálogo -->
-      <div style="margin-bottom:8px;display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-        <div style="flex:1;min-width:200px;position:relative">
-          <div class="fl">Actividad del catálogo</div>
-          <input class="fi" id="cot-item-search" placeholder="Buscar por nombre o código..." autocomplete="off"
-            style="width:100%" oninput="cotizFiltrarCatalogo(this.value)"
-            onfocus="cotizFiltrarCatalogo(this.value)"
-            onblur="setTimeout(()=>{const d=document.getElementById('cot-dd');if(d)d.style.display='none'},200)">
-          <div id="cot-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:400;
-            background:var(--bg);border:1px solid var(--b);border-radius:var(--r);
-            max-height:280px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.18);padding:4px"></div>
-          <input type="hidden" id="cot-item-sel" value="">
+      <!-- Selector de catálogo estilo cards -->
+      <div style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--rlg);padding:12px;margin-bottom:10px">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+          <input class="fi" id="cot-item-search" placeholder="Buscar actividad..." autocomplete="off"
+            style="flex:1;min-width:140px" oninput="cotizFiltrarCatalogo(this.value)">
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+            <span style="font-size:12px;color:var(--tx3)">Horas</span>
+            <input class="fi" id="cot-item-horas" type="number" min="0.5" step="0.5" value="1" style="width:68px;text-align:center" oninput="cotizPreviewItem()">
+            <button class="btn pri" onclick="cotizAddItem()" style="padding:7px 14px;white-space:nowrap">+ Agregar</button>
+          </div>
         </div>
-        <div><div class="fl">Horas</div><input class="fi" id="cot-item-horas" type="number" min="0.5" step="0.5" value="1" style="width:75px" oninput="cotizPreviewItem()"></div>
-        <button class="btn pri" onclick="cotizAddItem()" style="padding:8px 16px">+ Agregar</button>
+        <div id="cot-dd" style="display:flex;flex-direction:column;gap:4px;max-height:220px;overflow-y:auto;padding-right:2px"></div>
+        <input type="hidden" id="cot-item-sel" value="">
       </div>
       <!-- Preview del item seleccionado -->
       <div id="cot-item-preview" style="display:none;margin-bottom:12px;padding:8px 12px;background:var(--surf2);border-radius:var(--r);font-size:12px;color:var(--tx2);border:1px solid var(--b)"></div>
@@ -13713,6 +13711,7 @@ function openNuevaCotizacion(){
   document.getElementById("cot-item-preview").style.display="none";
   document.getElementById("cot-btn-pdf").style.display="none";
   setCotizVia("A");
+  cotizFiltrarCatalogo("");
   renderCotizItemsTable();
   cotizCalc();
   openModal("modal-cotizacion");
@@ -13738,6 +13737,7 @@ function openEditCotizacion(id){
   document.getElementById("cot-item-preview").style.display="none";
   document.getElementById("cot-btn-pdf").style.display="";
   setCotizVia(c.via||"A");
+  cotizFiltrarCatalogo("");
   renderCotizItemsTable();
   cotizCalc();
   openModal("modal-cotizacion");
@@ -13754,6 +13754,7 @@ function setCotizVia(via){
     ?"<strong>Vía A</strong>: Colmedsa organiza y avala el curso. SUDES actúa como proveedor de simulación. El precio para alumnos afiliados tiene descuento; los externos pagan canon del 10% a CM. Usá cuando el cliente es el propio Colegio Médico."
     :"<strong>Vía B</strong>: SUDES organiza el curso y presta el servicio directamente a Colmedsa. La tarifa por hora incluye instructor, amortización de equipos, overhead (15%) y margen (40%). Usá cuando facturás a CM por horas de servicio.";
   document.getElementById("cot-via-desc").innerHTML=desc;
+  cotizFiltrarCatalogo(document.getElementById("cot-item-search")?.value||"");
   renderCotizItemsTable();
   cotizCalc();
 }
@@ -13783,6 +13784,7 @@ function cotizAddItem(){
   document.getElementById("cot-item-search").value="";
   document.getElementById("cot-item-preview").style.display="none";
   document.getElementById("cot-item-horas").value=1;
+  cotizFiltrarCatalogo("");
   renderCotizItemsTable();
   cotizCalc();
 }
@@ -13790,44 +13792,43 @@ function cotizAddItem(){
 function cotizFiltrarCatalogo(q){
   const dd=document.getElementById("cot-dd");
   if(!dd)return;
-  const filtrados=nomCatalogo.filter(it=>{
-    if(!q)return true;
-    const s=q.toLowerCase();
-    return it.descripcion.toLowerCase().includes(s)||it.codigo.toLowerCase().includes(s);
-  });
-  const p=nomParams;
+  const s=(q||"").toLowerCase();
+  const filtrados=nomCatalogo.filter(it=>
+    !s||it.descripcion.toLowerCase().includes(s)||it.codigo.toLowerCase().includes(s)
+  );
   const tipoBadge={PRC:"var(--tx2)",SIM:"var(--bl)",CUR:"var(--ve)",ABO:"var(--am)",EVT:"var(--re)"};
+  const selCod=document.getElementById("cot-item-sel")?.value||"";
   if(!filtrados.length){
-    dd.innerHTML='<div style="padding:12px 14px;color:var(--tx3);font-size:13px">Sin resultados</div>';
-  } else {
-    dd.innerHTML=filtrados.map(it=>{
-      const color=tipoBadge[it.tipo]||"var(--tx3)";
-      const tarifaB=cotizVia==="B"?`<span style="color:var(--bl);font-weight:600">$${cotizTarifaViaB(it.nivel).toFixed(0)}/h</span>`:"";
-      const precioA=cotizVia==="A"
-        ?`<span style="color:var(--ve)">Afl $${(it.precio_afiliado_usd||0).toFixed(0)}</span> · <span style="color:var(--am)">Ext $${(it.precio_externo_usd||0).toFixed(0)}</span>`
-        :"";
-      return `<div style="padding:8px 10px;cursor:pointer;border-radius:var(--r);margin-bottom:2px;
-          background:var(--surf2);border:1px solid var(--b);transition:background .1s"
-        onmousedown="cotizSeleccionarItem('${it.codigo}')"
-        onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='var(--surf2)'">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
-          <span style="font-family:monospace;font-size:11px;font-weight:700;color:${color}">${it.codigo}</span>
-          <span style="font-size:11px;color:var(--tx3)">N${it.nivel} · ${it.modalidad}</span>
-          <span style="margin-left:auto;font-size:11px">${tarifaB}${precioA}</span>
-        </div>
-        <div style="font-size:13px;color:var(--tx)">${it.descripcion}</div>
-      </div>`;
-    }).join("");
+    dd.innerHTML='<div style="padding:12px;color:var(--tx3);font-size:13px;text-align:center">Sin resultados</div>';
+    return;
   }
-  dd.style.display="block";
+  dd.innerHTML=filtrados.map(it=>{
+    const color=tipoBadge[it.tipo]||"var(--tx3)";
+    const sel=it.codigo===selCod;
+    const tarifaB=cotizVia==="B"?`<span style="color:var(--bl);font-weight:600">$${cotizTarifaViaB(it.nivel).toFixed(0)}/h</span>`:"";
+    const precioA=cotizVia==="A"
+      ?`<span style="color:var(--ve)">Afl $${(it.precio_afiliado_usd||0).toFixed(0)}</span><span style="color:var(--tx3)"> · </span><span style="color:var(--am)">Ext $${(it.precio_externo_usd||0).toFixed(0)}</span>`
+      :"";
+    const bg=sel?"var(--bl-bg,rgba(99,102,241,.12))":"var(--surf)";
+    const border=sel?"1px solid var(--bl)":"1px solid var(--b)";
+    return `<div style="padding:8px 12px;cursor:pointer;border-radius:var(--r);background:${bg};border:${border};transition:background .1s"
+      onclick="cotizSeleccionarItem('${it.codigo}')"
+      onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='${bg}'">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span style="font-family:monospace;font-size:11px;font-weight:700;color:${color}">${it.codigo}</span>
+        <span style="font-size:11px;color:var(--tx3)">N${it.nivel} · ${it.modalidad}</span>
+        <span style="margin-left:auto;font-size:11px">${tarifaB}${precioA}</span>
+      </div>
+      <div style="font-size:12px;color:var(--tx);margin-top:2px">${it.descripcion}</div>
+    </div>`;
+  }).join("");
 }
 
 function cotizSeleccionarItem(codigo){
   const item=nomCatalogo.find(x=>x.codigo===codigo);
   if(!item)return;
-  document.getElementById("cot-item-search").value=`${item.codigo} — ${item.descripcion}`;
   document.getElementById("cot-item-sel").value=codigo;
-  document.getElementById("cot-dd").style.display="none";
+  cotizFiltrarCatalogo(document.getElementById("cot-item-search")?.value||"");
   cotizPreviewItem();
 }
 
