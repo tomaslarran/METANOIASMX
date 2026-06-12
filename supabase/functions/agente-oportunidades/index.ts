@@ -20,7 +20,7 @@ serve(async (req) => {
     // ── Recopilar contexto de todos los dominios en paralelo ──────────────────
     const [
       cajaMov, cfInversiones, cfPrestamos, cfConceptos,
-      cursosActivos, otrasOportunidades,
+      cursosActivos, otrasOportunidades, reunionesRecientes,
     ] = await Promise.all([
       supabase.from("caja_movimientos")
         .select("sociedad,fecha,tipo,concepto,monto")
@@ -44,6 +44,11 @@ serve(async (req) => {
         .neq("id", oportunidad.id || "00000000-0000-0000-0000-000000000000")
         .neq("estado", "Descartado")
         .limit(20),
+      supabase.from("reuniones")
+        .select("id,titulo,fecha,participantes,resumen,decisiones,tareas_extraidas,proximos_pasos")
+        .eq("estado", "listo")
+        .order("fecha", { ascending: false })
+        .limit(15),
     ]);
 
     // ── Calcular resumen financiero ───────────────────────────────────────────
@@ -83,6 +88,17 @@ ${JSON.stringify(cursosActivos.data ?? [], null, 2)}
 
 ## OTRAS OPORTUNIDADES EN PIPELINE
 ${JSON.stringify(otrasOportunidades.data ?? [], null, 2)}
+
+## REUNIONES RECIENTES (decisiones y compromisos relevantes)
+${JSON.stringify((reunionesRecientes.data ?? []).map((r: any) => ({
+  titulo: r.titulo,
+  fecha: r.fecha,
+  participantes: r.participantes,
+  resumen: r.resumen,
+  decisiones: r.decisiones,
+  tareas_extraidas: r.tareas_extraidas,
+  proximos_pasos: r.proximos_pasos,
+})), null, 2)}
 
 ## OPORTUNIDAD EN ANÁLISIS
 ${oportunidad.idea_cruda ? `

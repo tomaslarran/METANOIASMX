@@ -1059,12 +1059,29 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
 <!-- ══ REUNIONES ══ -->
 <div id="pg-reuniones" style="display:none">
-  <div class="pg-header">
-    <div>
-      <h1 class="pg-title">🎙️ Reuniones</h1>
-      <p class="pg-sub">Transcripción y análisis automático con IA</p>
+  <div class="pgh">
+    <div class="pgh-left">
+      <div class="pgt">🎙️ Reuniones</div>
+      <div class="pgs">Transcripción, análisis y seguimiento de compromisos</div>
     </div>
-    <button class="bk" onclick="openAddReunion()">+ Nueva reunión</button>
+    <div class="pgh-right" style="display:flex;gap:8px">
+      <button class="btn sec" onclick="toggleReunionesAgente()" id="btn-agente-reuniones">🤖 Agente</button>
+      <button class="btn" onclick="openAddReunion()">+ Nueva reunión</button>
+    </div>
+  </div>
+  <!-- Panel agente (colapsable) -->
+  <div id="panel-agente-reuniones" style="display:none;background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);margin-bottom:16px;overflow:hidden">
+    <div style="padding:10px 14px;border-bottom:1px solid var(--b);display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:12px;font-weight:600;color:var(--tx)">🤖 Agente de reuniones y seguimiento</div>
+      <span style="font-size:10px;color:var(--tx3)">Conoce todas las reuniones, compromisos y el estado del negocio</span>
+    </div>
+    <div id="reun-chat-msgs" style="max-height:360px;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:11px;color:var(--tx3);text-align:center;padding:16px">Preguntá sobre compromisos pendientes, decisiones tomadas, preparación de reuniones futuras o cualquier cosa relacionada con el seguimiento.</div>
+    </div>
+    <div style="padding:8px 12px;border-top:1px solid var(--b);display:flex;gap:6px">
+      <input class="fi" id="reun-chat-input" placeholder="¿Qué compromisos están pendientes? ¿Qué se decidió con el banco?..." style="flex:1;font-size:12px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();reunChatEnviar()}">
+      <button class="btn" style="font-size:12px;padding:6px 14px" onclick="reunChatEnviar()">Enviar</button>
+    </div>
   </div>
   <div id="reuniones-list" style="display:flex;flex-direction:column;gap:12px;margin-top:8px">
     <div class="empty"><div class="ei">🎙️</div>Cargando reuniones...</div>
@@ -1661,6 +1678,14 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
           <div class="fl">12. ¿Quién hizo el intake?</div>
           <input class="fi" id="oport-intake-por" placeholder="Nombre de quien procesó">
         </div>
+      </div>
+
+      <!-- Reunión vinculada -->
+      <div style="margin-bottom:14px">
+        <div class="fl">Reunión donde se originó / discutió <span style="font-size:10px;color:var(--tx3)">(opcional)</span></div>
+        <select class="fi" id="oport-reunion-sel" style="width:100%">
+          <option value="">— Sin reunión vinculada —</option>
+        </select>
       </div>
 
       <!-- Archivos adjuntos -->
@@ -9777,6 +9802,7 @@ const tareasCurso_global={};
 
 /* ── REUNIONES ── */
 let reuniones=[];
+let reunChatHistorial=[];
 
 /* ── COMUNICACIONES ── */
 let publicaciones=[];
@@ -10245,6 +10271,62 @@ async function mrEliminarReunion(id){
     closeModal("modal-reunion-detalle");
     toast("Reunión eliminada","ok");
   }catch(e){toast("Error al eliminar: "+e.message,"err");}
+}
+
+/* ── AGENTE REUNIONES ── */
+function toggleReunionesAgente(){
+  const panel=document.getElementById("panel-agente-reuniones");
+  if(!panel)return;
+  const open=panel.style.display==="none"||!panel.style.display||panel.style.display==="";
+  panel.style.display=open?"":"none";
+  const btn=document.getElementById("btn-agente-reuniones");
+  if(btn)btn.classList.toggle("on",open);
+  if(open&&!panel.dataset.init){
+    panel.dataset.init="1";
+    const msgs=document.getElementById("reun-chat-msgs");
+    if(msgs&&!msgs.innerHTML.trim()){
+      msgs.innerHTML='<div style="font-size:11px;color:var(--tx3);text-align:center;padding:20px">Preguntame sobre compromisos pendientes, reuniones pasadas, o pedime que te ayude a preparar la próxima.</div>';
+    }
+  }
+}
+
+async function reunChatEnviar(event){
+  if(event&&event.key&&event.key!=="Enter")return;
+  const input=document.getElementById("reun-chat-input");
+  const msgs=document.getElementById("reun-chat-msgs");
+  if(!input||!msgs)return;
+  const msg=input.value.trim();
+  if(!msg)return;
+  input.value="";
+
+  msgs.innerHTML+=`<div style="text-align:right;margin:8px 0"><span style="background:var(--ac);color:#fff;padding:6px 12px;border-radius:12px 12px 2px 12px;font-size:13px;display:inline-block;max-width:80%">${msg}</span></div>`;
+  msgs.scrollTop=msgs.scrollHeight;
+
+  const loading=document.createElement("div");
+  loading.style.cssText="color:var(--tx3);font-size:12px;padding:8px 0";
+  loading.textContent="Consultando reuniones…";
+  msgs.appendChild(loading);
+  msgs.scrollTop=msgs.scrollHeight;
+
+  reunChatHistorial.push({role:"user",content:msg});
+
+  try{
+    const r=await fetch(`${SB}/functions/v1/agente-reuniones`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${smxSession?.access_token||KEY}`},
+      body:JSON.stringify({message:msg,historial:reunChatHistorial.slice(-10)}),
+    });
+    const d=await r.json();
+    if(d.error)throw new Error(d.error);
+    loading.remove();
+    const html=typeof marked!=="undefined"?marked.parse(d.respuesta||""):d.respuesta||"";
+    msgs.innerHTML+=`<div style="margin:8px 0;font-size:13px;line-height:1.6;color:var(--tx)">${html}</div>`;
+    reunChatHistorial.push({role:"assistant",content:d.respuesta||""});
+  }catch(e){
+    loading.remove();
+    msgs.innerHTML+=`<div style="color:var(--re);font-size:12px">Error: ${e.message}</div>`;
+  }
+  msgs.scrollTop=msgs.scrollHeight;
 }
 
 /* ── INTEGRACIÓN CASH FLOW → CALENDARIO ── */
@@ -13926,6 +14008,18 @@ function renderOportunidades(){
   }).join("");
 }
 
+function oportPopularReuniones(selectedId=""){
+  const sel=document.getElementById("oport-reunion-sel");
+  if(!sel)return;
+  // Usa la variable global reuniones si existe, si no carga async
+  const lista=typeof reuniones!=="undefined"?reuniones:[];
+  sel.innerHTML='<option value="">— Sin reunión vinculada —</option>'+
+    lista.filter(r=>r.estado==="listo").map(r=>{
+      const fecha=r.fecha?new Date(r.fecha).toLocaleDateString("es-AR"):"";
+      return `<option value="${r.id}"${r.id===selectedId?" selected":""}>${fecha} — ${r.titulo||"Sin título"}</option>`;
+    }).join("");
+}
+
 function oportResetModal(){
   oportArchivosTemp=[];
   oportChatHistorial=[];
@@ -13938,6 +14032,7 @@ function oportResetModal(){
   document.getElementById("oport-archivos-lista").innerHTML="";
   document.getElementById("oport-chat-msgs").innerHTML='<div style="font-size:11px;color:var(--tx3);text-align:center;padding:20px">El agente conoce el estado financiero, los proyectos activos y el resto del pipeline. Pedile un análisis o hacé preguntas específicas.</div>';
   document.getElementById("oport-chat-input").value="";
+  oportPopularReuniones("");
   const fi=document.getElementById("oport-file-input");if(fi)fi.value="";
 }
 
@@ -13968,6 +14063,7 @@ function openEditOportunidad(id){
   document.getElementById("oport-riesgos").value=o.riesgos||"";
   document.getElementById("oport-estado").value=o.estado||"Crudo";
   document.getElementById("oport-intake-por").value=o.intake_por||"";
+  oportPopularReuniones(o.reunion_id||"");
   // Mostrar archivos guardados
   oportArchivosTemp=(o.archivos||[]).map(a=>({...a,isNew:false}));
   oportRenderArchivos();
@@ -13995,6 +14091,7 @@ async function saveOportunidad(){
     riesgos:document.getElementById("oport-riesgos").value.trim(),
     estado:document.getElementById("oport-estado").value||"Crudo",
     intake_por:document.getElementById("oport-intake-por").value.trim(),
+    reunion_id:document.getElementById("oport-reunion-sel")?.value||null,
     archivos:archivosGuardados,
     updated_at:new Date().toISOString(),
   };
