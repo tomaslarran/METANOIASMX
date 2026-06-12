@@ -13866,39 +13866,6 @@ function cotizRemoveItem(i){
   cotizCalc();
 }
 
-function cotizFiltrarCatalogo(q){
-  const dd=document.getElementById("cot-dd");
-  if(!dd)return;
-  const filtrados=nomCatalogo.filter(it=>{
-    if(!q)return true;
-    const s=q.toLowerCase();
-    return it.descripcion.toLowerCase().includes(s)||it.codigo.toLowerCase().includes(s);
-  });
-  if(!filtrados.length){
-    dd.innerHTML='<div style="padding:12px 14px;color:var(--tx3);font-size:13px">Sin resultados</div>';
-  } else {
-    const p=nomParams;
-    const tipoBadge={PRC:"var(--tx3)",SIM:"var(--bl)",CUR:"var(--ve)",ABO:"var(--am)",EVT:"var(--re)"};
-    dd.innerHTML=filtrados.map(it=>{
-      const color=tipoBadge[it.tipo]||"var(--tx3)";
-      const tarifaB=cotizVia==="B"?`<span style="margin-left:6px;font-size:11px;color:var(--bl)">$${cotizTarifaViaB(it.nivel).toFixed(0)}/h</span>`:"";
-      const precioA=cotizVia==="A"?`<span style="margin-left:6px;font-size:11px;color:var(--ve)">Afl $${(it.precio_afiliado_usd||0).toFixed(0)}</span><span style="margin-left:4px;font-size:11px;color:var(--am)">Ext $${(it.precio_externo_usd||0).toFixed(0)}</span>`:"";
-      return `<div style="padding:8px 14px;cursor:pointer;border-bottom:1px solid var(--b);transition:background .1s"
-        onmousedown="cotizSeleccionarItem('${it.codigo}')"
-        onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
-        <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-family:monospace;font-size:11px;font-weight:700;color:${color}">${it.codigo}</span>
-          <span style="font-size:11px;color:var(--tx3)">N${it.nivel} · ${it.modalidad}</span>
-          ${tarifaB}${precioA}
-        </div>
-        <div style="font-size:13px;color:var(--tx);margin-top:2px">${it.descripcion}</div>
-      </div>`;
-    }).join("");
-  }
-  dd.style.display="block";
-}
-
-
 function renderCotizItemsTable(){
   const el=document.getElementById("cotiz-items-table");
   if(!el)return;
