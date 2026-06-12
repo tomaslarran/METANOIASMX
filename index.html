@@ -14242,7 +14242,8 @@ function exportarCotizPDF(id){
   doc.text(`COTIZACIÓN ${c.numero||""}`,W-MR,12,{align:"right"});
   doc.setFontSize(9);
   doc.setTextColor(180,200,240);
-  doc.text(`Vía ${c.via} · ${new Date(c.created_at||Date.now()).toLocaleDateString("es-AR")}`,W-MR,19,{align:"right"});
+  const viaLabel=c.via==="PEV"?`PEV ${c.pev_etapa||""} · ${new Date(c.created_at||Date.now()).toLocaleDateString("es-AR")}`:`Vía ${c.via} · ${new Date(c.created_at||Date.now()).toLocaleDateString("es-AR")}`;
+  doc.text(viaLabel,W-MR,19,{align:"right"});
   // Cliente
   let y=38;
   doc.setFont("helvetica","bold");doc.setFontSize(10);doc.setTextColor(30,30,30);
@@ -14254,6 +14255,8 @@ function exportarCotizPDF(id){
   y+=10;
   const viaDesc=c.via==="A"
     ?"Presupuesto Vía A: Colmedsa organiza y avala. SUDES presta servicio de simulación."
+    :c.via==="PEV"
+    ?`Cotización PEV (Actividad nueva en desarrollo) · Etapa: ${c.pev_etapa||"PEV1"} · Precio sugerido incluye overhead 15% + margen 40%`
     :"Presupuesto Vía B: SUDES organiza y presta el servicio directamente a Colmedsa.";
   doc.setFontSize(9);doc.setTextColor(60,80,120);
   doc.setFillColor(235,240,255);
@@ -14261,46 +14264,80 @@ function exportarCotizPDF(id){
   doc.text(viaDesc,ML+4,y+1);
   // Tabla items
   y+=14;
-  doc.setFillColor(25,50,100);
-  doc.rect(ML,y-4,CW,7,"F");
-  doc.setFont("helvetica","bold");doc.setFontSize(8.5);doc.setTextColor(255,255,255);
-  if(c.via==="A"){
-    doc.text("Código",ML+1,y);doc.text("Actividad",ML+22,y);doc.text("Hs",ML+107,y);
-    doc.text("P.Afl/h",ML+117,y);doc.text("P.Ext/h",ML+133,y);doc.text("Subtotal",ML+150,y);
+  if(c.via==="PEV"){
+    const pevItems=c.pev_items||[];
+    const bloquesDef=[
+      {key:"pedagogico",label:"Bloque 1 — Pedagógico"},
+      {key:"procedimental",label:"Bloque 2 — Procedimental"},
+      {key:"insumos",label:"Bloque 3 — Insumos y equipamiento"},
+      {key:"informatizacion",label:"Bloque 4 — Informatización"},
+      {key:"aprobacion",label:"Bloque 5 — Aprobación y certificación"},
+    ];
+    // header row
+    doc.setFillColor(25,50,100);doc.rect(ML,y-4,CW,7,"F");
+    doc.setFont("helvetica","bold");doc.setFontSize(8.5);doc.setTextColor(255,255,255);
+    doc.text("Bloque / Descripción",ML+2,y);
+    doc.text("Cant.",ML+122,y);doc.text("USD/u",ML+138,y);doc.text("Subtotal",ML+155,y);
+    y+=7;
+    bloquesDef.forEach(bloque=>{
+      const bItems=pevItems.filter(it=>it.bloque===bloque.key);
+      if(!bItems.length)return;
+      doc.setFillColor(235,240,255);doc.rect(ML,y-4,CW,6,"F");
+      doc.setFont("helvetica","bold");doc.setFontSize(8);doc.setTextColor(25,50,100);
+      doc.text(bloque.label,ML+2,y);
+      const bTotal=bItems.reduce((s,it)=>s+(parseFloat(it.cantidad)||0)*(parseFloat(it.precio)||0),0);
+      doc.text("USD "+bTotal.toFixed(2),W-MR,y,{align:"right"});
+      y+=7;
+      doc.setFont("helvetica","normal");doc.setFontSize(8.5);
+      bItems.forEach((it,i)=>{
+        if(i%2===0){doc.setFillColor(248,250,255);doc.rect(ML,y-4,CW,6.5,"F");}
+        doc.setTextColor(30,30,30);
+        doc.text(it.descripcion||"",ML+6,y);
+        doc.text(String(parseFloat(it.cantidad)||0),ML+124,y);
+        doc.text("$"+(parseFloat(it.precio)||0).toFixed(2),ML+138,y);
+        doc.text("$"+((parseFloat(it.cantidad)||0)*(parseFloat(it.precio)||0)).toFixed(2),ML+155,y);
+        y+=6.5;
+      });
+    });
   } else {
-    doc.text("Código",ML+1,y);doc.text("Actividad",ML+22,y);doc.text("Nv",ML+107,y);
-    doc.text("Horas",ML+115,y);doc.text("Tarifa/h",ML+132,y);doc.text("Subtotal",ML+150,y);
-  }
-  y+=7;
-  doc.setFont("helvetica","normal");doc.setFontSize(8.5);
-  items.forEach((it,i)=>{
-    if(i%2===0){doc.setFillColor(245,247,255);doc.rect(ML,y-4,CW,6.5,"F");}
-    doc.setTextColor(30,30,30);
-    doc.text(it.codigo||"",ML+1,y);
-    const dmax=doc.splitTextToSize(it.descripcion||"",78);
-    doc.text(dmax[0],ML+22,y);
+    doc.setFillColor(25,50,100);doc.rect(ML,y-4,CW,7,"F");
+    doc.setFont("helvetica","bold");doc.setFontSize(8.5);doc.setTextColor(255,255,255);
     if(c.via==="A"){
-      doc.text(String(it.horas||1),ML+108,y);
-      doc.text("$"+(it.precio_afiliado_usd||0).toFixed(0),ML+117,y);
-      doc.text("$"+(it.precio_externo_usd||0).toFixed(0),ML+133,y);
-      const sub=(it.precio_afiliado_usd||0)*it.horas*(c.alumnos_afiliados||0)
-               +(it.precio_externo_usd||0)*it.horas*(c.alumnos_externos||0)*(1+(p.CANON_CM_PCT||0.10));
-      doc.text("$"+sub.toFixed(0),ML+150,y);
+      doc.text("Código",ML+1,y);doc.text("Actividad",ML+22,y);doc.text("Hs",ML+107,y);
+      doc.text("P.Afl/h",ML+117,y);doc.text("P.Ext/h",ML+133,y);doc.text("Subtotal",ML+150,y);
     } else {
-      const tarifa=cotizTarifaViaB(it.nivel);
-      doc.text("N"+it.nivel,ML+108,y);
-      doc.text(String(it.horas||1),ML+117,y);
-      doc.text("$"+tarifa.toFixed(0),ML+132,y);
-      doc.text("$"+(tarifa*it.horas).toFixed(0),ML+150,y);
+      doc.text("Código",ML+1,y);doc.text("Actividad",ML+22,y);doc.text("Nv",ML+107,y);
+      doc.text("Horas",ML+115,y);doc.text("Tarifa/h",ML+132,y);doc.text("Subtotal",ML+150,y);
     }
-    y+=6.5;
-  });
-  // Parámetros Vía A
-  if(c.via==="A"&&(c.alumnos_afiliados||c.alumnos_externos)){
-    y+=3;
-    doc.setFontSize(8);doc.setTextColor(80,80,80);
-    doc.text(`Alumnos afiliados CM: ${c.alumnos_afiliados||0} · Alumnos externos: ${c.alumnos_externos||0}`,ML,y);
-    y+=5;
+    y+=7;
+    doc.setFont("helvetica","normal");doc.setFontSize(8.5);
+    items.forEach((it,i)=>{
+      if(i%2===0){doc.setFillColor(245,247,255);doc.rect(ML,y-4,CW,6.5,"F");}
+      doc.setTextColor(30,30,30);
+      doc.text(it.codigo||"",ML+1,y);
+      const dmax=doc.splitTextToSize(it.descripcion||"",78);
+      doc.text(dmax[0],ML+22,y);
+      if(c.via==="A"){
+        doc.text(String(it.horas||1),ML+108,y);
+        doc.text("$"+(it.precio_afiliado_usd||0).toFixed(0),ML+117,y);
+        doc.text("$"+(it.precio_externo_usd||0).toFixed(0),ML+133,y);
+        const sub=(it.precio_afiliado_usd||0)*it.horas*(c.alumnos_afiliados||0)
+                 +(it.precio_externo_usd||0)*it.horas*(c.alumnos_externos||0)*(1+(p.CANON_CM_PCT||0.10));
+        doc.text("$"+sub.toFixed(0),ML+150,y);
+      } else {
+        const tarifa=cotizTarifaViaB(it.nivel);
+        doc.text("N"+it.nivel,ML+108,y);
+        doc.text(String(it.horas||1),ML+117,y);
+        doc.text("$"+tarifa.toFixed(0),ML+132,y);
+        doc.text("$"+(tarifa*it.horas).toFixed(0),ML+150,y);
+      }
+      y+=6.5;
+    });
+    if(c.via==="A"&&(c.alumnos_afiliados||c.alumnos_externos)){
+      y+=3;doc.setFontSize(8);doc.setTextColor(80,80,80);
+      doc.text(`Alumnos afiliados CM: ${c.alumnos_afiliados||0} · Alumnos externos: ${c.alumnos_externos||0}`,ML,y);
+      y+=5;
+    }
   }
   // Totales
   y+=4;
@@ -14309,8 +14346,16 @@ function exportarCotizPDF(id){
   y+=6;
   const totCol=W-MR-40;
   doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(60,60,60);
-  doc.text("Subtotal:",totCol,y,{align:"right"});
+  doc.text(c.via==="PEV"?"Costo base:":"Subtotal:",totCol,y,{align:"right"});
   doc.text("USD "+(c.subtotal_usd||0).toFixed(2),W-MR,y,{align:"right"});
+  if(c.via==="PEV"){
+    const overhead=(c.subtotal_usd||0)*0.15;
+    const margen=((c.subtotal_usd||0)+overhead)*0.40;
+    y+=5.5;doc.text("Overhead (15%):",totCol,y,{align:"right"});
+    doc.text("USD "+overhead.toFixed(2),W-MR,y,{align:"right"});
+    y+=5.5;doc.text("Margen (40%):",totCol,y,{align:"right"});
+    doc.text("USD "+margen.toFixed(2),W-MR,y,{align:"right"});
+  }
   if(c.via==="A"&&(c.canon_cm_usd||0)>0){
     y+=5.5;
     doc.text("Canon CM (10%):",totCol,y,{align:"right"});
@@ -14323,7 +14368,7 @@ function exportarCotizPDF(id){
   }
   y+=7;
   doc.setFont("helvetica","bold");doc.setFontSize(11);doc.setTextColor(25,50,100);
-  doc.text("TOTAL USD:",totCol,y,{align:"right"});
+  doc.text(c.via==="PEV"?"PRECIO SUGERIDO USD:":"TOTAL USD:",totCol,y,{align:"right"});
   doc.text("USD "+(c.total_usd||0).toFixed(2),W-MR,y,{align:"right"});
   y+=6;
   doc.setFontSize(12);doc.setTextColor(0,130,80);
