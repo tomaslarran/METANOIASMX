@@ -3565,14 +3565,22 @@ async function renderAlertas(){
       const deb=(ing.ingresos_gravados||0)*IVA_TASA;
       const cr=getCreditoFiscal(mesImpKey,soc);
       const saldo=Math.round(deb-cr);
-      if(saldo>0)alertas.push({tipo:"impuesto",icon:"🏛",urgencia:dVencIVA<0?"critica":dVencIVA===0?"hoy":dVencIVA<=7?"semana":"mes",d:dVencIVA,
-        titulo:`IVA ${mesImpLabel} — ${soc}`,sub:`A pagar: $${saldo.toLocaleString("es-AR")}`,fecha:vencIVAStr,
-        onclick:`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('iva')`});
+      const declIVA=getDeclaracion(mesImpKey,soc,"IVA");
+      if(saldo>0&&!declIVA?.pagado){
+        const ivaPresStr=declIVA?.presentado?` · presentado ${declIVA.fecha_presentacion?fmt(declIVA.fecha_presentacion):""}`:""
+        alertas.push({tipo:"impuesto",icon:"🏛",urgencia:dVencIVA<0?"critica":dVencIVA===0?"hoy":dVencIVA<=7?"semana":"mes",d:dVencIVA,
+          titulo:`IVA ${mesImpLabel} — ${soc}`,sub:`$${saldo.toLocaleString("es-AR")}${ivaPresStr}`,fecha:vencIVAStr,
+          onclick:`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('iva')`});
+      }
       const base=(ing.ingresos_gravados||0)+(ing.ingresos_exentos||0);
       const iibb=Math.round(base*IIBB_TASA);
-      if(iibb>0)alertas.push({tipo:"impuesto",icon:"🏛",urgencia:dVencIVA<0?"critica":dVencIVA===0?"hoy":dVencIVA<=7?"semana":"mes",d:dVencIVA,
-        titulo:`IIBB ${mesImpLabel} — ${soc}`,sub:`6% de $${Math.round(base).toLocaleString("es-AR")} = $${iibb.toLocaleString("es-AR")}`,fecha:vencIVAStr,
-        onclick:`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('iibb')`});
+      const declIIBB=getDeclaracion(mesImpKey,soc,"IIBB");
+      if(iibb>0&&!declIIBB?.pagado){
+        const iibbPresStr=declIIBB?.presentado?` · presentado ${declIIBB.fecha_presentacion?fmt(declIIBB.fecha_presentacion):""}`:""
+        alertas.push({tipo:"impuesto",icon:"🏛",urgencia:dVencIVA<0?"critica":dVencIVA===0?"hoy":dVencIVA<=7?"semana":"mes",d:dVencIVA,
+          titulo:`IIBB ${mesImpLabel} — ${soc}`,sub:`$${iibb.toLocaleString("es-AR")}${iibbPresStr}`,fecha:vencIVAStr,
+          onclick:`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('iibb')`});
+      }
     });
   }
   // Autónomos: vencen el 20 del mes actual
@@ -3620,7 +3628,7 @@ async function renderAlertas(){
   const invMonto=invActivas.reduce((s,i)=>s+(parseFloat(i.monto_actual||i.monto_inicial)||0),0);
   // Stats impuestos
   let ivaTotalMes=0;
-  ["SUDES","POINTERS"].forEach(soc=>{const ing=getIngreso(mesImpKey,soc);const s=(ing.ingresos_gravados||0)*IVA_TASA-getCreditoFiscal(mesImpKey,soc);if(s>0)ivaTotalMes+=s;});
+  ["SUDES","POINTERS"].forEach(soc=>{const ing=getIngreso(mesImpKey,soc);const s=(ing.ingresos_gravados||0)*IVA_TASA-getCreditoFiscal(mesImpKey,soc);if(s>0&&!getDeclaracion(mesImpKey,soc,"IVA")?.pagado)ivaTotalMes+=s;});
   ivaTotalMes=Math.round(ivaTotalMes);
   const autoPend=autonomosCuotas.filter(c=>c.periodo===mesImpKey&&!c.pagado&&(c.monto||0)>0);
   const autoMontoPend=Math.round(autoPend.reduce((s,c)=>s+(c.monto||0),0));
@@ -12281,9 +12289,27 @@ async function marcarPresentado(periodo,sociedad,tipo){
       const[r]=await sb("impuestos_declaraciones",{method:"POST",body:JSON.stringify({periodo,sociedad,tipo,presentado:true,fecha_presentacion:fecha,updated_at:new Date().toISOString()})});
       impuestosDeclaraciones.push(r);
     }
-    toast(`${tipo} ${periodo} — ${sociedad} marcado como presentado ✓`,"ok");
+    toast(`${tipo} ${periodo} — ${sociedad} presentado ✓`,"ok");
     if(impTab==="iva")renderImpIVA();
     if(impTab==="iibb")renderImpIIBB();
+  }catch(e){toast("Error al guardar","err")}
+}
+
+async function marcarPagadoDeclaracion(periodo,sociedad,tipo){
+  const existing=getDeclaracion(periodo,sociedad,tipo);
+  const fecha=today();
+  try{
+    if(existing){
+      await sb(`impuestos_declaraciones?id=eq.${existing.id}`,{method:"PATCH",body:JSON.stringify({pagado:true,fecha_pago:fecha,updated_at:new Date().toISOString()})});
+      existing.pagado=true;existing.fecha_pago=fecha;
+    }else{
+      const[r]=await sb("impuestos_declaraciones",{method:"POST",body:JSON.stringify({periodo,sociedad,tipo,presentado:false,pagado:true,fecha_pago:fecha,updated_at:new Date().toISOString()})});
+      impuestosDeclaraciones.push(r);
+    }
+    toast(`${tipo} ${periodo} — ${sociedad} pagado ✓`,"ok");
+    if(impTab==="iva")renderImpIVA();
+    if(impTab==="iibb")renderImpIIBB();
+    if(curPage==="alertas")renderAlertas();
   }catch(e){toast("Error al guardar","err")}
 }
 
@@ -12346,10 +12372,15 @@ function renderImpIVA(){
       const bg=m.actual?"background:rgba(124,58,237,.1)":"background:var(--surf2)";
       const col=saldo>0?"var(--re)":saldo<0?"var(--gr)":"var(--tx3)";
       const decl=getDeclaracion(m.key,soc,"IVA");
-      const pres=decl?.presentado;
-      const presBtn=saldo&&!pres
-        ?`<div><button onclick="marcarPresentado('${m.key}','${soc}','IVA')" style="margin-top:4px;background:var(--surf);border:1px solid var(--b);border-radius:4px;padding:2px 7px;font-size:10px;color:var(--tx3);cursor:pointer;white-space:nowrap">Presentar →</button></div>`
-        :pres?`<div style="font-size:10px;color:var(--gr);margin-top:3px">✓ ${decl.fecha_presentacion?fmt(decl.fecha_presentacion):"presentado"}</div>`:"";
+      const pres=decl?.presentado;const pago=decl?.pagado;
+      let presBtn="";
+      if(saldo&&!pres&&!pago){
+        presBtn=`<div><button onclick="marcarPresentado('${m.key}','${soc}','IVA')" style="margin-top:4px;background:var(--surf);border:1px solid var(--b);border-radius:4px;padding:2px 7px;font-size:10px;color:var(--tx3);cursor:pointer;white-space:nowrap">Presentar →</button></div>`;
+      }else if(pres&&!pago){
+        presBtn=`<div style="font-size:10px;color:var(--am);margin-top:3px;line-height:1.5">✓ Pres. ${decl.fecha_presentacion?fmt(decl.fecha_presentacion):""}<br><button onclick="marcarPagadoDeclaracion('${m.key}','${soc}','IVA')" style="margin-top:2px;background:var(--surf);border:1px solid var(--am);border-radius:4px;padding:2px 7px;font-size:10px;color:var(--am);cursor:pointer;white-space:nowrap">Pagar →</button></div>`;
+      }else if(pago){
+        presBtn=`<div style="font-size:10px;color:var(--gr);margin-top:3px;line-height:1.5">${pres?"✓ Pres. "+(decl.fecha_presentacion?fmt(decl.fecha_presentacion):"")+"<br>":""}✓ Pagado ${decl.fecha_pago?fmt(decl.fecha_pago):""}</div>`;
+      }
       return`<td style="text-align:right;padding:6px 10px;font-size:12px;font-weight:700;color:${col};border-right:1px solid var(--b);${bg}">${saldo?fmtImp(Math.abs(saldo)):"—"}${presBtn}</td>`;
     }).join("");
     rows+=`<tr><td style="padding:6px 12px;font-size:12px;font-weight:700;color:${color};background:var(--surf2)">SALDO IVA ${soc}</td>${saldos}</tr>`;
@@ -12413,10 +12444,15 @@ function renderImpIIBB(){
       const v=Math.round(base*IIBB_TASA);
       const bg=m.actual?"background:rgba(124,58,237,.1)":"background:var(--surf2)";
       const decl=getDeclaracion(m.key,soc,"IIBB");
-      const pres=decl?.presentado;
-      const presBtn=v&&!pres
-        ?`<div><button onclick="marcarPresentado('${m.key}','${soc}','IIBB')" style="margin-top:4px;background:var(--surf);border:1px solid var(--b);border-radius:4px;padding:2px 7px;font-size:10px;color:var(--tx3);cursor:pointer;white-space:nowrap">Presentar →</button></div>`
-        :pres?`<div style="font-size:10px;color:var(--gr);margin-top:3px">✓ ${decl.fecha_presentacion?fmt(decl.fecha_presentacion):"presentado"}</div>`:"";
+      const pres=decl?.presentado;const pago=decl?.pagado;
+      let presBtn="";
+      if(v&&!pres&&!pago){
+        presBtn=`<div><button onclick="marcarPresentado('${m.key}','${soc}','IIBB')" style="margin-top:4px;background:var(--surf);border:1px solid var(--b);border-radius:4px;padding:2px 7px;font-size:10px;color:var(--tx3);cursor:pointer;white-space:nowrap">Presentar →</button></div>`;
+      }else if(pres&&!pago){
+        presBtn=`<div style="font-size:10px;color:var(--am);margin-top:3px;line-height:1.5">✓ Pres. ${decl.fecha_presentacion?fmt(decl.fecha_presentacion):""}<br><button onclick="marcarPagadoDeclaracion('${m.key}','${soc}','IIBB')" style="margin-top:2px;background:var(--surf);border:1px solid var(--am);border-radius:4px;padding:2px 7px;font-size:10px;color:var(--am);cursor:pointer;white-space:nowrap">Pagar →</button></div>`;
+      }else if(pago){
+        presBtn=`<div style="font-size:10px;color:var(--gr);margin-top:3px;line-height:1.5">${pres?"✓ Pres. "+(decl.fecha_presentacion?fmt(decl.fecha_presentacion):"")+"<br>":""}✓ Pagado ${decl.fecha_pago?fmt(decl.fecha_pago):""}</div>`;
+      }
       return`<td style="text-align:right;padding:6px 10px;font-size:12px;font-weight:700;color:${v?"var(--re)":"var(--tx3)"};border-right:1px solid var(--b);${bg}">${v?fmtImp(v):"—"}${presBtn}</td>`;
     }).join("");
     return`
