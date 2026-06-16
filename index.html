@@ -3186,6 +3186,22 @@ async function sbRefreshToken(){
   }catch(_){return false;}
 }
 
+async function logError(path,opts,statusCode,mensaje){
+  try{
+    const session=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
+    await fetch(`${SB}/rest/v1/panel_errores`,{
+      method:"POST",mode:"cors",
+      headers:{...H,"Authorization":"Bearer "+KEY,"Prefer":"return=minimal"},
+      body:JSON.stringify({
+        path:path.split("?")[0],metodo:opts.method||"GET",
+        status_code:statusCode||null,mensaje:String(mensaje).slice(0,500),
+        usuario_email:session.email||null,
+        pagina_activa:document.querySelector(".page.active")?.id||null
+      })
+    });
+  }catch(_){}
+}
+
 async function sb(path,opts={},retry=2){
   const {headers:extraH,...restOpts}=opts;
   const bearer=authToken||KEY;
@@ -3202,6 +3218,7 @@ async function sb(path,opts={},retry=2){
         setTimeout(()=>logout(),2000);
         throw new Error("Sesión vencida");
       }
+      logError(path,opts,r.status,e);
       throw new Error(e);
     }
     const txt=await r.text();
@@ -3211,6 +3228,7 @@ async function sb(path,opts={},retry=2){
       await new Promise(res=>setTimeout(res,1500));
       return sb(path,opts,retry-1);
     }
+    if(e.message!=="Sesión vencida")logError(path,opts,null,e.message);
     throw e;
   }
 }
