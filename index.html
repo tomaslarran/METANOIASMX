@@ -1772,6 +1772,12 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <span style="font-size:11px;color:var(--tx4)">el saldo acumulado parte de este valor</span>
     </div>
 
+    <!-- Gráfico ingresos vs egresos -->
+    <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:14px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">📊 Ingresos vs Egresos — últimos 6 meses</div>
+      <canvas id="cf-chart-ingegr" height="70"></canvas>
+    </div>
+
     <!-- Grilla -->
     <div id="cf-grilla-wrap" style="overflow-x:auto">
       <div class="loading"><div class="loader"></div><div class="lt">Cargando cash flow...</div></div>
@@ -1929,6 +1935,18 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="sc"><div class="sc-l">Efectivo caja</div><div class="sc-v va" id="caja-k-efectivo">—</div><div class="sc-s">registrado hoy</div></div>
       <div class="sc"><div class="sc-l">Inversiones</div><div class="sc-v vp" id="caja-k-inversiones">—</div><div class="sc-s">valor actual</div></div>
       <div class="sc" style="border:1px solid var(--ac)"><div class="sc-l">Total disponible</div><div class="sc-v" id="caja-k-total" style="color:var(--ac)">—</div><div class="sc-s">posición consolidada</div></div>
+    </div>
+
+    <!-- Gráfico evolución de caja 30 días -->
+    <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:16px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px">📈 Evolución de caja — últimos 30 días</div>
+        <div class="fbar">
+          <button class="fb on" id="caja-chart-sudes" onclick="cajaChartSetSoc('SUDES',this)">SUDES</button>
+          <button class="fb" id="caja-chart-ptr" onclick="cajaChartSetSoc('POINTERS',this)">POINTERS</button>
+        </div>
+      </div>
+      <canvas id="caja-chart" height="80"></canvas>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
@@ -7032,15 +7050,146 @@ async function renderResumenSemanal(){
   }catch(e){el.innerHTML=`<p style="color:var(--re);padding:20px">Error: ${e.message}</p>`;}
 }
 
+// ── GRÁFICO INGRESOS VS EGRESOS (Resumen mensual) ────────────────────────────
+let _chartIngEgr=null;
+function renderCFChart(){
+  const canvas=document.getElementById("cf-chart-ingegr");
+  if(!canvas)return;
+  // Últimos 6 meses
+  const meses=[];
+  const now=new Date();
+  for(let i=5;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    const key=d.toISOString().slice(0,7);
+    const label=d.toLocaleDateString("es-AR",{month:"short",year:"2-digit"});
+    meses.push({key,label});
+  }
+  const ingData=[],egrData=[];
+  for(const m of meses){
+    let ing=0,egr=0;
+    for(const c of cfConceptos){
+      if(c.sociedad&&c.sociedad!==cfSociedad&&c.sociedad!=="Ambas")continue;
+      const v=cfValores.find(x=>x.concepto_id===c.id&&x.periodo===m.key);
+      const val=v?.monto_real??v?.monto??0;
+      if(c.tipo==="Ingreso")ing+=val;
+      else egr+=val;
+    }
+    ingData.push(Math.round(ing));
+    egrData.push(Math.round(egr));
+  }
+  const labels=meses.map(m=>m.label);
+  if(_chartIngEgr){_chartIngEgr.destroy();_chartIngEgr=null;}
+  const ctx=canvas.getContext("2d");
+  const isDark=document.body.classList.contains("dark");
+  const gridColor=isDark?"rgba(255,255,255,.07)":"rgba(0,0,0,.07)";
+  const textColor=isDark?"#94a3b8":"#64748b";
+  _chartIngEgr=new Chart(ctx,{
+    type:"bar",
+    data:{
+      labels,
+      datasets:[
+        {label:"Ingresos",data:ingData,backgroundColor:"rgba(16,185,129,.7)",borderColor:"#10b981",borderWidth:1,borderRadius:4},
+        {label:"Egresos",data:egrData,backgroundColor:"rgba(239,68,68,.6)",borderColor:"#ef4444",borderWidth:1,borderRadius:4},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:true,
+      plugins:{legend:{labels:{color:textColor,font:{size:11}}},tooltip:{callbacks:{label:ctx=>`$${Math.round(ctx.parsed.y).toLocaleString("es-AR")}`}}},
+      scales:{
+        x:{ticks:{color:textColor,font:{size:10}},grid:{color:gridColor}},
+        y:{ticks:{color:textColor,font:{size:10},callback:v=>"$"+Math.round(v/1000)+"k"},grid:{color:gridColor}},
+      }
+    }
+  });
+}
+
 // ── MÓDULO CAJA ──────────────────────────────────────────────────────────────
 let cajaMovimientos=[];
 let cajaSociedad="SUDES";
+let cajaChartSoc="SUDES";
+let _chartCajaEvol=null;
 
 function cajaSetSociedad(s,btn){
   cajaSociedad=s;
-  document.querySelectorAll("#cfpg-caja .fbar .fb").forEach(b=>b.classList.remove("on"));
+  document.querySelectorAll("#cfpg-caja .fbar:first-child .fb").forEach(b=>b.classList.remove("on"));
   if(btn)btn.classList.add("on");
   renderCaja();
+}
+
+function cajaChartSetSoc(s,btn){
+  cajaChartSoc=s;
+  document.querySelectorAll("#caja-chart-sudes,#caja-chart-ptr").forEach(b=>b.classList.remove("on"));
+  if(btn)btn.classList.add("on");
+  renderCajaChart();
+}
+
+async function renderCajaChart(){
+  const canvas=document.getElementById("caja-chart");
+  if(!canvas)return;
+  // Cargar últimos 30 días
+  const hasta=new Date();
+  const desde=new Date();desde.setDate(desde.getDate()-29);
+  const desdeStr=desde.toISOString().split("T")[0];
+  const hastaStr=hasta.toISOString().split("T")[0];
+  let movs=[];
+  try{
+    movs=await sb(`caja_movimientos?sociedad=eq.${cajaChartSoc}&fecha=gte.${desdeStr}&fecha=lte.${hastaStr}&order=fecha.asc`)||[];
+  }catch(_){}
+
+  // Agrupar por día y calcular saldo acumulado
+  const dias={};
+  for(let d=new Date(desde);d<=hasta;d.setDate(d.getDate()+1)){
+    dias[d.toISOString().split("T")[0]]=0;
+  }
+  for(const m of movs){
+    const k=m.fecha?.slice(0,10);
+    if(!k||dias[k]===undefined)continue;
+    const v=parseFloat(m.monto)||0;
+    dias[k]+=m.tipo==="ingreso"?v:-v;
+  }
+  const labels=Object.keys(dias).map(d=>{
+    const dt=new Date(d+"T00:00:00");
+    return dt.toLocaleDateString("es-AR",{day:"numeric",month:"short"});
+  });
+  // Saldo acumulado
+  let acum=0;
+  const data=Object.values(dias).map(v=>{acum+=v;return Math.round(acum);});
+
+  if(_chartCajaEvol){_chartCajaEvol.destroy();_chartCajaEvol=null;}
+  const ctx=canvas.getContext("2d");
+  const isDark=document.body.classList.contains("dark");
+  const gridColor=isDark?"rgba(255,255,255,.07)":"rgba(0,0,0,.07)";
+  const textColor=isDark?"#94a3b8":"#64748b";
+  const positiveColor="rgba(124,58,237,.7)";
+  const gradient=ctx.createLinearGradient(0,0,0,canvas.height*2);
+  gradient.addColorStop(0,"rgba(124,58,237,.25)");
+  gradient.addColorStop(1,"rgba(124,58,237,.02)");
+
+  _chartCajaEvol=new Chart(ctx,{
+    type:"line",
+    data:{
+      labels,
+      datasets:[{
+        label:`Saldo acumulado ${cajaChartSoc}`,
+        data,
+        borderColor:positiveColor,
+        backgroundColor:gradient,
+        borderWidth:2,
+        pointRadius:2,
+        pointHoverRadius:5,
+        fill:true,
+        tension:.35,
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:true,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`$${ctx.parsed.y.toLocaleString("es-AR")}`}}},
+      scales:{
+        x:{ticks:{color:textColor,font:{size:9},maxTicksLimit:10},grid:{color:gridColor}},
+        y:{ticks:{color:textColor,font:{size:10},callback:v=>"$"+Math.round(v/1000)+"k"},grid:{color:gridColor}},
+      }
+    }
+  });
 }
 
 async function renderCaja(){
@@ -7093,6 +7242,9 @@ async function renderCaja(){
 
   // Proyección 30 días
   renderCajaProyeccion();
+
+  // Gráfico evolución (siempre, independiente de si hay movimientos hoy)
+  renderCajaChart();
 
   // Tabla de movimientos
   const tabla=el("caja-tabla");
@@ -7535,10 +7687,11 @@ function renderCFResumen(){
           const isGood=tipo==="Ingreso"?delta>=0:delta<=0;
           const deltaCol=delta===0?"var(--tx3)":isGood?"var(--gr)":"var(--re)";
           const sign=delta>0?"+":"-";
+          const realLabel=real===0?`<span style="color:var(--tx3)">$0 ✓</span>`:`$${Math.round(real).toLocaleString("es-AR")}`;
           display=`<div style="line-height:1.35">
-            <div style="font-weight:700;color:${deltaCol==="var(--tx3)"?"var(--tx)":deltaCol}">${real?"$"+Math.round(real).toLocaleString("es-AR"):"—"}</div>
-            ${monto?`<div style="font-size:10px;color:var(--tx4)">proy $${Math.round(monto).toLocaleString("es-AR")}</div>`:""}
-            ${delta!==0?`<div style="font-size:10px;color:${deltaCol}">${sign}$${Math.round(Math.abs(delta)).toLocaleString("es-AR")}</div>`:""}
+            <div style="font-weight:700;color:${real===0?"var(--tx3)":deltaCol==="var(--tx3)"?"var(--tx)":deltaCol}">${realLabel}</div>
+            ${monto&&real!==0?`<div style="font-size:10px;color:var(--tx4)">proy $${Math.round(monto).toLocaleString("es-AR")}</div>`:""}
+            ${delta!==0&&real!==0?`<div style="font-size:10px;color:${deltaCol}">${sign}$${Math.round(Math.abs(delta)).toLocaleString("es-AR")}</div>`:""}
           </div>`;
           cellColor="var(--tx)";
         }else{
@@ -7765,11 +7918,12 @@ function renderCFResumen(){
         const isGood=tipo==="Ingreso"?delta>=0:delta<=0;
         const deltaCol=delta===0?"var(--tx3)":isGood?"var(--gr)":"var(--re)";
         const sign=delta>0?"+":"-";
+        const realLbl2=real===0?`<span style="color:var(--tx3)">$0 ✓</span>`:`$${Math.round(real).toLocaleString("es-AR")}`;
         return`<td style="text-align:right;padding:6px 10px;font-size:12px;border-right:1px solid var(--b);${bgActual}">
           <div style="line-height:1.35">
-            <div style="font-weight:700;color:${colorT}">${real?"$"+Math.round(real).toLocaleString("es-AR"):"—"}</div>
-            <div style="font-size:10px;color:var(--tx4)">proy $${Math.round(proy).toLocaleString("es-AR")}</div>
-            ${delta!==0?`<div style="font-size:10px;color:${deltaCol}">${sign}$${Math.round(Math.abs(delta)).toLocaleString("es-AR")}</div>`:""}
+            <div style="font-weight:700;color:${real===0?"var(--tx3)":colorT}">${realLbl2}</div>
+            ${real!==0?`<div style="font-size:10px;color:var(--tx4)">proy $${Math.round(proy).toLocaleString("es-AR")}</div>`:""}
+            ${delta!==0&&real!==0?`<div style="font-size:10px;color:${deltaCol}">${sign}$${Math.round(Math.abs(delta)).toLocaleString("es-AR")}</div>`:""}
           </div>
         </td>`;
       }
@@ -7835,6 +7989,9 @@ function renderCFResumen(){
   // Cuotas ahora integradas dentro del buildRows de Egresos
   const cfCuotasWrap=document.getElementById("cf-cuotas-wrap");
   if(cfCuotasWrap)cfCuotasWrap.innerHTML="";
+
+  // Renderizar gráfico ingresos vs egresos
+  renderCFChart();
 }
 
 let _cfCeldaConceptoId=null,_cfCeldaPeriodo=null,_cfCeldaTipo=null;
@@ -7992,10 +8149,11 @@ function cfCeldaRefresh(td){
     const delta=real-monto,isGood=tipo==="Ingreso"?delta>=0:delta<=0;
     const deltaCol=delta===0?"var(--tx3)":isGood?"var(--gr)":"var(--re)";
     const sign=delta>0?"+":"-";
+    const realLbl3=real===0?`<span style="color:var(--tx3)">$0 ✓</span>`:`$${Math.round(real).toLocaleString("es-AR")}`;
     display=`<div style="line-height:1.35">
-      <div style="font-weight:700;color:${deltaCol==="var(--tx3)"?"var(--tx)":deltaCol}">${real?"$"+Math.round(real).toLocaleString("es-AR"):"—"}</div>
-      ${monto?`<div style="font-size:10px;color:var(--tx4)">proy $${Math.round(monto).toLocaleString("es-AR")}</div>`:""}
-      ${delta!==0?`<div style="font-size:10px;color:${deltaCol}">${sign}$${Math.round(Math.abs(delta)).toLocaleString("es-AR")}</div>`:""}
+      <div style="font-weight:700;color:${real===0?"var(--tx3)":deltaCol==="var(--tx3)"?"var(--tx)":deltaCol}">${realLbl3}</div>
+      ${monto&&real!==0?`<div style="font-size:10px;color:var(--tx4)">proy $${Math.round(monto).toLocaleString("es-AR")}</div>`:""}
+      ${delta!==0&&real!==0?`<div style="font-size:10px;color:${deltaCol}">${sign}$${Math.round(Math.abs(delta)).toLocaleString("es-AR")}</div>`:""}
     </div>`;
     cellColor="var(--tx)";
   }else{
