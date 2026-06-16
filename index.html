@@ -2737,7 +2737,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="fg"><label class="fl">Tipo</label><select class="fs" id="cfc-tipo"><option value="Ingreso">Ingreso</option><option value="Egreso">Egreso</option></select></div>
       <div class="fg"><label class="fl">Categoría</label><select class="fs" id="cfc-cat"><option>Operaciones</option><option>Financiero</option><option>Impuestos</option><option>Honorarios</option><option>Servicios</option><option>Inversión</option><option>Otro</option></select></div>
     </div>
-    <div class="fg"><label class="fl">Sociedad</label><select class="fs" id="cfc-soc"><option value="SUDES">SUDES</option><option value="POINTERS">POINTERS</option><option value="Ambas">Ambas</option></select></div>
+    <div class="fgrid">
+      <div class="fg"><label class="fl">Sociedad</label><select class="fs" id="cfc-soc"><option value="SUDES">SUDES</option><option value="POINTERS">POINTERS</option><option value="Ambas">Ambas</option></select></div>
+      <div class="fg"><label class="fl">Línea de negocio</label><select class="fs" id="cfc-linea"><option value="">Sin clasificar</option><option value="A">A — MSP Convenio</option><option value="B">B — Colmedsa</option><option value="C">C — Cursos</option><option value="D">D — COFRADIA</option></select></div>
+    </div>
     <div class="fg"><label class="fl">Notas</label><input class="fi" id="cfc-notas" type="text" placeholder="Observaciones..."></div>
     <div class="ma"><button class="bc" onclick="closeModal('modal-cf-concepto')">Cancelar</button><button class="bk" id="cfc-save-btn" onclick="saveCFConcepto()">Guardar</button></div>
   </div>
@@ -3453,6 +3456,35 @@ async function renderAlertas(){
   const inscMes=cfCobranzas.filter(c=>c.created_at&&c.created_at.startsWith(mesKey)&&c.monto>0);
   const ticketProm=inscMes.length?Math.round(inscMes.reduce((s,c)=>s+(c.monto||0),0)/inscMes.length):0;
 
+  // ── Autonomía: dependencia MSP por línea de negocio ──
+  const LINEAS_INFO={A:{label:"MSP Convenio",color:"#EF4444",icon:"🏛"},B:{label:"Colmedsa",color:"#F97316",icon:"🏥"},C:{label:"Cursos",color:"#10B981",icon:"📚"},D:{label:"COFRADIA",color:"#7C3AED",icon:"🌐"}};
+  // Ingresos por línea — mes actual (monto_real si existe, sino proyectado)
+  const ingLinea={A:0,B:0,C:0,D:0,sin:0};
+  for(const c of cfConceptos){
+    if(c.tipo!=="Ingreso")continue;
+    const v=cfValores.find(vv=>vv.concepto_id===c.id&&vv.periodo===mesKey);
+    const val=v?.monto_real??v?.monto??0;
+    if(!val)continue;
+    const ln=c.linea_negocio;
+    if(ln&&ingLinea[ln]!==undefined)ingLinea[ln]+=val;
+    else ingLinea.sin+=val;
+  }
+  const ingTotalAut=Object.values(ingLinea).reduce((s,v)=>s+v,0);
+  const pctMSP=ingTotalAut>0?Math.round(ingLinea.A/ingTotalAut*100):null;
+  // Evolución 6 meses de dependencia MSP
+  const autTrend=m6.map(m=>{
+    let a=0,tot=0;
+    for(const c of cfConceptos){
+      if(c.tipo!=="Ingreso")continue;
+      const v=cfValores.find(vv=>vv.concepto_id===c.id&&vv.periodo===m.key);
+      const val=v?.monto_real??v?.monto??0;
+      tot+=val;
+      if(c.linea_negocio==="A")a+=val;
+    }
+    return tot>0?Math.round(a/tot*100):null;
+  });
+  const hayDatosAut=ingTotalAut>0;
+
   // ── Recolectar alertas ──
   const alertas=[];
 
@@ -3660,6 +3692,41 @@ async function renderAlertas(){
       ${statCard("✅",tareasActivas,"Tareas activas",tareasVenc?`${tareasVenc} vencida${tareasVenc>1?"s":""}`:tareasActivas?"Al día":"Sin tareas",tareasVenc?"#EF4444":"var(--gr)",`goPage('tareas',document.getElementById('nav-tareas'))`)}
     </div>
 
+    <!-- ── Autonomía MSP ── -->
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tx3);margin-bottom:8px;display:flex;align-items:center;gap:8px">Autonomía · dependencia por línea — ${mesLabel}<span style="flex:1;height:1px;background:var(--b);display:inline-block"></span><span style="font-size:10px;font-weight:600;color:var(--tx4);text-transform:none;letter-spacing:0">Objetivo: MSP &lt; 40%</span></div>
+    ${!hayDatosAut
+      ?`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:20px;margin-bottom:20px;text-align:center;color:var(--tx3);font-size:12px">Sin ingresos clasificados por línea aún — editá los conceptos del Cash Flow para asignarles una línea.</div>`
+      :`<div style="display:grid;grid-template-columns:minmax(200px,1.2fr) repeat(4,1fr);gap:8px;margin-bottom:12px">
+        <!-- Gauge MSP -->
+        <div style="background:var(--surf);border:1px solid ${pctMSP!==null&&pctMSP>60?"#EF4444":pctMSP>40?"#F97316":"var(--b)"};border-radius:var(--rlg);padding:14px 18px">
+          <div style="font-size:10px;color:var(--tx3);margin-bottom:6px;font-weight:600">🏛 DEPENDENCIA MSP</div>
+          <div style="font-size:28px;font-weight:800;color:${pctMSP===null?"var(--tx3)":pctMSP>60?"#EF4444":pctMSP>40?"#F97316":"#10B981"}">${pctMSP!==null?pctMSP+"%":"—"}</div>
+          <div style="margin:8px 0 4px;height:6px;background:var(--surf2);border-radius:4px;overflow:hidden">
+            <div style="height:100%;width:${Math.min(pctMSP??0,100)}%;background:${pctMSP!==null&&pctMSP>60?"#EF4444":pctMSP>40?"#F97316":"#10B981"};border-radius:4px;transition:width .4s"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--tx4)"><span>0%</span><span style="color:var(--am)">⚑ 40%</span><span>100%</span></div>
+          <div style="font-size:10px;color:var(--tx3);margin-top:6px">${fmtM(ingLinea.A)} de ${fmtM(ingTotalAut)} total</div>
+        </div>
+        <!-- Cards por línea -->
+        ${["A","B","C","D"].map(ln=>{
+          const li=LINEAS_INFO[ln];
+          const v=ingLinea[ln];
+          const pct=ingTotalAut>0?Math.round(v/ingTotalAut*100):0;
+          return`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:14px">
+            <div style="font-size:10px;color:var(--tx3);margin-bottom:4px">${li.icon} LÍNEA ${ln}</div>
+            <div style="font-size:13px;font-weight:700;color:var(--tx)">${v>0?fmtM(v):"—"}</div>
+            <div style="font-size:10px;color:${li.color};font-weight:600;margin-top:2px">${pct}%</div>
+            <div style="font-size:9px;color:var(--tx4);margin-top:2px">${li.label}</div>
+          </div>`;
+        }).join("")}
+      </div>
+      <!-- Trend chart -->
+      <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:14px 18px;margin-bottom:20px">
+        <div style="font-size:10px;color:var(--tx3);margin-bottom:8px;font-weight:600">Evolución dependencia MSP — últimos 6 meses</div>
+        <div style="position:relative;height:90px"><canvas id="dashAutCanvas"></canvas></div>
+      </div>`
+    }
+
     <!-- ── Fila 3: KPIs financieros + Compromisos ── -->
     <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tx3);margin-bottom:8px;display:flex;align-items:center;gap:8px">KPIs · Control financiero<span style="flex:1;height:1px;background:var(--b);display:inline-block"></span></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
@@ -3687,8 +3754,35 @@ async function renderAlertas(){
         </div>`
     }`;
 
-  // Render mini chart after DOM is set
+  // Render charts after DOM is set
   requestAnimationFrame(()=>{
+    // Autonomía trend chart
+    const autEl=document.getElementById("dashAutCanvas");
+    if(autEl&&hayDatosAut){
+      destroyChart("dashAut");
+      const isDark=document.body.classList.contains("dark");
+      const tc=isDark?"#94a3b8":"#64748b";
+      const gc=isDark?"rgba(255,255,255,.06)":"rgba(0,0,0,.06)";
+      charts.dashAut=new Chart(autEl,{
+        type:"line",
+        data:{
+          labels:m6.map(m=>m.label),
+          datasets:[
+            {label:"Dependencia MSP %",data:autTrend,borderColor:"#EF4444",backgroundColor:"rgba(239,68,68,.1)",fill:true,tension:.35,pointRadius:4,pointBackgroundColor:autTrend.map(v=>v===null?"transparent":v>60?"#EF4444":v>40?"#F97316":"#10B981"),spanGaps:false},
+            {label:"Objetivo 40%",data:m6.map(()=>40),borderColor:"rgba(251,191,36,.7)",borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false},
+          ]
+        },
+        options:{
+          responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{labels:{color:tc,font:{size:10},boxWidth:8,padding:10}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+(ctx.raw!==null?": "+ctx.raw+"%":"")}}},
+          scales:{
+            x:{ticks:{color:tc,font:{size:10}},grid:{color:gc},border:{display:false}},
+            y:{min:0,max:100,ticks:{color:tc,font:{size:10},callback:v=>v+"%"},grid:{color:gc},border:{display:false}}
+          }
+        }
+      });
+    }
+
     const el=document.getElementById("dashCashCanvas");
     if(!el)return;
     destroyChart("dashCash");
@@ -8038,11 +8132,11 @@ async function saveCFCelda(){
 }
 
 /* Conceptos CRUD */
-function openAddConcepto(){editCFConcId=null;document.getElementById("mcc-title").textContent="Nuevo Concepto";document.getElementById("cfc-save-btn").textContent="Guardar";["cfc-nombre","cfc-notas"].forEach(id=>document.getElementById(id).value="");document.getElementById("cfc-tipo").value="Ingreso";document.getElementById("cfc-cat").value="Operaciones";document.getElementById("cfc-soc").value=cfSociedad;openM("modal-cf-concepto")}
-function editCFConc(id){const c=cfConceptos.find(c=>c.id===id);if(!c)return;editCFConcId=id;document.getElementById("mcc-title").textContent="Editar Concepto";document.getElementById("cfc-save-btn").textContent="Guardar cambios";document.getElementById("cfc-nombre").value=c.nombre||"";document.getElementById("cfc-tipo").value=c.tipo||"Ingreso";document.getElementById("cfc-cat").value=c.categoria||"Operaciones";document.getElementById("cfc-soc").value=c.sociedad||"SUDES";document.getElementById("cfc-notas").value=c.notas||"";openM("modal-cf-concepto")}
+function openAddConcepto(){editCFConcId=null;document.getElementById("mcc-title").textContent="Nuevo Concepto";document.getElementById("cfc-save-btn").textContent="Guardar";["cfc-nombre","cfc-notas"].forEach(id=>document.getElementById(id).value="");document.getElementById("cfc-tipo").value="Ingreso";document.getElementById("cfc-cat").value="Operaciones";document.getElementById("cfc-soc").value=cfSociedad;document.getElementById("cfc-linea").value="";openM("modal-cf-concepto")}
+function editCFConc(id){const c=cfConceptos.find(c=>c.id===id);if(!c)return;editCFConcId=id;document.getElementById("mcc-title").textContent="Editar Concepto";document.getElementById("cfc-save-btn").textContent="Guardar cambios";document.getElementById("cfc-nombre").value=c.nombre||"";document.getElementById("cfc-tipo").value=c.tipo||"Ingreso";document.getElementById("cfc-cat").value=c.categoria||"Operaciones";document.getElementById("cfc-soc").value=c.sociedad||"SUDES";document.getElementById("cfc-linea").value=c.linea_negocio||"";document.getElementById("cfc-notas").value=c.notas||"";openM("modal-cf-concepto")}
 async function saveCFConcepto(){
   const nombre=document.getElementById("cfc-nombre").value.trim();if(!nombre){toast("Escribí un nombre","err");return}
-  const data={nombre,tipo:document.getElementById("cfc-tipo").value,categoria:document.getElementById("cfc-cat").value,sociedad:document.getElementById("cfc-soc").value,notas:document.getElementById("cfc-notas").value.trim()||null};
+  const data={nombre,tipo:document.getElementById("cfc-tipo").value,categoria:document.getElementById("cfc-cat").value,sociedad:document.getElementById("cfc-soc").value,linea_negocio:document.getElementById("cfc-linea").value||null,notas:document.getElementById("cfc-notas").value.trim()||null};
   const btn=document.getElementById("cfc-save-btn");btn.disabled=true;
   try{
     if(editCFConcId){await sb(`cf_conceptos?id=eq.${editCFConcId}`,{method:"PATCH",body:JSON.stringify(data)});const i=cfConceptos.findIndex(c=>c.id===editCFConcId);if(i>=0)cfConceptos[i]={...cfConceptos[i],...data};toast("Concepto actualizado","ok")}
