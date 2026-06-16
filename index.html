@@ -6771,7 +6771,7 @@ async function renderConciliacion() {
   if (!tabla) return;
 
   if (!total) {
-    tabla.innerHTML = `<div class="empty"><div class="ei">🏦</div><div>Importá el XLS del Banco Macro para empezar</div></div>`;
+    tabla.innerHTML = `<div class="empty"><div class="ei">🏦</div><div>Importá el extracto bancario para empezar</div></div>`;
     return;
   }
 
@@ -6948,7 +6948,7 @@ async function concConciliarAuto() {
     const [cobranzas, comprobantes, inscripciones] = await Promise.all([
       sb(`cf_cobranzas?sociedad=eq.${concSociedad}&select=id,descripcion,monto,fecha_vencimiento`).catch(() => []),
       sb(`comprobantes_compra?sociedad=eq.${concSociedad}&select=id,proveedor,total,fecha`).catch(() => []),
-      sb(`inscripciones?select=id,monto,fecha_pago,alumnos(nombre,apellido),cursos(nombre)&fecha_pago=not.is.null`).catch(() => []),
+      sb(`inscripciones?select=id,monto,fecha_pago,alumnos(nombre,apellido),cursos(nombre,sociedad)&cursos.sociedad=eq.${concSociedad}&fecha_pago=not.is.null`).catch(() => []),
     ]);
 
     let matcheados = 0;
