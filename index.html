@@ -1110,6 +1110,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="cd-tab" id="com-tab-met" onclick="showComTab('met')">📈 Métricas</div>
     <div class="cd-tab" id="com-tab-agente" onclick="showComTab('agente')">🤖 Agente IA</div>
     <div class="cd-tab" id="com-tab-videos" onclick="showComTab('videos')">🎬 Videos IA</div>
+    <div class="cd-tab" id="com-tab-msg" onclick="showComTab('msg')">💬 Mensajes</div>
   </div>
   <!-- TAB Publicaciones -->
   <div id="com-tab-pub-content">
@@ -1181,6 +1182,26 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <button class="btn" onclick="openModalNuevoVideo()">+ Nuevo script</button>
     </div>
     <div id="com-videos-lista"><div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div></div>
+  </div>
+  <!-- TAB Mensajes -->
+  <div id="com-tab-msg-content" style="display:none">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+      <select id="msg-fil-plat" onchange="renderComMensajes()" style="padding:6px 10px;border:1px solid var(--b);border-radius:6px;background:var(--surf);color:var(--tx);font-size:13px">
+        <option value="">Todas las plataformas</option>
+        <option value="whatsapp">WhatsApp</option>
+        <option value="instagram">Instagram</option>
+        <option value="facebook">Facebook</option>
+      </select>
+      <select id="msg-fil-estado" onchange="renderComMensajes()" style="padding:6px 10px;border:1px solid var(--b);border-radius:6px;background:var(--surf);color:var(--tx);font-size:13px">
+        <option value="">Todos</option>
+        <option value="respondido">Respondidos</option>
+        <option value="escalado">Escalados</option>
+        <option value="pendiente">Pendientes</option>
+      </select>
+      <span id="msg-badge-escalados" style="display:none;background:#EF4444;color:#fff;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700"></span>
+      <button class="btn" style="margin-left:auto" onclick="renderComMensajes()">↻ Actualizar</button>
+    </div>
+    <div id="com-msg-lista"></div>
   </div>
 </div>
 
@@ -13617,12 +13638,60 @@ let comTabActual="pub";
 
 function showComTab(tab){
   comTabActual=tab;
-  ["pub","met","agente","videos"].forEach(t=>{
+  ["pub","met","agente","videos","msg"].forEach(t=>{
     document.getElementById(`com-tab-${t}`).classList.toggle("on",t===tab);
     document.getElementById(`com-tab-${t}-content`).style.display=t===tab?"block":"none";
   });
   if(tab==="met")renderComMetricas();
   if(tab==="videos")renderVideosIA();
+  if(tab==="msg")renderComMensajes();
+}
+
+async function renderComMensajes(){
+  const cont=document.getElementById("com-msg-lista");
+  const badge=document.getElementById("msg-badge-escalados");
+  if(!cont)return;
+  cont.innerHTML='<div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>';
+  try{
+    const plat=document.getElementById("msg-fil-plat")?.value||"";
+    const estado=document.getElementById("msg-fil-estado")?.value||"";
+    let q="mensajes_publico?order=created_at.desc&limit=100";
+    if(plat)q+=`&plataforma=eq.${plat}`;
+    if(estado)q+=`&estado=eq.${estado}`;
+    const msgs=await sb(q)||[];
+
+    // Badge escalados sin atender
+    const escalados=msgs.filter(m=>m.estado==="escalado").length;
+    if(badge){badge.textContent=`${escalados} escalados`;badge.style.display=escalados>0?"inline":"none";}
+
+    if(!msgs.length){cont.innerHTML='<div class="empty"><div class="ei">💬</div><div>No hay mensajes registrados</div></div>';return;}
+
+    const platIcon={whatsapp:"📱",instagram:"📸",facebook:"👤"};
+    const estadoColor={respondido:"var(--gr)",escalado:"#EF4444",pendiente:"var(--am)"};
+
+    cont.innerHTML=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="border-bottom:2px solid var(--b);color:var(--tx2)">
+        <th style="text-align:left;padding:8px 10px">Canal</th>
+        <th style="text-align:left;padding:8px 10px">Contacto</th>
+        <th style="text-align:left;padding:8px 10px">Mensaje</th>
+        <th style="text-align:left;padding:8px 10px">Respuesta</th>
+        <th style="text-align:left;padding:8px 10px">Estado</th>
+        <th style="text-align:left;padding:8px 10px">Fecha</th>
+      </tr></thead>
+      <tbody>${msgs.map(m=>{
+        const fecha=m.created_at?new Date(m.created_at).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
+        const color=estadoColor[m.estado]||"var(--tx3)";
+        return`<tr style="border-bottom:1px solid var(--b);vertical-align:top">
+          <td style="padding:8px 10px">${platIcon[m.plataforma]||"💬"} ${m.plataforma||"—"}</td>
+          <td style="padding:8px 10px;white-space:nowrap"><div style="font-weight:600">${m.from_name||"—"}</div><div style="color:var(--tx3);font-size:11px">${m.from_id||""}</div></td>
+          <td style="padding:8px 10px;max-width:220px"><div style="white-space:pre-wrap;word-break:break-word">${m.mensaje||"—"}</div></td>
+          <td style="padding:8px 10px;max-width:260px;color:var(--tx2)"><div style="white-space:pre-wrap;word-break:break-word">${m.respuesta||"—"}${m.motivo_escalado?`<div style="margin-top:4px;font-size:11px;color:#EF4444">⚠ ${m.motivo_escalado}</div>`:""}</div></td>
+          <td style="padding:8px 10px"><span style="color:${color};font-weight:600;font-size:12px">${m.estado||"—"}</span></td>
+          <td style="padding:8px 10px;white-space:nowrap;color:var(--tx3);font-size:12px">${fecha}</td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table></div>`;
+  }catch(e){cont.innerHTML=`<div class="empty"><div class="ei">⚠</div><div>Error: ${e.message}</div></div>`;}
 }
 
 async function loadComunicaciones(){
