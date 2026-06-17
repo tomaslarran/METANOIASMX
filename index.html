@@ -13716,7 +13716,8 @@ async function renderMsgDetalle(fromId,plataforma){
       <div style="display:flex;align-items:center;gap:10px;padding:10px 0 14px;border-bottom:1px solid var(--b);margin-bottom:14px">
         <button onclick="volverListaMsg()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--tx);padding:0 4px">←</button>
         <span style="font-size:20px">${platIcon[plataforma]||"💬"}</span>
-        <div><div style="font-weight:700;font-size:15px">${nombre}</div><div style="color:var(--tx3);font-size:12px">${fromId}</div></div>
+        <div style="flex:1"><div style="font-weight:700;font-size:15px">${nombre}</div><div style="color:var(--tx3);font-size:12px">${fromId}</div></div>
+        <button onclick="eliminarConvMsg('${fromId}','${plataforma}','${nombre}')" style="background:none;border:1px solid #EF4444;color:#EF4444;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer">🗑 Eliminar</button>
       </div>
       <div id="msg-chat-scroll" style="display:flex;flex-direction:column;gap:12px;max-height:60vh;overflow-y:auto;padding-right:4px">
         ${msgs.map(m=>{
@@ -13748,6 +13749,15 @@ async function renderMsgDetalle(fromId,plataforma){
 }
 
 function volverListaMsg(){msgConvActual=null;renderComMensajes();}
+
+async function eliminarConvMsg(fromId,plataforma,nombre){
+  if(!confirm(`¿Eliminar toda la conversación con ${nombre}?\nEsta acción no se puede deshacer.`))return;
+  try{
+    await sb(`mensajes_publico?from_id=eq.${fromId}&plataforma=eq.${plataforma}`,{method:"DELETE"});
+    toast("Conversación eliminada","ok");
+    volverListaMsg();
+  }catch(e){toast("Error al eliminar: "+e.message,"err");}
+}
 
 async function msgFeedback(id,valor){
   try{
