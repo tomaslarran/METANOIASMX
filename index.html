@@ -13647,7 +13647,10 @@ function showComTab(tab){
   if(tab==="msg")renderComMensajes();
 }
 
+let msgConvActual=null;
+
 async function renderComMensajes(){
+  if(msgConvActual)return renderMsgDetalle(msgConvActual.fromId,msgConvActual.plataforma);
   const cont=document.getElementById("com-msg-lista");
   const badge=document.getElementById("msg-badge-escalados");
   if(!cont)return;
@@ -13655,43 +13658,103 @@ async function renderComMensajes(){
   try{
     const plat=document.getElementById("msg-fil-plat")?.value||"";
     const estado=document.getElementById("msg-fil-estado")?.value||"";
-    let q="mensajes_publico?order=created_at.desc&limit=100";
+    let q="mensajes_publico?order=created_at.desc&limit=500";
     if(plat)q+=`&plataforma=eq.${plat}`;
-    if(estado)q+=`&estado=eq.${estado}`;
     const msgs=await sb(q)||[];
-
-    // Badge escalados sin atender
-    const escalados=msgs.filter(m=>m.estado==="escalado").length;
-    if(badge){badge.textContent=`${escalados} escalados`;badge.style.display=escalados>0?"inline":"none";}
-
-    if(!msgs.length){cont.innerHTML='<div class="empty"><div class="ei">💬</div><div>No hay mensajes registrados</div></div>';return;}
-
+    const nEsc=msgs.filter(m=>m.estado==="escalado").length;
+    if(badge){badge.textContent=`${nEsc} escalados`;badge.style.display=nEsc>0?"inline":"none";}
+    // Agrupar por conversación
+    const convMap={};
+    for(const m of msgs){
+      const key=`${m.plataforma}||${m.from_id}`;
+      if(!convMap[key]){convMap[key]={plataforma:m.plataforma,from_id:m.from_id,from_name:m.from_name,msgs:[],escalado:false,ultimo:m.created_at};}
+      convMap[key].msgs.push(m);
+      if(m.estado==="escalado")convMap[key].escalado=true;
+    }
+    let convs=Object.values(convMap).sort((a,b)=>new Date(b.ultimo)-new Date(a.ultimo));
+    if(estado)convs=convs.filter(c=>estado==="escalado"?c.escalado:c.msgs.some(m=>m.estado===estado));
+    if(!convs.length){cont.innerHTML='<div class="empty"><div class="ei">💬</div><div>No hay conversaciones registradas</div></div>';return;}
     const platIcon={whatsapp:"📱",instagram:"📸",facebook:"👤"};
-    const estadoColor={respondido:"var(--gr)",escalado:"#EF4444",pendiente:"var(--am)"};
-
-    cont.innerHTML=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
-      <thead><tr style="border-bottom:2px solid var(--b);color:var(--tx2)">
-        <th style="text-align:left;padding:8px 10px">Canal</th>
-        <th style="text-align:left;padding:8px 10px">Contacto</th>
-        <th style="text-align:left;padding:8px 10px">Mensaje</th>
-        <th style="text-align:left;padding:8px 10px">Respuesta</th>
-        <th style="text-align:left;padding:8px 10px">Estado</th>
-        <th style="text-align:left;padding:8px 10px">Fecha</th>
-      </tr></thead>
-      <tbody>${msgs.map(m=>{
-        const fecha=m.created_at?new Date(m.created_at).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
-        const color=estadoColor[m.estado]||"var(--tx3)";
-        return`<tr style="border-bottom:1px solid var(--b);vertical-align:top">
-          <td style="padding:8px 10px">${platIcon[m.plataforma]||"💬"} ${m.plataforma||"—"}</td>
-          <td style="padding:8px 10px;white-space:nowrap"><div style="font-weight:600">${m.from_name||"—"}</div><div style="color:var(--tx3);font-size:11px">${m.from_id||""}</div></td>
-          <td style="padding:8px 10px;max-width:220px"><div style="white-space:pre-wrap;word-break:break-word">${m.mensaje||"—"}</div></td>
-          <td style="padding:8px 10px;max-width:260px;color:var(--tx2)"><div style="white-space:pre-wrap;word-break:break-word">${m.respuesta||"—"}${m.motivo_escalado?`<div style="margin-top:4px;font-size:11px;color:#EF4444">⚠ ${m.motivo_escalado}</div>`:""}</div></td>
-          <td style="padding:8px 10px"><span style="color:${color};font-weight:600;font-size:12px">${m.estado||"—"}</span></td>
-          <td style="padding:8px 10px;white-space:nowrap;color:var(--tx3);font-size:12px">${fecha}</td>
-        </tr>`;
-      }).join("")}</tbody>
-    </table></div>`;
+    cont.innerHTML=convs.map(c=>{
+      const ultimo=c.msgs[0];
+      const fecha=c.ultimo?new Date(c.ultimo).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
+      const preview=(ultimo?.mensaje||"").slice(0,60)+(ultimo?.mensaje?.length>60?"…":"");
+      return`<div onclick="abrirConvMsg('${c.from_id}','${c.plataforma}')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--b);cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+        <div style="font-size:24px;flex-shrink:0">${platIcon[c.plataforma]||"💬"}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+            <span style="font-weight:700;font-size:14px">${c.from_name||c.from_id}</span>
+            ${c.escalado?'<span style="background:#EF4444;color:#fff;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700">escalado</span>':""}
+          </div>
+          <div style="color:var(--tx3);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${preview||"—"}</div>
+        </div>
+        <div style="flex-shrink:0;text-align:right">
+          <div style="color:var(--tx3);font-size:11px">${fecha}</div>
+          <div style="color:var(--tx2);font-size:12px;margin-top:2px">${c.msgs.length} msg${c.msgs.length!==1?"s":""}</div>
+        </div>
+        <div style="color:var(--tx3);font-size:18px">›</div>
+      </div>`;
+    }).join("");
   }catch(e){cont.innerHTML=`<div class="empty"><div class="ei">⚠</div><div>Error: ${e.message}</div></div>`;}
+}
+
+function abrirConvMsg(fromId,plataforma){
+  msgConvActual={fromId,plataforma};
+  renderMsgDetalle(fromId,plataforma);
+}
+
+async function renderMsgDetalle(fromId,plataforma){
+  const cont=document.getElementById("com-msg-lista");
+  if(!cont)return;
+  cont.innerHTML='<div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>';
+  try{
+    const msgs=await sb(`mensajes_publico?from_id=eq.${fromId}&plataforma=eq.${plataforma}&order=created_at.asc&limit=200`)||[];
+    if(!msgs.length){cont.innerHTML='<div class="empty"><div class="ei">💬</div><div>Sin mensajes</div></div>';return;}
+    const nombre=msgs[0]?.from_name||fromId;
+    const platIcon={whatsapp:"📱",instagram:"📸",facebook:"👤"};
+    cont.innerHTML=`
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 0 14px;border-bottom:1px solid var(--b);margin-bottom:14px">
+        <button onclick="volverListaMsg()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--tx);padding:0 4px">←</button>
+        <span style="font-size:20px">${platIcon[plataforma]||"💬"}</span>
+        <div><div style="font-weight:700;font-size:15px">${nombre}</div><div style="color:var(--tx3);font-size:12px">${fromId}</div></div>
+      </div>
+      <div id="msg-chat-scroll" style="display:flex;flex-direction:column;gap:12px;max-height:60vh;overflow-y:auto;padding-right:4px">
+        ${msgs.map(m=>{
+          const fecha=m.created_at?new Date(m.created_at).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"";
+          const like=m.feedback==="like";const dislike=m.feedback==="dislike";
+          return`
+            <div style="display:flex;justify-content:flex-end">
+              <div style="background:var(--primary);color:#fff;border-radius:16px 16px 4px 16px;padding:10px 14px;max-width:70%;font-size:13px;white-space:pre-wrap;word-break:break-word">
+                ${m.mensaje||""}
+                <div style="font-size:10px;opacity:.7;margin-top:4px;text-align:right">${fecha}</div>
+              </div>
+            </div>
+            ${m.respuesta?`<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px">
+              <div style="background:var(--surf);border:1px solid var(--b);border-radius:16px 16px 16px 4px;padding:10px 14px;max-width:70%;font-size:13px;white-space:pre-wrap;word-break:break-word">
+                ${m.respuesta}
+                ${m.motivo_escalado?`<div style="margin-top:6px;font-size:11px;color:#EF4444">⚠ Escalado: ${m.motivo_escalado}</div>`:""}
+                <div style="font-size:10px;color:var(--tx3);margin-top:4px">${fecha}</div>
+              </div>
+              <div style="display:flex;gap:6px;padding-left:4px">
+                <button onclick="msgFeedback('${m.id}','like')" style="background:${like?"#10B981":"var(--surf)"};color:${like?"#fff":"var(--tx3)"};border:1px solid var(--b);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer">👍${like?" ✓":""}</button>
+                <button onclick="msgFeedback('${m.id}','dislike')" style="background:${dislike?"#EF4444":"var(--surf)"};color:${dislike?"#fff":"var(--tx3)"};border:1px solid var(--b);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer">👎${dislike?" ✓":""}</button>
+              </div>
+            </div>`:""}`;
+        }).join("")}
+      </div>`;
+    const sc=document.getElementById("msg-chat-scroll");
+    if(sc)sc.scrollTop=sc.scrollHeight;
+  }catch(e){cont.innerHTML=`<div class="empty"><div class="ei">⚠</div><div>Error: ${e.message}</div></div>`;}
+}
+
+function volverListaMsg(){msgConvActual=null;renderComMensajes();}
+
+async function msgFeedback(id,valor){
+  try{
+    await sb(`mensajes_publico?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({feedback:valor})});
+    if(msgConvActual)renderMsgDetalle(msgConvActual.fromId,msgConvActual.plataforma);
+    toast(valor==="like"?"Respuesta marcada como buena 👍":"Marcada para mejorar 👎","ok");
+  }catch(e){toast("Error al guardar feedback","err");}
 }
 
 async function loadComunicaciones(){
