@@ -10598,7 +10598,11 @@ async function reunChatEnviar(event){
   if(!msg)return;
   input.value="";
 
-  msgs.innerHTML+=`<div style="text-align:right;margin:8px 0"><span style="background:var(--ac);color:#fff;padding:6px 12px;border-radius:12px 12px 2px 12px;font-size:13px;display:inline-block;max-width:80%">${msg}</span></div>`;
+  // Limpiar placeholder inicial al primer mensaje
+  const placeholder=msgs.querySelector("div[style*='text-align:center']");
+  if(placeholder)placeholder.remove();
+
+  msgs.innerHTML+=`<div style="text-align:right;margin:8px 0"><span style="background:var(--ac);color:#fff;padding:6px 12px;border-radius:12px 12px 2px 12px;font-size:13px;display:inline-block;max-width:80%">${escHtml(msg)}</span></div>`;
   msgs.scrollTop=msgs.scrollHeight;
 
   const loading=document.createElement("div");
