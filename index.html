@@ -12868,8 +12868,9 @@ function buildCompMesSelect(){
   if(!sel)return;
   const meses=new Map();
   comprobantes.forEach(c=>{
-    if(!c.fecha)return;
-    const ym=c.fecha.slice(0,7); // "2026-04"
+    const fi=c.fecha_imputacion||c.fecha;
+    if(!fi)return;
+    const ym=fi.slice(0,7); // "2026-04"
     if(!meses.has(ym)){
       const [y,m]=ym.split("-");
       const nombre=new Date(+y,+m-1,1).toLocaleDateString("es-AR",{month:"long",year:"numeric"});
