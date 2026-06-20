@@ -12257,6 +12257,7 @@ async function loadImpuestos(){
       sb("ganancias_anticipos?select=*&order=anio.desc,nro.asc").catch(()=>[]),
       sb("impuestos_declaraciones?select=*").catch(()=>[])
     ]);
+    if(!comprobantes.length) comprobantes=await sb("comprobantes_compra?select=*&order=fecha.desc").catch(()=>[]);
   }catch(e){impuestosIngresos=[];autonomosCuotas=[];gananciasAnticipos=[];}
   setImpTab(impTab);
 }
