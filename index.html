@@ -12560,7 +12560,7 @@ function renderImpAutonomos(){
         <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
           <input type="number" value="${monto||""}" placeholder="0" style="width:70px;text-align:right;background:transparent;border:none;border-bottom:1px dashed var(--b2);color:${monto?"var(--re)":"var(--tx3)"};font-size:12px;outline:none;font-family:var(--f)"
             onchange="saveAutonomo('${m.key}','${nombre}','monto',this.value)">
-          ${monto?`<button onclick="marcarAutonomoPagado('${m.key}','${nombre}')" style="background:none;border:none;cursor:pointer;color:var(--tx4);font-size:10px;padding:1px 3px;border-radius:3px" title="Marcar pagado" onmouseenter="this.style.color='var(--gr)'" onmouseleave="this.style.color='var(--tx4)'">✓</button>`:""}
+          ${monto?`<button onclick="marcarAutonomoPagado('${m.key}','${nombre}')" style="margin-top:3px;background:var(--surf);border:1px solid var(--gr);border-radius:4px;padding:2px 8px;font-size:10px;color:var(--gr);cursor:pointer;white-space:nowrap" onmouseenter="this.style.background='var(--gr)';this.style.color='#fff'" onmouseleave="this.style.background='var(--surf)';this.style.color='var(--gr)'">Pagar →</button>`:""}
         </div>
       </td>`;
     }).join("");
