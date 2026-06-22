@@ -3371,7 +3371,7 @@ function fillGlobal(){
     <label class="uc" id="uc-${u.id}">
       <input type="checkbox" value="${u.id}">
       <span style="width:7px;height:7px;border-radius:50%;background:${UC[i%UC.length]};flex-shrink:0"></span>
-      ${u.nombre}
+      ${esc(u.nombre)}
     </label>`).join("");
   mc.querySelectorAll(".uc").forEach(el=>{
     el.querySelector("input").addEventListener("change",()=>el.classList.toggle("sel2",el.querySelector("input").checked));
@@ -3388,7 +3388,7 @@ function fillGlobal(){
   const ns=document.getElementById("notifUserSel");
   const isAdmin=loggedUser?.rol==="admin";
   const notifUsers=isAdmin?users:users.filter(u=>u.id===loggedUser?.id);
-  ns.innerHTML=notifUsers.map(u=>`<button class="nu-btn" onclick="selectNotifUser('${u.id}',this)">${u.nombre}</button>`).join("");
+  ns.innerHTML=notifUsers.map(u=>`<button class="nu-btn" onclick="selectNotifUser('${u.id}',this)">${esc(u.nombre)}</button>`).join("");
   if(notifUsers.length>0){const first=ns.querySelector(".nu-btn");if(first){first.classList.add("on");selectNotifUser(notifUsers[0].id,first)}}
 
   // Selector de responsable para rutinas
@@ -4087,7 +4087,7 @@ function taskCard(t){
   const assHtml=ass.map(id=>{const n=uName(id);const c2=uColor(id);return n?`<span class="apill" style="background:${c2}18;border-color:${c2}40;color:${c2}">${n}</span>`:""}).join("");
   const sBtns=Object.entries(BC).map(([s,b])=>`<button class="sb ${b.cls}${s===t.status?" cur":""}" onclick="event.stopPropagation();chgTaskStatus('${t.id}','${s}',this)">${b.label}</button>`).join("");
   const prioOpts=["","Alta","Media","Baja"].map(v=>`<option value="${v}"${t.prioridad===v?" selected":""}>${v||"Sin prioridad"}</option>`).join("");
-  const assChecks=users.map((u,i)=>{const checked=ass.includes(u.id);const col=UC[i%UC.length];return`<label class="uc${checked?" sel2":""}" id="ac-${t.id}-${u.id}"><input type="checkbox" value="${u.id}"${checked?" checked":""} onchange="toggleAssignee('${t.id}','${u.id}',this.checked)"><span style="width:7px;height:7px;border-radius:50%;background:${col};flex-shrink:0"></span>${u.nombre}</label>`}).join("");
+  const assChecks=users.map((u,i)=>{const checked=ass.includes(u.id);const col=UC[i%UC.length];return`<label class="uc${checked?" sel2":""}" id="ac-${t.id}-${u.id}"><input type="checkbox" value="${u.id}"${checked?" checked":""} onchange="toggleAssignee('${t.id}','${u.id}',this.checked)"><span style="width:7px;height:7px;border-radius:50%;background:${col};flex-shrink:0"></span>${esc(u.nombre)}</label>`}).join("");
   return`<div class="tc" id="c-${t.id}">
   <div class="tcm" onclick="tog('${t.id}')">
     <div class="stripe ${pc?pc.stripe:"str-n"}"></div>
@@ -4294,7 +4294,7 @@ function renderCursos(){
       <div class="cc-top">
         ${estadoBadge(curso.estado)}
         <div class="cc-nombre">${esc(curso.nombre)}</div>
-        <div class="cc-tipo">${curso.tipo||""} · ${curso.modalidad||""}</div>
+        <div class="cc-tipo">${esc(curso.tipo||"")} · ${esc(curso.modalidad||"")}</div>
       </div>
       <div class="cc-bottom">
         <div class="cc-meta">
@@ -4302,7 +4302,7 @@ function renderCursos(){
           ${curso.cupos_max?`<span class="cc-pill">👥 ${curso.cupos_inscriptos||0}/${curso.cupos_max}</span>`:""}
           ${curso.arancel?`<span class="cc-pill">💰 $${curso.arancel.toLocaleString()}</span>`:""}
           ${curso.tiene_after?`<span class="cc-pill" style="color:#C4B5FD">🍽️ Catering</span>`:""}
-          ${prov?`<span class="cc-pill">🏢 ${prov.nombre}</span>`:""}
+          ${prov?`<span class="cc-pill">🏢 ${esc(prov.nombre)}</span>`:""}
         </div>
         <div class="cc-progress">
           <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--tx3)"><span>Progreso</span><span>${pct}%</span></div>
@@ -6077,7 +6077,7 @@ function renderCharts(){
   charts.persona=new Chart(document.getElementById("chartPersona"),{type:"bar",data:{labels:pd.map(p=>p.label),datasets:[{data:pd.map(p=>p.count),backgroundColor:pd.map(p=>p.color+"CC"),borderRadius:4,borderSkipped:false}]},options:{...CDEFS,plugins:{legend:{display:false}},indexAxis:"y",scales:{x:{ticks:{color:"#5A5C72",font:{size:10},stepSize:1},grid:{color:"rgba(255,255,255,.05)"}},y:{ticks:{color:"#9899B0",font:{size:11}},grid:{display:false}}}}});
 
   const pl=document.getElementById("progList");
-  pl.innerHTML=users.map((u,i)=>{const mine=tasks.filter(t=>(t.assignees||[]).includes(u.id));const done=mine.filter(t=>t.status==="Listo").length;const pct=mine.length?Math.round(done/mine.length*100):0;const col=UC[i%UC.length];return`<div class="prog-item" style="flex-direction:row"><span class="prog-name">${u.nombre}</span><div class="prog-bw"><div class="prog-b" style="width:${pct}%;background:${col}"></div></div><span class="prog-pct">${pct}%</span></div>`;}).join("");
+  pl.innerHTML=users.map((u,i)=>{const mine=tasks.filter(t=>(t.assignees||[]).includes(u.id));const done=mine.filter(t=>t.status==="Listo").length;const pct=mine.length?Math.round(done/mine.length*100):0;const col=UC[i%UC.length];return`<div class="prog-item" style="flex-direction:row"><span class="prog-name">${esc(u.nombre)}</span><div class="prog-bw"><div class="prog-b" style="width:${pct}%;background:${col}"></div></div><span class="prog-pct">${pct}%</span></div>`;}).join("");
 
   destroyChart("cursos");
   const estados=["Borrador","Convocatoria","Inscripciones","En curso","Completado","Cancelado"];
@@ -6594,7 +6594,7 @@ function rutinaCard(r){
       <div class="tmeta">
         <span class="badge ${freqCls}">${r.frecuencia}</span>
         <span class="badge ${prioCls}">${r.prioridad}</span>
-        ${u?`<span class="apill" style="background:${col}18;border-color:${col}40;color:${col}">${u.nombre}</span>`:""}
+        ${u?`<span class="apill" style="background:${col}18;border-color:${col}40;color:${col}">${esc(u.nombre)}</span>`:""}
       </div>
       <div style="font-size:11px;color:var(--tx3);margin-top:4px">📅 ${fechaInfo}</div>
       ${r.notas?`<div style="font-size:11px;color:var(--tx3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.notas)}">${esc(r.notas)}</div>`:""}
@@ -14445,17 +14445,17 @@ function renderOportunidades(){
     return `<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:14px 16px;margin-bottom:8px;cursor:pointer" onclick="openEditOportunidad('${o.id}')">
       <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">
         <div style="flex:1;min-width:200px">
-          <div style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:4px;line-height:1.4">${o.idea_cruda||"(sin descripción)"}</div>
-          ${o.definicion?`<div style="font-size:11px;color:var(--tx2);margin-bottom:4px">${o.definicion}</div>`:""}
+          <div style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:4px;line-height:1.4">${esc(o.idea_cruda||"(sin descripción)")}</div>
+          ${o.definicion?`<div style="font-size:11px;color:var(--tx2);margin-bottom:4px">${esc(o.definicion)}</div>`:""}
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             ${tipo}${linea}${archivos}
-            ${o.ejecutor?`<span style="font-size:10px;color:var(--tx3)">→ ${o.ejecutor}</span>`:""}
+            ${o.ejecutor?`<span style="font-size:10px;color:var(--tx3)">→ ${esc(o.ejecutor)}</span>`:""}
             ${fecha?`<span style="font-size:10px;color:var(--tx3)">${fecha}</span>`:""}
           </div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
-          <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;background:${est.bg};color:${est.color};white-space:nowrap">${o.estado||"Crudo"}</span>
-          ${o.primer_paso?`<span style="font-size:10px;color:var(--tx3);text-align:right;max-width:180px">→ ${o.primer_paso}</span>`:""}
+          <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;background:${est.bg};color:${est.color};white-space:nowrap">${esc(o.estado||"Crudo")}</span>
+          ${o.primer_paso?`<span style="font-size:10px;color:var(--tx3);text-align:right;max-width:180px">→ ${esc(o.primer_paso)}</span>`:""}
         </div>
       </div>
     </div>`;
@@ -14662,7 +14662,7 @@ async function oportChatEnviar(){
   const msgs=document.getElementById("oport-chat-msgs");
 
   // Agregar mensaje del usuario
-  msgs.innerHTML+=`<div style="align-self:flex-end;background:var(--bl);color:#fff;border-radius:10px 10px 2px 10px;padding:7px 12px;font-size:12px;max-width:85%">${msg}</div>`;
+  msgs.innerHTML+=`<div style="align-self:flex-end;background:var(--bl);color:#fff;border-radius:10px 10px 2px 10px;padding:7px 12px;font-size:12px;max-width:85%">${esc(msg)}</div>`;
   const loading=document.createElement("div");
   loading.style.cssText="align-self:flex-start;background:var(--surf2);border:1px solid var(--b);border-radius:10px 10px 10px 2px;padding:7px 12px;font-size:12px;color:var(--tx3)";
   loading.textContent="Analizando...";
@@ -14820,7 +14820,7 @@ function renderCotizaciones(){
     <th>N°</th><th>Cliente</th><th>Vía</th><th>Total USD</th><th>Total ARS</th><th>Estado</th><th>Fecha</th><th></th>
   </tr></thead><tbody>${rows.map(c=>`<tr>
     <td style="font-family:monospace;font-size:12px">${c.numero||"—"}</td>
-    <td><strong>${c.cliente||"—"}</strong>${c.contacto?`<br><span style="font-size:11px;color:var(--tx3)">${c.contacto}</span>`:""}</td>
+    <td><strong>${esc(c.cliente||"—")}</strong>${c.contacto?`<br><span style="font-size:11px;color:var(--tx3)">${esc(c.contacto)}</span>`:""}</td>
     <td><span style="font-size:11px;font-weight:700;color:${c.via==="PEV"?"var(--am)":"var(--bl)"}">${c.via==="PEV"?"PEV "+(c.pev_etapa||""):"VÍA "+(c.via||"A")}</span></td>
     <td>USD ${(c.total_usd||0).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
     <td>$${(c.total_ars||0).toLocaleString("es-AR",{maximumFractionDigits:0})}</td>
