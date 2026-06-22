@@ -7,6 +7,28 @@ const TWILIO_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN")!;
 serve(async (req) => {
   try {
     const body = await req.text();
+
+    // ── Verificación de firma Twilio (X-Twilio-Signature) ──────────────────────
+    const twilioToken = Deno.env.get("TWILIO_AUTH_TOKEN");
+    if (twilioToken) {
+      const twilioSig = req.headers.get("X-Twilio-Signature") || "";
+      const params2 = new URLSearchParams(body);
+      const sortedParams = [...params2.entries()].sort(([a], [b]) => a.localeCompare(b));
+      let stringToSign = req.url;
+      for (const [k, v] of sortedParams) stringToSign += k + v;
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        "raw", encoder.encode(twilioToken),
+        { name: "HMAC", hash: "SHA-1" }, false, ["sign"]
+      );
+      const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(stringToSign));
+      const expected = btoa(String.fromCharCode(...new Uint8Array(sig)));
+      if (twilioSig !== expected) {
+        console.error("Invalid Twilio signature");
+        return new Response("Forbidden", { status: 403 });
+      }
+    }
+
     const params = new URLSearchParams(body);
     const from = params.get("From") ?? "";
     const message = params.get("Body")?.trim() ?? "";
