@@ -32,6 +32,7 @@ Panel web interno para **Metanoia SMX**, empresa de capacitación médica en sim
 - `qrcode-generator` — QR codes
 - `Chart.js` — gráficos
 - `marked` — markdown rendering
+- `mammoth` — extracción de texto de archivos .docx (cargado dinámicamente en chat IA de cursos)
 
 ---
 
@@ -73,6 +74,8 @@ Panel web interno para **Metanoia SMX**, empresa de capacitación médica en sim
 
 **Implementación:** CSS classes en `body` (`rol-comunicaciones`, `rol-instructor`, `rol-logistica`). Los nav items tienen clases `comu-visible`, `inst-visible`, `logi-visible`.
 
+**Página inicial por rol** (función `enterPanel`): admin→alertas, comunicaciones→comunicaciones, instructor→cursos, logistica→comprobantes.
+
 ---
 
 ## Edge Functions
@@ -94,7 +97,7 @@ Panel web interno para **Metanoia SMX**, empresa de capacitación médica en sim
 **Secrets de Supabase:**
 - `ANTHROPIC_API_KEY` — Claude API
 - `META_ACCESS_TOKEN` — Instagram (@metanoiasmx, ID: 17841470857318268)
-- `META_FB_PAGE_TOKEN` — Facebook Page (Metanoiasme.ok, ID: 478694861999786) — **vence periódicamente, renovar en Graph API Explorer**
+- `META_FB_PAGE_TOKEN` — Facebook Page (Metanoiasme.ok, ID: 478694861999786) — **token permanente via Usuario del Sistema "Panel Metanoia" en Meta Business Suite** (ver nota técnica #1)
 - `TAVILY_API_KEY` — búsqueda web para agente comunicaciones
 - `LINKEDIN_ACCESS_TOKEN` — LinkedIn OAuth token (app "Panel Metanoia", vence en 2 meses)
 
@@ -200,6 +203,7 @@ git push
 - **Flor** (florencia.i.bustamante@gmail.com) — Comunicaciones
 - **Dani** (danielaspostigo@gmail.com) — Comunicaciones
 - **Octavio Marquez** (octavio.marquez@getdarwin.ai) — Comunicaciones (Darwin AI)
+- **Derlin** (derlinjmuas@gmail.com) — Instructor
 
 ---
 
@@ -265,20 +269,60 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 ## Pendientes / Roadmap
 
 - [ ] LinkedIn sync — esperando aprobación Community Management API (app "Metanoia CMS", enviado 2 Jun 2026)
+- [ ] Darwin integration — hub de comunicaciones (WhatsApp/consultas), esperando APIs de Octavio (eventos: Session.opened, Session.closed, session.stage.transition, session.forwarded.*)
+- [ ] Integración E-learning — transmisión automática de cursos a plataforma metanoiasme.com
 - [ ] Módulo COFRADIA — gestión de planes, suscriptores y contenido (Línea D)
 - [ ] Intake de oportunidades en el panel — Mario carga ideas, Amparo las procesa
 - [ ] Dashboard de autonomía — KPI dependencia MSP vs privado en tiempo real
-- [ ] Darwin integration — hub de comunicaciones (WhatsApp/consultas), esperando APIs de Octavio
-- [ ] Integración E-learning — transmisión automática de cursos a plataforma metanoiasme.com
 - [ ] Agentes cloud autónomos para automatizaciones (gstack instalado)
 - [ ] Conciliación bancaria POINTERS (actualmente solo SUDES)
 - [ ] Mejoras Cash Flow — gráficos de evolución de caja
+
+## Implementado (4 Jun 2026)
+- ✅ Sistema de diplomas: Canvas + envío automático por email (SMTP) al finalizar curso
+- ✅ Modo claro/oscuro con toggle en topbar (guarda preferencia en localStorage)
+- ✅ Búsqueda de alumnos al agregar inscripto (dropdown filtrable)
+- ✅ Alertas de tokens API (META_FB_PAGE_TOKEN, META_ACCESS_TOKEN, LINKEDIN_ACCESS_TOKEN) — badge en topbar + alertas en dashboard
+- ✅ Tabla `tokens_api` en Supabase para trackear vencimientos
+- ✅ Tab "Resumen semanal" en Cash Flow con posición de caja, movimientos, cobranzas, préstamos e inversiones
+- ✅ Script CLI `resumen_cashflow.py` instalado en `~/.claude/skills/cashflow/`
+- ✅ Script `cashflow.ps1` en carpeta Metanoia para uso rápido en PowerShell
+- ✅ Skill de emails institucionales instalado en `~/.claude/skills/emails/`
+- ✅ CLAUDE.md actualizado con estrategia, modelo de negocio y roles (Documento Base v4)
+
+## Implementado (9 Jun 2026)
+- ✅ Fix login: cada rol redirige a su página inicial accesible (instructor→cursos, logistica→comprobantes)
+- ✅ Dropdown "Cambiar estado" en cursos con los 6 estados y badge de color
+- ✅ Soporte .docx en chat IA de cursos (mammoth.js extrae texto en browser, edge function lo procesa)
+- ✅ agente-cursos: reglas de calendario (feriados 2026, fines de semana, superposición de cursos)
+- ✅ agente-cursos: resumen compacto de cursos para ahorrar tokens
+- ✅ Facebook sync funcionando con token permanente via Usuario del Sistema en Meta Business Suite
+- ✅ sync-instagram: alcance Instagram funcionando (reach,saved); Facebook trae likes+comentarios sin insights
+
+## Implementado (22 Jun 2026) — Seguridad
+- ✅ RLS habilitado en 21 tablas + políticas `{public}` eliminadas (solo `authenticated` puede leer/escribir)
+- ✅ XSS sanitizado en módulo mensajes externos (Instagram/FB/WA) — todos los campos de usuario externo pasan por `esc()`
+- ✅ XSS sanitizado en módulos tareas, cursos, rutinas, oportunidades, cotizaciones
+- ✅ JWT validation en 11 Edge Functions (todas excepto webhooks Meta/Twilio)
+- ✅ CORS restringido de `*` a `https://tomaslarran.github.io` en todas las Edge Functions
+- ✅ Frontend usa `authToken` (JWT de sesión del usuario) en lugar de anon key al llamar Edge Functions
+- ✅ Valores hardcodeados en agente-mensajes (números WA, VERIFY_TOKEN) movidos a Supabase Secrets
+- ✅ Verificación de firma webhook Meta (`X-Hub-Signature-256`) en agente-mensajes
+- ✅ Verificación de firma webhook Twilio (`X-Twilio-Signature`) en whatsapp-agente
+- ✅ Backup mensual automatizado (`backup_mensual.ps1`) programado el día 20 de cada mes a las 9AM
 
 ---
 
 ## Notas técnicas críticas
 
-1. **Token Facebook:** `META_FB_PAGE_TOKEN` vence periódicamente (~60 días). Renovar en developers.facebook.com → Herramientas → Explorador API Graph → `me/accounts`.
+1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:
+   - **Meta Business Suite** → Configuración → Usuarios → Usuarios del sistema → "Panel Metanoia" (Admin)
+   - Asignar activos: página Metanoiasme.ok con todos los permisos
+   - Asignar app: **Configuración → Apps → Panel control → Asignar personas** (seleccionar "Panel Metanoia")
+   - Generar token con expiración **"Nunca"** y permisos: `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`, `instagram_basic`, `instagram_manage_insights`, etc.
+   - Con ese System User token, llamar a `GET https://graph.facebook.com/v21.0/me/accounts?access_token=TOKEN` → copiar el `access_token` de la página Metanoiasme.ok del JSON de respuesta (es el token permanente de la page)
+   - Pegar ese page token como `META_FB_PAGE_TOKEN` en Supabase → Edge Functions → Secrets
+   - **NOTA:** Si se pierde el token o se regenera, repetir el paso "Generar token" desde el mismo System User (no hay que crear uno nuevo).
 
 2. **Token Instagram:** `META_ACCESS_TOKEN` generado desde developers.facebook.com → Casos de uso → API de Instagram → Generar token.
 
@@ -295,3 +339,67 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 7. **Darwin AI:** Integración futura con api.getdarwin.ai — contacto: Octavio Marquez. Objetivo: hub de comunicaciones (ver y responder consultas desde el panel).
 
 8. **gstack:** Instalado en `~/.claude/skills/gstack/`. Comandos disponibles: `/gstack-review`, `/gstack-qa`, `/gstack-investigate`, `/gstack-health`.
+
+---
+
+## Patrones de seguridad (obligatorios para nuevos agentes y módulos)
+
+### Edge Function — JWT validation (toda función llamada desde el panel)
+```typescript
+const cors = {
+  "Access-Control-Allow-Origin": "https://tomaslarran.github.io",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+
+  // Validar JWT del usuario
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
+  const supabaseAuth = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
+  const { data: { user } } = await supabaseAuth.auth.getUser();
+  if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
+
+  // Resto de la función con service role para queries...
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+```
+
+### Frontend — llamar Edge Function (usar authToken, no KEY)
+```javascript
+const res = await fetch(`${SB}/functions/v1/nombre-funcion`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authToken||KEY}` },
+  body: JSON.stringify({ ... })
+});
+```
+
+### Edge Function — webhook Meta (verificación X-Hub-Signature-256)
+```typescript
+const rawBody = await req.text();
+const appSecret = Deno.env.get("META_APP_SECRET");
+if (appSecret) {
+  const signature = req.headers.get("X-Hub-Signature-256") || "";
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey("raw", encoder.encode(appSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody));
+  const expected = "sha256=" + Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("");
+  if (signature !== expected) return new Response("Forbidden", { status: 403 });
+}
+const body = JSON.parse(rawBody);
+```
+
+### Frontend — insertar datos en innerHTML (siempre escapar)
+```javascript
+// MAL — vulnerable a XSS:
+el.innerHTML = `<div>${dato}</div>`;
+
+// BIEN — usar esc() siempre con datos de BD o input de usuario:
+el.innerHTML = `<div>${esc(dato)}</div>`;
+```
+
+### RLS — nueva tabla (siempre habilitar al crearla)
+```sql
+ALTER TABLE nueva_tabla ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Solo autenticados" ON nueva_tabla FOR ALL TO authenticated USING (true) WITH CHECK (true);
+```
