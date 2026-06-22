@@ -4901,7 +4901,7 @@ async function enviarDiplomaEmail(inscId,cursoId,btnEl){
     toast("Generando diploma...","inf");
     const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha});
     toast("Enviando email...","inf");
-    const res=await fetch(`${SB}/functions/v1/enviar-diplomas`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},body:JSON.stringify({email:a.email,nombre,curso:curso.nombre||"",instructores:instructor,fecha,diploma_base64:base64})});
+    const res=await fetch(`${SB}/functions/v1/enviar-diplomas`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},body:JSON.stringify({email:a.email,nombre,curso:curso.nombre||"",instructores:instructor,fecha,diploma_base64:base64})});
     const data=await res.json();
     if(data.error)throw new Error(data.error);
     await sb(`inscripciones?id=eq.${inscId}`,{method:"PATCH",body:JSON.stringify({certificado_emitido:true})});
@@ -4930,7 +4930,7 @@ async function enviarTodosLosDiplomas(cursoId){
         const nombre=`${a.nombre||""} ${a.apellido||""}`.trim();
         if(btn)btn.textContent=`Enviando ${enviados+1}/${conEmail.length}...`;
         const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha});
-        const res=await fetch(`${SB}/functions/v1/enviar-diplomas`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},body:JSON.stringify({email:a.email,nombre,curso:curso.nombre,instructores:instructor,fecha,diploma_base64:base64})});
+        const res=await fetch(`${SB}/functions/v1/enviar-diplomas`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},body:JSON.stringify({email:a.email,nombre,curso:curso.nombre,instructores:instructor,fecha,diploma_base64:base64})});
         const data=await res.json();
         if(!data.error){
           await sb(`inscripciones?id=eq.${i.id}`,{method:"PATCH",body:JSON.stringify({certificado_emitido:true})});
@@ -5465,7 +5465,7 @@ async function crearCursoDesdeIA(){
 }`;
     const res=await fetch(`${SB}/functions/v1/agente-cursos`,{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
       body:JSON.stringify({message:extractPrompt,historial:cursoIAHistorial.slice(-10),canal:"generacion"})
     });
     const data=await res.json();
@@ -5555,7 +5555,7 @@ Incluí al menos 8 slides: portada, objetivos, metodología, programa por módul
     // Usar solo los últimos 6 mensajes y canal "generacion" para prompt liviano
     const res=await fetch(`${SB}/functions/v1/agente-cursos`,{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
       body:JSON.stringify({message:prompts[tipo],historial:cursoIAHistorial.slice(-6),canal:"generacion"})
     });
     const data=await res.json();
@@ -5805,7 +5805,7 @@ async function sendCursoIA(){
   try{
     const res=await fetch(`${SB}/functions/v1/agente-cursos`,{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
       body:JSON.stringify({
         message:texto,
         historial:cursoIAHistorial.slice(-10),
@@ -10228,7 +10228,7 @@ async function mrProcesar(){
     // 2. Llamar a iniciar-reunion
     const res=await fetch(`${SB}/functions/v1/iniciar-reunion`,{
       method:"POST",
-      headers:{"Authorization":`Bearer ${KEY}`,"apikey":KEY,"Content-Type":"application/json"},
+      headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":"application/json"},
       body:JSON.stringify({
         titulo,
         fecha:document.getElementById("mr-fecha").value||null,
@@ -10275,7 +10275,7 @@ async function mrActualizar(reunionId,silencioso=false){
   try{
     const res=await fetch(`${SB}/functions/v1/verificar-reunion`,{
       method:"POST",
-      headers:{"Authorization":`Bearer ${KEY}`,"apikey":KEY,"Content-Type":"application/json"},
+      headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":"application/json"},
       body:JSON.stringify({reunion_id:reunionId}),
     });
     const data=await res.json();
@@ -10511,7 +10511,7 @@ async function mrReanalizar(reunionId){
   try{
     const res=await fetch(`${SB}/functions/v1/verificar-reunion`,{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`,"apikey":KEY},
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY},
       body:JSON.stringify({reunion_id:reunionId,reanalizar:true}),
     });
     const data=await res.json();
@@ -10616,7 +10616,7 @@ async function reunChatEnviar(event){
   try{
     const r=await fetch(`${SB}/functions/v1/agente-reuniones`,{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
       body:JSON.stringify({message:msg,historial:reunChatHistorial.slice(-10)}),
     });
     const d=await r.json();
@@ -14103,7 +14103,7 @@ async function syncMeta(){
   try{
     const res=await fetch(`${SB}/functions/v1/sync-instagram`,{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
       body:JSON.stringify({})
     });
     const data=await res.json();
@@ -14134,7 +14134,7 @@ async function syncLinkedIn(silencioso=false){
   try{
     const res=await fetch(`${SB}/functions/v1/sync-linkedin`,{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
       body:JSON.stringify({})
     });
     const data=await res.json();
@@ -14326,7 +14326,7 @@ async function _comCallIA(prompt){
   try{
     const res=await fetch(`${SB}/functions/v1/agente-comunicaciones`,{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`,"apikey":KEY},
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY},
       body:JSON.stringify({prompt,publicaciones,videosIA}),
     });
     const data=await res.json();
@@ -14346,7 +14346,7 @@ async function comBuscarTendencias(){
   try{
     const res=await fetch(`${SB}/functions/v1/agente-comunicaciones`,{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`,"apikey":KEY},
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY},
       body:JSON.stringify({prompt:JSON.stringify({tipo:"buscar_tendencias",tema}),publicaciones,videosIA}),
     });
     const data=await res.json();
@@ -14383,7 +14383,7 @@ async function comGenerarPrompt(){
   try{
     const res=await fetch(`${SB}/functions/v1/agente-comunicaciones`,{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`,"apikey":KEY},
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY},
       body:JSON.stringify({
         prompt:JSON.stringify({tipo:"prompt_video",ejercicio,objetivo,modo:_videoModo}),
         imagenes,
@@ -14615,7 +14615,7 @@ async function oportSubirArchivos(oportId){
       const path=`${oportId}/${Date.now()}_${a.nombre}`;
       const resp=await fetch(`${window.SUPA_URL||'https://jppxmdvddvbsvymogvcp.supabase.co'}/storage/v1/object/oportunidades/${path}`,{
         method:"POST",
-        headers:{"Authorization":`Bearer ${KEY}`,"Content-Type":a.tipo||"application/octet-stream","x-upsert":"true"},
+        headers:{"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":a.tipo||"application/octet-stream","x-upsert":"true"},
         body:a.file,
       });
       if(resp.ok){
@@ -14691,7 +14691,7 @@ async function oportChatEnviar(){
   try{
     const r=await fetch(`${SB}/functions/v1/agente-oportunidades`,{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${KEY}`},
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
       body:JSON.stringify({message:msg,historial:oportChatHistorial,oportunidad:oportOportunidadActual(),archivos:archivosParaAgente}),
     });
     const resp=await r.json();
