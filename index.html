@@ -6404,7 +6404,9 @@ async function enrollMfa(){
     if(data.error||!data.totp)throw new Error(data.message||data.error||data.msg||JSON.stringify(data));
     mfaFactorId=data.id;
     // Generar QR con qrcode-generator
-    await loadLib("https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js","QRCode");
+    if(!window.QRCode){
+      await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+    }
     el.innerHTML=`
       <div style="font-size:12px;color:var(--tx2);margin-bottom:10px">1. Escaneá este QR con Google Authenticator, Authy o similar:</div>
       <div id="mfa-qr" style="background:#fff;padding:10px;border-radius:8px;display:inline-block;margin-bottom:12px"></div>
