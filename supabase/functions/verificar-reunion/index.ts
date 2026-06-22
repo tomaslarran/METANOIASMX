@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const cors = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": "https://tomaslarran.github.io",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
@@ -29,7 +29,7 @@ async function analizarConClaude(transcripcionTexto: string, anthropicKey: strin
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
-      max_tokens: 2048,
+      max_tokens: 4096,
       system: `Sos el asistente de Metanoia SMX. Analizás transcripciones de reuniones de la empresa.
 La empresa tiene dos sociedades: SUDES (capacitación médica) y POINTERS (logística/servicios).
 El equipo es: Tomás (gestión económica), Mario (cursos/relaciones), Valentina (contratos/redes), Amparo (administración).
@@ -56,17 +56,32 @@ Si el transcript está vacío o es incomprensible, devolvé el JSON con campos v
     }),
   });
 
+  if (!claudeRes.ok) {
+    const errBody = await claudeRes.text();
+    throw new Error(`Claude API error ${claudeRes.status}: ${errBody.slice(0, 300)}`);
+  }
   const claudeData = await claudeRes.json();
+  // Si Claude devuelve un error en el cuerpo (ej: overloaded, invalid_request)
+  if (claudeData.type === "error") {
+    throw new Error(`Claude error: ${claudeData.error?.message || JSON.stringify(claudeData.error)}`);
+  }
   const rawText = claudeData.content?.[0]?.text ?? "{}";
   try {
     return parsearAnalisis(rawText);
-  } catch {
+  } catch (e) {
+    console.error("parsearAnalisis falló:", e, "raw:", rawText.slice(0, 500));
     return null;
   }
 }
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
+  const supabaseAuth = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
+  const { data: { user } } = await supabaseAuth.auth.getUser();
+  if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
 
   try {
     const { reunion_id, reanalizar } = await req.json();
@@ -91,7 +106,7 @@ serve(async (req) => {
     // ── Modo re-análisis: usar transcripción ya guardada, llamar solo a Claude ──
     if (reanalizar && reunion.transcripcion) {
       const analisis = await analizarConClaude(reunion.transcripcion, ANTHROPIC_KEY);
-      if (!analisis) throw new Error("Claude no pudo analizar la transcripción");
+      if (!analisis) throw new Error("Claude no pudo parsear la respuesta como JSON. Revisá los logs de la función.");
 
       await supabase.from("reuniones").update({
         resumen: analisis.resumen || null,

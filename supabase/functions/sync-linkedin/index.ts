@@ -8,6 +8,7 @@ const cors = {
 
 const ORG_ID = "105737703"; // Metanoia SMX LinkedIn
 const LI_BASE = "https://api.linkedin.com/rest";
+const LI_V2 = "https://api.linkedin.com/v2";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -26,14 +27,15 @@ serve(async (req) => {
       "Content-Type": "application/json",
     };
 
-    // 1. Obtener posts de la organización
+    // 1. Obtener posts de la organización via Shares API (v2)
+    const orgUrn = encodeURIComponent(`urn:li:organization:${ORG_ID}`);
     const postsRes = await fetch(
-      `${LI_BASE}/posts?author=urn:li:organization:${ORG_ID}&count=50&sortBy=LAST_MODIFIED`,
+      `${LI_V2}/shares?q=owners&owners=${orgUrn}&sharesPerOwner=50`,
       { headers: liHeaders }
     );
     const postsData = await postsRes.json();
 
-    if (!postsRes.ok || postsData.status === 401) {
+    if (!postsRes.ok) {
       throw new Error(`LinkedIn API: ${postsData.message || JSON.stringify(postsData)}`);
     }
 
@@ -43,55 +45,26 @@ serve(async (req) => {
 
     for (const post of posts) {
       const postId = post.id;
-      const createdAt = post.publishedAt || post.createdAt;
+      const createdAt = post.created?.time;
       const fecha = createdAt ? new Date(createdAt).toISOString().split("T")[0] : null;
 
-      // Extraer texto del post
-      let caption = post.commentary || "";
-      if (!caption && post.specificContent) {
-        const sc = post.specificContent["com.linkedin.ugc.ShareContent"];
-        caption = sc?.shareCommentary?.text || "";
-      }
+      // Extraer texto del post (Shares API format)
+      const shareContent = post.text?.text || "";
+      const caption = shareContent;
 
-      // Obtener métricas sociales
-      let likes = 0, comentarios = 0, compartidos = 0, impresiones = 0;
-      try {
-        const socialRes = await fetch(
-          `${LI_BASE}/socialActions/${encodeURIComponent(postId)}`,
-          { headers: liHeaders }
-        );
-        if (socialRes.ok) {
-          const sd = await socialRes.json();
-          likes = sd.likesSummary?.totalLikes || 0;
-          comentarios = sd.commentsSummary?.totalFirstLevelComments || 0;
-        }
-      } catch (_) {}
-
-      // Obtener impresiones vía share statistics
-      try {
-        const statsRes = await fetch(
-          `${LI_BASE}/organizationalEntityShareStatistics?q=organizationalEntity&organizationalEntity=urn:li:organization:${ORG_ID}&shares=List(${encodeURIComponent(postId)})`,
-          { headers: liHeaders }
-        );
-        if (statsRes.ok) {
-          const statsData = await statsRes.json();
-          const stat = statsData.elements?.[0]?.totalShareStatistics;
-          if (stat) {
-            impresiones = stat.impressionCount || 0;
-            compartidos = stat.shareCount || 0;
-            likes = stat.likeCount || likes;
-            comentarios = stat.commentCount || comentarios;
-          }
-        }
-      } catch (_) {}
+      // Métricas del share
+      const stats = post.totalShareStatistics || {};
+      const likes = stats.likeCount || 0;
+      const comentarios = stats.commentCount || 0;
+      const compartidos = stats.shareCount || 0;
+      const impresiones = stats.impressionCount || 0;
 
       // Determinar tipo de contenido
       let tipo = "foto";
-      if (post.content?.media?.id?.includes("video") || post.content?.multiImage) {
-        tipo = post.content?.multiImage ? "carrusel" : "video";
-      } else if (post.resharedPost) {
-        tipo = "compartido";
-      }
+      const content = post.content;
+      if (content?.contentEntities?.some((e: any) => e.entityLocation?.includes("video"))) tipo = "video";
+      else if (content?.contentEntities?.length > 1) tipo = "carrusel";
+      else if (content?.contentEntities?.some((e: any) => e.entityLocation?.includes("article"))) tipo = "articulo";
 
       registros.push({
         ig_media_id: `li_${postId}`,

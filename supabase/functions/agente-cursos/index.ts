@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const cors = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": "https://tomaslarran.github.io",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
@@ -13,6 +13,14 @@ Metanoia SMX es un centro de simulación médica en Salta, Argentina. Opera bajo
 Línea C (Cursos comerciales): motor real de autonomía financiera. Meta: 4 cursos/mes para 2027.
 Línea D (COFRADIA): comunidad de suscripción con contenido de autor.
 PRINCIPIO CLAVE: Ningún curso puede comercializarse sin estado PROTOTIPO o APROBADO en PEV.
+
+## Identidad pedagógica — DISTINCIÓN CRÍTICA
+En Metanoia NO se "forma" ni se "capacita" en el sentido tradicional.
+Se ENTRENA y se PRACTICA: el foco está en la repetición deliberada de habilidades en entornos simulados, no en la transmisión de conocimiento teórico.
+NUNCA usar los términos "formación", "formar profesionales" o "capacitación" en comunicaciones, títulos de cursos o materiales.
+SIEMPRE usar: "entrenamiento", "práctica", "entrenamos habilidades", "practicamos con simulación".
+Ejemplo correcto: "Workshop de entrenamiento en vía aérea difícil"
+Ejemplo incorrecto: "Curso de formación en vía aérea difícil"
 
 ## Metodología PEV (Kaizen-PDCA)
 PEV1 — Prueba: unidad mínima testeable. Avanza con evidencia de interés real.
@@ -76,6 +84,12 @@ Nomenclador v1.1 calcula precios: horas × nivel simulación × seniority instru
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
+  const supabaseAuth = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
+  const { data: { user } } = await supabaseAuth.auth.getUser();
+  if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
 
   try {
     const { message, historial = [], canal = "panel", archivos = [] } = await req.json();
