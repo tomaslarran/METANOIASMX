@@ -6378,13 +6378,29 @@ async function enrollMfa(){
   const el=document.getElementById("mfa-status");
   el.innerHTML=`<div style="font-size:12px;color:var(--tx3)">Generando código QR...</div>`;
   try{
-    const res=await fetch(`${SB}/auth/v1/factors`,{
-      method:"POST",
-      headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":"application/json"},
-      body:JSON.stringify({factor_type:"totp",friendly_name:"Panel Metanoia"})
-    });
-    const data=await res.json();
-    console.log("MFA enroll response:", JSON.stringify(data));
+    // Intentar enroll; si ya existe un factor con ese nombre, borrarlo y reintentar
+    async function doEnroll(){
+      const r=await fetch(`${SB}/auth/v1/factors`,{
+        method:"POST",
+        headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":"application/json"},
+        body:JSON.stringify({factor_type:"totp",friendly_name:"Panel Metanoia"})
+      });
+      return await r.json();
+    }
+    let data=await doEnroll();
+    if(data.error_code==="mfa_factor_name_conflict"){
+      // Buscar y borrar el factor existente sin verificar
+      const uRes=await fetch(`${SB}/auth/v1/user`,{headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY}});
+      const uData=await uRes.json();
+      const existing=(uData?.factors||[]).find(f=>f.friendly_name==="Panel Metanoia");
+      if(existing){
+        await fetch(`${SB}/auth/v1/factors/${existing.id}`,{
+          method:"DELETE",
+          headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY}
+        });
+      }
+      data=await doEnroll();
+    }
     if(data.error||!data.totp)throw new Error(data.message||data.error||data.msg||JSON.stringify(data));
     mfaFactorId=data.id;
     // Generar QR con qrcode-generator
