@@ -6353,9 +6353,10 @@ let mfaChallengeId=null;
 async function loadMfaStatus(){
   const el=document.getElementById("mfa-status");if(!el)return;
   try{
-    const res=await fetch(`${SB}/auth/v1/factors`,{headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY}});
-    const factors=await res.json();
-    const totp=Array.isArray(factors)?factors.find(f=>f.factor_type==="totp"&&f.status==="verified"):null;
+    const res=await fetch(`${SB}/auth/v1/user`,{headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY}});
+    const user=await res.json();
+    const factors=user?.factors||[];
+    const totp=factors.find(f=>f.factor_type==="totp"&&f.status==="verified");
     if(totp){
       mfaFactorId=totp.id;
       el.innerHTML=`
