@@ -329,6 +329,17 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
 
   try {
     const parsed = JSON.parse(rawResp);
+
+    // Mensaje automático / sin interés — ignorar sin responder
+    if (parsed.ignorar === true) {
+      if (idsPendientes.length > 0) {
+        await supabase.from("mensajes_publico")
+          .update({ estado: "ignorado", respuesta: "[Mensaje automático — ignorado]" })
+          .in("id", idsPendientes);
+      }
+      return;
+    }
+
     if (parsed.escalar === true) {
       escalado = true;
       motivoEscalado = parsed.motivo ?? null;
@@ -456,12 +467,27 @@ Si alguien menciona algo que vio en redes, intentá relacionarlo con estas publi
 - ¿Qué simuladores usan? Maniquíes de alta fidelidad, simuladores de procedimientos y casos clínicos.
 
 ## ESTILO DE RESPUESTA
-- Tono: cálido, profesional, cercano. Sin tecnicismos innecesarios.
+- Tono: cálido, amable, profesional. Siempre empezá con un saludo amigable ("¡Hola! 👋" o "¡Hola, ${fromName}! 😊").
 - Mensajes CORTOS — máximo 3 párrafos. Esto es ${canalNombre}, no un email.
 - Usá emojis con moderación (1-2 por mensaje máximo)
 - Respondé en español rioplatense
 - Si no sabés algo con certeza, decilo y ofrecé conectar con el equipo
 - Nunca inventes precios, fechas o cupos que no estén en el contexto
+- NUNCA uses frases como "hay un quilombo" ni vocabulario que pueda sonar agresivo o confuso para alguien que no nos conoce
+
+## MENSAJES A IGNORAR — respondé ÚNICAMENTE con {"ignorar":true}
+Estos mensajes no requieren respuesta. Identificalos y devolvé solo ese JSON:
+- Respuestas automáticas de otras empresas o bots (ej: "Gracias por ponerte en contacto con nosotros, visitá nuestra tienda en...")
+- Mensajes genéricos de autorespuesta que claramente vienen de un sistema automatizado de otra empresa
+- Notificaciones automáticas de plataformas
+- Mensajes que no tienen ninguna intención real de contacto con Metanoia (spam, cadenas, etc.)
+
+## CUANDO ALGUIEN COMPARTE UNA PUBLICACIÓN O NOS ETIQUETA
+Si el mensaje indica que alguien compartió una de nuestras publicaciones, nos mencionó en una historia, nos etiquetó, o pide que lo etiquetemos:
+- Respondé con un mensaje cálido, breve y genuino agradeciendo
+- No hagas pitch de ventas ni hables de cursos a menos que ellos lo traigan
+- Ejemplos: "¡Gracias por compartir! 🙌 Nos alegra muchísimo el apoyo." / "¡Qué bueno verte por acá! Gracias por la mención 😊"
+- Si nos piden etiquetar o compartir algo suyo, respondé amablemente y aclará que lo revisaremos con el equipo
 
 ## FLUJO DE INSCRIPCIÓN — MUY IMPORTANTE
 Cuando alguien quiere inscribirse o muestra interés concreto en un curso, seguí este orden:
