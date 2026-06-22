@@ -13861,9 +13861,18 @@ async function renderMsgDetalle(fromId,plataforma){
                 ${m.motivo_escalado?`<div style="margin-top:6px;font-size:11px;color:#EF4444">⚠ Escalado: ${esc(m.motivo_escalado)}</div>`:""}
                 <div style="font-size:10px;color:var(--tx3);margin-top:4px">${fecha}</div>
               </div>
-              <div style="display:flex;gap:6px;padding-left:4px">
-                <button onclick="msgFeedback('${m.id}','like')" style="background:${like?"#10B981":"var(--surf)"};color:${like?"#fff":"var(--tx3)"};border:1px solid var(--b);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer">👍${like?" ✓":""}</button>
-                <button onclick="msgFeedback('${m.id}','dislike')" style="background:${dislike?"#EF4444":"var(--surf)"};color:${dislike?"#fff":"var(--tx3)"};border:1px solid var(--b);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer">👎${dislike?" ✓":""}</button>
+              <div style="display:flex;flex-direction:column;gap:6px;padding-left:4px;max-width:70%">
+                <div style="display:flex;gap:6px">
+                  <button onclick="msgFeedback('${m.id}','like')" style="background:${like?"#10B981":"var(--surf)"};color:${like?"#fff":"var(--tx3)"};border:1px solid var(--b);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer">👍${like?" ✓":""}</button>
+                  <button onclick="msgFeedback('${m.id}','dislike')" style="background:${dislike?"#EF4444":"var(--surf)"};color:${dislike?"#fff":"var(--tx3)"};border:1px solid var(--b);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer">👎${dislike?" ✓":""}</button>
+                </div>
+                ${m.feedback?(m.feedback_comentario?
+                  `<div style="font-size:11px;color:var(--tx3);background:var(--surf2);border-radius:8px;padding:5px 8px;font-style:italic">"${esc(m.feedback_comentario)}"</div>`:
+                  `<div style="display:flex;gap:6px;align-items:flex-start" id="fb-comment-${m.id}">
+                    <textarea id="fb-txt-${m.id}" placeholder="${m.feedback==="dislike"?"¿Qué mejorarías?":"¿Qué estuvo bien?"}" rows="2" style="font-size:11px;padding:5px 8px;border:1px solid var(--b);border-radius:8px;background:var(--surf);color:var(--tx);resize:none;width:200px;font-family:inherit"></textarea>
+                    <button onclick="msgFeedbackComentario('${m.id}')" style="background:var(--primary);border:none;border-radius:8px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap">Guardar</button>
+                  </div>`
+                ):""}
               </div>
             </div>`:""}`;
         }).join("")}
@@ -13890,6 +13899,16 @@ async function msgFeedback(id,valor){
     if(msgConvActual)renderMsgDetalle(msgConvActual.fromId,msgConvActual.plataforma);
     toast(valor==="like"?"Respuesta marcada como buena 👍":"Marcada para mejorar 👎","ok");
   }catch(e){toast("Error al guardar feedback","err");}
+}
+
+async function msgFeedbackComentario(id){
+  const txt=document.getElementById(`fb-txt-${id}`)?.value?.trim();
+  if(!txt)return;
+  try{
+    await sb(`mensajes_publico?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({feedback_comentario:txt})});
+    if(msgConvActual)renderMsgDetalle(msgConvActual.fromId,msgConvActual.plataforma);
+    toast("Comentario guardado ✓","ok");
+  }catch(e){toast("Error al guardar comentario","err");}
 }
 
 async function loadComunicaciones(){
