@@ -284,6 +284,12 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
     .order("fecha_publicacion", { ascending: false })
     .limit(15);
 
+  const { data: mejoras } = await supabase
+    .from("agente_mejoras")
+    .select("regla")
+    .eq("estado", "aprobada")
+    .order("created_at", { ascending: true });
+
   // Armar mensajes para Claude
   const messages: any[] = [];
   if (historial) {
@@ -315,7 +321,7 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
     body: JSON.stringify({
       model: imageBase64 ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001",
       max_tokens: 600,
-      system: buildSistema(cursos ?? [], publicaciones ?? [], fromName, plataforma),
+      system: buildSistema(cursos ?? [], publicaciones ?? [], fromName, plataforma, mejoras ?? []),
       messages,
     }),
   });
@@ -409,7 +415,7 @@ async function downloadMedia(mediaId: string, token: string): Promise<{ buffer: 
 }
 
 // ── System prompt ─────────────────────────────────────────────────────────────
-function buildSistema(cursos: any[], publicaciones: any[], fromName: string, plataforma: string): string {
+function buildSistema(cursos: any[], publicaciones: any[], fromName: string, plataforma: string, mejoras: any[] = []): string {
   const hoy = new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Salta" });
 
   const cursosTexto = cursos.length > 0
@@ -528,5 +534,9 @@ Cuando la consulta del usuario quedó resuelta (respondiste lo que necesitaba, n
 - "¡Nos encontramos también en Instagram como @metanoiasmx para novedades y contenido de simulación! 📲"
 - "Si te interesa ver más de lo que hacemos, seguinos en @metanoiasmx en Instagram y en Facebook como Metanoiasme.ok 😊"
 
-No lo agregues si la conversación está en medio de un intercambio (el usuario todavía tiene dudas o está en proceso de inscripción). Solo al cerrar.`;
+No lo agregues si la conversación está en medio de un intercambio (el usuario todavía tiene dudas o está en proceso de inscripción). Solo al cerrar.${mejoras.length > 0 ? `
+
+## REGLAS APRENDIDAS DEL EQUIPO (prioridad alta — aplicar siempre)
+El equipo revisó conversaciones reales y definió estas reglas específicas. Son de cumplimiento obligatorio:
+${mejoras.map((m: any, i: number) => `${i + 1}. ${m.regla}`).join("\n")}` : ""}`;
 }

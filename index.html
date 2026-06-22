@@ -1175,6 +1175,16 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Análisis</div>
       <div id="com-agente-texto" style="font-size:13px;color:var(--tx);line-height:1.7;white-space:pre-wrap"></div>
     </div>
+
+    <!-- Mejoras del agente -->
+    <div style="background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:20px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div style="font-size:13px;font-weight:600;color:var(--tx)">🧠 Mejoras del agente</div>
+        <button class="btn sec" id="btn-analizar-feedback" onclick="analizarFeedbackAgente()" style="font-size:12px">Analizar feedback semanal</button>
+      </div>
+      <div style="font-size:12px;color:var(--tx3);margin-bottom:14px">El agente analiza los comentarios del equipo y propone reglas nuevas. Aprobá las que sirvan y se aplican automáticamente.</div>
+      <div id="agente-mejoras-container"><div style="font-size:12px;color:var(--tx3)">Cargando...</div></div>
+    </div>
   </div>
   <!-- TAB Videos IA -->
   <div id="com-tab-videos-content" style="display:none">
@@ -13770,6 +13780,7 @@ function showComTab(tab){
   if(tab==="met")renderComMetricas();
   if(tab==="videos")renderVideosIA();
   if(tab==="msg")renderComMensajes();
+  if(tab==="agente")loadAgenteMejoras();
 }
 
 let msgConvActual=null;
@@ -14505,6 +14516,73 @@ async function comValidarContenido(){
   const plataforma=document.getElementById("com-validar-plat").value;
   if(!caption){toast("Escribí el contenido a validar","err");return;}
   _comCallIA(JSON.stringify({tipo:"validar",caption,plataforma}));
+}
+
+async function loadAgenteMejoras(){
+  const cont=document.getElementById("agente-mejoras-container");
+  if(!cont)return;
+  try{
+    const todas=await sb("agente_mejoras?select=*&order=created_at.desc");
+    const pendientes=(todas||[]).filter(m=>m.estado==="pendiente");
+    const aprobadas=(todas||[]).filter(m=>m.estado==="aprobada");
+    let html="";
+    if(pendientes.length>0){
+      html+=`<div style="font-size:12px;font-weight:600;color:var(--tx);margin-bottom:8px">Pendientes de revisión (${pendientes.length})</div>`;
+      html+=pendientes.map(m=>`
+        <div style="background:var(--surf);border:1px solid var(--b);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+          <div style="font-size:13px;color:var(--tx);margin-bottom:4px">${esc(m.regla)}</div>
+          ${m.motivo?`<div style="font-size:11px;color:var(--tx3);margin-bottom:8px;font-style:italic">Basado en: ${esc(m.motivo)}</div>`:""}
+          <div style="display:flex;gap:6px">
+            <button onclick="aprobarMejora('${m.id}')" style="background:#10B981;color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:12px;cursor:pointer">✓ Aprobar</button>
+            <button onclick="rechazarMejora('${m.id}')" style="background:none;border:1px solid #EF4444;color:#EF4444;border-radius:6px;padding:4px 12px;font-size:12px;cursor:pointer">✗ Rechazar</button>
+          </div>
+        </div>`).join("");
+    }
+    if(aprobadas.length>0){
+      html+=`<div style="font-size:12px;font-weight:600;color:var(--tx);margin-top:${pendientes.length>0?16:0}px;margin-bottom:8px">Reglas activas (${aprobadas.length})</div>`;
+      html+=aprobadas.map(m=>`
+        <div style="background:var(--surf);border:1px solid #10B98133;border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div style="font-size:12px;color:var(--tx)">${esc(m.regla)}</div>
+          <button onclick="rechazarMejora('${m.id}')" title="Desactivar" style="background:none;border:none;color:var(--tx3);font-size:14px;cursor:pointer;flex-shrink:0">✕</button>
+        </div>`).join("");
+    }
+    if(!pendientes.length&&!aprobadas.length){
+      html=`<div style="font-size:12px;color:var(--tx3)">No hay mejoras aún. Hacé click en "Analizar feedback semanal" para generar sugerencias.</div>`;
+    }
+    cont.innerHTML=html;
+  }catch(e){cont.innerHTML=`<div style="font-size:12px;color:var(--tx3)">Error al cargar mejoras.</div>`;}
+}
+
+async function analizarFeedbackAgente(){
+  const btn=document.getElementById("btn-analizar-feedback");
+  btn.disabled=true;btn.textContent="Analizando...";
+  try{
+    const res=await fetch(`${SB}/functions/v1/analizar-feedback`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error);
+    if(data.generadas===0){toast(data.mensaje||"Sin patrones suficientes esta semana","inf");}
+    else{toast(`${data.generadas} mejora${data.generadas>1?"s":""}  generada${data.generadas>1?"s":""} para revisar 🧠`,"ok");}
+    loadAgenteMejoras();
+  }catch(e){toast("Error al analizar: "+e.message,"err");}
+  finally{btn.disabled=false;btn.textContent="Analizar feedback semanal";}
+}
+
+async function aprobarMejora(id){
+  try{
+    await sb(`agente_mejoras?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado:"aprobada"})});
+    toast("Regla aprobada — el agente la aplica desde ahora ✓","ok");
+    loadAgenteMejoras();
+  }catch(e){toast("Error","err");}
+}
+
+async function rechazarMejora(id){
+  try{
+    await sb(`agente_mejoras?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado:"rechazada"})});
+    loadAgenteMejoras();
+  }catch(e){toast("Error","err");}
 }
 
 async function comGenerarPrompt(){
