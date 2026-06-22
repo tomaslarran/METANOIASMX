@@ -6384,7 +6384,8 @@ async function enrollMfa(){
       body:JSON.stringify({factor_type:"totp",friendly_name:"Panel Metanoia"})
     });
     const data=await res.json();
-    if(data.error||!data.totp)throw new Error(data.error||"Error al generar");
+    console.log("MFA enroll response:", JSON.stringify(data));
+    if(data.error||!data.totp)throw new Error(data.message||data.error||data.msg||JSON.stringify(data));
     mfaFactorId=data.id;
     // Generar QR con qrcode-generator
     await loadLib("https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js","QRCode");
