@@ -288,11 +288,22 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 
 ## Pendientes / Roadmap
 
+### Bloqueados por externos
 - [ ] LinkedIn sync — esperando aprobación Community Management API (app "Metanoia CMS", enviado 2 Jun 2026)
-- [ ] Darwin integration — hub de comunicaciones (WhatsApp/consultas), esperando APIs de Octavio (eventos: Session.opened, Session.closed, session.stage.transition, session.forwarded.*)
-- [ ] Integración E-learning — transmisión automática de cursos a plataforma metanoiasme.com
+- [ ] Integración E-learning — transmisión automática de cursos a metanoiasme.com + facturación automática vía Finnegans API
+
+### Contabilidad y finanzas
+- [ ] Alertas de pagos pendientes — notificación cuando hay facturas vencidas o pagos programados sin registrar
+- [ ] Cierre mensual asistido — checklist guiado + agente IA que valida qué falta registrar antes de cerrar el mes
+- [ ] Importador Finnegans — leer archivos exportados de Finnegans (semanal/mensual) y conciliar con comprobantes, cobranzas y caja del panel
+- [ ] Resumen mensual ejecutivo — agente IA que lee todos los módulos y genera balance en lenguaje natural (financiero + cursos + comunicaciones)
+
+### Producto
 - [ ] Módulo COFRADIA — gestión de planes, suscriptores y contenido (Línea D)
 - [ ] Agentes cloud autónomos para automatizaciones (gstack instalado en `~/.claude/skills/gstack/`)
+
+### Cancelado
+- ~~Darwin integration~~ — reemplazado por respuesta manual desde el panel (tab Mensajes)
 
 ## Implementado (4 Jun 2026)
 - ✅ Sistema de diplomas: Canvas + envío automático por email (SMTP) al finalizar curso
