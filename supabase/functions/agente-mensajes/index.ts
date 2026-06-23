@@ -270,6 +270,7 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
   const { data: historial } = await supabase
     .from("mensajes_publico").select("mensaje, respuesta")
     .eq("from_id", fromId).eq("plataforma", plataforma).eq("estado", "respondido")
+    .eq("es_respuesta_manual", false)
     .gt("created_at", seisHorasAtras)
     .order("created_at", { ascending: false }).limit(5);
 
@@ -294,6 +295,7 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
   const messages: any[] = [];
   if (historial) {
     for (const h of [...historial].reverse()) {
+      if (!h.mensaje?.trim()) continue;
       messages.push({ role: "user", content: h.mensaje });
       if (h.respuesta) messages.push({ role: "assistant", content: h.respuesta });
     }
