@@ -56,9 +56,10 @@ Panel web interno para **Metanoia SMX**, empresa de capacitación médica en sim
 | Impuestos | `pg-impuestos` | IVA, IIBB, autónomos, ganancias |
 | Comprobantes | `pg-comprobantes` | Facturas de proveedores |
 | Cuentas Corrientes | `pg-cuentas` | Cuentas de proveedores |
-| Notificaciones | `pg-notif` | Preferencias de notificaciones |
+| Notificaciones | `pg-notif` | Preferencias de notificaciones + 2FA TOTP |
 | Usuarios | `pg-usuarios` | Gestión de roles |
 | Rutinas | `pg-rutinas` | Tareas recurrentes |
+| Oportunidades | `pg-oportunidades` | Intake de oportunidades: Mario carga ideas, Amparo procesa con estados PEV |
 
 ---
 
@@ -84,22 +85,34 @@ Panel web interno para **Metanoia SMX**, empresa de capacitación médica en sim
 |---|---|
 | `agente-comunicaciones` | Agente IA para RRSS: analiza métricas, valida captions, genera prompts de video, busca tendencias (Tavily API) |
 | `agente-financiero` | Agente IA financiero: lee todas las tablas de CF y responde preguntas |
-| `agente-cursos` | Agente IA para gestión de cursos |
+| `agente-cursos` | Agente IA para gestión de cursos (reglas calendario, feriados 2026) |
 | `agente-tareas` | Agente IA para gestión de tareas |
 | `agente-ejecutivo` | Agente ejecutivo general |
+| `agente-mensajes` | Bot 24/7 para Instagram DM / Facebook Messenger / WhatsApp: responde con Claude Haiku, escala al equipo, ignora autorespuestas, lee reglas aprobadas de `agente_mejoras` |
+| `agente-oportunidades` | Agente IA analista de oportunidades con contexto multi-dominio |
+| `analizar-feedback` | Lee feedback semanal de `mensajes_publico` con comentario, genera reglas con Claude y las guarda en `agente_mejoras` como pendientes |
 | `sync-instagram` | Sincroniza posts de Instagram (@metanoiasmx) y Facebook (Metanoiasme.ok, ID: 478694861999786) con Supabase |
 | `sync-linkedin` | Sincroniza posts de LinkedIn (org ID: 105737703) — **pendiente aprobación Community Management API** |
-| `iniciar-reunion` | Inicia reunión con agente IA |
-| `verificar-reunion` | Verifica estado de reunión |
+| `iniciar-reunion` | Inicia reunión con agente IA (AssemblyAI transcripción) |
+| `verificar-reunion` | Verifica estado de reunión y analiza con Claude |
 | `leer-factura` | Lee facturas con visión de Claude |
-| `whatsapp-agente` | Integración WhatsApp |
+| `whatsapp-agente` | Carga de facturas por WhatsApp via Twilio (flujo conversacional multi-paso) |
+| `enviar-diplomas` | Envío automático de diplomas por email (SMTP) al finalizar curso |
 
 **Secrets de Supabase:**
 - `ANTHROPIC_API_KEY` — Claude API
 - `META_ACCESS_TOKEN` — Instagram (@metanoiasmx, ID: 17841470857318268)
-- `META_FB_PAGE_TOKEN` — Facebook Page (Metanoiasme.ok, ID: 478694861999786) — **token permanente via Usuario del Sistema "Panel Metanoia" en Meta Business Suite** (ver nota técnica #1)
+- `META_FB_PAGE_TOKEN` — Facebook Page (Metanoiasme.ok, ID: 478694861999786) — **token permanente via Usuario del Sistema** (ver nota técnica #1)
+- `META_APP_SECRET` — para verificación firma webhook `X-Hub-Signature-256`
+- `META_WH_VERIFY_TOKEN` — token verificación webhook Meta (agente-mensajes)
+- `META_WA_TOKEN` — WhatsApp Business API token
+- `WA_PHONE_NUMBER_ID` — ID del número de WhatsApp Business
+- `WA_AMPARO`, `WA_VALENTINA`, `WA_DANI`, `WA_FLOR` — números WA del equipo para escalación
 - `TAVILY_API_KEY` — búsqueda web para agente comunicaciones
-- `LINKEDIN_ACCESS_TOKEN` — LinkedIn OAuth token (app "Panel Metanoia", vence en 2 meses)
+- `LINKEDIN_ACCESS_TOKEN` — LinkedIn OAuth token (app "Panel Metanoia", vence cada 2 meses)
+- `GROQ_API_KEY` — transcripción de audio (Whisper) en agente-mensajes
+- `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` — integración WhatsApp via Twilio (whatsapp-agente)
+- `ASSEMBLYAI_API_KEY` — transcripción de reuniones
 
 ---
 
@@ -139,12 +152,19 @@ Panel web interno para **Metanoia SMX**, empresa de capacitación médica en sim
 ### Comunicaciones
 - `publicaciones` — posts de RRSS (plataforma, tipo, fecha_publicacion, likes, alcance, guardados, comentarios, ig_media_id)
 - `videos_ia` — videos generados con IA
+- `mensajes_publico` — conversaciones del agente de mensajes (plataforma, from_id, from_name, mensaje, respuesta, estado, feedback, feedback_comentario, escalado, motivo_escalado, wa_message_id)
+- `agente_mejoras` — reglas aprobadas/pendientes/rechazadas para el agente de mensajes (regla, motivo, estado, feedback_count)
+
+### Oportunidades
+- `oportunidades` — intake de oportunidades con 12 campos PEV (idea_cruda, definicion, linea_negocio, ejecutor, estado, fit_estrategico, etc.)
 
 ### Otros
 - `proveedores` — proveedores externos
 - `inventario` — control de stock
-- `reuniones` — reuniones del equipo
+- `reuniones` — reuniones del equipo (transcripcion, transcripcion_diarizada, resumen, decisiones, tareas_extraidas, assembly_job_id)
 - `rutinas` — tareas recurrentes
+- `wpp_sesiones` — sesiones activas de carga de facturas por WhatsApp (telefono, tipo, paso, datos)
+- `panel_errores` — errores del panel logueados automáticamente por `sb()` (modulo, path, mensaje, pagina_activa)
 
 ---
 
@@ -272,11 +292,7 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 - [ ] Darwin integration — hub de comunicaciones (WhatsApp/consultas), esperando APIs de Octavio (eventos: Session.opened, Session.closed, session.stage.transition, session.forwarded.*)
 - [ ] Integración E-learning — transmisión automática de cursos a plataforma metanoiasme.com
 - [ ] Módulo COFRADIA — gestión de planes, suscriptores y contenido (Línea D)
-- [ ] Intake de oportunidades en el panel — Mario carga ideas, Amparo las procesa
-- [ ] Dashboard de autonomía — KPI dependencia MSP vs privado en tiempo real
-- [ ] Agentes cloud autónomos para automatizaciones (gstack instalado)
-- [ ] Conciliación bancaria POINTERS (actualmente solo SUDES)
-- [ ] Mejoras Cash Flow — gráficos de evolución de caja
+- [ ] Agentes cloud autónomos para automatizaciones (gstack instalado en `~/.claude/skills/gstack/`)
 
 ## Implementado (4 Jun 2026)
 - ✅ Sistema de diplomas: Canvas + envío automático por email (SMTP) al finalizar curso
@@ -299,6 +315,17 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 - ✅ Facebook sync funcionando con token permanente via Usuario del Sistema en Meta Business Suite
 - ✅ sync-instagram: alcance Instagram funcionando (reach,saved); Facebook trae likes+comentarios sin insights
 
+## Implementado (Jun 2026) — Finanzas, Oportunidades, Reuniones
+- ✅ Cotizador PEV — bloques de costo por actividad, PDF con secciones, vinculación a cursos, lista de cards
+- ✅ Módulo Intake de Oportunidades — 12 campos PEV, estados, agente IA analista con contexto multi-dominio
+- ✅ Agente reuniones — transcripción con AssemblyAI, análisis con Claude, vinculación a oportunidades
+- ✅ Dashboard de autonomía MSP — KPI dependencia por línea de negocio en tiempo real
+- ✅ Gráficos Cash Flow — evolución de caja e ingresos/egresos con Chart.js
+- ✅ Conciliación bancaria POINTERS — filtro sociedad en inscripciones + texto extracto bancario genérico
+- ✅ Impuestos — etapa "presentado no pagado" en IVA/IIBB + botón Pagar en Autónomos
+- ✅ Logging de errores — `sb()` loguea errores automáticamente a `panel_errores` + skill `/panel-debugger`
+- ✅ Tab Mensajes en Comunicaciones — historial WhatsApp/IG/FB agrupado por conversación, burbujas, feedback 👍/👎
+
 ## Implementado (22 Jun 2026) — Seguridad
 - ✅ RLS habilitado en 21 tablas + políticas `{public}` eliminadas (solo `authenticated` puede leer/escribir)
 - ✅ XSS sanitizado en módulo mensajes externos (Instagram/FB/WA) — todos los campos de usuario externo pasan por `esc()`
@@ -310,6 +337,13 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 - ✅ Verificación de firma webhook Meta (`X-Hub-Signature-256`) en agente-mensajes
 - ✅ Verificación de firma webhook Twilio (`X-Twilio-Signature`) en whatsapp-agente
 - ✅ Backup mensual automatizado (`backup_mensual.ps1`) programado el día 20 de cada mes a las 9AM
+
+## Implementado (23 Jun 2026) — Agente mensajes y mejoras continuas
+- ✅ agente-mensajes: bot 24/7 para IG DM / FB Messenger / WhatsApp — Claude Haiku, escalación al equipo vía WA, transcripción de audio con Groq/Whisper, visión para imágenes
+- ✅ agente-mensajes: detecta y descarta respuestas automáticas (`{"ignorar":true}`), manejo de etiquetas/shares, tono mejorado
+- ✅ Feedback con comentario en mensajes — campo `feedback_comentario` en `mensajes_publico`, textarea inline
+- ✅ Sistema de mejoras del agente — Edge Function `analizar-feedback` analiza feedback semanal con Claude, propone reglas, equipo aprueba/rechaza en tab Agente IA, reglas aprobadas se inyectan en el system prompt
+- ✅ 2FA TOTP en Notificaciones — enroll/verify/unenroll via Supabase Auth MFA API, QR con qrcode-generator
 
 ---
 
