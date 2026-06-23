@@ -13859,6 +13859,14 @@ async function renderMsgDetalle(fromId,plataforma){
         ${msgs.map(m=>{
           const fecha=m.created_at?new Date(m.created_at).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"";
           const like=m.feedback==="like";const dislike=m.feedback==="dislike";
+          // Respuesta manual del equipo — solo burbuja de salida, sin mensaje entrante
+          if(m.es_respuesta_manual){return`
+            <div style="display:flex;justify-content:flex-end">
+              <div style="background:#6366F1;color:#fff;border-radius:16px 16px 4px 16px;padding:10px 14px;max-width:70%;font-size:13px;white-space:pre-wrap;word-break:break-word">
+                ${esc(m.respuesta||"")}
+                <div style="font-size:10px;opacity:.7;margin-top:4px;text-align:right">✏ ${m.enviado_por?esc(m.enviado_por):"Equipo"} · ${fecha}</div>
+              </div>
+            </div>`;}
           return`
             <div style="display:flex;justify-content:flex-end">
               <div style="background:var(--primary);color:#000;border-radius:16px 16px 4px 16px;padding:10px 14px;max-width:70%;font-size:13px;white-space:pre-wrap;word-break:break-word">
@@ -13870,7 +13878,7 @@ async function renderMsgDetalle(fromId,plataforma){
               <div style="background:var(--surf);border:1px solid var(--b);border-radius:16px 16px 16px 4px;padding:10px 14px;max-width:70%;font-size:13px;white-space:pre-wrap;word-break:break-word">
                 ${esc(m.respuesta)}
                 ${m.motivo_escalado?`<div style="margin-top:6px;font-size:11px;color:#EF4444">⚠ Escalado: ${esc(m.motivo_escalado)}</div>`:""}
-                <div style="font-size:10px;color:var(--tx3);margin-top:4px">${fecha}</div>
+                <div style="font-size:10px;color:var(--tx3);margin-top:4px">🤖 Bot · ${fecha}</div>
               </div>
               <div style="display:flex;flex-direction:column;gap:6px;padding-left:4px;max-width:70%">
                 <div style="display:flex;gap:6px">
@@ -13887,6 +13895,13 @@ async function renderMsgDetalle(fromId,plataforma){
               </div>
             </div>`:""}`;
         }).join("")}
+      </div>
+      <div style="border-top:1px solid var(--b);padding-top:12px;margin-top:12px;display:flex;gap:8px;align-items:flex-end">
+        <textarea id="msg-reply-input" placeholder="Escribí tu respuesta..." rows="2"
+          style="flex:1;padding:8px 12px;border:1px solid var(--b);border-radius:12px;background:var(--surf);color:var(--tx);font-size:13px;resize:none;font-family:inherit;line-height:1.4"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarRespuestaManual('${fromId}','${plataforma}')}"></textarea>
+        <button onclick="enviarRespuestaManual('${fromId}','${plataforma}')"
+          style="background:#6366F1;color:#fff;border:none;border-radius:12px;padding:9px 16px;font-size:13px;cursor:pointer;white-space:nowrap;font-weight:600">Enviar ↑</button>
       </div>`;
     const sc=document.getElementById("msg-chat-scroll");
     if(sc)sc.scrollTop=sc.scrollHeight;
@@ -13910,6 +13925,29 @@ async function msgFeedback(id,valor){
     if(msgConvActual)renderMsgDetalle(msgConvActual.fromId,msgConvActual.plataforma);
     toast(valor==="like"?"Respuesta marcada como buena 👍":"Marcada para mejorar 👎","ok");
   }catch(e){toast("Error al guardar feedback","err");}
+}
+
+async function enviarRespuestaManual(fromId,plataforma){
+  const input=document.getElementById("msg-reply-input");
+  const texto=input?.value?.trim();
+  if(!texto){toast("Escribí un mensaje antes de enviar","err");return;}
+  const btn=input.nextElementSibling;
+  btn.disabled=true;btn.textContent="Enviando...";
+  try{
+    const sesion=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
+    const enviado_por=sesion?.user?.user_metadata?.nombre||sesion?.user?.email||"Equipo";
+    const res=await fetch(`${SB}/functions/v1/responder-mensaje`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
+      body:JSON.stringify({from_id:fromId,plataforma,mensaje:texto,enviado_por}),
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error);
+    input.value="";
+    renderMsgDetalle(fromId,plataforma);
+    toast("Mensaje enviado ✓","ok");
+  }catch(e){toast("Error al enviar: "+e.message,"err");}
+  finally{btn.disabled=false;btn.textContent="Enviar ↑";}
 }
 
 async function msgFeedbackComentario(id){
