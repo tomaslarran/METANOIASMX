@@ -3467,6 +3467,25 @@ function updateSideBadges(){
 let curPage="alertas";
 
 /* ── DASHBOARD / ALERTAS ── */
+async function checkAlertasPagos(){
+  const btn=document.getElementById("btn-check-alertas");
+  if(btn){btn.disabled=true;btn.textContent="Revisando...";}
+  try{
+    const res=await fetch(`${SB}/functions/v1/check-alertas-pagos`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error);
+    if(data.alertas===0){toast("Sin alertas pendientes 🎉","ok");}
+    else{
+      toast(`${data.alertas} alerta${data.alertas>1?"s":""} generada${data.alertas>1?"s":""} — revisá las notificaciones 🔔`,"inf");
+      loadBellNotifs();
+    }
+  }catch(e){toast("Error al revisar: "+e.message,"err");}
+  finally{if(btn){btn.disabled=false;btn.textContent="🔔 Revisar pagos";}}
+}
+
 async function renderAlertas(){
   const wrap=document.getElementById("alertas-wrap");
   if(!wrap)return;
@@ -3734,7 +3753,10 @@ async function renderAlertas(){
   wrap.innerHTML=`
     <div class="pg-header">
       <div><div class="pg-title" style="text-transform:capitalize">${greeting}${nombre?" "+nombre:""}! 👋</div><div class="pg-title-sub" style="text-transform:capitalize">${dayName}, ${dateFull}</div></div>
-      <button class="btn" onclick="renderAlertas()" style="gap:6px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Actualizar</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn sec" id="btn-check-alertas" onclick="checkAlertasPagos()" style="gap:6px">🔔 Revisar pagos</button>
+        <button class="btn" onclick="renderAlertas()" style="gap:6px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Actualizar</button>
+      </div>
     </div>
 
     <!-- ── Fila 1: Cash flow del mes ── -->
