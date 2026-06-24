@@ -302,6 +302,9 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 - [ ] Módulo COFRADIA — gestión de planes, suscriptores y contenido (Línea D)
 - [ ] Agentes cloud autónomos para automatizaciones (gstack instalado en `~/.claude/skills/gstack/`)
 
+### Cursos / E-learning
+- [ ] Palmier Pro (palmier.io) — editor de video open source que permite a Claude editar videos con comandos de texto. Evaluar para: cortar grabaciones de cursos, agregar intro/outro Metanoia, dividir una grabación larga en módulos, generar subtítulos. Útil antes de subir a la plataforma e-learning.
+
 ### Cancelado
 - ~~Darwin integration~~ — reemplazado por respuesta manual desde el panel (tab Mensajes)
 
