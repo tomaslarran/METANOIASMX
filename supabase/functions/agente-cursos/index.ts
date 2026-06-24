@@ -6,6 +6,76 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ── Documentos normativos institucionales (Mario Larran, Jun 2026) ────────────
+const DOCS_NORMATIVOS = `
+## Código de Ética del Simulacionista de Metanoia (SSH 2018 + INACSL 2021)
+6 valores fundamentales:
+1. Integridad — honestidad, veracidad, declarar supuestos y limitaciones, reconocer propiedad intelectual
+2. Transparencia — claridad en diseño y comunicación, declarar conflictos de interés
+3. Respeto mutuo — honrar la dignidad de estudiantes y colegas, maximizar seguridad psicológica
+4. Profesionalismo — competencia, desarrollo continuo
+5. Responsabilidad — rendir cuentas, notificar conductas inseguras
+6. Orientación a resultados — mejora continua, medir impacto hasta resultados del paciente
+
+Compromisos institucionales obligatorios:
+- Autoridad clínico-editorial: la Dirección Médica define el contenido. Industria y patrocinadores acompañan pero NO definen.
+- Todo contenido pasa por curaduría obligatoria y proceso PEV antes de usarse o comercializarse.
+- Declaración de Conflictos de Interés requerida para instructores, curadores y referentes (formulario Metanoia v1.0).
+- Propiedad intelectual: el autor retiene su crédito; Metanoia recibe licencia de uso por contrato.
+- Seguridad psicológica: el error en simulación es oportunidad de aprendizaje, NUNCA motivo de humillación o sanción.
+- Confidencialidad: grabaciones y registros de desempeño son datos sensibles (Leyes 25.326 y 26.529). Requieren consentimiento informado específico (formulario Consentimiento de Grabación Metanoia v1.0).
+- IA es apoyo, nunca sustituto del juicio profesional. Siempre con supervisión humana responsable.
+- No se prometen resultados no sustentables en evidencia. Rigor académico certificable es un compromiso central.
+
+## Marco de Buenas Prácticas en Simulación (INACSL 2021, SASIM 2023, adaptado a Metanoia)
+
+PREBRIEFING OBLIGATORIO antes de cada actividad:
+- Facilitador competente conduce prebriefing planificado y estandarizado
+- Explicitar propósito, objetivos, logística, roles, confidencialidad
+- Establecer contrato de ficción y "supuesto básico": todos son inteligentes, capaces y desean mejorar (Rudolph et al., 2014)
+- La fidelidad psicológica supera al realismo físico en importancia
+
+DISEÑO DE SIMULACIÓN (INACSL, Diseño de Simulación y Resultados y Objetivos, 2021):
+- Partir de evaluación de necesidades educativas
+- Objetivos medibles y alineados con nivel del participante (alineación constructiva)
+- Seleccionar modalidad según objetivos — no "máxima fidelidad" por defecto
+- Escenario estructurado: disparadores, estados clínicos y criterios de avance
+- Incluir plan de prebriefing y debriefing DESDE EL DISEÑO
+- Prueba piloto y revisión por pares antes de implementar
+- Formativa (mejora) vs. Sumativa/certificante (juicio final): separar roles de quien forma y quien certifica
+
+DEBRIEFING (componente con mayor impacto en el aprendizaje, Fanning & Gaba, 2007):
+- Método: "debriefing con buen juicio" — transparencia del facilitador + indagación genuina del participante (Rudolph et al., 2006)
+- Estructura PEARLS (Eppich & Cheng, 2015): reacción → análisis/descripción → exploración → resumen/aplicación
+- Gestionar carga cognitiva: minimizar extrínseca (distracciones), favorecer germinal (construcción de esquemas)
+- Evaluar impacto con Kirkpatrick: reacción → aprendizaje → conducta → resultados
+- Pirámide de Miller: sabe → sabe cómo → muestra cómo → hace
+
+MÓDULO QUIRÚRGICO (progresión basada en competencia, mastery learning):
+- Avance por logro de benchmarks objetivos de expertos, NO por tiempo de práctica
+- Práctica deliberada con feedback hasta estándar elevado (McGaghie et al., 2011)
+- Instrumentos validados: OSATS (destreza técnica), GOALS (laparoscopía), FLS (cirugía laparoscópica)
+- CRM (Manejo de Recursos en Crisis): liderazgo, comunicación de circuito cerrado, conciencia situacional
+
+PACIENTES SIMULADOS Y ESTANDARIZADOS (ASPE SOBP):
+- Protección física y psicológica; consentimiento, encuadre y posibilidad de pausa siempre
+- Des-rol (de-roling) tras escenarios emocionalmente exigentes
+- Feedback efectivo al participante cuando forma parte del diseño
+
+INSTRUMENTOS LEGALES REQUERIDOS (Metanoia, Jun 2026):
+- Consentimiento Informado de Grabación v1.0 — usar en TODAS las actividades grabadas
+- Declaración de Conflictos de Interés v1.0 — requerida para instructores, curadores, referentes
+
+AL DISEÑAR O VALIDAR UN CURSO, VERIFICAR SIEMPRE:
+✓ Contenido aprobado por Dirección Médica (curaduría editorial)
+✓ Estado en PEV (no comercializar antes de PROTOTIPO/APROBADO)
+✓ Prebriefing planificado desde el inicio
+✓ Debriefing estructurado incluido
+✓ Instructores con Declaración de Conflictos de Interés
+✓ Actividades grabadas con Consentimiento de Grabación
+✓ Lenguaje correcto: "entrenamiento" y "práctica", NUNCA "formación" o "capacitación"
+`;
+
 // ── SKILL: Diseño y gestión de cursos — Metanoia SMX ──────────────────────────
 const SKILL_CURSOS = `
 ## Marco institucional
@@ -151,6 +221,8 @@ SIEMPRE que se proponga o confirme una fecha para un curso nuevo:
 Sé proactivo: si el instructor dice "el 15" calculá qué día de la semana es y verificá todo antes de aceptar.
 
 ${SKILL_CURSOS}
+
+${DOCS_NORMATIVOS}
 
 CURSOS ACTUALES (fechas y estado): ${JSON.stringify(cursosResumen)}
 INSTRUCTORES: ${JSON.stringify(instructores.data)}`;
