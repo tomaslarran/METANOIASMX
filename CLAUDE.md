@@ -290,7 +290,12 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 
 ### Bloqueados por externos
 - [ ] LinkedIn sync — esperando aprobación Community Management API (app "Metanoia CMS", enviado 2 Jun 2026)
-- [ ] Integración E-learning — transmisión automática de cursos a metanoiasme.com + facturación automática vía Finnegans API
+- [ ] Integración E-learning — transmisión automática de cursos a plataforma.metanoiasmx.com + facturación automática vía Finnegans API
+
+### Alumnos / Integración Finnegans
+- [ ] Importador masivo Excel → Supabase + Finnegans API — leer plantilla, validar CUIT, crear cliente en Finnegans por cada alumno, insertar en `alumnos` solo si Finnegans responde OK
+- [ ] Alta individual con Finnegans — `saveAlumno()` debe disparar POST a Finnegans API al guardar (crear cliente, obtener comprobante)
+- [ ] Seguimiento e-learning por CUIT — usar CUIT como key de lookup en la plataforma e-learning para gestión de alumno
 
 ### Contabilidad y finanzas
 - [ ] Alertas de pagos pendientes — notificación cuando hay facturas vencidas o pagos programados sin registrar
@@ -351,6 +356,15 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 - ✅ Verificación de firma webhook Meta (`X-Hub-Signature-256`) en agente-mensajes
 - ✅ Verificación de firma webhook Twilio (`X-Twilio-Signature`) en whatsapp-agente
 - ✅ Backup mensual automatizado (`backup_mensual.ps1`) programado el día 20 de cada mes a las 9AM
+
+## Implementado (25 Jun 2026) — Alumnos, Cierre mensual, Agente cursos
+- ✅ Cierre mensual asistido — Edge Function `cierre-mensual` con checklist de 7 áreas + análisis IA (Claude Haiku); botón "Cerrar mes" en Cash Flow
+- ✅ agente-cursos: incorpora Código de Ética y Marco de Buenas Prácticas como referencia normativa (PEARLS, OSATS, Kirkpatrick, conflicto de interés, consentimiento grabación)
+- ✅ Limpieza periodo de prueba — alumnos e inscripciones borradas (SQL: DELETE FROM inscripciones; DELETE FROM alumnos)
+- ✅ Campo `cuit` en tabla `alumnos` — obligatorio, identificador maestro para integración Finnegans + e-learning
+- ✅ Plantilla Excel importación alumnos — 9 columnas (nombre*, apellido*, dni*, cuit*, email, telefono, matricula, especialidad, institucion); DNI y CUIT formateados como texto
+- ✅ CUIT en modal, búsqueda y filtros del módulo Alumnos
+- ✅ check-alertas-pagos acepta CRON_SECRET como autenticación alternativa (para llamadas programadas sin sesión de usuario)
 
 ## Implementado (23 Jun 2026) — Agente mensajes y mejoras continuas
 - ✅ agente-mensajes: bot 24/7 para IG DM / FB Messenger / WhatsApp — Claude Haiku, escalación al equipo vía WA, transcripción de audio con Groq/Whisper, visión para imágenes

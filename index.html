@@ -3152,7 +3152,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="form-grid">
     <div class="fg"><label class="fl">Nombre *</label><input class="fi" id="a-nombre" type="text" placeholder="Nombre"></div>
     <div class="fg"><label class="fl">Apellido *</label><input class="fi" id="a-apellido" type="text" placeholder="Apellido"></div>
-    <div class="fg"><label class="fl">DNI</label><input class="fi" id="a-dni" type="text" placeholder="DNI"></div>
+    <div class="fg"><label class="fl">DNI *</label><input class="fi" id="a-dni" type="text" placeholder="DNI sin puntos"></div>
+    <div class="fg"><label class="fl">CUIT *</label><input class="fi" id="a-cuit" type="text" placeholder="XX-XXXXXXXX-X"></div>
     <div class="fg"><label class="fl">Matrícula</label><input class="fi" id="a-matricula" type="text" placeholder="N° matrícula médica"></div>
     <div class="fg"><label class="fl">Especialidad</label><input class="fi" id="a-esp" type="text" placeholder="Ej: Clínica médica"></div>
     <div class="fg"><label class="fl">Institución</label><input class="fi" id="a-inst" type="text" placeholder="Hospital, clínica..."></div>
@@ -4036,7 +4037,7 @@ function openNewModal(){
     document.getElementById("c-after-desc-wrap").style.display="none";
     openModal("modal-curso");
   }
-  else if(curPage==="alumnos"){document.getElementById("alum-edit-id").value="";document.getElementById("modal-alum-title").textContent="Nuevo Alumno";["a-nombre","a-apellido","a-dni","a-matricula","a-esp","a-inst","a-email","a-tel","a-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("alum-cursos-section").style.display="none";openModal("modal-alumno")}
+  else if(curPage==="alumnos"){document.getElementById("alum-edit-id").value="";document.getElementById("modal-alum-title").textContent="Nuevo Alumno";["a-nombre","a-apellido","a-dni","a-cuit","a-matricula","a-esp","a-inst","a-email","a-tel","a-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("alum-cursos-section").style.display="none";openModal("modal-alumno")}
   else if(curPage==="proveedores"){document.getElementById("prov-edit-id").value="";document.getElementById("modal-prov-title").textContent="Nuevo Proveedor";["p-nombre","p-email","p-tel","p-esp","p-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("p-tipo").value="Empresa";openModal("modal-proveedor")}
   else if(curPage==="instructores"){document.getElementById("inst-edit-id").value="";document.getElementById("modal-inst-title").textContent="Nuevo Instructor";["i-nombre","i-apellido","i-esp","i-matricula","i-email","i-tel","i-inst","i-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("i-activo").checked=true;document.getElementById("ibtn-del").style.display="none";openModal("modal-instructor")}
   else if(curPage==="comunicaciones")openModalNuevoPost();
@@ -6004,7 +6005,7 @@ function delInstructor(id,nombre){
 // ── ALUMNOS ──
 function renderAlumnos(){
   const c=document.getElementById("alumnos-container");
-  const list=!aq?alumnos:alumnos.filter(a=>`${a.nombre} ${a.apellido} ${a.email||""} ${a.matricula||""}`.toLowerCase().includes(aq.toLowerCase()));
+  const list=!aq?alumnos:alumnos.filter(a=>`${a.nombre} ${a.apellido} ${a.email||""} ${a.matricula||""} ${a.cuit||""}`.toLowerCase().includes(aq.toLowerCase()));
   if(!list.length){c.innerHTML=`<div class="empty"><div class="ei">👨‍⚕️</div>No hay alumnos${aq?" con esa búsqueda":""}. Agregá el primero.</div>`;return}
   const colores=["#7C3AED","#3B82F6","#10B981","#F59E0B","#EC4899","#14B8A6"];
   c.innerHTML=`<div class="entity-grid">${list.map((a,i)=>`
@@ -6025,7 +6026,7 @@ async function editAlumno(id){
   document.getElementById("alum-edit-id").value=id;
   document.getElementById("modal-alum-title").textContent="Editar Alumno";
   document.getElementById("a-nombre").value=a.nombre||"";document.getElementById("a-apellido").value=a.apellido||"";
-  document.getElementById("a-dni").value=a.dni||"";document.getElementById("a-matricula").value=a.matricula||"";
+  document.getElementById("a-dni").value=a.dni||"";document.getElementById("a-cuit").value=a.cuit||"";document.getElementById("a-matricula").value=a.matricula||"";
   document.getElementById("a-esp").value=a.especialidad||"";document.getElementById("a-inst").value=a.institucion||"";
   document.getElementById("a-email").value=a.email||"";document.getElementById("a-tel").value=a.telefono||"";
   document.getElementById("a-notas").value=a.notas||"";
@@ -6065,7 +6066,8 @@ async function saveAlumno(){
   const nombre=document.getElementById("a-nombre").value.trim();const apellido=document.getElementById("a-apellido").value.trim();
   if(!nombre||!apellido){toast("Nombre y apellido son obligatorios","err");return}
   const id=document.getElementById("alum-edit-id").value;
-  const data={nombre,apellido,dni:document.getElementById("a-dni").value||null,matricula:document.getElementById("a-matricula").value||null,especialidad:document.getElementById("a-esp").value||null,institucion:document.getElementById("a-inst").value||null,email:document.getElementById("a-email").value||null,telefono:document.getElementById("a-tel").value||null,notas:document.getElementById("a-notas").value||null,updated_at:new Date().toISOString()};
+  const cuit=document.getElementById("a-cuit").value.trim();if(!cuit){toast("CUIT es obligatorio","err");return}
+  const data={nombre,apellido,dni:document.getElementById("a-dni").value||null,cuit,matricula:document.getElementById("a-matricula").value||null,especialidad:document.getElementById("a-esp").value||null,institucion:document.getElementById("a-inst").value||null,email:document.getElementById("a-email").value||null,telefono:document.getElementById("a-tel").value||null,notas:document.getElementById("a-notas").value||null,updated_at:new Date().toISOString()};
   const abtn=document.getElementById("abtn");abtn.disabled=true;abtn.textContent="Guardando...";
   try{
     if(id){await sb(`alumnos?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(data)});const i=alumnos.findIndex(a=>a.id===id);if(i>=0)alumnos[i]={...alumnos[i],...data};}
@@ -11230,7 +11232,7 @@ function runSearch(q){
     res.push({icon:"📚",color:"#7C3AED",title:c.nombre,sub:`${c.estado||""} · ${c.fecha_inicio||"Sin fecha"}`,action:()=>{goPage("cursos",document.getElementById("nav-cursos"));setTimeout(()=>selectCurso(c.id),200)}}));
 
   // Alumnos
-  alumnos.filter(a=>match(a.nombre)||match(a.apellido)||match(a.dni)||match(a.institucion)).slice(0,5).forEach(a=>
+  alumnos.filter(a=>match(a.nombre)||match(a.apellido)||match(a.dni)||match(a.cuit)||match(a.institucion)).slice(0,5).forEach(a=>
     res.push({icon:"👤",color:"#3B82F6",title:`${a.apellido||""}, ${a.nombre||""}`,sub:`DNI ${a.dni||"—"} · ${a.institucion||""}`,action:()=>{goPage("alumnos",document.getElementById("nav-alumnos"))}}));
 
   // Instructores
@@ -12187,6 +12189,7 @@ function renderUsuariosPage(users){
           <option value="proveedor"${rol==="proveedor"?" selected":""}>Proveedor externo</option>
         </select>
         ${rol==="proveedor"?`<button class="btn sec" style="font-size:11px;padding:4px 10px" onclick="openCuentaCorriente('${u.id}','${esc(u.nombre)}')">📊 Cuenta corriente</button>`:""}
+        ${!isSelf?`<button class="btn" style="font-size:11px;padding:4px 10px;background:var(--re);color:#fff;border-color:var(--re)" onclick="eliminarUsuario('${u.id}','${esc(u.nombre)}')">🗑 Eliminar</button>`:""}
       </div>
     </div>`;
   }).join("");
@@ -12229,6 +12232,26 @@ async function saveUsuarioRol(id,newRol,selectEl){
   }finally{
     selectEl.disabled=false;
     selectEl.dataset.prev=selectEl.value;
+  }
+}
+
+async function eliminarUsuario(id, nombre){
+  if(!confirm(`¿Eliminar a ${nombre}?\n\nSe eliminará su acceso al panel y todos sus datos. Esta acción no se puede deshacer.`))return;
+  const btn=document.querySelector(`#ucard-${id} button[onclick*="eliminarUsuario"]`);
+  if(btn){btn.disabled=true;btn.textContent="Eliminando...";}
+  try{
+    const res=await fetch(`${SB}/functions/v1/eliminar-usuario`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
+      body:JSON.stringify({usuario_id:id})
+    });
+    const d=await res.json();
+    if(!res.ok)throw new Error(d.error||"Error desconocido");
+    document.getElementById("ucard-"+id)?.remove();
+    toast(`${nombre} eliminado del panel`,"ok");
+  }catch(e){
+    toast("Error: "+e.message,"err");
+    if(btn){btn.disabled=false;btn.textContent="🗑 Eliminar";}
   }
 }
 
@@ -13466,11 +13489,9 @@ async function analizarConIA(){
   btn.disabled=true;btn.textContent="✨ Analizando...";
   try{
     // Llama a la Edge Function de Supabase (se configura en el próximo paso)
-    const SUPA_URL="https://jppxmdvddvbsvymogvcp.supabase.co";
-    const KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwcHhtZHZkZHZic3Z5bW9ndmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMjcyODAsImV4cCI6MjA5MDgwMzI4MH0.KPAqCKfUteE3XK9QFqb_44Hm8jYQxfjVLkrlyGvaMhE";
-    const res=await fetch(`${SUPA_URL}/functions/v1/leer-factura`,{
+    const res=await fetch(`${SB}/functions/v1/leer-factura`,{
       method:"POST",
-      headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json"},
+      headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":"application/json"},
       body:JSON.stringify({url:compArchivoUrl})
     });
     if(!res.ok)throw new Error(await res.text());
