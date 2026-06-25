@@ -10109,18 +10109,18 @@ async function apAnalizar(){
     // Subir archivo a Supabase Storage (bucket Facturas)
     const ext=apArchivoFile.name.split(".").pop()||"pdf";
     const fname=`prestamos_${Date.now()}.${ext}`;
-    const upRes=await fetch(`${SUPA_URL_P}/storage/v1/object/Facturas/${fname}`,{
+    const upRes=await fetch(`${SB}/storage/v1/object/Facturas/${fname}`,{
       method:"POST",
-      headers:{"apikey":KEY_P,"Authorization":"Bearer "+KEY_P,"Content-Type":apArchivoFile.type,"x-upsert":"true"},
+      headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":apArchivoFile.type,"x-upsert":"true"},
       body:apArchivoFile
     });
     if(!upRes.ok){const t=await upRes.text();throw new Error("Upload: "+t.slice(0,80));}
-    apArchivoUrl=`${SUPA_URL_P}/storage/v1/object/public/Facturas/${fname}`;
+    apArchivoUrl=`${SB}/storage/v1/object/public/Facturas/${fname}`;
 
     // Llamar Edge Function
-    const res=await fetch(`${SUPA_URL_P}/functions/v1/leer-prestamo`,{
+    const res=await fetch(`${SB}/functions/v1/leer-prestamo`,{
       method:"POST",
-      headers:{"apikey":KEY_P,"Authorization":"Bearer "+KEY_P,"Content-Type":"application/json"},
+      headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":"application/json"},
       body:JSON.stringify({url:apArchivoUrl})
     });
     const data=await res.json();
