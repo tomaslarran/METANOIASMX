@@ -29,12 +29,7 @@ Deno.serve(async (req) => {
     if (!apiKey) throw new Error("Sin API key");
     const h = { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" };
 
-    const modelsRes = await fetch("https://api.anthropic.com/v1/models", { headers: h });
-    const modelsData = await modelsRes.json();
-    const preferred = ["claude-3-5-sonnet","claude-3-5-haiku","claude-3-sonnet","claude-3-haiku","claude-3-opus"];
-    const available = modelsData.data?.map((m: any) => m.id) || [];
-    const model = available.find((id: string) => preferred.some(p => id.includes(p))) || available[0];
-    if (!model) throw new Error("No hay modelos: " + JSON.stringify(available));
+    const model = "claude-sonnet-4-6";
 
     const fileRes = await fetch(url);
     if (!fileRes.ok) throw new Error("No se pudo obtener archivo: " + fileRes.status);
