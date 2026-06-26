@@ -9701,6 +9701,7 @@ function calcRendStats(){
 async function renderBenchmark(){
   const el=document.getElementById("benchmark-tabla");
   if(!el)return;
+  const getCapActivo=(inv)=>inv.valor_actual!=null?inv.valor_actual:(inv.capital||0);
   // Últimos 12 meses calendario
   const meses=[];
   const d=new Date();
