@@ -1236,10 +1236,19 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </div>
   </div>
   <div class="stats">
-    <div class="sc"><div class="sc-l">Total cursos</div><div class="sc-v vp" id="cT">—</div><div class="sc-s">registrados</div></div>
-    <div class="sc"><div class="sc-l">Activos</div><div class="sc-v vb" id="cA">—</div><div class="sc-s">en curso</div></div>
-    <div class="sc"><div class="sc-l">Inscriptos</div><div class="sc-v va" id="cI">—</div><div class="sc-s">alumnos totales</div></div>
-    <div class="sc"><div class="sc-l">Completados</div><div class="sc-v vg" id="cC">—</div><div class="sc-s">finalizados</div></div>
+    <div class="sc" onclick="setCursoFilter('all')" style="cursor:pointer" onmouseenter="this.style.borderColor='rgba(124,58,237,.4)'" onmouseleave="this.style.borderColor=''"><div class="sc-l">Total cursos</div><div class="sc-v vp" id="cT">—</div><div class="sc-s">todos</div></div>
+    <div class="sc" onclick="setCursoFilter('activos')" style="cursor:pointer" onmouseenter="this.style.borderColor='rgba(124,58,237,.4)'" onmouseleave="this.style.borderColor=''"><div class="sc-l">Activos</div><div class="sc-v vb" id="cA">—</div><div class="sc-s">en curso</div></div>
+    <div class="sc" onclick="goPage('alumnos',document.getElementById('nav-alumnos'))" style="cursor:pointer" onmouseenter="this.style.borderColor='rgba(124,58,237,.4)'" onmouseleave="this.style.borderColor=''"><div class="sc-l">Inscriptos</div><div class="sc-v va" id="cI">—</div><div class="sc-s">ver alumnos</div></div>
+    <div class="sc" onclick="setCursoFilter('completados')" style="cursor:pointer" onmouseenter="this.style.borderColor='rgba(124,58,237,.4)'" onmouseleave="this.style.borderColor=''"><div class="sc-l">Completados</div><div class="sc-v vg" id="cC">—</div><div class="sc-s">finalizados</div></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+    <span style="font-size:11px;color:var(--tx3)">Ordenar por:</span>
+    <select class="sel" onchange="cursoSort=this.value;renderCursos()">
+      <option value="fecha">Fecha inicio</option>
+      <option value="estado">Estado</option>
+      <option value="nombre">Nombre A-Z</option>
+      <option value="inscriptos">Inscriptos</option>
+    </select>
   </div>
   <div id="curso-grid-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando cursos...</div></div></div>
   <div id="curso-detail-container"></div>
@@ -3282,7 +3291,7 @@ let tasks=[],users=[],cursos=[],alumnos=[],proveedores=[],instructores=[],planti
 let oportFilter='all', oportArchivosTemp=[], oportChatHistorial=[];
 let inventario=[],invFilter="all",invSearch="",editInvId=null;
 let instSearch="",instActivo="";
-let curUser="",curF="all",curCat="",q="",aq="",cursoFilter="all";
+let curUser="",curF="all",curCat="",q="",aq="",cursoFilter="all",cursoSort="fecha";
 let charts={};
 const UC=["#7C3AED","#3B82F6","#10B981","#F59E0B","#EC4899","#14B8A6"];
 
@@ -4323,6 +4332,12 @@ function renderCursos(){
   else if(cursoFilter==="borrador")list=cursos.filter(x=>x.estado==="Borrador");
   else if(cursoFilter==="completados")list=realizados;
   else list=cursos.filter(x=>x.estado!=="Completado"); // vista "all": oculta completados
+  // Ordenar
+  const estadoOrd={"Convocatoria":1,"Inscripciones":2,"En curso":3,"Educación médica continua":4,"Borrador":5,"Completado":6,"Cancelado":7};
+  if(cursoSort==="estado") list=[...list].sort((a,b)=>(estadoOrd[a.estado]||9)-(estadoOrd[b.estado]||9));
+  else if(cursoSort==="nombre") list=[...list].sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es"));
+  else if(cursoSort==="inscriptos") list=[...list].sort((a,b)=>(b.cupos_inscriptos||0)-(a.cupos_inscriptos||0));
+  else list=[...list].sort((a,b)=>(b.fecha_inicio||"0").localeCompare(a.fecha_inicio||"0")); // fecha desc
   // Actualizar botón Realizados con conteo
   const btnReal=document.getElementById("btn-realizados");
   if(btnReal){btnReal.textContent=`🏁 Realizados (${realizados.length})`;btnReal.style.opacity=cursoFilter==="completados"?"1":".75";btnReal.style.fontWeight=cursoFilter==="completados"?"700":"400";}
