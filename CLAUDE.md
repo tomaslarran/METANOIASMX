@@ -298,8 +298,6 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 - [ ] Seguimiento e-learning por CUIT — usar CUIT como key de lookup en la plataforma e-learning para gestión de alumno
 
 ### Contabilidad y finanzas
-- [ ] Alertas de pagos pendientes — notificación cuando hay facturas vencidas o pagos programados sin registrar
-- [ ] Cierre mensual asistido — checklist guiado + agente IA que valida qué falta registrar antes de cerrar el mes
 - [ ] Importador Finnegans — leer archivos exportados de Finnegans (semanal/mensual) y conciliar con comprobantes, cobranzas y caja del panel
 - [ ] Resumen mensual ejecutivo — agente IA que lee todos los módulos y genera balance en lenguaje natural (financiero + cursos + comunicaciones)
 
@@ -365,6 +363,29 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 - ✅ Plantilla Excel importación alumnos — 9 columnas (nombre*, apellido*, dni*, cuit*, email, telefono, matricula, especialidad, institucion); DNI y CUIT formateados como texto
 - ✅ CUIT en modal, búsqueda y filtros del módulo Alumnos
 - ✅ check-alertas-pagos acepta CRON_SECRET como autenticación alternativa (para llamadas programadas sin sesión de usuario)
+
+## Implementado (29 Jun 2026) — Cursos y fixes
+- ✅ `linea_negocio` en cursos — 4 categorías: MSP/Convenio, Colmedsa, Comercial, EMC/Gratuito; badge de color en cards, select en modal de creación y en panel de detalle inline, filtro por línea en grilla
+- ✅ Estado "Educación médica continua" en cursos — badge teal + dropdown "Cambiar estado" + fix constraint `cursos_estado_check`
+- ✅ Fix "Cambiar estado" botón desaparecía — selector `:not([id^='estado-dd-wrap-'])` para no ocultar el wrapper
+- ✅ Fix dark dropdowns — `color-scheme: dark/light` en `.sel`, `.mini-sel`, `.fs` (light mode compatible)
+- ✅ Cards cursos clickeables — navegan a filtro correspondiente al clickear stat card
+- ✅ Sort cursos — selector Fecha/Estado/Nombre/Inscriptos encima de la grilla
+- ✅ Fix Benchmark vs Inflación vacío — `getCapActivo` redefinido en scope de `renderBenchmark`
+- ✅ Fix `leer-factura` model error — hardcodeado `claude-sonnet-4-6` (eliminada detección dinámica que elegía claude-fable-5)
+- ✅ Fix `leer-factura` + `analizarConIA` + `apAnalizar` Unauthorized — usar `authToken||KEY` en lugar de anon key hardcodeada
+- ✅ Edge Function `eliminar-usuario` — elimina usuario de Supabase Auth + tabla `usuarios`, solo admins, con guard de auto-eliminación (pendiente deploy en Supabase dashboard)
+- ✅ Botón "Eliminar" en módulo Usuarios — llama a `eliminar-usuario` con confirmación
+
+**SQL pendiente (correr en Supabase SQL editor):**
+```sql
+ALTER TABLE cursos ADD COLUMN IF NOT EXISTS linea_negocio text
+  CHECK (linea_negocio IN ('MSP / Convenio','Colmedsa','Comercial','EMC / Gratuito'));
+ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS cuit text;
+-- Fix constraint estado cursos:
+ALTER TABLE cursos DROP CONSTRAINT IF EXISTS cursos_estado_check;
+ALTER TABLE cursos ADD CONSTRAINT cursos_estado_check CHECK (estado IN ('Borrador','Convocatoria','Inscripciones','En curso','Educación médica continua','Completado','Cancelado'));
+```
 
 ## Implementado (23 Jun 2026) — Agente mensajes y mejoras continuas
 - ✅ agente-mensajes: bot 24/7 para IG DM / FB Messenger / WhatsApp — Claude Haiku, escalación al equipo vía WA, transcripción de audio con Groq/Whisper, visión para imágenes
