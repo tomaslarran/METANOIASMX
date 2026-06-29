@@ -238,6 +238,12 @@ body.light-mode .mini-sel option{background:#ffffff;color:#1A1D2E}
 .est-completado{background:var(--gl);color:#6EE7B7}
 .est-cancelado{background:var(--rl2);color:#FCA5A5}
 .est-emc{background:rgba(20,184,166,.15);color:#2DD4BF}
+.lnb{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600;letter-spacing:.3px}
+.lnb-msp{background:rgba(59,130,246,.15);color:#60A5FA}
+.lnb-col{background:rgba(245,158,11,.15);color:#FCD34D}
+.lnb-com{background:rgba(124,58,237,.15);color:#C4B5FD}
+.lnb-emc{background:rgba(20,184,166,.15);color:#2DD4BF}
+.lnb-def{background:rgba(148,163,184,.15);color:#94A3B8}
 .cc-nombre{font-size:15px;font-weight:600;color:var(--tx);margin-bottom:4px;line-height:1.3}
 .cc-tipo{font-size:11px;color:var(--tx3)}
 .cc-bottom{padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
@@ -1254,6 +1260,14 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <option value="estado">Estado</option>
       <option value="nombre">Nombre A-Z</option>
       <option value="inscriptos">Inscriptos</option>
+    </select>
+    <span style="font-size:11px;color:var(--tx3);margin-left:8px">Línea:</span>
+    <select class="sel" id="sel-linea-negocio" onchange="cursoLinea=this.value;renderCursos()">
+      <option value="">Todas</option>
+      <option value="MSP / Convenio">MSP / Convenio</option>
+      <option value="Colmedsa">Colmedsa</option>
+      <option value="Comercial">Comercial</option>
+      <option value="EMC / Gratuito">EMC / Gratuito</option>
     </select>
   </div>
   <div id="curso-grid-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando cursos...</div></div></div>
@@ -3102,6 +3116,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg"><label class="fl">Cupos máximos</label><input class="fi" id="c-cupos" type="number" placeholder="20"></div>
     <div class="fg"><label class="fl">Arancel ($)</label><input class="fi" id="c-arancel" type="number" placeholder="0"></div>
     <div class="fg"><label class="fl">Desc. Colegio Médicos (%)</label><input class="fi" id="c-descuento" type="number" placeholder="0" min="0" max="100"></div>
+    <div class="fg"><label class="fl">Línea de negocio</label><select class="fs" id="c-linea"><option value="">Sin asignar</option><option value="MSP / Convenio">MSP / Convenio</option><option value="Colmedsa">Colmedsa</option><option value="Comercial">Comercial</option><option value="EMC / Gratuito">EMC / Gratuito</option></select></div>
     <div class="fg"><label class="fl">Instructor</label><input class="fi" id="c-instructor" type="text" placeholder="Nombre del instructor"></div>
     <div class="fg"><label class="fl">Proveedor</label><select class="fs" id="c-proveedor"><option value="">Sin proveedor</option></select></div>
     <div class="fg form-full"><label class="fl">Respaldo institucional</label><input class="fi" id="c-respaldo" type="text" placeholder="Ej: Colegio de Médicos de Salta"></div>
@@ -3297,7 +3312,7 @@ let tasks=[],users=[],cursos=[],alumnos=[],proveedores=[],instructores=[],planti
 let oportFilter='all', oportArchivosTemp=[], oportChatHistorial=[];
 let inventario=[],invFilter="all",invSearch="",editInvId=null;
 let instSearch="",instActivo="";
-let curUser="",curF="all",curCat="",q="",aq="",cursoFilter="all",cursoSort="fecha";
+let curUser="",curF="all",curCat="",q="",aq="",cursoFilter="all",cursoSort="fecha",cursoLinea="";
 let charts={};
 const UC=["#7C3AED","#3B82F6","#10B981","#F59E0B","#EC4899","#14B8A6"];
 
@@ -4050,6 +4065,7 @@ function openNewModal(){
     document.getElementById("c-tipo").value="Mixto";
     document.getElementById("c-modalidad").value="Presencial";
     document.getElementById("c-estado").value="Borrador";
+    document.getElementById("c-linea").value="";
     document.getElementById("c-proveedor").value="";
     document.getElementById("c-plantilla").value="";
     const cb=document.getElementById("c-after");if(cb)cb.checked=false;
@@ -4329,6 +4345,7 @@ async function createTask(){
 
 // ── CURSOS ──
 function estadoBadge(e){const m={"Borrador":"est-borrador","Convocatoria":"est-convocatoria","Inscripciones":"est-inscripciones","En curso":"est-en curso","Completado":"est-completado","Cancelado":"est-cancelado","Educación médica continua":"est-emc"};return`<span class="cc-estado ${m[e]||"est-borrador"}">${e}</span>`}
+function lineaBadge(l){if(!l)return"";const m={"MSP / Convenio":"lnb-msp","Colmedsa":"lnb-col","Comercial":"lnb-com","EMC / Gratuito":"lnb-emc"};return`<span class="lnb ${m[l]||"lnb-def"}">${esc(l)}</span>`}
 
 function renderCursos(){
   const c=document.getElementById("curso-grid-container");
@@ -4338,6 +4355,7 @@ function renderCursos(){
   else if(cursoFilter==="borrador")list=cursos.filter(x=>x.estado==="Borrador");
   else if(cursoFilter==="completados")list=realizados;
   else list=cursos.filter(x=>x.estado!=="Completado"); // vista "all": oculta completados
+  if(cursoLinea) list=list.filter(x=>x.linea_negocio===cursoLinea);
   // Ordenar
   const estadoOrd={"Convocatoria":1,"Inscripciones":2,"En curso":3,"Educación médica continua":4,"Borrador":5,"Completado":6,"Cancelado":7};
   if(cursoSort==="estado") list=[...list].sort((a,b)=>(estadoOrd[a.estado]||9)-(estadoOrd[b.estado]||9));
@@ -4358,7 +4376,7 @@ function renderCursos(){
     const pct=curso.progreso||0;
     return`<div class="curso-card" onclick="selectCurso('${curso.id}')">
       <div class="cc-top">
-        ${estadoBadge(curso.estado)}
+        <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">${estadoBadge(curso.estado)}${lineaBadge(curso.linea_negocio)}</div>
         <div class="cc-nombre">${esc(curso.nombre)}</div>
         <div class="cc-tipo">${esc(curso.tipo||"")} · ${esc(curso.modalidad||"")}</div>
       </div>
@@ -4433,6 +4451,7 @@ async function selectCurso(id){
           <div class="fg"><label class="fl">Desc. Colegio (%)</label><input class="fi" type="number" value="${curso.descuento_colegio||""}" onchange="updateCursoField('${id}','descuento_colegio',this.value)"></div>
           <div class="fg"><label class="fl">Instructor</label><input class="fi" value="${esc(curso.instructor_nombre||"")}" onchange="updateCursoField('${id}','instructor_nombre',this.value)"></div>
           <div class="fg"><label class="fl">Proveedor</label><select class="fs" onchange="updateCursoField('${id}','proveedor_id',this.value)"><option value="">Sin proveedor</option>${proveedores.map(p=>`<option value="${p.id}"${p.id===curso.proveedor_id?" selected":""}>${p.nombre}</option>`).join("")}</select></div>
+          <div class="fg"><label class="fl">Línea de negocio</label><select class="fs" onchange="updateCursoField('${id}','linea_negocio',this.value||null)"><option value="">Sin asignar</option>${["MSP / Convenio","Colmedsa","Comercial","EMC / Gratuito"].map(l=>`<option value="${l}"${curso.linea_negocio===l?" selected":""}>${l}</option>`).join("")}</select></div>
           <div class="fg form-full"><label class="fl">Respaldo institucional</label><input class="fi" value="${esc(curso.respaldo_institucional||"")}" onchange="updateCursoField('${id}','respaldo_institucional',this.value)"></div>
           <div class="fg form-full"><label class="fl">Descripción</label><textarea class="fta" onchange="updateCursoField('${id}','descripcion',this.value)">${esc(curso.descripcion||"")}</textarea></div>
         </div>
@@ -5471,6 +5490,7 @@ async function createCurso(){
     cupos_max:document.getElementById("c-cupos").value?Number(document.getElementById("c-cupos").value):null,
     arancel:document.getElementById("c-arancel").value?Number(document.getElementById("c-arancel").value):null,
     descuento_colegio:document.getElementById("c-descuento").value?Number(document.getElementById("c-descuento").value):null,
+    linea_negocio:document.getElementById("c-linea").value||null,
     instructor_nombre:document.getElementById("c-instructor").value||null,
     proveedor_id:document.getElementById("c-proveedor").value||null,
     respaldo_institucional:document.getElementById("c-respaldo").value||null,
@@ -5547,6 +5567,7 @@ async function crearCursoDesdeIA(){
     document.getElementById("c-tipo").value="Mixto";
     document.getElementById("c-modalidad").value="Presencial";
     document.getElementById("c-estado").value="Borrador";
+    document.getElementById("c-linea").value="";
     document.getElementById("c-proveedor").value="";
     document.getElementById("c-plantilla").value="";
     const cb=document.getElementById("c-after");if(cb)cb.checked=false;
