@@ -297,7 +297,10 @@ td.cf-fill-target{outline:2px dashed var(--ac);outline-offset:-2px;background:co
 .fi:focus,.fs:focus,.fta:focus{border-color:var(--pu)}
 .fi::placeholder,.fta::placeholder{color:var(--tx3)}
 .fs{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='5' fill='none'%3E%3Cpath d='M1 1l3.5 3.5L8 1' stroke='%239899B0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;cursor:pointer}
-.fs option{background:#1A1D2E}
+.fs option{background:#1A1D2E;color:#E2E4F0}
+.fs{color-scheme:dark}
+body.light-mode .fs{color-scheme:light}
+body.light-mode .fs option{background:#ffffff;color:#1A1D2E}
 .fta{resize:vertical;min-height:80px}
 .toggle-row{display:flex;align-items:center;gap:10px;padding:6px 0}
 .toggle{position:relative;width:36px;height:20px;flex-shrink:0}
