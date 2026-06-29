@@ -3074,7 +3074,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="mt">Nuevo Curso</div>
   <div class="form-grid">
     <div class="fg form-full"><label class="fl">Nombre del curso *</label><input class="fi" id="c-nombre" type="text" placeholder="Ej: ACLS Avanzado — Abril 2026"></div>
-    <div class="fg"><label class="fl">Tipo</label><select class="fs" id="c-tipo"><option value="Mixto">Mixto</option><option value="Teórico">Teórico</option><option value="Práctico">Práctico</option></select></div>
+    <div class="fg"><label class="fl">Tipo</label><select class="fs" id="c-tipo"><option value="Mixto">Mixto</option><option value="Teórico">Teórico</option><option value="Práctico">Práctico</option><option value="Educación médica continua">Educación médica continua</option></select></div>
     <div class="fg"><label class="fl">Modalidad</label><select class="fs" id="c-modalidad"><option value="Presencial">Presencial</option><option value="Virtual">Virtual</option><option value="Híbrido">Híbrido</option></select></div>
     <div class="fg"><label class="fl">Estado</label><select class="fs" id="c-estado"><option value="Borrador">Borrador</option><option value="Convocatoria">Convocatoria</option><option value="Inscripciones">Inscripciones</option><option value="En curso">En curso</option></select></div>
     <div class="fg"><label class="fl">Fecha inicio</label><input class="fi" id="c-inicio" type="date"></div>
@@ -5493,7 +5493,7 @@ async function crearCursoDesdeIA(){
     const extractPrompt=`Basándote en toda la conversación, extraé los datos del curso en formato JSON. Devolvé SOLO el JSON sin texto adicional, sin markdown, sin bloques de código. Campos a completar (dejá null si no se mencionó):
 {
   "nombre": "Nombre completo del curso",
-  "tipo": "Mixto|Teórico|Práctico",
+  "tipo": "Mixto|Teórico|Práctico|Educación médica continua",
   "modalidad": "Presencial|Virtual|Híbrido",
   "fecha_inicio": "YYYY-MM-DD o null",
   "fecha_fin": "YYYY-MM-DD o null",
