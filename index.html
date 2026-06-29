@@ -5411,7 +5411,7 @@ function toggleEstadoDD(id){
   if(!dd)return;
   const visible=dd.style.display!=="none";
   // Cerrar todos los otros dropdowns abiertos
-  document.querySelectorAll("[id^='estado-dd-']").forEach(el=>el.style.display="none");
+  document.querySelectorAll("[id^='estado-dd-']:not([id^='estado-dd-wrap-'])").forEach(el=>el.style.display="none");
   if(!visible){
     dd.style.display="block";
     // Click fuera cierra
