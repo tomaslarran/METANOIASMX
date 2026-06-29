@@ -231,6 +231,7 @@ body{font-family:var(--f);background:var(--bg);color:var(--tx);min-height:100vh;
 .est-en.curso{background:var(--pl);color:#C4B5FD}
 .est-completado{background:var(--gl);color:#6EE7B7}
 .est-cancelado{background:var(--rl2);color:#FCA5A5}
+.est-emc{background:rgba(20,184,166,.15);color:#2DD4BF}
 .cc-nombre{font-size:15px;font-weight:600;color:var(--tx);margin-bottom:4px;line-height:1.3}
 .cc-tipo{font-size:11px;color:var(--tx3)}
 .cc-bottom{padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
@@ -3076,7 +3077,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg form-full"><label class="fl">Nombre del curso *</label><input class="fi" id="c-nombre" type="text" placeholder="Ej: ACLS Avanzado — Abril 2026"></div>
     <div class="fg"><label class="fl">Tipo</label><select class="fs" id="c-tipo"><option value="Mixto">Mixto</option><option value="Teórico">Teórico</option><option value="Práctico">Práctico</option><option value="Educación médica continua">Educación médica continua</option></select></div>
     <div class="fg"><label class="fl">Modalidad</label><select class="fs" id="c-modalidad"><option value="Presencial">Presencial</option><option value="Virtual">Virtual</option><option value="Híbrido">Híbrido</option></select></div>
-    <div class="fg"><label class="fl">Estado</label><select class="fs" id="c-estado"><option value="Borrador">Borrador</option><option value="Convocatoria">Convocatoria</option><option value="Inscripciones">Inscripciones</option><option value="En curso">En curso</option></select></div>
+    <div class="fg"><label class="fl">Estado</label><select class="fs" id="c-estado"><option value="Borrador">Borrador</option><option value="Convocatoria">Convocatoria</option><option value="Inscripciones">Inscripciones</option><option value="En curso">En curso</option><option value="Educación médica continua">Educación médica continua</option></select></div>
     <div class="fg"><label class="fl">Fecha inicio</label><input class="fi" id="c-inicio" type="date"></div>
     <div class="fg"><label class="fl">Fecha fin</label><input class="fi" id="c-fin" type="date"></div>
     <div class="fg"><label class="fl">Duración (horas)</label><input class="fi" id="c-horas" type="number" placeholder="8"></div>
@@ -4309,7 +4310,7 @@ async function createTask(){
 }
 
 // ── CURSOS ──
-function estadoBadge(e){const m={"Borrador":"est-borrador","Convocatoria":"est-convocatoria","Inscripciones":"est-inscripciones","En curso":"est-en curso","Completado":"est-completado","Cancelado":"est-cancelado"};return`<span class="cc-estado ${m[e]||"est-borrador"}">${e}</span>`}
+function estadoBadge(e){const m={"Borrador":"est-borrador","Convocatoria":"est-convocatoria","Inscripciones":"est-inscripciones","En curso":"est-en curso","Completado":"est-completado","Cancelado":"est-cancelado","Educación médica continua":"est-emc"};return`<span class="cc-estado ${m[e]||"est-borrador"}">${e}</span>`}
 
 function renderCursos(){
   const c=document.getElementById("curso-grid-container");
@@ -4383,7 +4384,7 @@ async function selectCurso(id){
         <div style="position:relative;display:inline-block" id="estado-dd-wrap-${id}" onclick="event.stopPropagation()">
           <button class="btn" onclick="event.stopPropagation();toggleEstadoDD('${id}')">Cambiar estado ▾</button>
           <div id="estado-dd-${id}" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--surf);border:1px solid var(--b);border-radius:8px;padding:4px;z-index:999;min-width:150px;box-shadow:0 4px 16px rgba(0,0,0,.25)" onclick="event.stopPropagation()">
-            ${["Borrador","Convocatoria","Inscripciones","En curso","Completado","Cancelado"].map(e=>`<div onclick="event.stopPropagation();setEstadoCurso('${id}','${e}')" style="padding:7px 12px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--tx);white-space:nowrap" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background=''">${estadoBadge(e)} ${e}</div>`).join("")}
+            ${["Borrador","Convocatoria","Inscripciones","En curso","Educación médica continua","Completado","Cancelado"].map(e=>`<div onclick="event.stopPropagation();setEstadoCurso('${id}','${e}')" style="padding:7px 12px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--tx);white-space:nowrap" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background=''">${estadoBadge(e)} ${e}</div>`).join("")}
           </div>
         </div>
         <button class="btn" onclick="confirmDel('¿Eliminar el curso &quot;${esc(curso.nombre)}&quot;?',()=>delCurso('${id}'))"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
