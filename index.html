@@ -955,6 +955,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         Oportunidades
         <span class="sitem-badge" id="badge-oportunidades">—</span>
       </div>
+      <div class="sitem comu-visible" onclick="goPage('cofradia',this)" id="nav-cofradia">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        COFRADIA
+        <span class="sitem-badge" id="badge-cofradia">—</span>
+      </div>
     </div>
   </div>
   <div class="sgroup" id="sg-finanzas">
@@ -2621,6 +2626,33 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 </div>
 
+<!-- ══ COFRADIA ══ -->
+<div id="pg-cofradia" style="display:none">
+  <div class="pg-header">
+    <div>
+      <div class="pg-title">COFRADIA</div>
+      <div class="pg-title-sub">Buscador-curador de contenidos médicos</div>
+    </div>
+    <div class="pg-header-actions">
+      <button class="btn sec" onclick="loadCofradia()" title="Recargar datos">↻ Actualizar</button>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="sc"><div class="sc-l">En triage</div><div class="sc-v vp" id="cfT">—</div><div class="sc-s">a revisar</div></div>
+    <div class="sc"><div class="sc-l">Aceptadas</div><div class="sc-v vb" id="cfA">—</div><div class="sc-s">para borrador</div></div>
+    <div class="sc"><div class="sc-l">Borradores</div><div class="sc-v va" id="cfB">—</div><div class="sc-s">en edición</div></div>
+    <div class="sc"><div class="sc-l">Aprobados</div><div class="sc-v vg" id="cfP">—</div><div class="sc-s">listos</div></div>
+  </div>
+  <div style="display:flex;gap:0;border-bottom:1px solid var(--b);margin-bottom:16px">
+    <div class="cd-tab on" id="cf-tab-triage" onclick="setCofradiaTab('triage')" style="cursor:pointer">📋 Triage</div>
+    <div class="cd-tab" id="cf-tab-borradores" onclick="setCofradiaTab('borradores')" style="cursor:pointer">✍️ Borradores</div>
+    <div class="cd-tab" id="cf-tab-fuentes" onclick="setCofradiaTab('fuentes')" style="cursor:pointer">📡 Fuentes</div>
+  </div>
+  <div id="cf-triage"><div class="loading"><div class="loader"></div><div class="lt">Cargando triage...</div></div></div>
+  <div id="cf-borradores" style="display:none"><div class="loading"><div class="loader"></div><div class="lt">Cargando borradores...</div></div></div>
+  <div id="cf-fuentes" style="display:none"><div class="loading"><div class="loader"></div><div class="lt">Cargando fuentes...</div></div></div>
+</div>
+
 </div><!-- /content -->
 </div><!-- /layout -->
 
@@ -4046,6 +4078,7 @@ function goPage(name,el){
   if(name==="cotizaciones")loadCotizacionesPage();
   if(name==="reportes")initReportesPage();
   if(name==="oportunidades")loadOportunidades();
+  if(name==="cofradia")loadCofradia();
 }
 function goTo(name,el){goPage(name,el)}
 function renderNotifPage(){
@@ -15923,6 +15956,216 @@ function exportarCotizPDF(id){
   doc.text("Los precios en USD se calculan según TC vigente. Vigencia: 10 días corridos.",W-MR,288,{align:"right"});
   doc.save(`${c.numero||"cotizacion"}.pdf`);
   toast("PDF generado","ok");
+}
+</script>
+
+<script>
+// ── COFRADIA ─────────────────────────────────────────────────────────────────
+let cofradiaCapturas=[],cofradiaBorradores=[],cofradiaFuentes=[],cofradiaTab="triage";
+
+async function loadCofradia(){
+  const el=document.getElementById("cf-triage");if(el)el.innerHTML='<div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>';
+  try{
+    const [caps,bors,ftes]=await Promise.all([
+      sb("cofradia_capturas?select=*,cofradia_fuentes(nombre)&estado=in.(triage,aceptada,pendiente)&order=score.desc&limit=100").catch(()=>[]),
+      sb("cofradia_borradores?select=*,cofradia_capturas(titulo_original,url_original)&estado=in.(borrador,aprobado)&order=created_at.desc&limit=50").catch(()=>[]),
+      sb("cofradia_fuentes?select=*&order=prioridad,nombre").catch(()=>[])
+    ]);
+    cofradiaCapturas=caps;cofradiaBorradores=bors;cofradiaFuentes=ftes;
+    renderCofradiaTriage();renderCofradiaBorradores();renderCofradiaFuentes();updateCofradiaStats();
+    const b=document.getElementById("badge-cofradia");
+    if(b)b.textContent=caps.filter(c=>c.estado==="triage").length||"—";
+  }catch(e){toast("Error COFRADIA: "+e.message,"err")}
+}
+
+function updateCofradiaStats(){
+  document.getElementById("cfT").textContent=cofradiaCapturas.filter(c=>c.estado==="triage").length;
+  document.getElementById("cfA").textContent=cofradiaCapturas.filter(c=>c.estado==="aceptada").length;
+  document.getElementById("cfB").textContent=cofradiaBorradores.filter(b=>b.estado==="borrador").length;
+  document.getElementById("cfP").textContent=cofradiaBorradores.filter(b=>b.estado==="aprobado").length;
+}
+
+function setCofradiaTab(tab){
+  cofradiaTab=tab;
+  ["triage","borradores","fuentes"].forEach(t=>{
+    document.getElementById("cf-"+t).style.display=t===tab?"block":"none";
+    document.getElementById("cf-tab-"+t).classList.toggle("on",t===tab);
+  });
+}
+
+function cofScoreBadge(score){
+  if(score==null)return'<span style="background:var(--bg3);color:var(--tx3);padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">—</span>';
+  const c=score>=9?"var(--gr)":score>=6?"#F59E0B":score>=4?"#F97316":"var(--re)";
+  return`<span style="background:${c}22;color:${c};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;min-width:28px;display:inline-block;text-align:center">${score}/12</span>`;
+}
+
+function renderCofradiaTriage(){
+  const el=document.getElementById("cf-triage");
+  const list=cofradiaCapturas.filter(c=>["triage","pendiente"].includes(c.estado));
+  if(!list.length){el.innerHTML='<div class="empty"><div class="ei">📋</div>No hay capturas en triage.<br>Ejecutá el collector para traer nuevas.</div>';return}
+  el.innerHTML=list.map(c=>{
+    const fuente=c.cofradia_fuentes?.nombre||"Fuente desconocida";
+    const raz=(c.razonamiento_ia||"").split("|");
+    return`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px;margin-bottom:10px">
+      <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+            ${cofScoreBadge(c.score)}
+            <span style="font-size:10px;padding:2px 7px;background:var(--bg3);border-radius:12px;color:var(--tx2)">${esc(c.categoria||"Sin clasificar")}</span>
+            ${c.idioma_original?`<span style="font-size:10px;padding:2px 7px;background:var(--bg3);border-radius:12px;color:var(--tx3)">${esc(c.idioma_original)}</span>`:""}
+            ${c.estado==="pendiente"?'<span style="font-size:10px;padding:2px 7px;background:rgba(251,191,36,.12);color:#FCD34D;border-radius:12px">⏸ Pendiente</span>':""}
+          </div>
+          <a href="${esc(c.url_original||"#")}" target="_blank" style="font-size:14px;font-weight:600;color:var(--tx);text-decoration:none;line-height:1.4;display:block;margin-bottom:4px">${esc(c.titulo_original)}</a>
+          <div style="font-size:11px;color:var(--tx3);margin-bottom:6px">${esc(fuente)}${c.publicado_at?" · "+new Date(c.publicado_at).toLocaleDateString("es-AR",{day:"2-digit",month:"short",year:"numeric"}):""}</div>
+          ${raz[0]?.trim()?`<div style="font-size:11px;color:var(--tx3);font-style:italic;border-left:2px solid var(--b);padding-left:8px;line-height:1.5">${esc(raz[0].trim())}</div>`:""}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;min-width:120px;flex-shrink:0">
+          <button class="btn pri" style="font-size:12px;padding:6px 10px" onclick="cofradiaDecide('${c.id}','aceptada')">✅ Aceptar</button>
+          <button class="btn" style="font-size:12px;padding:6px 10px" onclick="cofradiaDecide('${c.id}','pendiente')">⏸ Pendiente</button>
+          <button class="btn" style="font-size:12px;padding:6px 10px;color:var(--re)" onclick="cofradiaDecide('${c.id}','descartada')">🗑 Descartar</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderCofradiaBorradores(){
+  const el=document.getElementById("cf-borradores");
+  const aceptadas=cofradiaCapturas.filter(c=>c.estado==="aceptada");
+  const bors=cofradiaBorradores;
+  if(!aceptadas.length&&!bors.length){
+    el.innerHTML='<div class="empty"><div class="ei">✍️</div>No hay capturas aceptadas ni borradores.<br>Aceptá capturas desde el Triage para generar borradores.</div>';return;
+  }
+  let html="";
+  if(aceptadas.length){
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">📥 Listas para generar borrador (${aceptadas.length})</div>`;
+    html+=aceptadas.map(c=>`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:3px">${esc(c.titulo_original)}</div>
+        <div style="font-size:11px;color:var(--tx3)">${esc(c.categoria||"")} · Score ${c.score||"—"}/12</div>
+      </div>
+      <button class="btn pri" id="btn-gen-${c.id}" onclick="generarBorrador('${c.id}')">✨ Generar borrador</button>
+    </div>`).join("");
+  }
+  if(bors.length){
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 10px">✍️ Borradores METANOIA (${bors.length})</div>`;
+    html+=bors.map(b=>{
+      const color=b.estado==="aprobado"?"var(--gr)":"var(--pu)";
+      const titulo=b.cofradia_capturas?.titulo_original||"";
+      return`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:16px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+          <div>
+            <span style="font-size:10px;padding:3px 8px;border-radius:20px;background:${color}22;color:${color};font-weight:700">${b.estado==="aprobado"?"✅ Aprobado":"✍️ Borrador"}</span>
+            ${titulo?`<span style="font-size:11px;color:var(--tx3);margin-left:8px">${esc(titulo.slice(0,60))}${titulo.length>60?"…":""}</span>`:""}
+          </div>
+          <div style="display:flex;gap:6px">
+            ${b.estado==="borrador"?`<button class="btn pri sm" onclick="aprobarBorrador('${b.id}')">✅ Aprobar</button>`:""}
+            <button class="btn sm" onclick="saveBorrador('${b.id}')">💾 Guardar</button>
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="fg form-full"><label class="fl">Titular METANOIA (máx. 12 palabras)</label><input class="fi" id="bf-titulo-${b.id}" value="${esc(b.titulo_metanoia||"")}" placeholder="Titular en español..."></div>
+          <div class="fg form-full"><label class="fl">Bajada (por qué importa)</label><input class="fi" id="bf-bajada-${b.id}" value="${esc(b.bajada||"")}" placeholder="Una frase con el por qué importa al lector..."></div>
+          <div class="fg form-full"><label class="fl">Introducción METANOIA (150-250 palabras)</label><textarea class="fta" id="bf-intro-${b.id}" style="min-height:120px">${esc(b.intro_metanoia||"")}</textarea></div>
+          <div class="fg"><label class="fl">Cita destacada (máx. 40 palabras)</label><textarea class="fta" id="bf-cita-${b.id}" style="min-height:70px">${esc(b.cita_destacada||"")}</textarea></div>
+          <div class="fg"><label class="fl">Atribución de la cita</label><input class="fi" id="bf-cita-atr-${b.id}" value="${esc(b.cita_atribucion||"")}" placeholder="Autor, año, revista..."></div>
+          <div class="fg form-full"><label class="fl">Implicancia para simulación / formación</label><textarea class="fta" id="bf-impl-${b.id}" style="min-height:80px">${esc(b.implicancia_simulacion||"")}</textarea></div>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:var(--tx3)">Generado: ${b.generado_at?new Date(b.generado_at).toLocaleDateString("es-AR",{day:"2-digit",month:"long",year:"numeric"}):"—"}</div>
+      </div>`;
+    }).join("");
+  }
+  el.innerHTML=html;
+}
+
+function renderCofradiaFuentes(){
+  const el=document.getElementById("cf-fuentes");
+  document.getElementById("cf-tab-fuentes").textContent=`📡 Fuentes (${cofradiaFuentes.length})`;
+  if(!cofradiaFuentes.length){el.innerHTML='<div class="empty"><div class="ei">📡</div>No hay fuentes configuradas.<br>Cargá el catálogo en Supabase → cofradia_fuentes.</div>';return}
+  el.innerHTML=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="border-bottom:2px solid var(--b)">
+      <th style="text-align:left;padding:8px 12px;color:var(--tx3);font-weight:600">Fuente</th>
+      <th style="text-align:left;padding:8px 12px;color:var(--tx3);font-weight:600">Categoría</th>
+      <th style="text-align:left;padding:8px 12px;color:var(--tx3);font-weight:600">Método</th>
+      <th style="text-align:center;padding:8px 12px;color:var(--tx3);font-weight:600">Prior.</th>
+      <th style="text-align:center;padding:8px 12px;color:var(--tx3);font-weight:600">Idioma</th>
+      <th style="text-align:center;padding:8px 12px;color:var(--tx3);font-weight:600">Activa</th>
+    </tr></thead>
+    <tbody>${cofradiaFuentes.map(f=>`<tr style="border-bottom:1px solid var(--b)">
+      <td style="padding:10px 12px"><div style="font-weight:600;color:var(--tx)">${esc(f.nombre)}</div><div style="font-size:11px;color:var(--tx3)">${esc(f.institucion||"")}</div></td>
+      <td style="padding:10px 12px;color:var(--tx2);font-size:12px">${esc(f.categoria||"—")}</td>
+      <td style="padding:10px 12px"><span style="font-size:11px;padding:2px 6px;background:var(--bg3);border-radius:8px;color:var(--tx2)">${esc(f.metodo_acceso||"RSS")}</span></td>
+      <td style="padding:10px 12px;text-align:center"><span style="font-size:12px;color:${f.prioridad==="Alta"?"var(--gr)":f.prioridad==="Baja"?"var(--tx3)":"#F59E0B"};font-weight:600">${esc(f.prioridad||"Media")}</span></td>
+      <td style="padding:10px 12px;text-align:center;font-size:12px;color:var(--tx2)">${esc(f.idioma||"EN")}</td>
+      <td style="padding:10px 12px;text-align:center"><label class="toggle"><input type="checkbox" ${f.activa?"checked":""} onchange="toggleFuente('${f.id}',this.checked)"><span class="tslider"></span></label></td>
+    </tr>`).join("")}</tbody>
+  </table></div>`;
+}
+
+async function cofradiaDecide(id,estado){
+  try{
+    await sb(`cofradia_capturas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado})});
+    const cap=cofradiaCapturas.find(c=>c.id===id);if(cap)cap.estado=estado;
+    renderCofradiaTriage();renderCofradiaBorradores();updateCofradiaStats();
+    const b=document.getElementById("badge-cofradia");
+    if(b)b.textContent=cofradiaCapturas.filter(c=>c.estado==="triage").length||"—";
+    if(estado==="aceptada"){toast("Aceptada — generá el borrador desde la pestaña Borradores","ok");}
+    else if(estado==="descartada")toast("Descartada","inf");
+    else toast("Marcada como pendiente","inf");
+  }catch(e){toast("Error: "+e.message,"err")}
+}
+
+async function generarBorrador(capturaId){
+  const btn=document.getElementById("btn-gen-"+capturaId);
+  if(btn){btn.disabled=true;btn.textContent="Generando..."}
+  try{
+    const res=await fetch(`${SB}/functions/v1/cofradia-borrador`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`}
+      ,body:JSON.stringify({captura_id:capturaId})
+    });
+    const data=await res.json();
+    if(!res.ok)throw new Error(data.error||"Error en el servidor");
+    toast("Borrador generado con IA ✨","ok");
+    await loadCofradia();
+    setCofradiaTab("borradores");
+  }catch(e){
+    toast("Error: "+e.message,"err");
+    if(btn){btn.disabled=false;btn.textContent="✨ Generar borrador"}
+  }
+}
+
+async function saveBorrador(id){
+  const updates={
+    titulo_metanoia:document.getElementById("bf-titulo-"+id)?.value||null,
+    bajada:document.getElementById("bf-bajada-"+id)?.value||null,
+    intro_metanoia:document.getElementById("bf-intro-"+id)?.value||null,
+    cita_destacada:document.getElementById("bf-cita-"+id)?.value||null,
+    cita_atribucion:document.getElementById("bf-cita-atr-"+id)?.value||null,
+    implicancia_simulacion:document.getElementById("bf-impl-"+id)?.value||null,
+  };
+  try{
+    await sb(`cofradia_borradores?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(updates)});
+    const b=cofradiaBorradores.find(x=>x.id===id);if(b)Object.assign(b,updates);
+    toast("Borrador guardado","ok");
+  }catch(e){toast("Error: "+e.message,"err")}
+}
+
+async function aprobarBorrador(id){
+  try{
+    await sb(`cofradia_borradores?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado:"aprobado"})});
+    const b=cofradiaBorradores.find(x=>x.id===id);if(b)b.estado="aprobado";
+    renderCofradiaBorradores();updateCofradiaStats();
+    toast("Borrador aprobado ✅","ok");
+  }catch(e){toast("Error: "+e.message,"err")}
+}
+
+async function toggleFuente(id,activa){
+  try{
+    await sb(`cofradia_fuentes?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({activa})});
+    const f=cofradiaFuentes.find(x=>x.id===id);if(f)f.activa=activa;
+    toast(activa?"Fuente activada":"Fuente pausada","inf");
+  }catch(e){toast("Error: "+e.message,"err")}
 }
 </script>
 
