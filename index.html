@@ -11630,6 +11630,7 @@ async function initLogin(){
       }
       if(type==="invite"||type==="signup"||type==="recovery"){
         document.getElementById("login-screen").style.display="flex";
+        document.querySelector(".login-box").style.display="none";
         document.getElementById("set-password-box").style.display="";
         document.getElementById("sp-title").textContent=type==="recovery"?"Nueva contraseña":"Bienvenido/a 👋";
         document.getElementById("sp-subtitle").textContent=type==="recovery"?"Ingresá tu nueva contraseña para recuperar el acceso":"Creá tu contraseña para acceder al panel";
