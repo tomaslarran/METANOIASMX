@@ -12344,7 +12344,9 @@ async function invitarUsuario(){
     const d=await res.json();
     if(!res.ok)throw new Error(d.error||"Error al generar invitación");
     document.getElementById("inv-link-input").value=d.link||"";
-    document.getElementById("inv-result-email").textContent=`Para ${esc(d.nombre)} · ${esc(d.email)}`;
+    document.getElementById("inv-result-email").textContent=d.ya_registrado
+      ?`${esc(d.nombre)} ya tenía cuenta — link de acceso rápido generado`
+      :`Para ${esc(d.nombre)} · ${esc(d.email)}`;
     document.getElementById("invitar-form-wrap").style.display="none";
     document.getElementById("invitar-result-wrap").style.display="";
     loadUsuariosPage();

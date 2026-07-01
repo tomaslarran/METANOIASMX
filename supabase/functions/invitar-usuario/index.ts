@@ -32,7 +32,10 @@ Deno.serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Generar link de invitación (no envía email, nos devuelve el link para copiar)
+    // Verificar si ya existe en usuarios
+    const { data: existing } = await supabase.from("usuarios").select("id,estado").eq("email", email).maybeSingle();
+
+    // Intentar generar link de invitación
     const genRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
       method: "POST",
       headers: {
@@ -48,38 +51,56 @@ Deno.serve(async (req) => {
     });
 
     const genData = await genRes.json();
-    if (!genRes.ok) throw new Error(genData.msg || genData.error || "Error generando el link");
+    const alreadyRegistered = !genRes.ok && (
+      (genData.msg || genData.error || "").toLowerCase().includes("already") ||
+      (genData.msg || genData.error || "").toLowerCase().includes("registered")
+    );
 
-    const actionLink: string = genData.properties?.action_link || genData.action_link;
-    if (!actionLink) throw new Error("No se pudo obtener el link de invitación");
+    let actionLink = "";
 
-    // Enviar email de invitación via Supabase Auth invite (separado del link generado)
-    await fetch(`${SUPABASE_URL}/auth/v1/admin/invite`, {
-      method: "POST",
-      headers: {
-        "apikey": SERVICE_KEY,
-        "Authorization": `Bearer ${SERVICE_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email }),
-    });
-    // Ignoramos error de invite (puede fallar si el usuario ya existe desde generate_link)
+    if (alreadyRegistered) {
+      // Usuario ya tiene cuenta — generar magic link para que entre directamente
+      const mlRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
+        method: "POST",
+        headers: {
+          "apikey": SERVICE_KEY,
+          "Authorization": `Bearer ${SERVICE_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          type: "magiclink",
+          email,
+          options: { redirect_to: "https://tomaslarran.github.io/METANOIASMX/" },
+        }),
+      });
+      const mlData = await mlRes.json();
+      actionLink = mlData.properties?.action_link || mlData.action_link || "";
+    } else {
+      if (!genRes.ok) throw new Error(genData.msg || genData.error || "Error generando el link");
+      actionLink = genData.properties?.action_link || genData.action_link || "";
+      if (!actionLink) throw new Error("No se pudo obtener el link de invitación");
+    }
 
-    // Verificar si ya existe en usuarios
-    const { data: existing } = await supabase.from("usuarios").select("id").eq("email", email).single();
+    // Insertar o actualizar registro en usuarios
     if (!existing) {
-      // Insertar registro pendiente en usuarios
-      // El id se actualizará cuando el usuario confirme y haga login por primera vez
       await supabase.from("usuarios").insert({
         nombre,
         email,
         rol,
-        estado: "pendiente",
+        estado: alreadyRegistered ? "activo" : "pendiente",
         invitado_at: new Date().toISOString(),
       });
+    } else if (existing.estado === "pendiente") {
+      await supabase.from("usuarios").update({ rol, estado: alreadyRegistered ? "activo" : "pendiente" }).eq("email", email);
     }
 
-    return new Response(JSON.stringify({ ok: true, link: actionLink, email, nombre }), {
+    return new Response(JSON.stringify({
+      ok: true,
+      link: actionLink,
+      email,
+      nombre,
+      ya_registrado: alreadyRegistered,
+    }), {
       headers: { ...cors, "Content-Type": "application/json" },
     });
   } catch (e: any) {
