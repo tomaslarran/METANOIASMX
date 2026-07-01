@@ -725,14 +725,15 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
   <!-- Panel para usuarios invitados: crear contraseña -->
   <div id="set-password-box" class="login-box" style="display:none">
-    <div style="font-size:22px;font-weight:800;color:var(--tx);margin-bottom:4px">Bienvenido/a 👋</div>
-    <div style="font-size:13px;color:var(--tx3);margin-bottom:20px">Creá tu contraseña para acceder al panel</div>
+    <div id="sp-title" style="font-size:22px;font-weight:800;color:var(--tx);margin-bottom:4px">Bienvenido/a 👋</div>
+    <div id="sp-subtitle" style="font-size:13px;color:var(--tx3);margin-bottom:20px">Creá tu contraseña para acceder al panel</div>
     <div class="login-label">Nueva contraseña</div>
     <input class="login-input" type="password" id="sp-pass" placeholder="Mínimo 8 caracteres" autocomplete="new-password" onkeydown="if(event.key==='Enter')doSetPassword()">
     <div class="login-label" style="margin-top:14px">Confirmá la contraseña</div>
     <input class="login-input" type="password" id="sp-pass2" placeholder="Repetí la contraseña" autocomplete="new-password" onkeydown="if(event.key==='Enter')doSetPassword()">
     <div class="pin-error" id="sp-error"></div>
     <button class="btn pri" style="width:100%;margin-top:16px;padding:12px;font-size:14px" onclick="doSetPassword()" id="sp-btn">Crear contraseña e ingresar</button>
+
   </div>
 </div>
 
@@ -11628,9 +11629,11 @@ async function initLogin(){
         return;
       }
       if(type==="invite"||type==="signup"||type==="recovery"){
-        // Invite o recovery: mostrar pantalla de crear/cambiar contraseña
         document.getElementById("login-screen").style.display="flex";
         document.getElementById("set-password-box").style.display="";
+        document.getElementById("sp-title").textContent=type==="recovery"?"Nueva contraseña":"Bienvenido/a 👋";
+        document.getElementById("sp-subtitle").textContent=type==="recovery"?"Ingresá tu nueva contraseña para recuperar el acceso":"Creá tu contraseña para acceder al panel";
+        document.getElementById("sp-btn").textContent=type==="recovery"?"Restablecer contraseña":"Crear contraseña e ingresar";
         document.getElementById("sp-pass").focus();
         window._inviteRefresh=refresh;
         return;
@@ -11797,7 +11800,7 @@ async function doResetPass(){
     await fetch(`${SB}/auth/v1/recover`,{
       method:"POST",
       headers:{"apikey":KEY,"Content-Type":"application/json"},
-      body:JSON.stringify({email})
+      body:JSON.stringify({email,redirect_to:"https://tomaslarran.github.io/METANOIASMX/"})
     });
     err.style.color="var(--gr)";
     err.textContent="✓ Si el email existe, recibirás un link para restablecer tu contraseña.";
