@@ -12389,8 +12389,13 @@ async function loadUsuariosPage(){
   if(!wrap)return;
   wrap.innerHTML=`<div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>`;
   try{
-    const users=await sb("usuarios?select=id,nombre,email,rol,activo,estado,invitado_at&order=nombre");
-    renderUsuariosPage(users);
+    let users;
+    try{
+      users=await sb("usuarios?select=id,nombre,email,rol,activo,estado,invitado_at&order=nombre");
+    }catch(_){
+      users=await sb("usuarios?select=id,nombre,email,rol,activo&order=nombre");
+    }
+    renderUsuariosPage(users||[]);
   }catch(e){
     wrap.innerHTML=`<p style="color:var(--re);padding:20px">Error al cargar usuarios.</p>`;
   }
