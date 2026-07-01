@@ -73,14 +73,16 @@ Deno.serve(async (req) => {
     }
 
     // 2. Insertar o actualizar registro en usuarios
+    // Extraer el Auth user ID del response de generate_link para que eliminar-usuario pueda borrarlo de Auth correctamente
+    const authUserId = genInvData.user?.id || null;
     if (!existing) {
-      await supabase.from("usuarios").insert({
-        nombre, email, rol,
-        estado: alreadyRegistered ? "activo" : "pendiente",
-        invitado_at: new Date().toISOString(),
-      });
+      const row: any = { nombre, email, rol, estado: alreadyRegistered ? "activo" : "pendiente", invitado_at: new Date().toISOString() };
+      if (authUserId) row.id = authUserId;
+      await supabase.from("usuarios").insert(row);
     } else if (existing.estado === "pendiente") {
-      await supabase.from("usuarios").update({ rol, estado: alreadyRegistered ? "activo" : "pendiente" }).eq("email", email);
+      const upd: any = { rol, estado: alreadyRegistered ? "activo" : "pendiente" };
+      if (authUserId) upd.id = authUserId;
+      await supabase.from("usuarios").update(upd).eq("email", email);
     }
 
     // 3. Enviar email desde cuenta de administración vía SMTP
