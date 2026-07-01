@@ -11595,22 +11595,46 @@ function _showLoginScreen(){
 }
 
 async function initLogin(){
-  // Detectar link de invitación o recuperación (hash fragment de Supabase)
+  // Detectar link de invitación, magic link o recuperación (hash fragment de Supabase)
   const hash=window.location.hash.slice(1);
   if(hash&&hash.includes("access_token")){
     const params=new URLSearchParams(hash);
     const token=params.get("access_token");
     const type=params.get("type");
     const refresh=params.get("refresh_token")||"";
-    if(token&&(type==="invite"||type==="signup"||type==="recovery")){
+    if(token){
       history.replaceState(null,"",window.location.pathname+window.location.search);
       authToken=token;
-      // Mostrar pantalla de crear contraseña
-      document.getElementById("login-screen").style.display="flex";
-      document.getElementById("set-password-box").style.display="";
-      document.getElementById("sp-pass").focus();
-      window._inviteRefresh=refresh;
-      return;
+      if(type==="magiclink"||type==="email"){
+        // Magic link: entrar directo sin crear contraseña
+        try{
+          const rows=await sb(`usuarios?select=*&limit=1`);
+          // Obtener datos del usuario del token
+          const uRes=await fetch(`${SB}/auth/v1/user`,{headers:{"apikey":KEY,"Authorization":`Bearer ${token}`}});
+          const uData=await uRes.json();
+          const email=uData.email||"";
+          let u=null;
+          if(email){
+            try{const r=await sb(`usuarios?email=ilike.${encodeURIComponent(email)}&select=*`);u=r?.[0];}catch(_){}
+          }
+          if(!u)u={id:uData.id,nombre:email.split("@")[0],email,rol:"instructor"};
+          loggedUser=u;
+          sessionStorage.setItem("smx_session",JSON.stringify({
+            userId:u.id,nombre:u.nombre,email:u.email,rol:u.rol||"instructor",
+            token,refreshToken:refresh,loginTime:Date.now()
+          }));
+          enterPanel(u,true);
+        }catch(e){_showLoginScreen();}
+        return;
+      }
+      if(type==="invite"||type==="signup"||type==="recovery"){
+        // Invite o recovery: mostrar pantalla de crear/cambiar contraseña
+        document.getElementById("login-screen").style.display="flex";
+        document.getElementById("set-password-box").style.display="";
+        document.getElementById("sp-pass").focus();
+        window._inviteRefresh=refresh;
+        return;
+      }
     }
   }
   const saved=sessionStorage.getItem("smx_session");
