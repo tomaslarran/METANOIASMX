@@ -61,7 +61,9 @@ Deno.serve(async (req) => {
       headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ type: linkType, email, options: { redirect_to: REDIRECT } }),
     });
-    const genData = await genRes.json();
+    const genText = await genRes.text();
+    let genData: any = {};
+    try { genData = JSON.parse(genText); } catch (_) { genData = {}; }
     actionLink = genData.properties?.action_link || genData.action_link || "";
 
     // 3. Insertar o actualizar registro en usuarios
