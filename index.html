@@ -721,7 +721,17 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <input class="login-input" type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
     <div class="pin-error" id="login-error"></div>
     <button class="btn pri" style="width:100%;margin-top:16px;padding:12px;font-size:14px" onclick="doLogin()" id="login-btn">Ingresar</button>
-    <button class="login-back" onclick="doResetPass()" style="margin-top:12px">¿Olvidaste tu contraseña?</button>
+    <button class="login-back" onclick="showResetPass()" style="margin-top:12px">¿Olvidaste tu contraseña?</button>
+  </div>
+  <!-- Panel recuperar contraseña -->
+  <div id="reset-pass-box" class="login-box" style="display:none">
+    <div style="font-size:22px;font-weight:800;color:var(--tx);margin-bottom:4px">Recuperar acceso</div>
+    <div style="font-size:13px;color:var(--tx3);margin-bottom:20px">Te enviamos un link para crear una nueva contraseña</div>
+    <div class="login-label">Tu email</div>
+    <input class="login-input" type="email" id="rp-email" placeholder="tu@metanoiasmx.com" autocomplete="email" onkeydown="if(event.key==='Enter')doResetPass()">
+    <div class="pin-error" id="rp-error"></div>
+    <button class="btn pri" style="width:100%;margin-top:16px;padding:12px;font-size:14px" onclick="doResetPass()" id="rp-btn">Enviar link de recuperación</button>
+    <button class="login-back" onclick="hideResetPass()" style="margin-top:10px">← Volver al login</button>
   </div>
   <!-- Panel para usuarios invitados: crear contraseña -->
   <div id="set-password-box" class="login-box" style="display:none">
@@ -11811,21 +11821,37 @@ async function doLogin(){
   }
 }
 
+function showResetPass(){
+  document.querySelector(".login-box").style.display="none";
+  document.getElementById("reset-pass-box").style.display="";
+  document.getElementById("rp-email").focus();
+}
+function hideResetPass(){
+  document.getElementById("reset-pass-box").style.display="none";
+  document.querySelector(".login-box").style.display="";
+  document.getElementById("rp-error").textContent="";
+  document.getElementById("rp-error").style.color="";
+}
 async function doResetPass(){
-  const email=document.getElementById("login-email").value.trim();
-  const err=document.getElementById("login-error");
-  if(!email){err.textContent="Ingresá tu email primero.";return;}
+  const email=document.getElementById("rp-email").value.trim();
+  const err=document.getElementById("rp-error");
+  const btn=document.getElementById("rp-btn");
+  if(!email||!email.includes("@")){err.textContent="Ingresá un email válido.";return;}
+  btn.disabled=true;btn.textContent="Enviando...";err.textContent="";
   try{
-    await fetch(`${SB}/auth/v1/recover`,{
+    await fetch(`${SB}/functions/v1/recuperar-password`,{
       method:"POST",
-      headers:{"apikey":KEY,"Content-Type":"application/json"},
-      body:JSON.stringify({email,redirect_to:"https://tomaslarran.github.io/METANOIASMX/"})
+      headers:{"Content-Type":"application/json","apikey":KEY},
+      body:JSON.stringify({email})
     });
     err.style.color="var(--gr)";
-    err.textContent="✓ Si el email existe, recibirás un link para restablecer tu contraseña.";
-    setTimeout(()=>{err.style.color="";err.textContent=""},6000);
+    err.textContent="✓ Si el email existe, recibirás el link en tu bandeja.";
+    document.getElementById("rp-email").value="";
+    setTimeout(()=>hideResetPass(),4000);
   }catch(e){
     err.textContent="Error al enviar. Intentá de nuevo.";
+  }finally{
+    btn.disabled=false;btn.textContent="Enviar link de recuperación";
   }
 }
 
