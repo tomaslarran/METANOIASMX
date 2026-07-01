@@ -727,7 +727,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div id="set-password-box" class="login-box" style="display:none">
     <div id="sp-title" style="font-size:22px;font-weight:800;color:var(--tx);margin-bottom:4px">Bienvenido/a 👋</div>
     <div id="sp-subtitle" style="font-size:13px;color:var(--tx3);margin-bottom:20px">Creá tu contraseña para acceder al panel</div>
-    <div class="login-label">Nueva contraseña</div>
+    <div id="sp-email-wrap">
+      <div class="login-label">Confirmá tu email</div>
+      <input class="login-input" type="email" id="sp-email" placeholder="el email al que llegó la invitación" autocomplete="email" onkeydown="if(event.key==='Enter')document.getElementById('sp-pass').focus()">
+    </div>
+    <div class="login-label" style="margin-top:14px">Nueva contraseña</div>
     <input class="login-input" type="password" id="sp-pass" placeholder="Mínimo 8 caracteres" autocomplete="new-password" onkeydown="if(event.key==='Enter')doSetPassword()">
     <div class="login-label" style="margin-top:14px">Confirmá la contraseña</div>
     <input class="login-input" type="password" id="sp-pass2" placeholder="Repetí la contraseña" autocomplete="new-password" onkeydown="if(event.key==='Enter')doSetPassword()">
@@ -11635,7 +11639,14 @@ async function initLogin(){
         document.getElementById("sp-title").textContent=type==="recovery"?"Nueva contraseña":"Bienvenido/a 👋";
         document.getElementById("sp-subtitle").textContent=type==="recovery"?"Ingresá tu nueva contraseña para recuperar el acceso":"Creá tu contraseña para acceder al panel";
         document.getElementById("sp-btn").textContent=type==="recovery"?"Restablecer contraseña":"Crear contraseña e ingresar";
-        document.getElementById("sp-pass").focus();
+        // Decodificar JWT para obtener el email esperado y validarlo en doSetPassword
+        try{
+          const payload=JSON.parse(atob(token.split(".")[1].replace(/-/g,"+").replace(/_/g,"/")));
+          window._inviteEmail=(payload.email||"").toLowerCase();
+        }catch(_){window._inviteEmail="";}
+        // Para recovery ocultamos el campo email (el usuario ya sabe cuál es)
+        document.getElementById("sp-email-wrap").style.display=type==="recovery"?"none":"";
+        document.getElementById(type==="recovery"?"sp-pass":"sp-email").focus();
         window._inviteRefresh=refresh;
         return;
       }
@@ -11689,6 +11700,13 @@ async function doSetPassword(){
   const pass2=document.getElementById("sp-pass2").value;
   const err=document.getElementById("sp-error");
   const btn=document.getElementById("sp-btn");
+  // Validar email si el campo está visible (invitación, no recovery)
+  if(document.getElementById("sp-email-wrap").style.display!=="none"){
+    const emailInput=document.getElementById("sp-email").value.trim().toLowerCase();
+    const expected=(window._inviteEmail||"").toLowerCase();
+    if(!emailInput){err.textContent="Ingresá el email al que llegó la invitación.";return;}
+    if(expected&&emailInput!==expected){err.textContent="El email no coincide con el de la invitación.";return;}
+  }
   if(pass.length<8){err.textContent="La contraseña debe tener al menos 8 caracteres.";return;}
   if(pass!==pass2){err.textContent="Las contraseñas no coinciden.";return;}
   btn.disabled=true;btn.textContent="Creando cuenta...";err.textContent="";
