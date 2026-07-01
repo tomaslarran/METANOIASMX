@@ -37,11 +37,13 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "No podés eliminarte a vos mismo" }), { status: 400, headers: cors });
     }
 
-    // Eliminar de Auth (requiere service role)
+    // Eliminar de Auth (requiere service role) — ignorar si no existe en Auth
     const { error: authError } = await supabase.auth.admin.deleteUser(usuario_id);
-    if (authError) throw new Error("Error al eliminar de Auth: " + authError.message);
+    if (authError && !authError.message.toLowerCase().includes("not found")) {
+      throw new Error("Error al eliminar de Auth: " + authError.message);
+    }
 
-    // Eliminar de tabla usuarios
+    // Eliminar de tabla usuarios (por id o por email si el id no matchea)
     await supabase.from("usuarios").delete().eq("id", usuario_id);
 
     return new Response(JSON.stringify({ ok: true }), {
