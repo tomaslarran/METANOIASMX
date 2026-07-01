@@ -16069,6 +16069,7 @@ function renderCofradiaBorradores(){
             ${b.estado==="en_supervision"?`<button class="btn pri sm" onclick="aprobarBorrador('${bid}')">✅ Aprobar</button><button class="btn sm" style="color:var(--re)" onclick="devolverBorrador('${bid}')">↩ Devolver</button>`:""}
             ${b.estado==="devuelto"?`<button class="btn sec sm" onclick="enviarRevision('${bid}')">↗ Reenviar</button>`:""}
             ${b.estado==="aprobado"?`<button class="btn pri sm" onclick="publicarBorrador('${bid}')">🌐 Marcar publicado</button>`:""}
+            <button class="btn sm" style="color:var(--re);border-color:var(--re)" onclick="eliminarBorrador('${bid}')">🗑</button>
           </div>
         </div>
         <div style="display:flex;gap:2px;border-bottom:1px solid var(--b);margin-bottom:14px">
@@ -16262,6 +16263,16 @@ async function publicarBorrador(id){
     const b=cofradiaBorradores.find(x=>x.id===id);if(b)Object.assign(b,updates);
     renderCofradiaBorradores();updateCofradiaStats();
     toast("Publicado 🌐","ok");
+  }catch(e){toast("Error: "+e.message,"err")}
+}
+
+async function eliminarBorrador(id){
+  if(!confirm("¿Eliminar este borrador? Esta acción no se puede deshacer."))return;
+  try{
+    await sb(`cofradia_borradores?id=eq.${id}`,{method:"DELETE"});
+    cofradiaBorradores=cofradiaBorradores.filter(x=>x.id!==id);
+    renderCofradiaBorradores();updateCofradiaStats();
+    toast("Borrador eliminado","inf");
   }catch(e){toast("Error: "+e.message,"err")}
 }
 
