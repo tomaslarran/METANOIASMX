@@ -74,7 +74,6 @@ Deno.serve(async (req) => {
         nombre,
         email,
         rol,
-        activo: false,
         estado: "pendiente",
         invitado_at: new Date().toISOString(),
       });

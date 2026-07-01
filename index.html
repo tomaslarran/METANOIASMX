@@ -11681,14 +11681,14 @@ async function doSetPassword(){
       u=rows[0];
       // Marcar como activo y vincular el id de auth
       if(u){
-        await sb(`usuarios?id=eq.${u.id}`,{method:"PATCH",body:JSON.stringify({activo:true,estado:"activo",id:data.id})});
-        u={...u,id:data.id,activo:true,estado:"activo"};
+        await sb(`usuarios?id=eq.${u.id}`,{method:"PATCH",body:JSON.stringify({estado:"activo",id:data.id})});
+        u={...u,id:data.id,estado:"activo"};
       }
     }catch(e){}
     if(!u){
       const nombre=email.split("@")[0].replace(/[._]/g," ").replace(/\b\w/g,c=>c.toUpperCase());
       try{
-        const[created]=await sb("usuarios",{method:"POST",body:JSON.stringify({id:data.id,nombre,email,rol:"instructor",activo:true,estado:"activo"})});
+        const[created]=await sb("usuarios",{method:"POST",body:JSON.stringify({id:data.id,nombre,email,rol:"instructor",estado:"activo"})});
         u=created;
       }catch(e){u={id:data.id,nombre,email,rol:"instructor"};}
     }
@@ -12389,12 +12389,7 @@ async function loadUsuariosPage(){
   if(!wrap)return;
   wrap.innerHTML=`<div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>`;
   try{
-    let users;
-    try{
-      users=await sb("usuarios?select=id,nombre,email,rol,activo,estado,invitado_at&order=nombre");
-    }catch(_){
-      users=await sb("usuarios?select=id,nombre,email,rol,activo&order=nombre");
-    }
+    const users=await sb("usuarios?select=id,nombre,email,rol,estado,invitado_at&order=nombre");
     renderUsuariosPage(users||[]);
   }catch(e){
     wrap.innerHTML=`<p style="color:var(--re);padding:20px">Error al cargar usuarios.</p>`;
@@ -12411,7 +12406,7 @@ function renderUsuariosPage(users){
     const color=rolColors[rol]||"#7C3AED";
     const isSelf=u.id===loggedUser?.id;
     const isPending=u.estado==="pendiente";
-    const isSuspended=u.activo===false&&!isPending;
+    const isSuspended=u.estado==="suspendido";
     return`<div class="urol-card" id="ucard-${u.id}" style="${isSuspended?"opacity:.5":""}">
       <div class="urol-avatar" style="background:${color}">${initials}</div>
       <div class="urol-info">
@@ -12438,8 +12433,8 @@ function renderUsuariosPage(users){
       </div>
     </div>`;
   };
-  const activos=users.filter(u=>u.estado!=="pendiente"&&u.activo!==false);
-  const suspendidos=users.filter(u=>u.estado!=="pendiente"&&u.activo===false);
+  const activos=users.filter(u=>u.estado!=="pendiente"&&u.estado!=="suspendido");
+  const suspendidos=users.filter(u=>u.estado==="suspendido");
   const pendientes=users.filter(u=>u.estado==="pendiente");
   let html="";
   if(activos.length){
@@ -12461,7 +12456,7 @@ function renderUsuariosPage(users){
 async function toggleActivarUsuario(id, activar){
   try{
     const estado=activar?"activo":"suspendido";
-    await sb(`usuarios?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({activo:activar,estado})});
+    await sb(`usuarios?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado})});
     toast(activar?"Usuario activado ✓":"Usuario suspendido","ok");
     loadUsuariosPage();
   }catch(e){toast("Error: "+e.message,"err")}
