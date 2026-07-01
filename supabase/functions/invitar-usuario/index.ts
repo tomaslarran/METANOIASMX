@@ -44,10 +44,12 @@ Deno.serve(async (req) => {
       headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ email, data: { nombre, rol } }),
     });
-    const inviteData = await inviteRes.json();
+    const inviteText = await inviteRes.text();
+    let inviteData: any = {};
+    try { inviteData = JSON.parse(inviteText); } catch (_) { inviteData = { msg: inviteText }; }
 
     if (!inviteRes.ok) {
-      const msg = (inviteData.msg || inviteData.error || "").toLowerCase();
+      const msg = (inviteData.msg || inviteData.error || inviteText || "").toLowerCase();
       alreadyRegistered = msg.includes("already") || msg.includes("registered");
       if (!alreadyRegistered) throw new Error(inviteData.msg || inviteData.error || "Error al invitar");
     }
