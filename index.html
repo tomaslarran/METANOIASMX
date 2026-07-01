@@ -723,6 +723,17 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="btn pri" style="width:100%;margin-top:16px;padding:12px;font-size:14px" onclick="doLogin()" id="login-btn">Ingresar</button>
     <button class="login-back" onclick="doResetPass()" style="margin-top:12px">¿Olvidaste tu contraseña?</button>
   </div>
+  <!-- Panel para usuarios invitados: crear contraseña -->
+  <div id="set-password-box" class="login-box" style="display:none">
+    <div style="font-size:22px;font-weight:800;color:var(--tx);margin-bottom:4px">Bienvenido/a 👋</div>
+    <div style="font-size:13px;color:var(--tx3);margin-bottom:20px">Creá tu contraseña para acceder al panel</div>
+    <div class="login-label">Nueva contraseña</div>
+    <input class="login-input" type="password" id="sp-pass" placeholder="Mínimo 8 caracteres" autocomplete="new-password" onkeydown="if(event.key==='Enter')doSetPassword()">
+    <div class="login-label" style="margin-top:14px">Confirmá la contraseña</div>
+    <input class="login-input" type="password" id="sp-pass2" placeholder="Repetí la contraseña" autocomplete="new-password" onkeydown="if(event.key==='Enter')doSetPassword()">
+    <div class="pin-error" id="sp-error"></div>
+    <button class="btn pri" style="width:100%;margin-top:16px;padding:12px;font-size:14px" onclick="doSetPassword()" id="sp-btn">Crear contraseña e ingresar</button>
+  </div>
 </div>
 
 <!-- PORTAL PROVEEDOR -->
@@ -2158,38 +2169,71 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="pg-header">
     <div>
       <div class="pg-title">Usuarios</div>
-      <div class="pg-title-sub">Gestión de roles del equipo</div>
+      <div class="pg-title-sub">Gestión de accesos del equipo</div>
     </div>
     <div class="pg-header-actions">
       <button class="btn sec" onclick="loadUsuariosPage()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
         Actualizar
       </button>
-      <button class="btn pri" onclick="openNuevoUsuario()">+ Agregar usuario</button>
+      <button class="btn pri" onclick="openInvitarUsuario()">+ Invitar usuario</button>
     </div>
   </div>
-  <!-- Formulario nuevo usuario (inline) -->
-  <div id="nuevo-usuario-form" style="display:none;max-width:560px;background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:18px;margin-bottom:16px">
-    <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:12px">Nuevo usuario</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div><label class="ml">Nombre completo</label><input class="mi" id="nu-nombre" placeholder="Ej: Juan Pérez"></div>
-      <div><label class="ml">Email</label><input class="mi" id="nu-email" type="email" placeholder="juan@empresa.com"></div>
+
+  <!-- Panel invitación -->
+  <div id="invitar-usuario-panel" style="display:none;max-width:560px;background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:18px;margin-bottom:16px">
+    <div id="invitar-form-wrap">
+      <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:12px">Invitar nuevo usuario</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div><label class="ml">Nombre completo</label><input class="mi" id="inv-nombre" placeholder="Ej: Juan Pérez"></div>
+        <div><label class="ml">Email</label><input class="mi" id="inv-email" type="email" placeholder="juan@empresa.com"></div>
+      </div>
+      <div style="margin-bottom:12px"><label class="ml">Rol</label>
+        <select class="mi" id="inv-rol">
+          <option value="instructor">Instructor</option>
+          <option value="logistica">Logística</option>
+          <option value="comunicaciones">Comunicaciones</option>
+          <option value="admin">Admin</option>
+          <option value="proveedor">Proveedor externo</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="closeInvitarUsuario()">Cancelar</button>
+        <button class="btn pri" id="inv-save-btn" onclick="invitarUsuario()">Generar invitación</button>
+      </div>
     </div>
-    <div style="margin-bottom:12px"><label class="ml">Rol</label>
-      <select class="mi" id="nu-rol">
-        <option value="instructor">Instructor</option>
-        <option value="logistica">Logística</option>
-        <option value="comunicaciones">Comunicaciones</option>
-        <option value="admin">Admin</option>
-        <option value="proveedor">Proveedor externo</option>
-      </select>
+    <div id="invitar-result-wrap" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <div style="width:36px;height:36px;background:rgba(16,185,129,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">✅</div>
+        <div><div style="font-size:13px;font-weight:700;color:var(--tx)">Invitación generada</div><div id="inv-result-email" style="font-size:12px;color:var(--tx3)"></div></div>
+      </div>
+      <div style="font-size:12px;color:var(--tx3);margin-bottom:6px">Link de acceso (válido por 24 horas) — copialo y envialo por WhatsApp o email:</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <input class="mi" id="inv-link-input" readonly style="flex:1;font-size:11px;font-family:monospace;color:var(--tx2)">
+        <button class="btn sec" onclick="copiarLinkInvitacion()" style="flex-shrink:0">Copiar</button>
+      </div>
+      <div style="font-size:11px;color:var(--tx3);margin-bottom:14px">📧 También se envió un email automático a la dirección indicada.</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="closeInvitarUsuario()">Cerrar</button>
+        <button class="btn sec" onclick="openInvitarUsuario()">Invitar otro</button>
+      </div>
     </div>
-    <div style="font-size:11px;color:var(--tx3);margin-bottom:12px">⚠️ El usuario debe tener una cuenta creada en Supabase Auth. Al ingresar por primera vez, su perfil se vincula automáticamente.</div>
+  </div>
+
+  <!-- Panel editar usuario -->
+  <div id="edit-usuario-panel" style="display:none;max-width:560px;background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:18px;margin-bottom:16px">
+    <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:12px">Editar usuario</div>
+    <input type="hidden" id="eu-id">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div><label class="ml">Nombre completo</label><input class="mi" id="eu-nombre" placeholder="Nombre..."></div>
+      <div><label class="ml">Email</label><input class="mi" id="eu-email" type="email" placeholder="email@..."></div>
+    </div>
     <div style="display:flex;gap:8px">
-      <button class="btn" onclick="closeNuevoUsuario()">Cancelar</button>
-      <button class="btn pri" id="nu-save-btn" onclick="saveNuevoUsuario()">Agregar</button>
+      <button class="btn" onclick="closeEditUsuario()">Cancelar</button>
+      <button class="btn pri" id="eu-save-btn" onclick="saveEditUsuario()">Guardar cambios</button>
     </div>
   </div>
+
   <div id="usuarios-list" style="max-width:560px">
     <div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>
   </div>
@@ -11551,6 +11595,24 @@ function _showLoginScreen(){
 }
 
 async function initLogin(){
+  // Detectar link de invitación o recuperación (hash fragment de Supabase)
+  const hash=window.location.hash.slice(1);
+  if(hash&&hash.includes("access_token")){
+    const params=new URLSearchParams(hash);
+    const token=params.get("access_token");
+    const type=params.get("type");
+    const refresh=params.get("refresh_token")||"";
+    if(token&&(type==="invite"||type==="signup"||type==="recovery")){
+      history.replaceState(null,"",window.location.pathname+window.location.search);
+      authToken=token;
+      // Mostrar pantalla de crear contraseña
+      document.getElementById("login-screen").style.display="flex";
+      document.getElementById("set-password-box").style.display="";
+      document.getElementById("sp-pass").focus();
+      window._inviteRefresh=refresh;
+      return;
+    }
+  }
   const saved=sessionStorage.getItem("smx_session");
   if(saved){
     try{
@@ -11592,6 +11654,55 @@ async function initLogin(){
     sessionStorage.removeItem("smx_session");
   }
   _showLoginScreen();
+}
+
+async function doSetPassword(){
+  const pass=document.getElementById("sp-pass").value;
+  const pass2=document.getElementById("sp-pass2").value;
+  const err=document.getElementById("sp-error");
+  const btn=document.getElementById("sp-btn");
+  if(pass.length<8){err.textContent="La contraseña debe tener al menos 8 caracteres.";return;}
+  if(pass!==pass2){err.textContent="Las contraseñas no coinciden.";return;}
+  btn.disabled=true;btn.textContent="Creando cuenta...";err.textContent="";
+  try{
+    // Actualizar contraseña usando el token del link de invitación
+    const res=await fetch(`${SB}/auth/v1/user`,{
+      method:"PUT",
+      headers:{"apikey":KEY,"Content-Type":"application/json","Authorization":`Bearer ${authToken}`},
+      body:JSON.stringify({password:pass})
+    });
+    const data=await res.json();
+    if(!res.ok)throw new Error(data.msg||data.error_description||"Error al crear contraseña");
+    // Obtener datos del usuario desde la tabla
+    const email=data.email||"";
+    let u=null;
+    try{
+      const rows=await sb(`usuarios?email=ilike.${encodeURIComponent(email)}&select=*`);
+      u=rows[0];
+      // Marcar como activo y vincular el id de auth
+      if(u){
+        await sb(`usuarios?id=eq.${u.id}`,{method:"PATCH",body:JSON.stringify({activo:true,estado:"activo",id:data.id})});
+        u={...u,id:data.id,activo:true,estado:"activo"};
+      }
+    }catch(e){}
+    if(!u){
+      const nombre=email.split("@")[0].replace(/[._]/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+      try{
+        const[created]=await sb("usuarios",{method:"POST",body:JSON.stringify({id:data.id,nombre,email,rol:"instructor",activo:true,estado:"activo"})});
+        u=created;
+      }catch(e){u={id:data.id,nombre,email,rol:"instructor"};}
+    }
+    loggedUser=u;
+    sessionStorage.setItem("smx_session",JSON.stringify({
+      userId:u.id,nombre:u.nombre,email:u.email,rol:u.rol||"instructor",
+      token:authToken,refreshToken:window._inviteRefresh||"",loginTime:Date.now()
+    }));
+    enterPanel(u,true);
+  }catch(e){
+    err.textContent=e.message||"Error desconocido.";
+  }finally{
+    btn.disabled=false;btn.textContent="Crear contraseña e ingresar";
+  }
 }
 
 async function doLogin(){
@@ -12203,33 +12314,74 @@ function renderPortalCuenta(movs,wrap){
 }
 
 /* ── GESTIÓN DE USUARIOS ── */
-function openNuevoUsuario(){
-  ["nu-nombre","nu-email"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
-  const elRol=document.getElementById("nu-rol");if(elRol)elRol.value="instructor";
-  document.getElementById("nuevo-usuario-form").style.display="block";
-  document.getElementById("nu-nombre").focus();
+function openInvitarUsuario(){
+  document.getElementById("inv-nombre").value="";
+  document.getElementById("inv-email").value="";
+  document.getElementById("inv-rol").value="instructor";
+  document.getElementById("invitar-form-wrap").style.display="";
+  document.getElementById("invitar-result-wrap").style.display="none";
+  document.getElementById("invitar-usuario-panel").style.display="";
+  document.getElementById("edit-usuario-panel").style.display="none";
+  document.getElementById("inv-nombre").focus();
 }
-function closeNuevoUsuario(){
-  document.getElementById("nuevo-usuario-form").style.display="none";
+function closeInvitarUsuario(){
+  document.getElementById("invitar-usuario-panel").style.display="none";
 }
-async function saveNuevoUsuario(){
-  const nombre=document.getElementById("nu-nombre").value.trim();
-  const email=document.getElementById("nu-email").value.trim().toLowerCase();
-  const rol=document.getElementById("nu-rol").value;
+async function invitarUsuario(){
+  const nombre=document.getElementById("inv-nombre").value.trim();
+  const email=document.getElementById("inv-email").value.trim().toLowerCase();
+  const rol=document.getElementById("inv-rol").value;
   if(!nombre){toast("Escribí el nombre","err");return;}
   if(!email||!email.includes("@")){toast("Email inválido","err");return;}
-  const btn=document.getElementById("nu-save-btn");
-  btn.disabled=true;btn.textContent="Guardando...";
+  const btn=document.getElementById("inv-save-btn");
+  btn.disabled=true;btn.textContent="Generando...";
   try{
-    // Verificar si ya existe
-    const existe=await sb(`usuarios?email=ilike.${encodeURIComponent(email)}&select=id`);
-    if(existe&&existe.length){toast("Ya existe un usuario con ese email","err");return;}
-    await sb("usuarios",{method:"POST",body:JSON.stringify({nombre,email,rol})});
-    toast("Usuario agregado ✓","ok");
-    closeNuevoUsuario();
+    const res=await fetch(`${SB}/functions/v1/invitar-usuario`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
+      body:JSON.stringify({nombre,email,rol})
+    });
+    const d=await res.json();
+    if(!res.ok)throw new Error(d.error||"Error al generar invitación");
+    document.getElementById("inv-link-input").value=d.link||"";
+    document.getElementById("inv-result-email").textContent=`Para ${esc(d.nombre)} · ${esc(d.email)}`;
+    document.getElementById("invitar-form-wrap").style.display="none";
+    document.getElementById("invitar-result-wrap").style.display="";
     loadUsuariosPage();
   }catch(e){toast("Error: "+e.message,"err");}
-  finally{btn.disabled=false;btn.textContent="Agregar";}
+  finally{btn.disabled=false;btn.textContent="Generar invitación";}
+}
+function copiarLinkInvitacion(){
+  const val=document.getElementById("inv-link-input")?.value;
+  if(!val){toast("Sin link","inf");return;}
+  navigator.clipboard.writeText(val).then(()=>toast("Link copiado","ok")).catch(()=>toast("Error al copiar","err"));
+}
+function openEditUsuario(id,nombre,email){
+  document.getElementById("eu-id").value=id;
+  document.getElementById("eu-nombre").value=nombre||"";
+  document.getElementById("eu-email").value=email||"";
+  document.getElementById("invitar-usuario-panel").style.display="none";
+  document.getElementById("edit-usuario-panel").style.display="";
+  document.getElementById("eu-nombre").focus();
+}
+function closeEditUsuario(){
+  document.getElementById("edit-usuario-panel").style.display="none";
+}
+async function saveEditUsuario(){
+  const id=document.getElementById("eu-id").value;
+  const nombre=document.getElementById("eu-nombre").value.trim();
+  const email=document.getElementById("eu-email").value.trim().toLowerCase();
+  if(!nombre){toast("Escribí el nombre","err");return;}
+  if(!email||!email.includes("@")){toast("Email inválido","err");return;}
+  const btn=document.getElementById("eu-save-btn");
+  btn.disabled=true;btn.textContent="Guardando...";
+  try{
+    await sb(`usuarios?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({nombre,email})});
+    closeEditUsuario();
+    toast("Usuario actualizado","ok");
+    loadUsuariosPage();
+  }catch(e){toast("Error: "+e.message,"err");}
+  finally{btn.disabled=false;btn.textContent="Guardar cambios";}
 }
 
 async function loadUsuariosPage(){
@@ -12237,7 +12389,7 @@ async function loadUsuariosPage(){
   if(!wrap)return;
   wrap.innerHTML=`<div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>`;
   try{
-    const users=await sb("usuarios?select=id,nombre,email,rol&order=nombre");
+    const users=await sb("usuarios?select=id,nombre,email,rol,activo,estado,invitado_at&order=nombre");
     renderUsuariosPage(users);
   }catch(e){
     wrap.innerHTML=`<p style="color:var(--re);padding:20px">Error al cargar usuarios.</p>`;
@@ -12246,37 +12398,71 @@ async function loadUsuariosPage(){
 
 function renderUsuariosPage(users){
   const wrap=document.getElementById("usuarios-list");
-  const rolColors={admin:"#7C3AED",instructor:"#3B82F6",logistica:"#10B981",comunicaciones:"#EC4899"};
-  const rolLabels={admin:"Admin",instructor:"Instructor",logistica:"Logística",comunicaciones:"Comunicaciones"};
-  wrap.innerHTML=users.map(u=>{
+  const rolColors={admin:"#7C3AED",instructor:"#3B82F6",logistica:"#10B981",comunicaciones:"#EC4899",proveedor:"#F59E0B"};
+  const rolLabels={admin:"Admin",instructor:"Instructor",logistica:"Logística",comunicaciones:"Comunicaciones",proveedor:"Proveedor"};
+  const renderCard=(u)=>{
     const initials=(u.nombre||"?").split(" ").map(n=>n[0]).slice(0,2).join("").toUpperCase();
     const rol=u.rol||"instructor";
     const color=rolColors[rol]||"#7C3AED";
     const isSelf=u.id===loggedUser?.id;
-    return`<div class="urol-card" id="ucard-${u.id}">
+    const isPending=u.estado==="pendiente";
+    const isSuspended=u.activo===false&&!isPending;
+    return`<div class="urol-card" id="ucard-${u.id}" style="${isSuspended?"opacity:.5":""}">
       <div class="urol-avatar" style="background:${color}">${initials}</div>
       <div class="urol-info">
-        <div class="urol-nombre">${esc(u.nombre)}${isSelf?` <span style="font-size:11px;color:var(--tx3)">(vos)</span>`:""}</div>
+        <div class="urol-nombre">${esc(u.nombre)}${isSelf?` <span style="font-size:11px;color:var(--tx3)">(vos)</span>`:""}
+          ${isPending?` <span style="font-size:10px;padding:1px 7px;background:rgba(245,158,11,.12);color:#F59E0B;border-radius:8px;border:1px solid rgba(245,158,11,.3)">pendiente</span>`:""}
+          ${isSuspended?` <span style="font-size:10px;padding:1px 7px;background:rgba(239,68,68,.1);color:var(--re);border-radius:8px;border:1px solid rgba(239,68,68,.2)">suspendido</span>`:""}
+        </div>
         <div class="urol-email">${esc(u.email||"")}</div>
-        <span class="urol-badge ${rol}">${rolLabels[rol]||rol}</span>
+        ${!isPending?`<span class="urol-badge ${rol}">${rolLabels[rol]||rol}</span>`:""}
+        ${isPending&&u.invitado_at?`<div style="font-size:11px;color:var(--tx3);margin-top:2px">Invitado el ${new Date(u.invitado_at).toLocaleDateString("es-AR",{day:"2-digit",month:"short"})}</div>`:""}
       </div>
-      <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;align-items:flex-end">
-        <select class="urol-sel" data-uid="${u.id}" onchange="saveUsuarioRol('${u.id}',this.value,this)">
+      <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;align-items:flex-end">
+        ${!isPending?`<select class="urol-sel" data-prev="${rol}" onchange="saveUsuarioRol('${u.id}',this.value,this)">
           <option value="admin"${rol==="admin"?" selected":""}>Admin</option>
           <option value="instructor"${rol==="instructor"?" selected":""}>Instructor</option>
           <option value="logistica"${rol==="logistica"?" selected":""}>Logística</option>
           <option value="comunicaciones"${rol==="comunicaciones"?" selected":""}>Comunicaciones</option>
           <option value="proveedor"${rol==="proveedor"?" selected":""}>Proveedor externo</option>
-        </select>
-        ${rol==="proveedor"?`<button class="btn sec" style="font-size:11px;padding:4px 10px" onclick="openCuentaCorriente('${u.id}','${esc(u.nombre)}')">📊 Cuenta corriente</button>`:""}
-        ${!isSelf?`<button class="btn" style="font-size:11px;padding:4px 10px;background:var(--re);color:#fff;border-color:var(--re)" onclick="eliminarUsuario('${u.id}','${esc(u.nombre)}')">🗑 Eliminar</button>`:""}
+        </select>`:""}
+        <button class="btn" style="font-size:11px;padding:3px 9px" onclick="openEditUsuario('${u.id}','${esc(u.nombre||"")}','${esc(u.email||"")}')">✏️ Editar</button>
+        ${!isSelf&&!isPending?`<button class="btn" style="font-size:11px;padding:3px 9px" onclick="toggleActivarUsuario('${u.id}',${isSuspended})">${isSuspended?"▶ Activar":"⏸ Pausar"}</button>`:""}
+        ${rol==="proveedor"?`<button class="btn sec" style="font-size:11px;padding:3px 9px" onclick="openCuentaCorriente('${u.id}','${esc(u.nombre)}')">📊 Cuenta</button>`:""}
+        ${!isSelf?`<button class="btn" style="font-size:11px;padding:3px 9px;background:var(--re);color:#fff;border-color:var(--re)" onclick="eliminarUsuario('${u.id}','${esc(u.nombre)}')">🗑</button>`:""}
       </div>
     </div>`;
-  }).join("");
+  };
+  const activos=users.filter(u=>u.estado!=="pendiente"&&u.activo!==false);
+  const suspendidos=users.filter(u=>u.estado!=="pendiente"&&u.activo===false);
+  const pendientes=users.filter(u=>u.estado==="pendiente");
+  let html="";
+  if(activos.length){
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Activos (${activos.length})</div>`;
+    html+=activos.map(renderCard).join("");
+  }
+  if(suspendidos.length){
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px">Suspendidos (${suspendidos.length})</div>`;
+    html+=suspendidos.map(renderCard).join("");
+  }
+  if(pendientes.length){
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px">Invitaciones pendientes (${pendientes.length})</div>`;
+    html+=pendientes.map(renderCard).join("");
+  }
+  if(!html)html=`<div class="empty" style="text-align:center;padding:32px 0;color:var(--tx3)">No hay usuarios registrados.</div>`;
+  wrap.innerHTML=html;
+}
+
+async function toggleActivarUsuario(id, activar){
+  try{
+    const estado=activar?"activo":"suspendido";
+    await sb(`usuarios?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({activo:activar,estado})});
+    toast(activar?"Usuario activado ✓":"Usuario suspendido","ok");
+    loadUsuariosPage();
+  }catch(e){toast("Error: "+e.message,"err")}
 }
 
 async function saveUsuarioRol(id,newRol,selectEl){
-  // Advertencia si el admin se quita su propio rol
   if(id===loggedUser?.id&&newRol!=="admin"){
     if(!confirm("¿Seguro que querés quitarte el rol de admin? Perderías acceso a ciertas secciones.")){
       selectEl.value="admin";
@@ -12287,16 +12473,14 @@ async function saveUsuarioRol(id,newRol,selectEl){
   selectEl.disabled=true;
   try{
     await sb(`usuarios?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({rol:newRol})});
-    const rolColors={admin:"#7C3AED",instructor:"#3B82F6",logistica:"#10B981",comunicaciones:"#EC4899"};
-    const rolLabels={admin:"Admin",instructor:"Instructor",logistica:"Logística",comunicaciones:"Comunicaciones"};
+    const rolColors={admin:"#7C3AED",instructor:"#3B82F6",logistica:"#10B981",comunicaciones:"#EC4899",proveedor:"#F59E0B"};
+    const rolLabels={admin:"Admin",instructor:"Instructor",logistica:"Logística",comunicaciones:"Comunicaciones",proveedor:"Proveedor"};
     const card=document.getElementById("ucard-"+id);
     if(card){
       card.querySelector(".urol-avatar").style.background=rolColors[newRol]||"#7C3AED";
       const badge=card.querySelector(".urol-badge");
-      badge.className="urol-badge "+newRol;
-      badge.textContent=rolLabels[newRol]||newRol;
+      if(badge){badge.className="urol-badge "+newRol;badge.textContent=rolLabels[newRol]||newRol;}
     }
-    // Si es el usuario actual, actualizar en memoria y sesión sin necesidad de re-login
     if(id===loggedUser?.id){
       loggedUser.rol=newRol;
       const s=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
@@ -12306,17 +12490,17 @@ async function saveUsuarioRol(id,newRol,selectEl){
       renderTareas();
     }
     toast("Rol actualizado","ok");
+    selectEl.dataset.prev=newRol;
   }catch(e){
     toast("Error al guardar","err");
     selectEl.value=prevVal;
   }finally{
     selectEl.disabled=false;
-    selectEl.dataset.prev=selectEl.value;
   }
 }
 
 async function eliminarUsuario(id, nombre){
-  if(!confirm(`¿Eliminar a ${nombre}?\n\nSe eliminará su acceso al panel y todos sus datos. Esta acción no se puede deshacer.`))return;
+  if(!confirm(`¿Eliminar a ${nombre}?\n\nSe eliminará su acceso y todos sus datos. Esta acción no se puede deshacer.`))return;
   const btn=document.querySelector(`#ucard-${id} button[onclick*="eliminarUsuario"]`);
   if(btn){btn.disabled=true;btn.textContent="Eliminando...";}
   try{
@@ -12331,7 +12515,7 @@ async function eliminarUsuario(id, nombre){
     toast(`${nombre} eliminado del panel`,"ok");
   }catch(e){
     toast("Error: "+e.message,"err");
-    if(btn){btn.disabled=false;btn.textContent="🗑 Eliminar";}
+    if(btn){btn.disabled=false;btn.textContent="🗑";}
   }
 }
 
