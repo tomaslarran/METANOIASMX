@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     let actionLink = "";
     let alreadyRegistered = false;
 
-    // 1. Intentar generate_link type=invite (crea usuario en Auth + envía email + devuelve link)
+    // 1. generate_link type=invite → crea usuario en Auth y devuelve el link copiable
     const genInvRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
       method: "POST",
       headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
         throw new Error(`Error al generar invitación: ${genInvData.msg || genInvData.error || genInvText}`);
       }
 
-      // 2. Usuario ya existe en Auth → generar magic link para que ingrese
+      // Usuario ya existe en Auth → generar magic link para que ingrese
       const mgRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
         method: "POST",
         headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
@@ -68,6 +68,17 @@ Deno.serve(async (req) => {
       let mgData: any = {};
       try { mgData = JSON.parse(mgText); } catch (_) { mgData = {}; }
       actionLink = mgData.properties?.action_link || mgData.action_link || "";
+    }
+
+    // 2. Intentar /admin/invite para que Supabase envíe el email automáticamente (best-effort)
+    if (!alreadyRegistered) {
+      try {
+        await fetch(`${SUPABASE_URL}/auth/v1/admin/invite`, {
+          method: "POST",
+          headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ email, data: { nombre, rol } }),
+        });
+      } catch (_) { /* ignorar si falla — el link ya está generado */ }
     }
 
     // 3. Insertar o actualizar registro en usuarios
