@@ -38,33 +38,37 @@ Deno.serve(async (req) => {
     let actionLink = "";
     let alreadyRegistered = false;
 
-    // 1. Intentar invite (envía email + crea usuario en Auth)
-    const inviteRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/invite`, {
+    // 1. Intentar generate_link type=invite (crea usuario en Auth + envía email + devuelve link)
+    const genInvRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
       method: "POST",
       headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ email, data: { nombre, rol } }),
+      body: JSON.stringify({ type: "invite", email, options: { redirect_to: REDIRECT } }),
     });
-    const inviteText = await inviteRes.text();
-    let inviteData: any = {};
-    try { inviteData = JSON.parse(inviteText); } catch (_) { inviteData = { msg: inviteText }; }
+    const genInvText = await genInvRes.text();
+    let genInvData: any = {};
+    try { genInvData = JSON.parse(genInvText); } catch (_) { genInvData = { msg: genInvText }; }
 
-    if (!inviteRes.ok) {
-      const msg = (inviteData.msg || inviteData.error || inviteText || "").toLowerCase();
-      alreadyRegistered = msg.includes("already") || msg.includes("registered");
-      if (!alreadyRegistered) throw new Error(inviteData.msg || inviteData.error || "Error al invitar");
+    if (genInvRes.ok) {
+      actionLink = genInvData.properties?.action_link || genInvData.action_link || "";
+    } else {
+      const msg = (genInvData.msg || genInvData.error_code || genInvData.error || genInvText || "").toLowerCase();
+      alreadyRegistered = msg.includes("already") || msg.includes("registered") || msg.includes("exists") || msg.includes("duplicate");
+
+      if (!alreadyRegistered) {
+        throw new Error(`Error al generar invitación: ${genInvData.msg || genInvData.error || genInvText}`);
+      }
+
+      // 2. Usuario ya existe en Auth → generar magic link para que ingrese
+      const mgRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
+        method: "POST",
+        headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "magiclink", email, options: { redirect_to: REDIRECT } }),
+      });
+      const mgText = await mgRes.text();
+      let mgData: any = {};
+      try { mgData = JSON.parse(mgText); } catch (_) { mgData = {}; }
+      actionLink = mgData.properties?.action_link || mgData.action_link || "";
     }
-
-    // 2. Generar link copiable (invite para nuevos, magiclink para existentes)
-    const linkType = alreadyRegistered ? "magiclink" : "invite";
-    const genRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
-      method: "POST",
-      headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ type: linkType, email, options: { redirect_to: REDIRECT } }),
-    });
-    const genText = await genRes.text();
-    let genData: any = {};
-    try { genData = JSON.parse(genText); } catch (_) { genData = {}; }
-    actionLink = genData.properties?.action_link || genData.action_link || "";
 
     // 3. Insertar o actualizar registro en usuarios
     if (!existing) {
