@@ -1,3 +1,5 @@
+import nodemailer from "npm:nodemailer@6.9.9";
+
 const cors = {
   "Access-Control-Allow-Origin": "https://tomaslarran.github.io",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -70,18 +72,7 @@ Deno.serve(async (req) => {
       actionLink = mgData.properties?.action_link || mgData.action_link || "";
     }
 
-    // 2. Intentar /admin/invite para que Supabase envíe el email automáticamente (best-effort)
-    if (!alreadyRegistered) {
-      try {
-        await fetch(`${SUPABASE_URL}/auth/v1/admin/invite`, {
-          method: "POST",
-          headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ email, data: { nombre, rol } }),
-        });
-      } catch (_) { /* ignorar si falla — el link ya está generado */ }
-    }
-
-    // 3. Insertar o actualizar registro en usuarios
+    // 2. Insertar o actualizar registro en usuarios
     if (!existing) {
       await supabase.from("usuarios").insert({
         nombre, email, rol,
@@ -92,7 +83,55 @@ Deno.serve(async (req) => {
       await supabase.from("usuarios").update({ rol, estado: alreadyRegistered ? "activo" : "pendiente" }).eq("email", email);
     }
 
-    return new Response(JSON.stringify({ ok: true, link: actionLink, email, nombre, ya_registrado: alreadyRegistered }), {
+    // 3. Enviar email desde cuenta de administración vía SMTP
+    let emailSent = false;
+    if (actionLink) {
+      try {
+        const transporter = nodemailer.createTransport({
+          host: Deno.env.get("SMTP_HOST"),
+          port: 465,
+          secure: true,
+          auth: {
+            user: Deno.env.get("SMTP_USER"),
+            pass: Deno.env.get("SMTP_PASS"),
+          },
+        });
+
+        const accion = alreadyRegistered ? "acceder" : "crear tu contraseña y acceder";
+        const btnText = alreadyRegistered ? "Ingresar al panel" : "Crear contraseña e ingresar";
+        const html = `
+          <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#222">
+            <div style="background:#7c3aed;padding:24px 32px;border-radius:12px 12px 0 0">
+              <div style="color:#fff;font-size:22px;font-weight:800;letter-spacing:-0.5px">Metanoia SMX</div>
+              <div style="color:#e9d5ff;font-size:13px;margin-top:2px">Panel de gestión interno</div>
+            </div>
+            <div style="background:#fff;padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
+              <p style="margin:0 0 12px;font-size:16px">Hola <strong>${nombre}</strong>,</p>
+              <p style="margin:0 0 20px;color:#555;font-size:14px;line-height:1.6">
+                Fuiste invitado/a al panel interno de <strong>Metanoia SMX</strong> con rol <strong>${rol}</strong>.<br>
+                Hacé clic en el botón para ${accion}.
+              </p>
+              <div style="text-align:center;margin:28px 0">
+                <a href="${actionLink}" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700">${btnText}</a>
+              </div>
+              <p style="margin:20px 0 0;color:#999;font-size:12px;text-align:center">
+                Si no esperabas este mensaje, podés ignorarlo.<br>
+                El link expira en 24 horas.
+              </p>
+            </div>
+          </div>`;
+
+        await transporter.sendMail({
+          from: `"Metanoia SMX" <${Deno.env.get("SMTP_USER")}>`,
+          to: email,
+          subject: `Invitación al panel — Metanoia SMX`,
+          html,
+        });
+        emailSent = true;
+      } catch (_) { /* si falla el email, el link igual está disponible para copiar */ }
+    }
+
+    return new Response(JSON.stringify({ ok: true, link: actionLink, email, nombre, ya_registrado: alreadyRegistered, email_sent: emailSent }), {
       headers: { ...cors, "Content-Type": "application/json" },
     });
   } catch (e: any) {
