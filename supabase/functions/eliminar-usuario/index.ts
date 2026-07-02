@@ -22,7 +22,6 @@ serve(async (req) => {
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-  // Verificar que el que llama es admin
   const { data: caller } = await supabase.from("usuarios").select("rol").eq("id", user.id).single();
   if (caller?.rol !== "admin") {
     return new Response(JSON.stringify({ error: "Solo admins pueden eliminar usuarios" }), { status: 403, headers: cors });
@@ -32,31 +31,39 @@ serve(async (req) => {
     const { usuario_id } = await req.json();
     if (!usuario_id) return new Response(JSON.stringify({ error: "usuario_id requerido" }), { status: 400, headers: cors });
 
-    // No puede eliminarse a sí mismo
     if (usuario_id === user.id) {
       return new Response(JSON.stringify({ error: "No podés eliminarte a vos mismo" }), { status: 400, headers: cors });
     }
 
-    // Obtener email antes de borrar, por si necesitamos buscar en Auth por email
+    // Obtener email antes de borrar (necesario para fallback por email en Auth)
     const { data: usuarioRow } = await supabase.from("usuarios").select("email").eq("id", usuario_id).single();
 
-    // Eliminar de Auth por ID
+    // 1. Eliminar de Supabase Auth por ID
     const { error: authError } = await supabase.auth.admin.deleteUser(usuario_id);
     if (authError) {
       const msg = authError.message.toLowerCase();
-      if (!msg.includes("not found") && !msg.includes("user not found")) {
+      // Si el ID no coincide (usuario pendiente sin contraseña), buscar por email
+      if (msg.includes("not found") || msg.includes("user not found")) {
+        if (usuarioRow?.email) {
+          const { data: list } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+          const authUser = (list?.users ?? []).find((u: any) => u.email === usuarioRow.email);
+          if (authUser) {
+            const { error: e2 } = await supabase.auth.admin.deleteUser(authUser.id);
+            if (e2) console.error("Error eliminando de Auth por email:", e2.message);
+          }
+        }
+      } else {
         throw new Error("Error al eliminar de Auth: " + authError.message);
-      }
-      // ID no coincide (usuario invitado pendiente) → buscar por email y eliminar
-      if (usuarioRow?.email) {
-        const { data: list } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-        const authUser = list?.users?.find((u: any) => u.email === usuarioRow.email);
-        if (authUser) await supabase.auth.admin.deleteUser(authUser.id);
       }
     }
 
-    // Eliminar de tabla usuarios
-    await supabase.from("usuarios").delete().eq("id", usuario_id);
+    // 2. Borrar registros dependientes que pueden bloquear el delete por FK
+    await supabase.from("notificaciones").delete().eq("usuario_id", usuario_id);
+    await supabase.from("notificaciones_config").delete().eq("usuario_id", usuario_id);
+
+    // 3. Eliminar de tabla usuarios — verificar que realmente se borró
+    const { error: delError } = await supabase.from("usuarios").delete().eq("id", usuario_id);
+    if (delError) throw new Error("Error al eliminar usuario: " + delError.message);
 
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...cors, "Content-Type": "application/json" },
