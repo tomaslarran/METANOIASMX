@@ -5725,7 +5725,15 @@ async function generarCursoArchivo(tipo){
 Incluí al menos 8 slides: portada, objetivos, metodología, programa por módulos (1 slide por módulo), evaluación, cierre.`,
     examen:`Basándote en el curso de nuestra conversación, generá 10 preguntas de opción múltiple para evaluarlo. Devolvé SOLO JSON válido:
 {"titulo":"Evaluación — [nombre del curso]","preguntas":[{"n":1,"pregunta":"texto de la pregunta","opciones":["A) opción","B) opción","C) opción","D) opción"],"correcta":"A"}]}`,
-    programa:`Generá el programa académico completo del curso de nuestra conversación en texto estructurado con estas secciones: NOMBRE DEL CURSO, DESCRIPCIÓN, OBJETIVOS GENERALES, OBJETIVOS ESPECÍFICOS, NIVEL DE SIMULACIÓN, METODOLOGÍA, CONTENIDO (módulos detallados), SISTEMA DE EVALUACIÓN, DURACIÓN, DIRIGIDO A, INSTRUCTOR/REFERENTE SUGERIDO.`
+    programa:`Generá el programa académico completo del curso de nuestra conversación en texto estructurado. REGLAS IMPORTANTES para que el PDF renderice correctamente:
+- Usá ## para secciones principales (## DESCRIPCIÓN, ## OBJETIVOS GENERALES, etc.)
+- Usá ### para subsecciones (### Enfoque pedagógico central)
+- Usá guiones para listas: - ítem
+- NO uses tablas markdown (sin |col|col|)
+- NO uses flechas → ni emojis (escribí "a" o "al" en lugar de →, ej: "R1 al R4")
+- NO uses **negrita** ni *cursiva* (el PDF los ignora)
+- Los objetivos específicos ponelos como lista numerada simple, con categoría y nivel Miller en paréntesis al final
+Secciones: ## NOMBRE DEL CURSO, ## DESCRIPCIÓN, ## OBJETIVOS GENERALES, ## OBJETIVOS ESPECÍFICOS, ## NIVEL DE SIMULACIÓN, ## METODOLOGÍA, ## CONTENIDO (módulos detallados), ## SISTEMA DE EVALUACIÓN, ## DURACIÓN Y LOGÍSTICA, ## DIRIGIDO A, ## INSTRUCTOR SUGERIDO.`
   };
 
   const labels={ppt:"📊 Generando PPT...",examen:"📋 Generando examen...",programa:"📝 Generando programa..."};
@@ -5792,92 +5800,148 @@ async function _generarPPTCurso(jsonStr){
 }
 
 function _generarPDFCurso(content,tipo){
-  // Cargar jsPDF si no está
   const generarPDF=()=>{
     const {jsPDF}=window.jspdf;
     const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-    const PU=[124,58,237], DARK=[26,10,62], GRAY=[100,100,100];
-    const W=doc.internal.pageSize.getWidth();
+    const PU=[124,58,237],DARK=[26,10,62],GRAY=[110,110,110],LGRAY=[200,200,200];
+    const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
+    const ML=15,MR=15,CW=W-ML-MR;
     let y=20;
 
-    // Header
-    doc.setFillColor(...PU);
-    doc.rect(0,0,W,16,"F");
-    doc.setTextColor(255,255,255);
-    doc.setFont("helvetica","bold");
-    doc.setFontSize(12);
-    doc.text("Metanoia SMX · Simulación Médica",W/2,10,{align:"center"});
+    // Limpia caracteres que jsPDF/Helvetica no puede renderizar (no-Latin1, emojis, flechas)
+    const clean=s=>(s||"")
+      .replace(/→|➔|⟶/g,"->").replace(/←|⟵/g,"<-")
+      .replace(/[^\x00-\xFF]/g,c=>({'•':'-','✓':'v','✗':'x','…':'...'}[c]||''))
+      .replace(/\*\*(.*?)\*\*/g,"$1").replace(/\*(.*?)\*/g,"$1")
+      .replace(/`([^`]*)`/g,"$1");
 
-    // Título
+    const newPage=()=>{doc.addPage();y=20;};
+    const chk=(n=7)=>{if(y+n>H-14)newPage();};
+
+    // Header
+    doc.setFillColor(...PU);doc.rect(0,0,W,16,"F");
+    doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(12);
+    doc.text("Metanoia SMX - Simulacion Medica",W/2,10,{align:"center"});
+
+    // Titulo principal
     y=28;
-    doc.setTextColor(...DARK);
-    doc.setFontSize(tipo==="examen"?16:14);
+    doc.setTextColor(...DARK);doc.setFontSize(tipo==="examen"?16:14);
     doc.setFont("helvetica","bold");
-    const titulo=tipo==="examen"?"Evaluación del Curso":"Programa Académico";
-    doc.text(titulo,W/2,y,{align:"center"});
+    doc.text(tipo==="examen"?"Evaluacion del Curso":"Programa Academico",W/2,y,{align:"center"});
     y+=10;
 
-    // Contenido
-    doc.setFontSize(10);
-    doc.setFont("helvetica","normal");
-    doc.setTextColor(...DARK);
-
     if(tipo==="examen"){
-      // Intentar parsear JSON de examen
       try{
         const match=content.match(/\{[\s\S]*\}/);
         const data=JSON.parse(match?.[0]||content);
-        doc.setFontSize(13);doc.setFont("helvetica","bold");
-        doc.text(data.titulo||"Evaluación",W/2,y,{align:"center"});
-        y+=10;
+        chk(8);doc.setFontSize(13);doc.setFont("helvetica","bold");doc.setTextColor(...DARK);
+        const tLines=doc.splitTextToSize(clean(data.titulo||"Evaluacion"),CW);
+        doc.text(tLines,W/2,y,{align:"center"});y+=tLines.length*6+6;
         (data.preguntas||[]).forEach((p,i)=>{
-          if(y>260){doc.addPage();y=20;}
+          chk(12);
           doc.setFontSize(10);doc.setFont("helvetica","bold");doc.setTextColor(...DARK);
-          const qLines=doc.splitTextToSize(`${p.n||i+1}. ${p.pregunta}`,W-30);
-          doc.text(qLines,15,y);y+=qLines.length*5+2;
+          const qLines=doc.splitTextToSize(`${p.n||i+1}. ${clean(p.pregunta)}`,CW);
+          doc.text(qLines,ML,y);y+=qLines.length*5+2;
           doc.setFont("helvetica","normal");doc.setTextColor(...GRAY);
           (p.opciones||[]).forEach(op=>{
-            if(y>265){doc.addPage();y=20;}
-            const oLines=doc.splitTextToSize("   "+op,W-35);
-            doc.text(oLines,18,y);y+=oLines.length*4.5;
+            chk(6);
+            const oLines=doc.splitTextToSize(clean(op),CW-6);
+            doc.text(oLines,ML+5,y);y+=oLines.length*4.5;
           });
-          y+=4;
+          y+=5;
         });
       }catch(e){
-        // Fallback a texto plano
-        const lines=doc.splitTextToSize(content,W-30);
-        doc.text(lines,15,y);
+        doc.setFont("helvetica","normal");doc.setFontSize(9.5);doc.setTextColor(...DARK);
+        const ls=doc.splitTextToSize(clean(content),CW);doc.text(ls,ML,y);
       }
     }else{
-      // Programa: texto formateado
+      // Programa: renderizador con soporte real de markdown
       const lines=content.split("\n");
-      lines.forEach(line=>{
-        if(y>270){doc.addPage();y=20;}
-        if(line.trim().match(/^[A-Z\s]{4,}:?$/)||line.startsWith("##")){
+      lines.forEach(raw=>{
+        const line=raw.trimEnd();
+
+        // Línea vacía
+        if(!line.trim()){y+=3;return;}
+
+        // Separador ---
+        if(line.trim().match(/^-{3,}$|^={3,}$/)){
+          chk(5);doc.setDrawColor(...LGRAY);doc.line(ML,y,W-MR,y);y+=5;return;
+        }
+
+        // Fila de tabla — separador |---|---| → ignorar
+        if(line.trim().match(/^\|[-\s|:]+\|$/))return;
+
+        // Fila de tabla | col | col |
+        if(line.trim().match(/^\|.*\|$/)){
+          const cells=line.trim().split("|").slice(1,-1).map(c=>clean(c.trim())).filter(c=>c);
+          if(!cells.length)return;
+          chk(6);
+          doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(...DARK);
+          if(cells.length===1){
+            const ls=doc.splitTextToSize(cells[0],CW);doc.text(ls,ML,y);y+=ls.length*4.5;
+          }else{
+            const c1w=CW*0.36,c2w=CW*0.61;
+            const l1=doc.splitTextToSize(cells[0],c1w);
+            const l2=doc.splitTextToSize(cells.slice(1).join(" | "),c2w);
+            const h=Math.max(l1.length,l2.length)*4.5;
+            chk(h);doc.text(l1,ML,y);doc.text(l2,ML+c1w+3,y);y+=h+1;
+          }
+          return;
+        }
+
+        // Heading ## / ###
+        const hm=line.match(/^(#{1,3})\s+(.+)/);
+        if(hm){
+          const lvl=hm[1].length,txt=clean(hm[2]);
+          chk(12);y+=lvl===1?4:2;
+          if(lvl===1){doc.setFont("helvetica","bold");doc.setFontSize(12);doc.setTextColor(...PU);}
+          else if(lvl===2){doc.setFont("helvetica","bold");doc.setFontSize(11);doc.setTextColor(...PU);}
+          else{doc.setFont("helvetica","bold");doc.setFontSize(10);doc.setTextColor(...DARK);}
+          const ls=doc.splitTextToSize(txt,CW);doc.text(ls,ML,y);y+=ls.length*(lvl<=2?6:5);
+          return;
+        }
+
+        // ALL CAPS section header (sin ##)
+        const t=clean(line.trim());
+        if(t.length>3&&t===t.toUpperCase()&&/[A-Z]/.test(t)&&!t.startsWith("-")){
+          chk(12);y+=3;
           doc.setFont("helvetica","bold");doc.setFontSize(11);doc.setTextColor(...PU);
-          doc.text(line.replace(/#+/g,"").trim(),15,y);y+=7;
-        }else if(line.startsWith("-")||line.startsWith("•")){
+          doc.text(t,ML,y);y+=7;return;
+        }
+
+        // Lista con guion o bullet
+        if(line.match(/^\s*[-•]\s+/)){
+          chk(6);
           doc.setFont("helvetica","normal");doc.setFontSize(9.5);doc.setTextColor(...DARK);
-          const ls=doc.splitTextToSize(line,W-35);doc.text(ls,20,y);y+=ls.length*5;
-        }else if(line.trim()){
+          const txt=clean(line.replace(/^\s*[-•]\s+/,""));
+          const ls=doc.splitTextToSize("- "+txt,CW-6);doc.text(ls,ML+4,y);y+=ls.length*5;return;
+        }
+
+        // Lista numerada
+        if(line.match(/^\s*\d+[.)]\s+/)){
+          chk(6);
           doc.setFont("helvetica","normal");doc.setFontSize(9.5);doc.setTextColor(...DARK);
-          const ls=doc.splitTextToSize(line,W-30);doc.text(ls,15,y);y+=ls.length*5;
-        }else{y+=3;}
+          const ls=doc.splitTextToSize(clean(line.trim()),CW-4);doc.text(ls,ML+3,y);y+=ls.length*5;return;
+        }
+
+        // Párrafo normal
+        chk(6);
+        doc.setFont("helvetica","normal");doc.setFontSize(9.5);doc.setTextColor(...DARK);
+        const ls=doc.splitTextToSize(clean(line),CW);doc.text(ls,ML,y);y+=ls.length*5;
       });
     }
 
-    // Footer
+    // Footer en todas las páginas
     const pages=doc.getNumberOfPages();
     for(let i=1;i<=pages;i++){
       doc.setPage(i);
-      doc.setFillColor(...PU);doc.rect(0,doc.internal.pageSize.getHeight()-10,W,10,"F");
+      doc.setFillColor(...PU);doc.rect(0,H-10,W,10,"F");
       doc.setTextColor(255,255,255);doc.setFontSize(8);
-      doc.text(`Metanoia SMX · Página ${i} de ${pages}`,W/2,doc.internal.pageSize.getHeight()-3,{align:"center"});
+      doc.text(`Metanoia SMX - Pagina ${i} de ${pages}`,W/2,H-3,{align:"center"});
     }
 
-    const nombre=tipo==="examen"?"Examen_Curso":"Programa_Curso";
-    doc.save(`${nombre}_Metanoia.pdf`);
-    toast("✅ PDF generado y descargado","ok");
+    doc.save(`${tipo==="examen"?"Examen_Curso":"Programa_Curso"}_Metanoia.pdf`);
+    toast("PDF generado y descargado","ok");
   };
 
   if(window.jspdf){generarPDF();}
