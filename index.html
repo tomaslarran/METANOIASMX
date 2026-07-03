@@ -3404,6 +3404,7 @@ async function sb(path,opts={},retry=2){
 
 // ── STATE ──
 let tasks=[],users=[],cursos=[],alumnos=[],proveedores=[],instructores=[],plantillas=[],notifConfigs=[],oportunidades=[];
+let _cursoDetalleId=null;
 let oportFilter='all', oportArchivosTemp=[], oportChatHistorial=[];
 let inventario=[],invFilter="all",invSearch="",editInvId=null;
 let instSearch="",instActivo="";
@@ -4495,6 +4496,7 @@ function renderCursos(){
 }
 
 async function selectCurso(id){
+  _cursoDetalleId=id;
   const curso=cursos.find(c=>c.id===id);if(!curso)return;
   document.querySelectorAll(".curso-card").forEach(c=>c.classList.toggle("selected",c.onclick?.toString().includes(id)));
   const [tareasCurso,costosCurso0]=await Promise.all([
@@ -4535,6 +4537,7 @@ async function selectCurso(id){
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-instmat-${id}');loadInstMat('${id}')">👥 Instructores y materiales</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-inscriptos-${id}');loadInscriptos('${id}')">📋 Inscriptos</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-cotiz-${id}');loadCursoCotizaciones('${id}')">💼 Cotizaciones</div>
+      <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-archivos-${id}');loadCursoArchivos('${id}')">📁 Archivos</div>
     </div>
     <div class="cd-body">
       <div id="cd-info-${id}">
@@ -4610,6 +4613,9 @@ async function selectCurso(id){
       </div>
       <div id="cd-cotiz-${id}" style="display:none">
         <div id="cotiz-curso-content-${id}" style="padding:4px 0"><div style="color:var(--tx3);padding:24px;text-align:center">Cargando...</div></div>
+      </div>
+      <div id="cd-archivos-${id}" style="display:none">
+        <div id="archivos-content-${id}" style="padding:4px 0"><div style="color:var(--tx3);padding:24px;text-align:center">Cargando...</div></div>
       </div>
     </div>
   </div>`;
@@ -5625,6 +5631,97 @@ async function createCurso(){
 
 function openPlantillaModal(){toast("Plantillas: podés editar la plantilla base directamente en Supabase > curso_tareas","inf")}
 
+// ── ARCHIVOS DE CURSO ────────────────────────────────────────────────────────
+async function loadCursoArchivos(cursoId){
+  const cont=document.getElementById(`archivos-content-${cursoId}`);
+  if(!cont)return;
+  cont.innerHTML=`<div style="color:var(--tx3);padding:20px;text-align:center">Cargando...</div>`;
+  try{
+    const rows=await sb(`curso_archivos?curso_id=eq.${cursoId}&order=created_at.desc`);
+    const STO=`${SB}/storage/v1/object/public/curso-archivos`;
+    const tipoLabels={video:"🎥 Videos",pdf:"📄 PDFs",presentacion:"📊 Presentaciones",examen:"📋 Exámenes",otro:"📎 Otros"};
+    const grupos={};
+    rows.forEach(r=>{(grupos[r.tipo]||(grupos[r.tipo]=[])).push(r);});
+    let html=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <label style="font-size:12px;color:var(--tx3)">Tipo:</label>
+      <select class="mini-sel" id="upload-tipo-${cursoId}">
+        <option value="pdf">PDF</option>
+        <option value="presentacion">Presentación</option>
+        <option value="video">Video</option>
+        <option value="examen">Examen</option>
+        <option value="otro">Otro</option>
+      </select>
+      <label style="cursor:pointer">
+        <input type="file" style="display:none" multiple onchange="uploadCursoArchivo('${cursoId}',this)">
+        <span class="btn" style="font-size:12px;padding:5px 14px">⬆ Subir archivo</span>
+      </label>
+    </div>`;
+    if(!rows.length){
+      html+=`<div style="color:var(--tx3);padding:24px;text-align:center;font-size:13px">No hay archivos aún.<br><span style="font-size:11px">Subí archivos o generá PDF/PPT desde el agente IA mientras este curso está abierto.</span></div>`;
+    }else{
+      ["video","pdf","presentacion","examen","otro"].forEach(t=>{
+        if(!grupos[t]?.length)return;
+        html+=`<div style="margin-bottom:14px">
+          <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${tipoLabels[t]}</div>`;
+        grupos[t].forEach(f=>{
+          const url=`${STO}/${f.storage_path}`;
+          const kb=f.size_bytes?Math.round(f.size_bytes/1024)+" KB":"";
+          const date=f.created_at?new Date(f.created_at).toLocaleDateString("es-AR"):"";
+          html+=`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--b)">
+            <div style="flex:1;min-width:0;overflow:hidden">
+              <a href="${url}" target="_blank" style="color:var(--pu);font-size:13px;font-weight:500;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">${esc(f.nombre)}</a>
+              <div style="font-size:10px;color:var(--tx3)">${date}${kb?" · "+kb:""}${f.generado_ia?" · 🤖 IA":""}</div>
+            </div>
+            <button class="btn-icon" onclick="deleteCursoArchivo('${f.id}','${f.storage_path.replace(/'/g,"\\'")}','${cursoId}')" title="Eliminar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+          </div>`;
+        });
+        html+=`</div>`;
+      });
+    }
+    cont.innerHTML=html;
+  }catch(e){cont.innerHTML=`<div style="color:var(--re);padding:20px">Error: ${esc(e.message)}</div>`;}
+}
+
+async function _guardarArchivoEnCurso(cursoId,blob,nombre,tipo,generadoIA=false){
+  try{
+    const safe=nombre.replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,80);
+    const path=`${cursoId}/${tipo}/${Date.now()}_${safe}`;
+    const upRes=await fetch(`${SB}/storage/v1/object/curso-archivos/${path}`,{
+      method:"POST",
+      headers:{"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":blob.type||"application/octet-stream","x-upsert":"false"},
+      body:blob
+    });
+    if(!upRes.ok){const t=await upRes.text();throw new Error(t);}
+    const sess=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
+    await sb("curso_archivos",{method:"POST",body:JSON.stringify({curso_id:cursoId,tipo,nombre,storage_path:path,size_bytes:blob.size,subido_por:sess.id||null,generado_ia:generadoIA})});
+    toast(`Guardado en el curso: ${nombre}`,"ok");
+    const cont=document.getElementById(`archivos-content-${cursoId}`);
+    if(cont&&cont.parentElement&&cont.parentElement.style.display!=="none")loadCursoArchivos(cursoId);
+  }catch(e){console.error("Error guardando archivo en curso:",e);}
+}
+
+async function uploadCursoArchivo(cursoId,input){
+  const tipo=document.getElementById(`upload-tipo-${cursoId}`)?.value||"otro";
+  const files=Array.from(input.files);
+  if(!files.length)return;
+  for(const file of files){
+    toast(`Subiendo ${file.name}...`,"inf");
+    await _guardarArchivoEnCurso(cursoId,file,file.name,tipo,false);
+  }
+  input.value="";
+  loadCursoArchivos(cursoId);
+}
+
+async function deleteCursoArchivo(id,storagePath,cursoId){
+  if(!confirm("¿Eliminar este archivo?"))return;
+  try{
+    await fetch(`${SB}/storage/v1/object/curso-archivos/${storagePath}`,{method:"DELETE",headers:{"Authorization":`Bearer ${authToken||KEY}`}});
+    await sb(`curso_archivos?id=eq.${id}`,{method:"DELETE"});
+    toast("Archivo eliminado","ok");
+    loadCursoArchivos(cursoId);
+  }catch(e){toast("Error al eliminar: "+e.message,"err");}
+}
+
 // ── GENERAR ARCHIVOS CURSO IA ─────────────────────────────────────────────────
 async function crearCursoDesdeIA(){
   if(!cursoIAHistorial.length){toast("Primero charlá con el agente sobre el curso","inf");return;}
@@ -5765,12 +5862,12 @@ Secciones: ## NOMBRE DEL CURSO, ## DESCRIPCIÓN, ## OBJETIVOS GENERALES, ## OBJE
       return;
     }
 
-    if(tipo==="ppt") await _generarPPTCurso(content);
-    else _generarPDFCurso(content,tipo);
+    if(tipo==="ppt") await _generarPPTCurso(content,_cursoDetalleId);
+    else _generarPDFCurso(content,tipo,_cursoDetalleId);
   }catch(e){toast("Error al generar: "+String(e?.message||e),"err");}
 }
 
-async function _generarPPTCurso(jsonStr){
+async function _generarPPTCurso(jsonStr,cursoId=null){
   if(!window.PptxGenJS){
     try{
       await new Promise((res,rej)=>{
@@ -5830,8 +5927,13 @@ async function _generarPPTCurso(jsonStr){
     pc.addText("Metanoia SMX",{x:.5,y:1.5,w:9,h:1.2,fontSize:40,bold:true,color:WHITE,align:"center",fontFace:"Arial"});
     pc.addText("Simulacion Medica  |  Salta, Argentina",{x:.5,y:3.0,w:9,h:.7,fontSize:15,color:MUTED,align:"center"});
 
-    await pres.writeFile({fileName:`Curso_${cl(data.titulo||"Metanoia").replace(/[^a-zA-Z0-9 ]/g,"_").slice(0,40).trim()}.pptx`});
+    const fname=`Curso_${cl(data.titulo||"Metanoia").replace(/[^a-zA-Z0-9 ]/g,"_").slice(0,40).trim()}.pptx`;
+    const blob=await pres.write({outputType:"blob"});
+    const dlUrl=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=dlUrl;a.download=fname;a.click();
+    setTimeout(()=>URL.revokeObjectURL(dlUrl),2000);
     toast("PPT generado y descargado","ok");
+    if(cursoId)await _guardarArchivoEnCurso(cursoId,blob,fname,"presentacion",true);
   }catch(e){
     const msg=e?.message||String(e)||"error desconocido";
     toast("Error al generar PPT: "+msg,"err");
@@ -5839,8 +5941,8 @@ async function _generarPPTCurso(jsonStr){
   }
 }
 
-function _generarPDFCurso(content,tipo){
-  const generarPDF=()=>{
+function _generarPDFCurso(content,tipo,cursoId=null){
+  const generarPDF=async()=>{
     const {jsPDF}=window.jspdf;
     const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
     const PU=[124,58,237],DARK=[26,10,62],GRAY=[110,110,110],LGRAY=[200,200,200];
@@ -5980,8 +6082,10 @@ function _generarPDFCurso(content,tipo){
       doc.text(`Metanoia SMX - Pagina ${i} de ${pages}`,W/2,H-3,{align:"center"});
     }
 
-    doc.save(`${tipo==="examen"?"Examen_Curso":"Programa_Curso"}_Metanoia.pdf`);
+    const pdfFname=`${tipo==="examen"?"Examen_Curso":"Programa_Curso"}_Metanoia.pdf`;
+    doc.save(pdfFname);
     toast("PDF generado y descargado","ok");
+    if(cursoId){const pdfBlob=doc.output("blob");await _guardarArchivoEnCurso(cursoId,pdfBlob,pdfFname,tipo==="examen"?"examen":"pdf",true);}
   };
 
   if(window.jspdf){generarPDF();}
