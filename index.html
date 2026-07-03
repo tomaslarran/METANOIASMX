@@ -5744,7 +5744,7 @@ Secciones: ## NOMBRE DEL CURSO, ## DESCRIPCIÓN, ## OBJETIVOS GENERALES, ## OBJE
     const res=await fetch(`${SB}/functions/v1/agente-cursos`,{
       method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
-      body:JSON.stringify({message:prompts[tipo],historial:cursoIAHistorial.slice(-6),canal:"generacion"})
+      body:JSON.stringify({message:prompts[tipo],historial:cursoIAHistorial.slice(-30),canal:"generacion"})
     });
     const data=await res.json();
     if(data.error)throw new Error(data.error);
