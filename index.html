@@ -5750,9 +5750,19 @@ Secciones: ## NOMBRE DEL CURSO, ## DESCRIPCIÓN, ## OBJETIVOS GENERALES, ## OBJE
     if(data.error)throw new Error(data.error);
     const content=data.respuesta||"";
 
+    // Si el agente respondió en lenguaje natural (sin JSON), todavía no tiene info suficiente
+    if(tipo==="ppt"&&!content.includes('"slides"')){
+      toast("Completá el diseño del curso con el agente antes de generar el PPT","inf");
+      return;
+    }
+    if(tipo!=="ppt"&&content.trim().split("\n").length<5){
+      toast("El agente no generó contenido suficiente. Completá el diseño primero.","inf");
+      return;
+    }
+
     if(tipo==="ppt") await _generarPPTCurso(content);
     else _generarPDFCurso(content,tipo);
-  }catch(e){toast("Error al generar: "+e.message,"err");}
+  }catch(e){toast("Error al generar: "+String(e?.message||e),"err");}
 }
 
 async function _generarPPTCurso(jsonStr){
