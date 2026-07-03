@@ -5645,9 +5645,9 @@ async function loadCursoArchivos(cursoId){
     const tipoLabels={video:"🎥 Videos",pdf:"📄 PDFs",presentacion:"📊 Presentaciones",examen:"📋 Exámenes",otro:"📎 Otros"};
     const grupos={};
     rows.forEach(r=>{(grupos[r.tipo]||(grupos[r.tipo]=[])).push(r);});
-    let html=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+    let html=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
       <label style="font-size:12px;color:var(--tx3)">Tipo:</label>
-      <select class="mini-sel" id="upload-tipo-${cursoId}">
+      <select class="mini-sel" id="upload-tipo-${cursoId}" onchange="toggleVideoLink('${cursoId}',this.value)">
         <option value="pdf">PDF</option>
         <option value="presentacion">Presentación</option>
         <option value="video">Video</option>
@@ -5658,6 +5658,14 @@ async function loadCursoArchivos(cursoId){
         <input type="file" style="display:none" multiple onchange="uploadCursoArchivo('${cursoId}',this)">
         <span class="btn" style="font-size:12px;padding:5px 14px">⬆ Subir archivo</span>
       </label>
+    </div>
+    <div id="video-link-wrap-${cursoId}" style="display:none;margin-bottom:12px">
+      <div style="font-size:11px;color:var(--tx3);margin-bottom:5px">🎥 Los videos se publican en YouTube. Pegá el link una vez publicado:</div>
+      <div style="display:flex;gap:6px">
+        <input class="fi" id="video-link-input-${cursoId}" placeholder="https://youtube.com/watch?v=..." style="flex:1;font-size:12px">
+        <input class="fi" id="video-link-nombre-${cursoId}" placeholder="Nombre del video" style="flex:1;font-size:12px">
+        <button class="btn" style="font-size:12px;padding:5px 12px;white-space:nowrap" onclick="addVideoLink('${cursoId}')">Agregar</button>
+      </div>
     </div>`;
     if(!rows.length){
       html+=`<div style="color:var(--tx3);padding:24px;text-align:center;font-size:13px">No hay archivos aún.<br><span style="font-size:11px">Subí archivos o generá PDF/PPT desde el agente IA mientras este curso está abierto.</span></div>`;
@@ -5667,8 +5675,8 @@ async function loadCursoArchivos(cursoId){
         html+=`<div style="margin-bottom:14px">
           <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${tipoLabels[t]}</div>`;
         grupos[t].forEach(f=>{
-          const url=`${STO}/${f.storage_path}`;
-          const kb=f.size_bytes?Math.round(f.size_bytes/1024)+" KB":"";
+          const url=f.storage_path.startsWith("http")?f.storage_path:`${STO}/${f.storage_path}`;
+          const kb=f.size_bytes?Math.round(f.size_bytes/1024)+" KB":f.storage_path.startsWith("http")?"🔗 link externo":"";
           const date=f.created_at?new Date(f.created_at).toLocaleDateString("es-AR"):"";
           html+=`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--b)">
             <div style="flex:1;min-width:0;overflow:hidden">
@@ -5703,22 +5711,56 @@ async function _guardarArchivoEnCurso(cursoId,blob,nombre,tipo,generadoIA=false)
   }catch(e){console.error("Error guardando archivo en curso:",e);}
 }
 
+function toggleVideoLink(cursoId,tipo){
+  const wrap=document.getElementById(`video-link-wrap-${cursoId}`);
+  if(wrap)wrap.style.display=tipo==="video"?"block":"none";
+}
+
+async function addVideoLink(cursoId){
+  const urlEl=document.getElementById(`video-link-input-${cursoId}`);
+  const nomEl=document.getElementById(`video-link-nombre-${cursoId}`);
+  const url=(urlEl?.value||"").trim();
+  const nombre=(nomEl?.value||"").trim()||url;
+  if(!url.startsWith("http")){toast("Pegá una URL válida","err");return;}
+  try{
+    const sess=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
+    await sb("curso_archivos",{method:"POST",body:JSON.stringify({curso_id:cursoId,tipo:"video",nombre,storage_path:url,size_bytes:null,subido_por:sess.id||null,generado_ia:false})});
+    toast("Video agregado","ok");
+    if(urlEl)urlEl.value="";if(nomEl)nomEl.value="";
+    loadCursoArchivos(cursoId);
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
 async function uploadCursoArchivo(cursoId,input){
   const tipo=document.getElementById(`upload-tipo-${cursoId}`)?.value||"otro";
   const files=Array.from(input.files);
   if(!files.length)return;
+  const MAX_MB=45;
+  let alguboSubido=false;
   for(const file of files){
+    const mb=file.size/1024/1024;
+    if(mb>MAX_MB){
+      if(tipo==="video"){
+        toast(`"${file.name}" (${mb.toFixed(0)} MB) — Los videos van a YouTube. Agregá el link de YouTube una vez publicado.`,"inf");
+      }else{
+        toast(`"${file.name}" supera el límite de ${MAX_MB} MB. Dividilo o usá un link externo.`,"err");
+      }
+      continue;
+    }
     toast(`Subiendo ${file.name}...`,"inf");
     await _guardarArchivoEnCurso(cursoId,file,file.name,tipo,false);
+    alguboSubido=true;
   }
   input.value="";
-  loadCursoArchivos(cursoId);
+  if(alguboSubido)loadCursoArchivos(cursoId);
 }
 
 async function deleteCursoArchivo(id,storagePath,cursoId){
   if(!confirm("¿Eliminar este archivo?"))return;
   try{
-    await fetch(`${SB}/storage/v1/object/curso-archivos/${storagePath}`,{method:"DELETE",headers:{"Authorization":`Bearer ${authToken||KEY}`}});
+    if(!storagePath.startsWith("http")){
+      await fetch(`${SB}/storage/v1/object/curso-archivos/${storagePath}`,{method:"DELETE",headers:{"Authorization":`Bearer ${authToken||KEY}`}});
+    }
     await sb(`curso_archivos?id=eq.${id}`,{method:"DELETE"});
     toast("Archivo eliminado","ok");
     loadCursoArchivos(cursoId);
