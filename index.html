@@ -292,6 +292,7 @@ body.rol-logistica .sgroup-label{display:none!important}
 body.rol-logistica .sitem.logi-visible,
 body.rol-logistica .ssub.logi-visible{display:flex!important}
 body.rol-logistica .sgroup-items{max-height:600px!important}
+body.rol-instructor.perm-cofradia #nav-cofradia{display:flex!important}
 /* Cash flow inline edit */
 td.cf-editing{padding:0!important;outline:2px solid var(--ac);outline-offset:-2px;background:color-mix(in srgb,var(--ac) 8%,var(--surf))!important;position:relative;z-index:5}
 td.cf-editing:hover{background:color-mix(in srgb,var(--ac) 8%,var(--surf))!important}
@@ -11867,6 +11868,8 @@ function applyRoleUI(rol){
   if(rol==="comunicaciones") document.body.classList.add("rol-comunicaciones");
   if(rol==="instructor")     document.body.classList.add("rol-instructor");
   if(rol==="logistica")      document.body.classList.add("rol-logistica");
+  const perms=loggedUser?.permisos_extra||[];
+  if(perms.includes("cofradia")) document.body.classList.add("perm-cofradia");
 }
 
 async function enterPortalProveedor(user,isNewLogin){
@@ -12464,14 +12467,16 @@ async function loadUsuariosPage(){
   if(!wrap)return;
   wrap.innerHTML=`<div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>`;
   try{
-    const users=await sb("usuarios?select=id,nombre,email,rol,estado,invitado_at&order=nombre");
+    const users=await sb("usuarios?select=id,nombre,email,rol,estado,invitado_at,permisos_extra&order=nombre");
     renderUsuariosPage(users||[]);
   }catch(e){
     wrap.innerHTML=`<p style="color:var(--re);padding:20px">Error al cargar usuarios.</p>`;
   }
 }
 
+let _usuariosData=[];
 function renderUsuariosPage(users){
+  _usuariosData=users;
   const wrap=document.getElementById("usuarios-list");
   const rolColors={admin:"#7C3AED",instructor:"#3B82F6",logistica:"#10B981",comunicaciones:"#EC4899",proveedor:"#F59E0B"};
   const rolLabels={admin:"Admin",instructor:"Instructor",logistica:"Logística",comunicaciones:"Comunicaciones",proveedor:"Proveedor"};
@@ -12501,6 +12506,7 @@ function renderUsuariosPage(users){
           <option value="comunicaciones"${rol==="comunicaciones"?" selected":""}>Comunicaciones</option>
           <option value="proveedor"${rol==="proveedor"?" selected":""}>Proveedor externo</option>
         </select>`:""}
+        ${rol==="instructor"&&!isPending?(()=>{const hasCof=(u.permisos_extra||[]).includes("cofradia");return`<button class="btn" style="font-size:10px;padding:2px 8px;${hasCof?"background:rgba(124,58,237,.15);border-color:rgba(124,58,237,.4);color:var(--pu)":""}" onclick="toggleCofradiaAccess('${u.id}')" title="${hasCof?"Quitar acceso COFRADIA":"Dar acceso COFRADIA"}">🌐 COFRADIA${hasCof?" ✓":""}</button>`;})():""}
         <button class="btn" style="font-size:11px;padding:3px 9px" onclick="openEditUsuario('${u.id}','${esc(u.nombre||"")}','${esc(u.email||"")}')">✏️ Editar</button>
         ${!isSelf&&!isPending?`<button class="btn" style="font-size:11px;padding:3px 9px" onclick="toggleActivarUsuario('${u.id}',${isSuspended})">${isSuspended?"▶ Activar":"⏸ Pausar"}</button>`:""}
         ${rol==="proveedor"?`<button class="btn sec" style="font-size:11px;padding:3px 9px" onclick="openCuentaCorriente('${u.id}','${esc(u.nombre)}')">📊 Cuenta</button>`:""}
@@ -12526,6 +12532,19 @@ function renderUsuariosPage(users){
   }
   if(!html)html=`<div class="empty" style="text-align:center;padding:32px 0;color:var(--tx3)">No hay usuarios registrados.</div>`;
   wrap.innerHTML=html;
+}
+
+async function toggleCofradiaAccess(id){
+  const u=_usuariosData.find(x=>x.id===id);
+  if(!u)return;
+  const perms=u.permisos_extra||[];
+  const hasCof=perms.includes("cofradia");
+  const newPerms=hasCof?perms.filter(p=>p!=="cofradia"):[...perms,"cofradia"];
+  try{
+    await sb(`usuarios?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({permisos_extra:newPerms})});
+    toast(hasCof?"Acceso COFRADIA removido":"Acceso COFRADIA habilitado","ok");
+    loadUsuariosPage();
+  }catch(e){toast("Error: "+e.message,"err");}
 }
 
 async function toggleActivarUsuario(id, activar){
