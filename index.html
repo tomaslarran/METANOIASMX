@@ -5616,6 +5616,9 @@ async function createCurso(){
       }
     }
     closeModal("modal-curso");renderCursos();updateSideBadges();toast(`"${nombre}" creado`,"ok");
+    await selectCurso(created.id);
+    const archivosTab=document.querySelector(`[onclick*="cd-archivos-${created.id}"]`);
+    if(archivosTab)archivosTab.click();
     // Notificar a usuarios con alerta_nuevo_curso activa
     try{
       const destinos=notifConfigs.filter(c=>c.alerta_nuevo_curso&&c.usuario_id!==loggedUser?.id);
