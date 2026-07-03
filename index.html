@@ -5756,47 +5756,67 @@ Secciones: ## NOMBRE DEL CURSO, ## DESCRIPCIÓN, ## OBJETIVOS GENERALES, ## OBJE
 }
 
 async function _generarPPTCurso(jsonStr){
-  // Cargar pptxgenjs desde CDN si no está
   if(!window.PptxGenJS){
-    await new Promise((res,rej)=>{
-      const s=document.createElement("script");
-      s.src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/libs/pptxgen.bundle.js";
-      s.onload=res;s.onerror=rej;
-      document.head.appendChild(s);
-    });
+    try{
+      await new Promise((res,rej)=>{
+        const s=document.createElement("script");
+        s.src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js";
+        s.onload=res;s.onerror=rej;
+        document.head.appendChild(s);
+      });
+    }catch(e){toast("No se pudo cargar la librería PPT. Revisá la conexión.","err");return;}
   }
   let data;
   try{
-    const match=jsonStr.match(/\{[\s\S]*\}/);
+    // Extraer JSON aunque el agente agregue texto extra alrededor
+    const match=jsonStr.match(/\{[\s\S]*"slides"[\s\S]*\}/);
     data=JSON.parse(match?.[0]||jsonStr);
-  }catch(e){toast("No pude parsear la respuesta del agente","err");return;}
+  }catch(e){
+    toast("El agente no devolvió JSON válido para el PPT. Intentá de nuevo.","err");
+    console.error("PPT parse error:",e,jsonStr.slice(0,300));
+    return;
+  }
+  if(!data.slides?.length){toast("El agente no generó slides. Intentá de nuevo.","err");return;}
+
+  // Limpia caracteres no soportados
+  const cl=s=>(s||"").replace(/[^\x00-\xFF]/g,c=>({'•':'-','→':'->','←':'<-','✓':'v','✗':'x','…':'...'}[c]||'')).replace(/\*\*(.*?)\*\*/g,"$1").replace(/\*(.*?)\*/g,"$1");
 
   const pres=new PptxGenJS();
   pres.layout="LAYOUT_16x9";
-  pres.theme={headFontFace:"Arial",bodyFontFace:"Arial"};
-  const PU="#7C3AED", WHITE="#FFFFFF", LIGHT="#F5F3FF", DARK="#1A0A3E";
+  const PU="#7C3AED",WHITE="#FFFFFF",LIGHT="#F5F3FF",DARK="#1A0A3E",MUTED="#C4B5FD";
 
   // Portada
   const portada=pres.addSlide();
   portada.background={color:DARK};
-  portada.addShape(pres.shapes.RECTANGLE,{x:0,y:4.5,w:10,h:1.1,fill:{color:PU}});
-  portada.addText(data.titulo||"Curso Metanoia SMX",{x:.5,y:1.2,w:9,h:1.5,fontSize:36,bold:true,color:WHITE,fontFace:"Arial"});
-  portada.addText(data.subtitulo||"",{x:.5,y:2.9,w:9,h:.8,fontSize:18,color:"#C4B5FD",fontFace:"Arial"});
-  portada.addText("Metanoia SMX · Simulación Médica · Salta, Argentina",{x:.5,y:4.6,w:9,h:.6,fontSize:11,color:WHITE,align:"center"});
+  portada.addShape(pres.ShapeType?.rect||"rect",{x:0,y:4.4,w:10,h:1.15,fill:{color:PU}});
+  portada.addText(cl(data.titulo)||"Curso Metanoia SMX",{x:.5,y:1.0,w:9,h:1.8,fontSize:34,bold:true,color:WHITE,fontFace:"Arial",valign:"middle"});
+  portada.addText(cl(data.subtitulo)||"",{x:.5,y:2.9,w:9,h:.9,fontSize:17,color:MUTED,fontFace:"Arial"});
+  portada.addText("Metanoia SMX  |  Simulacion Medica  |  Salta, Argentina",{x:.5,y:4.55,w:9,h:.6,fontSize:10,color:WHITE,align:"center"});
 
   // Slides de contenido
-  (data.slides||[]).forEach((slide)=>{
+  (data.slides||[]).forEach(slide=>{
     const s=pres.addSlide();
     s.background={color:LIGHT};
-    s.addShape(pres.shapes.RECTANGLE,{x:0,y:0,w:10,h:.9,fill:{color:PU}});
-    s.addText(slide.titulo||"",{x:.3,y:0,w:9.4,h:.9,fontSize:20,bold:true,color:WHITE,valign:"middle"});
-    const puntos=(slide.puntos||[]).map(p=>({text:"• "+p,options:{breakLine:true,fontSize:15,color:DARK}}));
-    if(puntos.length)s.addText(puntos,{x:.5,y:1.1,w:9,h:4,valign:"top",fontFace:"Arial"});
-    s.addText("Metanoia SMX",{x:.3,y:5.1,w:9.4,h:.3,fontSize:9,color:"#9CA3AF",align:"right"});
+    // Header bar
+    s.addShape(pres.ShapeType?.rect||"rect",{x:0,y:0,w:10,h:.88,fill:{color:PU}});
+    s.addText(cl(slide.titulo)||"",{x:.3,y:0,w:9.4,h:.88,fontSize:19,bold:true,color:WHITE,valign:"middle",fontFace:"Arial"});
+    // Puntos
+    const puntos=(slide.puntos||[]).map(p=>({text:"  "+cl(p),options:{bullet:{type:"bullet"},breakLine:true,fontSize:14,color:DARK,fontFace:"Arial",paraSpaceAfter:4}}));
+    if(puntos.length)s.addText(puntos,{x:.4,y:1.05,w:9.2,h:4.1,valign:"top"});
+    // Footer
+    s.addText("Metanoia SMX",{x:.3,y:5.1,w:9.4,h:.3,fontSize:8,color:"#9CA3AF",align:"right",fontFace:"Arial"});
   });
 
-  await pres.writeFile({fileName:`Curso_${(data.titulo||"Metanoia").replace(/[^a-zA-Z0-9]/g,"_")}.pptx`});
-  toast("✅ PPT generado y descargado","ok");
+  // Slide de cierre
+  const cierre=pres.addSlide();
+  cierre.background={color:PU};
+  cierre.addText("Metanoia SMX",{x:.5,y:1.8,w:9,h:1,fontSize:36,bold:true,color:WHITE,align:"center"});
+  cierre.addText("Simulacion Medica | Salta, Argentina",{x:.5,y:3.0,w:9,h:.6,fontSize:14,color:MUTED,align:"center"});
+
+  try{
+    await pres.writeFile({fileName:`Curso_${cl(data.titulo||"Metanoia").replace(/[^a-zA-Z0-9 ]/g,"_").trim()}.pptx`});
+    toast("PPT generado y descargado","ok");
+  }catch(e){toast("Error al guardar el PPT: "+e.message,"err");}
 }
 
 function _generarPDFCurso(content,tipo){
