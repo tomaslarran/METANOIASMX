@@ -291,6 +291,7 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 ### Bloqueados por externos
 - [ ] LinkedIn sync — esperando aprobación Community Management API (app "Metanoia CMS", enviado 2 Jun 2026)
 - [ ] Integración E-learning — transmisión automática de cursos a plataforma.metanoiasmx.com + facturación automática vía Finnegans API
+- [ ] **Meta Business — resubmisión app Instagram DM** — se presentó la app para el permiso `instagram_manage_messages` (responder DMs desde el agente-mensajes) y fue rechazada. Pendiente revisar motivo del rechazo y reenviar con documentación completa (política de privacidad, caso de uso, capturas de pantalla del flujo). Ver mañana con Tomás.
 
 ### Alumnos / Integración Finnegans
 - [ ] Importador masivo Excel → Supabase + Finnegans API — leer plantilla, validar CUIT, crear cliente en Finnegans por cada alumno, insertar en `alumnos` solo si Finnegans responde OK
@@ -386,6 +387,36 @@ ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS cuit text;
 ALTER TABLE cursos DROP CONSTRAINT IF EXISTS cursos_estado_check;
 ALTER TABLE cursos ADD CONSTRAINT cursos_estado_check CHECK (estado IN ('Borrador','Convocatoria','Inscripciones','En curso','Educación médica continua','Completado','Cancelado'));
 ```
+
+## Implementado (5 Jul 2026) — Archivos de cursos, cola de video, system prompts, planes plataforma
+
+### Tab Archivos en Cursos
+- ✅ Tab "📁 Archivos" en detalle de curso — visible para instructores (`cd-tab-archivos`)
+- ✅ Bucket Supabase Storage `curso-archivos` + tabla `curso_archivos` (tipo, nombre, storage_path, size_bytes, generado_ia)
+- ✅ Upload de archivos por tipo (programa, examen, presentacion, pdf, otro) con validación 45MB
+- ✅ Videos van a YouTube: si supera 45MB el bot sugiere subir a YouTube y pegar el link
+- ✅ Links de YouTube almacenados directamente en `storage_path`
+- ✅ Auto-guardado de PDFs y PPTs generados por IA al curso correspondiente
+- ✅ Auto-apertura del tab Archivos al crear un curso desde IA
+
+### Cola de edición de video
+- ✅ Sección "🎬 Cola de edición" dentro del tab Archivos
+- ✅ Modal para solicitar edición: nombre, URL del video (opcional), instrucciones en lenguaje natural
+- ✅ Tabla `video_cola` con estado machine: pendiente → transcribiendo → con_spec → en_edicion → listo
+- ✅ Edge Function `procesar-video`: transcripción con AssemblyAI + spec técnica con Claude Haiku
+- ✅ Admin puede gestionar cola, generar spec, marcar como listo y agregar el video final al curso
+
+### System prompts — framework 6 bloques
+- ✅ `agente-mensajes`: reescritura completa con ROL/CONTEXTO/INSTRUCCIÓN/FORMATO/RESTRICCIONES/EJEMPLOS
+- ✅ `agente-mensajes`: FAQ ampliado con info de Darwin AI (tecnología, especialidades, modalidades, quiénes pueden participar)
+- ✅ `agente-mensajes`: 5 ejemplos de conversación reales (consulta inicial, cursos, planes, autorespuesta, escalación)
+- ✅ `agente-cursos`: ROL y CONTEXTO explícitos al inicio, RESTRICCIONES unificadas, EJEMPLOS de intake guiado
+
+### Planes plataforma
+- ✅ Tabla `plataforma_planes` en Supabase — nombre, descripcion, precio_mensual, precio_anual, sin_costo, requisito, activo, orden
+- ✅ 5 planes cargados: Médico COLMEDSA, Médico Externo, Residente MSP, PEMCS, Personal No Médico
+- ✅ `agente-mensajes` lee los planes dinámicamente en cada request — precios actualizables sin redeploy
+- ✅ Módulo `pg-planes` en el panel (nav Cursos → Planes plataforma): CRUD de planes con modal, toggle sin costo
 
 ## Implementado (23 Jun 2026) — Agente mensajes y mejoras continuas
 - ✅ agente-mensajes: bot 24/7 para IG DM / FB Messenger / WhatsApp — Claude Haiku, escalación al equipo vía WA, transcripción de audio con Groq/Whisper, visión para imágenes
