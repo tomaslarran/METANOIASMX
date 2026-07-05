@@ -291,6 +291,12 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
     .eq("estado", "aprobada")
     .order("created_at", { ascending: true });
 
+  const { data: planes } = await supabase
+    .from("plataforma_planes")
+    .select("nombre, descripcion, precio_mensual, precio_anual, sin_costo, requisito")
+    .eq("activo", true)
+    .order("orden", { ascending: true });
+
   // Armar mensajes para Claude
   const messages: any[] = [];
   if (historial) {
@@ -323,7 +329,7 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
     body: JSON.stringify({
       model: imageBase64 ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001",
       max_tokens: 600,
-      system: buildSistema(cursos ?? [], publicaciones ?? [], fromName, plataforma, mejoras ?? []),
+      system: buildSistema(cursos ?? [], publicaciones ?? [], fromName, plataforma, mejoras ?? [], planes ?? []),
       messages,
     }),
   });
@@ -417,7 +423,7 @@ async function downloadMedia(mediaId: string, token: string): Promise<{ buffer: 
 }
 
 // ── System prompt ─────────────────────────────────────────────────────────────
-function buildSistema(cursos: any[], publicaciones: any[], fromName: string, plataforma: string, mejoras: any[] = []): string {
+function buildSistema(cursos: any[], publicaciones: any[], fromName: string, plataforma: string, mejoras: any[] = [], planes: any[] = []): string {
   const hoy = new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Salta" });
 
   const cursosTexto = cursos.length > 0
@@ -476,20 +482,18 @@ Ofrecemos:
 ### Planes de la plataforma online
 Si preguntan por la plataforma, suscripción, acceso online o planes:
 
-**Médico matriculado COLMEDSA** — $8.000/mes · $90.000/año
-Acceso completo + simulaciones incluidas + Programa EMC de Salta. Requiere validación de matrícula en Colmedsa.
-
-**Médico matriculado externo** — $10.000/mes · $110.000/año
-Para médicos matriculados fuera de Colmedsa. Acceso completo + simulaciones. Requiere validación de matrícula.
-
-**Residente Ministerio de Salud Pública de Salta** — Sin costo
-Acceso libre durante la residencia. Requiere validación de residencia en el Ministerio. Si no recibieron acceso: administracion@metanoiasmx.com
-
-**Programa de Educación Médica Continua de Salta (PEMCS)** — Sin costo para médicos COLMEDSA
-Solo acceso al programa PEMCS. Requiere validación de matrícula.
-
-**Personal de Salud no médico** — $4.000/mes · $40.000/año
-Enfermeros, kinesiólogos, instrumentadores, técnicos y afines. Acceso a contenidos y simulaciones habilitadas.
+${planes.length > 0
+  ? planes.map((p: any) => {
+      const precio = p.sin_costo
+        ? "Sin costo"
+        : [
+            p.precio_mensual ? `$${Number(p.precio_mensual).toLocaleString("es-AR")}/mes` : null,
+            p.precio_anual ? `$${Number(p.precio_anual).toLocaleString("es-AR")}/año` : null,
+          ].filter(Boolean).join(" · ");
+      return `**${p.nombre}** — ${precio}\n${p.descripcion ?? ""}${p.requisito ? `\nRequiere: ${p.requisito}` : ""}`;
+    }).join("\n\n")
+  : "Consultá con el equipo los planes disponibles."
+}
 
 ### Cursos presenciales disponibles
 ${cursosTexto}
@@ -551,12 +555,7 @@ Usuario: "¿Tienen cursos de laparoscopía?"
 Asistente: "¡Sí! Tenemos entrenamiento en cirugía laparoscópica con simuladores especializados y métricas objetivas (GOALS/OSATS). Es uno de nuestros fuertes 💪 Te paso el link para ver la oferta actual y anotarte: https://plataforma.metanoiasmx.com/login — ¿Sos médico o residente? Así te oriento mejor con el plan que más te conviene."
 
 Usuario: "Cuánto sale la suscripción a la plataforma?"
-Asistente: "¡Buena pregunta! Depende de tu perfil:
-• Médico COLMEDSA: $8.000/mes o $90.000/año
-• Médico matriculado externo: $10.000/mes o $110.000/año
-• Residente del Ministerio de Salud de Salta: sin costo 🎓
-• Personal de salud no médico (enfermeros, kinesiólogos, etc.): $4.000/mes o $40.000/año
-¿Cuál es tu situación? Te digo exactamente cómo accedés."
+Asistente: "¡Buena pregunta! Depende de tu perfil — tenemos planes para médicos matriculados en Colmedsa, médicos externos, residentes del Ministerio de Salta (sin costo), personal de salud no médico y más. ¿Cuál es tu situación? Así te digo exactamente el precio y cómo accedés 😊"
 
 Usuario: "Gracias por ponerse en contacto con nosotros, pronto nos comunicaremos."
 Asistente: {"ignorar":true}
