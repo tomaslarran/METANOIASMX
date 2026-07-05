@@ -3166,6 +3166,32 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
 <!-- MODAL NUEVO CURSO -->
 <!-- ══ MODAL CREAR CURSO CON IA ══ -->
+<div class="mov" id="modal-solicitar-edicion" onclick="if(event.target===this)closeModal('modal-solicitar-edicion')">
+  <div class="modal" style="max-width:540px">
+    <div class="mt"><span>🎬 Solicitar edición de video</span><button class="mc" onclick="closeModal('modal-solicitar-edicion')">✕</button></div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+      <input type="hidden" id="sev-curso-id">
+      <div class="fg form-full">
+        <label class="fl">Nombre del video *</label>
+        <input class="fi" id="sev-nombre" placeholder="Ej: Módulo 3 — Acceso vascular venoso central">
+      </div>
+      <div class="fg form-full">
+        <label class="fl">URL del video crudo <span style="color:var(--tx3);font-weight:400">(Google Drive / Dropbox / link directo — opcional)</span></label>
+        <input class="fi" id="sev-url" placeholder="https://drive.google.com/...">
+        <div style="font-size:10px;color:var(--tx3);margin-top:3px">Necesario para transcripción automática con timestamps reales</div>
+      </div>
+      <div class="fg form-full">
+        <label class="fl">Instrucciones de edición *</label>
+        <textarea class="fta" id="sev-instrucciones" rows="5" placeholder="Describí qué querés editar en lenguaje natural:&#10;• Cortar los primeros 2 minutos (prueba de cámara)&#10;• Agregar intro Metanoia al inicio&#10;• Subtítulos en español&#10;• Cortar preguntas del final (últimos 5 min)"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="closeModal('modal-solicitar-edicion')">Cancelar</button>
+        <button class="btn" id="sev-btn" onclick="submitSolicitarEdicion()">Enviar solicitud</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="mov" id="modal-curso-ia" onclick="if(event.target===this)closeModal('modal-curso-ia')">
   <div class="modal" style="max-width:600px;height:80vh;display:flex;flex-direction:column">
     <div class="mt" style="display:flex;justify-content:space-between;align-items:center">
@@ -4618,6 +4644,13 @@ async function selectCurso(id){
       </div>
       <div id="cd-archivos-${id}" style="display:none">
         <div id="archivos-content-${id}" style="padding:4px 0"><div style="color:var(--tx3);padding:24px;text-align:center">Cargando...</div></div>
+        <div style="border-top:1px solid var(--b);margin-top:16px;padding-top:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px">🎬 Cola de edición de video</div>
+            <button class="btn" style="font-size:12px;padding:5px 12px" onclick="openSolicitarEdicion('${id}')">+ Solicitar edición</button>
+          </div>
+          <div id="videocola-content-${id}"><div style="color:var(--tx3);font-size:12px;padding:8px 0">Cargando...</div></div>
+        </div>
       </div>
     </div>
   </div>`;
@@ -5692,6 +5725,7 @@ async function loadCursoArchivos(cursoId){
       });
     }
     cont.innerHTML=html;
+    loadVideoCola(cursoId);
   }catch(e){cont.innerHTML=`<div style="color:var(--re);padding:20px">Error: ${esc(e.message)}</div>`;}
 }
 
@@ -5711,6 +5745,110 @@ async function _guardarArchivoEnCurso(cursoId,blob,nombre,tipo,generadoIA=false)
     const cont=document.getElementById(`archivos-content-${cursoId}`);
     if(cont&&cont.parentElement&&cont.parentElement.style.display!=="none")loadCursoArchivos(cursoId);
   }catch(e){console.error("Error guardando archivo en curso:",e);}
+}
+
+// ── COLA DE EDICIÓN DE VIDEO ──────────────────────────────────────────────────
+function openSolicitarEdicion(cursoId){
+  document.getElementById("sev-curso-id").value=cursoId;
+  document.getElementById("sev-nombre").value="";
+  document.getElementById("sev-url").value="";
+  document.getElementById("sev-instrucciones").value="";
+  openModal("modal-solicitar-edicion");
+  setTimeout(()=>document.getElementById("sev-nombre")?.focus(),200);
+}
+
+async function submitSolicitarEdicion(){
+  const cursoId=document.getElementById("sev-curso-id").value;
+  const nombre=document.getElementById("sev-nombre").value.trim();
+  const instrucciones=document.getElementById("sev-instrucciones").value.trim();
+  if(!nombre){toast("Escribí el nombre del video","err");return;}
+  if(!instrucciones){toast("Describí las instrucciones de edición","err");return;}
+  const btn=document.getElementById("sev-btn");
+  btn.disabled=true;btn.textContent="Enviando...";
+  try{
+    const sess=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
+    await sb("video_cola",{method:"POST",body:JSON.stringify({
+      curso_id:cursoId,
+      nombre,
+      video_url:document.getElementById("sev-url").value.trim()||null,
+      instrucciones,
+      estado:"pendiente",
+      subido_por:sess.id||null
+    })});
+    toast("Solicitud enviada — el equipo la procesará pronto","ok");
+    closeModal("modal-solicitar-edicion");
+    loadVideoCola(cursoId);
+  }catch(e){toast("Error: "+e.message,"err");}
+  finally{btn.disabled=false;btn.textContent="Enviar solicitud";}
+}
+
+async function loadVideoCola(cursoId){
+  const cont=document.getElementById(`videocola-content-${cursoId}`);
+  if(!cont)return;
+  try{
+    const rows=await sb(`video_cola?curso_id=eq.${cursoId}&order=created_at.desc`);
+    const esAdmin=!document.body.classList.contains("rol-instructor")&&!document.body.classList.contains("rol-comunicaciones")&&!document.body.classList.contains("rol-logistica");
+    const estadoBadgeV=e=>({pendiente:`<span style="background:#FEF3C7;color:#92400E;font-size:10px;padding:2px 6px;border-radius:4px">⏳ Pendiente</span>`,transcribiendo:`<span style="background:#DBEAFE;color:#1E40AF;font-size:10px;padding:2px 6px;border-radius:4px">🎙 Transcribiendo</span>`,con_spec:`<span style="background:#EDE9FE;color:#5B21B6;font-size:10px;padding:2px 6px;border-radius:4px">✅ Spec lista</span>`,en_edicion:`<span style="background:#FEE2E2;color:#991B1B;font-size:10px;padding:2px 6px;border-radius:4px">✂️ En edición</span>`,listo:`<span style="background:#D1FAE5;color:#065F46;font-size:10px;padding:2px 6px;border-radius:4px">✅ Listo</span>`,error:`<span style="background:#FEE2E2;color:#991B1B;font-size:10px;padding:2px 6px;border-radius:4px">❌ Error</span>`}[e]||e);
+    if(!rows.length){cont.innerHTML=`<div style="color:var(--tx3);font-size:12px;padding:8px 0">No hay solicitudes de edición para este curso.</div>`;return;}
+    cont.innerHTML=rows.map(r=>{
+      const date=r.created_at?new Date(r.created_at).toLocaleDateString("es-AR"):"";
+      return`<div style="border:1px solid var(--b);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">
+        <div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;color:var(--tx)">${esc(r.nombre)}</div>
+            <div style="font-size:10px;color:var(--tx3);margin-top:2px">${date} · ${estadoBadgeV(r.estado)}</div>
+          </div>
+          ${esAdmin?`<div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${r.estado==="pendiente"?`<button class="btn" style="font-size:11px;padding:4px 10px" onclick="generarSpecVideo('${r.id}','${cursoId}')">🤖 Generar spec</button>`:""}
+            ${r.estado==="con_spec"?`<button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="updateVideoColaEstado('${r.id}','en_edicion','${cursoId}')">▶ En edición</button>`:""}
+            ${r.estado==="en_edicion"?`<button class="btn" style="font-size:11px;padding:4px 10px" onclick="marcarVideoListo('${r.id}','${cursoId}')">✅ Marcar listo</button>`:""}
+          </div>`:""}
+        </div>
+        ${r.instrucciones?`<div style="font-size:11px;color:var(--tx3);margin-top:6px;padding:6px 8px;background:var(--bg3);border-radius:4px;white-space:pre-wrap">${esc(r.instrucciones)}</div>`:""}
+        ${r.spec_ia?`<details style="margin-top:6px"><summary style="font-size:11px;color:var(--pu);cursor:pointer;font-weight:600">📋 Ver spec de edición</summary><pre style="font-size:10px;color:var(--tx2);white-space:pre-wrap;margin-top:4px;padding:8px;background:var(--bg3);border-radius:4px;overflow-x:auto">${esc(r.spec_ia)}</pre></details>`:""}
+        ${r.youtube_url?`<div style="margin-top:6px"><a href="${esc(r.youtube_url)}" target="_blank" style="font-size:12px;color:var(--pu);font-weight:500">▶ Ver en YouTube</a></div>`:""}
+      </div>`;
+    }).join("");
+  }catch(e){cont.innerHTML=`<div style="color:var(--re);font-size:12px">Error al cargar cola: ${esc(e.message)}</div>`;}
+}
+
+async function generarSpecVideo(colaId,cursoId){
+  toast("Generando spec con IA...","inf");
+  try{
+    const res=await fetch(`${SB}/functions/v1/procesar-video`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
+      body:JSON.stringify({cola_id:colaId})
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error);
+    toast("Spec generada","ok");
+    loadVideoCola(cursoId);
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function updateVideoColaEstado(colaId,estado,cursoId){
+  try{
+    await sb(`video_cola?id=eq.${colaId}`,{method:"PATCH",body:JSON.stringify({estado,updated_at:new Date().toISOString()})});
+    loadVideoCola(cursoId);
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function marcarVideoListo(colaId,cursoId){
+  const url=prompt("Pegá la URL de YouTube del video editado:");
+  if(!url)return;
+  try{
+    await sb(`video_cola?id=eq.${colaId}`,{method:"PATCH",body:JSON.stringify({estado:"listo",youtube_url:url,updated_at:new Date().toISOString()})});
+    // También agregar como link en curso_archivos
+    const row=(await sb(`video_cola?id=eq.${colaId}&select=nombre,curso_id`))[0];
+    if(row){
+      const sess=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
+      await sb("curso_archivos",{method:"POST",body:JSON.stringify({curso_id:row.curso_id,tipo:"video",nombre:row.nombre,storage_path:url,size_bytes:null,subido_por:sess.id||null,generado_ia:false})});
+    }
+    toast("Video marcado como listo y agregado a Archivos","ok");
+    loadVideoCola(cursoId);
+    loadCursoArchivos(cursoId);
+  }catch(e){toast("Error: "+e.message,"err");}
 }
 
 function toggleVideoLink(cursoId,tipo){
