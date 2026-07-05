@@ -954,6 +954,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         Inventario
         <span class="sitem-badge" id="badge-inventario">—</span>
       </div>
+      <div class="sitem" onclick="goPage('planes',this)" id="nav-planes">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+        Planes plataforma
+      </div>
     </div>
   </div>
   <div class="sgroup" id="sg-analisis">
@@ -1388,6 +1392,74 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="btn sm" onclick="invClearFilters()">Limpiar</button>
   </div>
   <div id="inventario-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando inventario...</div></div></div>
+</div>
+
+<!-- ══ PLANES PLATAFORMA ══ -->
+<div id="pg-planes" style="display:none">
+  <div class="pg-header">
+    <div><div class="pg-title">Planes plataforma</div><div class="pg-title-sub">Suscripciones de la plataforma online — precios para el bot de mensajes</div></div>
+    <button class="btn pri" onclick="planesOpenNew()">+ Nuevo plan</button>
+  </div>
+  <div id="planes-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-top:4px">
+    <div class="loading"><div class="loader"></div><div class="lt">Cargando planes...</div></div>
+  </div>
+</div>
+
+<!-- modal plan -->
+<div class="modal-backdrop" id="modal-plan" style="display:none">
+  <div class="modal" style="max-width:480px;width:100%">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-plan-title">Nuevo plan</div>
+      <button class="modal-close" onclick="closeM('modal-plan')">✕</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <input type="hidden" id="plan-id">
+      <div>
+        <label class="flabel">Nombre del plan *</label>
+        <input class="finput" id="plan-nombre" placeholder="Ej: Médico matriculado COLMEDSA">
+      </div>
+      <div>
+        <label class="flabel">Descripción (se muestra en el bot)</label>
+        <textarea class="finput" id="plan-descripcion" rows="3" placeholder="Beneficios, alcance, condiciones..."></textarea>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+          <input type="checkbox" id="plan-sin-costo" onchange="planesSinCostoToggle(this.checked)" style="width:16px;height:16px">
+          Sin costo
+        </label>
+      </div>
+      <div id="plan-precios-wrap" style="display:flex;gap:12px">
+        <div style="flex:1">
+          <label class="flabel">Precio mensual (ARS)</label>
+          <input class="finput" id="plan-mensual" type="number" min="0" placeholder="8000">
+        </div>
+        <div style="flex:1">
+          <label class="flabel">Precio anual (ARS)</label>
+          <input class="finput" id="plan-anual" type="number" min="0" placeholder="90000">
+        </div>
+      </div>
+      <div>
+        <label class="flabel">Requisito de acceso</label>
+        <input class="finput" id="plan-requisito" placeholder="Ej: Validación de matrícula en Colmedsa">
+      </div>
+      <div style="display:flex;gap:12px">
+        <div style="flex:1">
+          <label class="flabel">Orden (posición en lista)</label>
+          <input class="finput" id="plan-orden" type="number" min="0" placeholder="1">
+        </div>
+        <div style="flex:1;display:flex;align-items:flex-end;padding-bottom:2px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+            <input type="checkbox" id="plan-activo" checked style="width:16px;height:16px">
+            Plan activo
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn sec" onclick="closeM('modal-plan')">Cancelar</button>
+      <button class="btn pri" onclick="planesSave()">Guardar</button>
+    </div>
+  </div>
 </div>
 
 <!-- ══ CALENDARIO ══ -->
@@ -4160,6 +4232,7 @@ function goPage(name,el){
   if(name==="cashflow")loadCF().then(()=>setCFTab(cfTab||"resumen"));
   if(name==="instructores")renderInstructores();
   if(name==="inventario")loadInventario();
+  if(name==="planes")loadPlanes();
   if(name==="comprobantes")loadComprobantes();
   if(name==="impuestos")loadImpuestos();
   if(name==="notif"){renderNotifPage();loadMfaStatus();}
@@ -11532,6 +11605,121 @@ async function delInventario(id){
     const bi=document.getElementById("badge-inventario");if(bi)bi.textContent=inventario.length||"—";
     toast("Ítem eliminado","ok");
   }catch(e){toast("Error","err")}
+}
+
+// ── PLANES PLATAFORMA ──
+let _planes=[];
+
+async function loadPlanes(){
+  const grid=document.getElementById("planes-grid");
+  if(!grid)return;
+  grid.innerHTML='<div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>';
+  try{
+    _planes=await sb("plataforma_planes?order=orden.asc");
+    renderPlanes();
+  }catch(e){grid.innerHTML='<div class="empty">Error al cargar planes</div>';}
+}
+
+function renderPlanes(){
+  const grid=document.getElementById("planes-grid");
+  if(!grid)return;
+  if(!_planes.length){grid.innerHTML='<div class="empty">No hay planes cargados</div>';return;}
+  grid.innerHTML=_planes.map(p=>{
+    const precio=p.sin_costo
+      ?'<span style="color:var(--green);font-weight:700">Sin costo</span>'
+      :[p.precio_mensual?`<b>$${Number(p.precio_mensual).toLocaleString("es-AR")}</b>/mes`:'',
+         p.precio_anual?`<b>$${Number(p.precio_anual).toLocaleString("es-AR")}</b>/año`:'']
+        .filter(Boolean).join(' · ');
+    return`<div class="card" style="padding:18px 20px;display:flex;flex-direction:column;gap:10px;${!p.activo?'opacity:.55':''}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="font-weight:600;font-size:15px;line-height:1.3">${esc(p.nombre)}</div>
+        <span style="font-size:11px;padding:2px 8px;border-radius:20px;white-space:nowrap;${p.activo?'background:var(--accent-alpha);color:var(--accent)':'background:var(--bg3);color:var(--text3)'}">${p.activo?'Activo':'Inactivo'}</span>
+      </div>
+      <div style="font-size:14px">${precio}</div>
+      ${p.descripcion?`<div style="font-size:13px;color:var(--text2);line-height:1.5">${esc(p.descripcion)}</div>`:''}
+      ${p.requisito?`<div style="font-size:12px;color:var(--text3)">Requiere: ${esc(p.requisito)}</div>`:''}
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn sm" onclick="planesOpenEdit(${JSON.stringify(JSON.stringify(p))})">Editar</button>
+        <button class="btn sm sec" onclick="planesDel('${p.id}','${esc(p.nombre)}')">Eliminar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function planesOpenNew(){
+  document.getElementById("plan-id").value='';
+  document.getElementById("plan-nombre").value='';
+  document.getElementById("plan-descripcion").value='';
+  document.getElementById("plan-mensual").value='';
+  document.getElementById("plan-anual").value='';
+  document.getElementById("plan-requisito").value='';
+  document.getElementById("plan-orden").value=_planes.length+1;
+  document.getElementById("plan-sin-costo").checked=false;
+  document.getElementById("plan-activo").checked=true;
+  document.getElementById("plan-precios-wrap").style.display='flex';
+  document.getElementById("modal-plan-title").textContent='Nuevo plan';
+  openM('modal-plan');
+}
+
+function planesOpenEdit(jsonStr){
+  const p=JSON.parse(jsonStr);
+  document.getElementById("plan-id").value=p.id;
+  document.getElementById("plan-nombre").value=p.nombre||'';
+  document.getElementById("plan-descripcion").value=p.descripcion||'';
+  document.getElementById("plan-mensual").value=p.precio_mensual||'';
+  document.getElementById("plan-anual").value=p.precio_anual||'';
+  document.getElementById("plan-requisito").value=p.requisito||'';
+  document.getElementById("plan-orden").value=p.orden??0;
+  document.getElementById("plan-sin-costo").checked=!!p.sin_costo;
+  document.getElementById("plan-activo").checked=!!p.activo;
+  document.getElementById("plan-precios-wrap").style.display=p.sin_costo?'none':'flex';
+  document.getElementById("modal-plan-title").textContent='Editar plan';
+  openM('modal-plan');
+}
+
+function planesSinCostoToggle(checked){
+  document.getElementById("plan-precios-wrap").style.display=checked?'none':'flex';
+}
+
+async function planesSave(){
+  const nombre=document.getElementById("plan-nombre").value.trim();
+  if(!nombre){toast("El nombre es obligatorio","err");return;}
+  const id=document.getElementById("plan-id").value;
+  const sinCosto=document.getElementById("plan-sin-costo").checked;
+  const obj={
+    nombre,
+    descripcion:document.getElementById("plan-descripcion").value.trim()||null,
+    precio_mensual:sinCosto?null:(parseInt(document.getElementById("plan-mensual").value)||null),
+    precio_anual:sinCosto?null:(parseInt(document.getElementById("plan-anual").value)||null),
+    sin_costo:sinCosto,
+    requisito:document.getElementById("plan-requisito").value.trim()||null,
+    orden:parseInt(document.getElementById("plan-orden").value)||0,
+    activo:document.getElementById("plan-activo").checked,
+    updated_at:new Date().toISOString()
+  };
+  try{
+    if(id){
+      await sb(`plataforma_planes?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(obj)});
+      _planes=_planes.map(p=>p.id===id?{...p,...obj}:p);
+      toast("Plan actualizado","ok");
+    }else{
+      const [created]=await sb("plataforma_planes",{method:"POST",body:JSON.stringify(obj)});
+      _planes.push(created);
+      toast("Plan creado","ok");
+    }
+    renderPlanes();
+    closeM('modal-plan');
+  }catch(e){toast("Error al guardar","err");}
+}
+
+async function planesDel(id,nombre){
+  if(!confirm(`¿Eliminar el plan "${nombre}"? El bot dejará de mostrarlo.`))return;
+  try{
+    await sb(`plataforma_planes?id=eq.${id}`,{method:"DELETE"});
+    _planes=_planes.filter(p=>p.id!==id);
+    renderPlanes();
+    toast("Plan eliminado","ok");
+  }catch(e){toast("Error al eliminar","err");}
 }
 
 // ── EXPORTAR A PIXELIO ──
