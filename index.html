@@ -16458,7 +16458,7 @@ function nomOpenEditItem(id){
   document.getElementById("nom-item-codigo").value=it.codigo||"";
   document.getElementById("nom-item-tipo").value=it.tipo||"SIM";
   document.getElementById("nom-item-nivel").value=it.nivel||1;
-  document.getElementById("nom-item-modalidad").value=it.modalidad||"";
+  const nomMod=document.getElementById("nom-item-modalidad");if(nomMod)nomMod.value=it.modalidad||"";
   document.getElementById("nom-item-costo").value=it.costo_usd||"";
   document.getElementById("nom-item-pafl").value=it.precio_afiliado_usd||"";
   document.getElementById("nom-item-pext").value=it.precio_externo_usd||"";
