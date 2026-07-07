@@ -14377,6 +14377,25 @@ async function marcarEstadoComp(id,estado){
         toast("Factura sin IVA — registrá el movimiento manualmente en Cuentas Corrientes","warn");
       }
     }
+    // Egreso en caja_movimientos (anti-duplicado por observaciones)
+    if(estado==="revisado"&&c&&c.total){
+      try{
+        const existe=await sb(`caja_movimientos?observaciones=like.*comp-${id}*&limit=1`);
+        if(!existe?.length){
+          const descCaja=`Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""} — ${esc(c.proveedor||"Proveedor")}`;
+          await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
+            sociedad:c.sociedad||"SUDES",
+            fecha:c.fecha||today(),
+            tipo:"egreso",
+            concepto:descCaja,
+            categoria:"Proveedor",
+            monto:Math.abs(parseFloat(c.total)||0),
+            observaciones:`Auto desde comprobantes. comp-${id}`
+          })});
+          toast(`✓ Egreso en Caja: $${Math.round(c.total).toLocaleString("es-AR")}  (${c.sociedad||"SUDES"})`,"ok");
+        }
+      }catch(e){toast(`Error al registrar egreso en caja: ${e.message.slice(0,60)}`,"err");}
+    }
   }catch(e){toast("Error","err")}
 }
 
