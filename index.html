@@ -3409,6 +3409,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 <div class="mov" id="modal-curso" onclick="if(event.target===this)closeModal('modal-curso')">
 <div class="modal">
   <div class="mt">Nuevo Curso</div>
+  <input type="hidden" id="c-cotizacion-id">
   <div class="form-grid">
     <div class="fg form-full"><label class="fl">Nombre del curso *</label><input class="fi" id="c-nombre" type="text" placeholder="Ej: ACLS Avanzado — Abril 2026"></div>
     <div class="fg"><label class="fl">Tipo</label><select class="fs" id="c-tipo"><option value="Mixto">Mixto</option><option value="Teórico">Teórico</option><option value="Práctico">Práctico</option><option value="Educación médica continua">Educación médica continua</option></select></div>
@@ -4369,7 +4370,7 @@ function openNewModal(){
   if(curPage==="tareas")openModal("modal-tarea");
   else if(curPage==="cursos"){
     // Limpiar todos los campos antes de abrir
-    ["c-nombre","c-instructor","c-respaldo","c-desc","c-desc-clases","c-inicio","c-fin","c-after-desc"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+    ["c-nombre","c-instructor","c-respaldo","c-desc","c-desc-clases","c-inicio","c-fin","c-after-desc","c-cotizacion-id"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
     ["c-horas","c-cupos","c-arancel","c-descuento"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
     document.getElementById("c-tipo").value="Mixto";
     document.getElementById("c-modalidad").value="Presencial";
@@ -5822,7 +5823,7 @@ async function createCurso(){
     descripcion_after:afterChecked?document.getElementById("c-after-desc").value||null:null,
     plantilla_usada:plantillaId||null,progreso:0,
     creado_por:loggedUser?.nombre||null,
-    // Si el curso se crea después de una sesión con el agente IA, guardar la conversación
+    cotizacion_id:document.getElementById("c-cotizacion-id")?.value||null,
     conversacion_ia:cursoIAHistorial.length>0?cursoIAHistorial:null,
     updated_at:new Date().toISOString()
   };
@@ -6126,7 +6127,7 @@ async function crearCursoDesdeIA(){
     try{curso=JSON.parse(texto);}catch(e){toast("No pude extraer los datos — completá el formulario manualmente","inf");}
 
     // Limpiar y pre-llenar el formulario
-    ["c-nombre","c-instructor","c-respaldo","c-desc","c-desc-clases","c-inicio","c-fin","c-after-desc"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+    ["c-nombre","c-instructor","c-respaldo","c-desc","c-desc-clases","c-inicio","c-fin","c-after-desc","c-cotizacion-id"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
     ["c-horas","c-cupos","c-arancel","c-descuento"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
     document.getElementById("c-tipo").value="Mixto";
     document.getElementById("c-modalidad").value="Presencial";
@@ -16489,6 +16490,7 @@ function renderCotizaciones(){
       <button class="btn sm sec" onclick="openEditCotizacion('${c.id}')">Editar</button>
       <button class="btn sm sec" onclick="exportarCotizPDF('${c.id}')" title="PDF">PDF</button>
       <button class="btn sm sec" onclick="rotarEstadoCotiz('${c.id}')" style="color:var(--am)" title="Cambiar estado">⋯</button>
+      ${c.estado==="aceptada"?`<button class="btn sm" onclick="cotizAbrirCrearCurso('${c.id}')" title="Crear curso desde cotización" style="background:var(--ac);color:#fff;font-size:11px">+ Curso</button>`:""}
       <button class="btn sm sec" onclick="deleteCotizacion('${c.id}')" style="color:var(--re)" title="Eliminar">✕</button>
     </div></td>
   </tr>`).join("")}</tbody></table></div>`;
@@ -16945,6 +16947,35 @@ async function rotarEstadoCotiz(id){
     toast(`Estado: ${next}`,"ok");
     if(next==="aceptada") await cotizCrearCobranzaCF(c);
   }catch(e){toast("Error","err");}
+}
+
+function cotizAbrirCrearCurso(cotizId){
+  const c=cotizaciones.find(x=>x.id===cotizId);
+  if(!c)return;
+  // Reset limpio
+  ["c-nombre","c-instructor","c-respaldo","c-desc","c-desc-clases","c-inicio","c-fin","c-after-desc","c-cotizacion-id"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+  ["c-horas","c-cupos","c-arancel","c-descuento"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+  document.getElementById("c-after-desc-wrap").style.display="none";
+  // Pre-cargar desde cotización
+  document.getElementById("c-cotizacion-id").value=cotizId;
+  document.getElementById("c-nombre").value=c.cliente?(c.cliente+(c.via==="PEV"?" — Nueva actividad":` — Vía ${c.via}`)):"";
+  // Arancel: total ARS (puede ajustarse después)
+  if(c.total_ars)document.getElementById("c-arancel").value=Math.round(c.total_ars);
+  // Línea de negocio según vía
+  const lineaMap={"A":"Colmedsa","B":"Colmedsa","PEV":"Comercial"};
+  const lineaSel=document.getElementById("c-linea");
+  if(lineaSel&&lineaMap[c.via])lineaSel.value=lineaMap[c.via];
+  // Instructor desde items (buscar ítem de tipo instructor)
+  if(c.items&&c.items.length){
+    const instrItem=c.items.find(it=>(it.descripcion||"").toLowerCase().includes("instructor"));
+    if(instrItem)document.getElementById("c-instructor").value=instrItem.descripcion;
+  }
+  // Cupos desde participantes
+  const part=(c.alumnos_afiliados||0)+(c.alumnos_externos||0)||(c.participantes||0);
+  if(part)document.getElementById("c-cupos").value=part;
+  // Estado borrador
+  const estSel=document.getElementById("c-estado");if(estSel)estSel.value="Borrador";
+  openModal("modal-curso");
 }
 
 async function cotizCrearCobranzaCF(c){
