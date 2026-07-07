@@ -5888,6 +5888,15 @@ async function createCurso(){
         await Promise.all(pasos.map(p=>sb("curso_tareas",{method:"POST",body:JSON.stringify({curso_id:created.id,nombre:p.nombre,etapa:p.etapa||"Diseño",orden:p.orden||0,updated_at:new Date().toISOString()})})));
       }
     }
+    // Si viene de cotización, actualizar el curso_id en la cotización para que aparezca en el tab
+    const cotizId=document.getElementById("c-cotizacion-id")?.value;
+    if(cotizId&&created?.id){
+      try{
+        await sb(`cotizaciones?id=eq.${cotizId}`,{method:"PATCH",body:JSON.stringify({curso_id:created.id})});
+        const cotizIdx=cotizaciones.findIndex(c=>c.id===cotizId);
+        if(cotizIdx>=0)cotizaciones[cotizIdx].curso_id=created.id;
+      }catch(_){}
+    }
     closeModal("modal-curso");renderCursos();updateSideBadges();toast(`"${nombre}" creado`,"ok");
     await selectCurso(created.id);
     const archivosTab=document.querySelector(`[onclick*="cd-archivos-${created.id}"]`);
