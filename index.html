@@ -3315,7 +3315,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg"><label class="fl">Instructor</label><input class="fi" id="c-instructor" type="text" placeholder="Nombre del instructor"></div>
     <div class="fg"><label class="fl">Proveedor</label><select class="fs" id="c-proveedor"><option value="">Sin proveedor</option></select></div>
     <div class="fg form-full"><label class="fl">Respaldo institucional</label><input class="fi" id="c-respaldo" type="text" placeholder="Ej: Colegio de Médicos de Salta"></div>
-    <div class="fg form-full"><label class="fl">Descripción</label><textarea class="fta" id="c-desc" placeholder="Descripción del curso, objetivos, contenido..."></textarea></div>
+    <div class="fg form-full"><label class="fl">Descripción del curso</label><textarea class="fta" id="c-desc" placeholder="Descripción del curso, objetivos, contenido..."></textarea></div>
+    <div class="fg form-full"><label class="fl">Descripción de clases</label><textarea class="fta" id="c-desc-clases" placeholder="Detalle de clases, módulos, actividades..."></textarea></div>
   </div>
   <div class="toggle-row">
     <label class="toggle"><input type="checkbox" id="c-after"><span class="tslider"></span></label>
@@ -4258,7 +4259,7 @@ function openNewModal(){
   if(curPage==="tareas")openModal("modal-tarea");
   else if(curPage==="cursos"){
     // Limpiar todos los campos antes de abrir
-    ["c-nombre","c-instructor","c-respaldo","c-desc","c-inicio","c-fin","c-after-desc"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+    ["c-nombre","c-instructor","c-respaldo","c-desc","c-desc-clases","c-inicio","c-fin","c-after-desc"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
     ["c-horas","c-cupos","c-arancel","c-descuento"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
     document.getElementById("c-tipo").value="Mixto";
     document.getElementById("c-modalidad").value="Presencial";
@@ -4653,7 +4654,8 @@ async function selectCurso(id){
           <div class="fg"><label class="fl">Proveedor</label><select class="fs" onchange="updateCursoField('${id}','proveedor_id',this.value)"><option value="">Sin proveedor</option>${proveedores.map(p=>`<option value="${p.id}"${p.id===curso.proveedor_id?" selected":""}>${p.nombre}</option>`).join("")}</select></div>
           <div class="fg"><label class="fl">Línea de negocio</label><select class="fs" onchange="updateCursoField('${id}','linea_negocio',this.value||null)"><option value="">Sin asignar</option>${["MSP / Convenio","Colmedsa","Comercial","EMC / Gratuito"].map(l=>`<option value="${l}"${curso.linea_negocio===l?" selected":""}>${l}</option>`).join("")}</select></div>
           <div class="fg form-full"><label class="fl">Respaldo institucional</label><input class="fi" value="${esc(curso.respaldo_institucional||"")}" onchange="updateCursoField('${id}','respaldo_institucional',this.value)"></div>
-          <div class="fg form-full"><label class="fl">Descripción</label><textarea class="fta" onchange="updateCursoField('${id}','descripcion',this.value)">${esc(curso.descripcion||"")}</textarea></div>
+          <div class="fg form-full"><label class="fl">Descripción del curso</label><textarea class="fta" onchange="updateCursoField('${id}','descripcion',this.value)">${esc(curso.descripcion||"")}</textarea></div>
+          <div class="fg form-full"><label class="fl">Descripción de clases</label><textarea class="fta" onchange="updateCursoField('${id}','descripcion_clases',this.value)">${esc(curso.descripcion_clases||"")}</textarea></div>
         </div>
         <div style="display:flex;gap:16px;flex-wrap:wrap">
           <div class="toggle-row">
@@ -5705,6 +5707,7 @@ async function createCurso(){
     proveedor_id:document.getElementById("c-proveedor").value||null,
     respaldo_institucional:document.getElementById("c-respaldo").value||null,
     descripcion:document.getElementById("c-desc").value||null,
+    descripcion_clases:document.getElementById("c-desc-clases").value||null,
     tiene_after:afterChecked,
     descripcion_after:afterChecked?document.getElementById("c-after-desc").value||null:null,
     plantilla_usada:plantillaId||null,progreso:0,
@@ -6013,7 +6016,7 @@ async function crearCursoDesdeIA(){
     try{curso=JSON.parse(texto);}catch(e){toast("No pude extraer los datos — completá el formulario manualmente","inf");}
 
     // Limpiar y pre-llenar el formulario
-    ["c-nombre","c-instructor","c-respaldo","c-desc","c-inicio","c-fin","c-after-desc"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+    ["c-nombre","c-instructor","c-respaldo","c-desc","c-desc-clases","c-inicio","c-fin","c-after-desc"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
     ["c-horas","c-cupos","c-arancel","c-descuento"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
     document.getElementById("c-tipo").value="Mixto";
     document.getElementById("c-modalidad").value="Presencial";
@@ -6038,6 +6041,7 @@ async function crearCursoDesdeIA(){
     if(curso.instructor_nombre)document.getElementById("c-instructor").value=curso.instructor_nombre;
     if(curso.respaldo_institucional)document.getElementById("c-respaldo").value=curso.respaldo_institucional;
     if(curso.descripcion)document.getElementById("c-desc").value=curso.descripcion;
+    if(curso.descripcion_clases)document.getElementById("c-desc-clases").value=curso.descripcion_clases;
 
     // ── Validaciones de calendario ──
     const avisos=[];
@@ -11830,12 +11834,13 @@ function exportReporteAlumnos(){
 
 function exportReporteCursos(){
   if(!cursos.length){toast("No hay cursos cargados","err");return;}
-  const header=["Nombre","Tipo","Estado","Fecha inicio","Fecha fin","Duración (hs)","Cupos máx","Precio ($)","Lugar","Descripción"];
+  const header=["Nombre","Tipo","Modalidad","Estado","Línea de negocio","Fecha inicio","Fecha fin","Duración (hs)","Cupos máx","Precio ($)","Lugar","Instructor","Descripción del curso","Descripción de clases","Descripción catering"];
   const rows=cursos.map(c=>[
-    c.nombre||"",c.tipo||"",c.estado||"",
+    c.nombre||"",c.tipo||"",c.modalidad||"",c.estado||"",c.linea_negocio||"",
     c.fecha_inicio||"",c.fecha_fin||"",
-    c.duracion_horas||"",c.cupos_max||"",c.precio||"",
-    c.lugar||"",c.descripcion||""
+    c.duracion_horas||"",c.cupos_max||"",c.arancel||c.precio||"",
+    c.lugar||"",c.instructor_nombre||"",
+    c.descripcion||"",c.descripcion_clases||"",c.descripcion_after||""
   ]);
   downloadCSV(`cursos_${today()}.csv`,[header,...rows]);
   toast(`${cursos.length} cursos exportados`,"ok");
