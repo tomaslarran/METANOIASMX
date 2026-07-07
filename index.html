@@ -17120,13 +17120,25 @@ async function cotizCrearCobranzaCF(c){
 async function deleteCotizacion(id){
   const c=cotizaciones.find(x=>x.id===id);
   if(!c)return;
-  if(!confirm(`¿Eliminar cotización ${c.numero||""} de "${c.cliente}"?\nEsta acción no se puede deshacer.`))return;
+  // Verificar cobranzas vinculadas
+  let cobranzasVinc=[];
+  try{cobranzasVinc=await sb(`cf_cobranzas?cotizacion_id=eq.${id}&select=id,nombre,monto`);}catch(_){}
+  let msg=`¿Eliminar cotización ${c.numero||""} de "${c.cliente}"?`;
+  if(cobranzasVinc.length){
+    msg+=`\n\n⚠ Tiene ${cobranzasVinc.length} cobranza${cobranzasVinc.length>1?"s":""} vinculada${cobranzasVinc.length>1?"s":""} en Cash Flow que también se eliminarán.`;
+  }
+  msg+="\n\nEsta acción no se puede deshacer.";
+  if(!confirm(msg))return;
   try{
+    // Eliminar cobranzas vinculadas primero (respetar FK)
+    if(cobranzasVinc.length){
+      await Promise.all(cobranzasVinc.map(cb=>sb(`cf_cobranzas?id=eq.${cb.id}`,{method:"DELETE"})));
+    }
     await sb(`cotizaciones?id=eq.${id}`,{method:"DELETE"});
     cotizaciones=cotizaciones.filter(x=>x.id!==id);
     renderCotizaciones();
     updateCotizStats();
-    toast("Cotización eliminada","ok");
+    toast("Cotización eliminada"+(cobranzasVinc.length?" (y cobranza vinculada)":""),"ok");
   }catch(e){toast("Error al eliminar: "+e.message,"err");}
 }
 
