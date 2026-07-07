@@ -17007,8 +17007,7 @@ async function saveCotizacion(estado){
   const payload={
     cliente,contacto:document.getElementById("cot-contacto").value.trim(),
     via:cotizVia,items:cotizVia==="PEV"?[]:cotizItems,
-    pev_items:cotizVia==="PEV"?cotizPevItems:[],
-    pev_etapa,
+    ...(cotizVia==="PEV"?{pev_items:cotizPevItems,pev_etapa}:{pev_etapa}),
     curso_id:document.getElementById("cot-curso-sel")?.value||null,
     alumnos_afiliados:afl,alumnos_externos:ext,
     participantes,grupos,insumos_usd:insumos,
