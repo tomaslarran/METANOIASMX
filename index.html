@@ -2598,6 +2598,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <!-- Notas -->
       <div style="margin-bottom:16px"><div class="fl">Notas / condiciones</div><textarea class="fi" id="cot-notas" rows="2" placeholder="Condiciones de pago, vigencia..." style="resize:vertical"></textarea></div>
       <input type="hidden" id="cot-edit-id">
+      <input type="hidden" id="cot-oportunidad-id">
       <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
         <button class="btn sec" onclick="closeModal('modal-cotizacion')">Cancelar</button>
         <button class="btn sec" id="cot-btn-pdf" onclick="exportarCotizPDF(document.getElementById('cot-edit-id').value)" style="display:none">↓ PDF</button>
@@ -15900,9 +15901,16 @@ const OPORT_ESTADOS={
 };
 const OPORT_LINEAS={A:'MSP Convenio',B:'Colmedsa',C:'Cursos',D:'COFRADIA',Transversal:'Transversal'};
 
+let oportCotizSet=new Set();
+
 async function loadOportunidades(){
   try{
-    oportunidades=await sb("oportunidades?select=*&order=created_at.desc");
+    [oportunidades]=await Promise.all([
+      sb("oportunidades?select=*&order=created_at.desc"),
+      sb("cotizaciones?oportunidad_id=not.is.null&select=oportunidad_id").then(rows=>{
+        oportCotizSet=new Set((rows||[]).map(r=>r.oportunidad_id));
+      })
+    ]);
     renderOportunidades();
     const badge=document.getElementById("badge-oportunidades");
     const activas=oportunidades.filter(o=>o.estado!=="Descartado"&&o.estado!=="Pausado").length;
@@ -15910,6 +15918,31 @@ async function loadOportunidades(){
   }catch(e){
     document.getElementById("oport-lista").innerHTML=`<div style="color:var(--re);padding:24px">Error al cargar: ${e.message}</div>`;
   }
+}
+
+function oportGenerarCotizacion(oportId){
+  const o=oportunidades.find(x=>x.id===oportId);
+  if(!o)return;
+  // Mapeo linea_negocio → vía cotización
+  const viaMap={A:"B",B:"B",C:"A",D:"PEV"};
+  const via=viaMap[o.linea_negocio]||"PEV";
+  goPage("cotizaciones",document.getElementById("nav-cotizaciones"));
+  setTimeout(()=>{
+    openNuevaCotizacion();
+    // Pre-cargar campos
+    document.getElementById("cot-oportunidad-id").value=oportId;
+    document.getElementById("cot-cliente").value=o.audiencia||o.ejecutor||"";
+    const notasParts=[];
+    if(o.definicion)notasParts.push(o.definicion);
+    if(o.primer_paso)notasParts.push(`Primer paso: ${o.primer_paso}`);
+    document.getElementById("cot-notas").value=notasParts.join("\n");
+    setCotizVia(via);
+    if(via==="PEV"){
+      const etapaSel=document.getElementById("cot-pev-etapa");
+      if(etapaSel)etapaSel.value="PEV3";
+    }
+    openModal("modal-cotizacion");
+  },200);
 }
 
 function setOportFilter(f,btn){
@@ -15946,6 +15979,8 @@ function renderOportunidades(){
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
           <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;background:${est.bg};color:${est.color};white-space:nowrap">${esc(o.estado||"Crudo")}</span>
+          ${oportCotizSet.has(o.id)?`<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:var(--ac)22;color:var(--ac)" title="Ya tiene cotización vinculada">Cotiz ✓</span>`:""}
+          ${o.estado!=="Crudo"&&o.estado!=="Descartado"&&!oportCotizSet.has(o.id)?`<button class="btn sm" onclick="event.stopPropagation();oportGenerarCotizacion('${o.id}')" style="font-size:10px;padding:3px 8px">→ Cotización</button>`:""}
           ${o.primer_paso?`<span style="font-size:10px;color:var(--tx3);text-align:right;max-width:180px">→ ${esc(o.primer_paso)}</span>`:""}
         </div>
       </div>
@@ -16527,6 +16562,7 @@ function openNuevaCotizacion(){
   cotizPevItems=[];
   document.getElementById("cot-modal-title").textContent="Nueva Cotización";
   document.getElementById("cot-edit-id").value="";
+  document.getElementById("cot-oportunidad-id").value="";
   ["cot-cliente","cot-contacto","cot-notas"].forEach(id=>document.getElementById(id).value="");
   cotizPopularCursos("");
   document.getElementById("cot-tc").value=nomParams.TC_USD_ARS||1400;
@@ -16931,6 +16967,7 @@ async function saveCotizacion(estado){
     total_usd:parseFloat(total.toFixed(2)),
     total_ars:parseFloat((total*tc).toFixed(0)),
     estado,notas:document.getElementById("cot-notas").value.trim(),
+    oportunidad_id:document.getElementById("cot-oportunidad-id")?.value||null,
     updated_at:new Date().toISOString(),
   };
   try{
