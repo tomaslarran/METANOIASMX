@@ -4034,6 +4034,56 @@ async function renderAlertas(){
     });
   }catch(_){}
 
+  // ── Alertas cruzadas ──
+
+  // 1. Cotizaciones "enviada" sin actualizar >7 días
+  try{
+    const hace7=new Date(Date.now()-7*86400000).toISOString();
+    const cotizStale=await sb(`cotizaciones?estado=eq.enviada&updated_at=lt.${hace7}&select=id,cliente,total_ars,updated_at&order=updated_at.asc&limit=10`);
+    (cotizStale||[]).forEach(c=>{
+      const diasSin=Math.round((Date.now()-new Date(c.updated_at).getTime())/86400000);
+      alertas.push({tipo:"cotiz",icon:"📋",urgencia:"semana",d:diasSin,
+        titulo:`Cotización sin seguimiento: ${esc(c.cliente||"(sin cliente)")}`,
+        sub:`Enviada hace ${diasSin} días · $${Math.round(c.total_ars||0).toLocaleString("es-AR")}`,
+        fecha:c.updated_at?.split("T")[0],
+        onclick:`goPage('cotizaciones',document.getElementById('nav-cotizaciones'))`});
+    });
+  }catch(_){}
+
+  // 2. Cursos activos con inscriptos sin cobrar
+  try{
+    const cursosActBefore=cursos.filter(c=>["Inscripciones","En curso"].includes(c.estado));
+    if(cursosActBefore.length){
+      const idsStr=cursosActBefore.map(c=>c.id).join(",");
+      const sinCobrar=await sb(`inscripciones?monto=gt.0&fecha_pago=is.null&estado=neq.Baja&select=id,monto,curso_id&curso_id=in.(${idsStr})`);
+      const porCurso={};
+      (sinCobrar||[]).forEach(i=>{if(!porCurso[i.curso_id]){porCurso[i.curso_id]={count:0,monto:0};}porCurso[i.curso_id].count++;porCurso[i.curso_id].monto+=parseFloat(i.monto)||0;});
+      Object.entries(porCurso).forEach(([cId,data])=>{
+        const cur=cursosActBefore.find(c=>c.id===cId);
+        if(!cur)return;
+        alertas.push({tipo:"inscr",icon:"🎓",urgencia:"semana",d:0,
+          titulo:`Cobro pendiente: ${esc(cur.nombre||"Curso")}`,
+          sub:`${data.count} inscripto${data.count!==1?"s":""} sin pago · $${Math.round(data.monto).toLocaleString("es-AR")} total`,
+          fecha:null,
+          onclick:`goPage('cursos',document.getElementById('nav-cursos'))`});
+      });
+    }
+  }catch(_){}
+
+  // 3. Oportunidades en ejecución paradas >14 días
+  if(oportunidades.length){
+    const hace14=new Date(Date.now()-14*86400000);
+    oportunidades.filter(o=>["En estructuración","En ejecución"].includes(o.estado)&&o.updated_at).forEach(o=>{
+      const diasSin=Math.round((Date.now()-new Date(o.updated_at).getTime())/86400000);
+      if(diasSin<14)return;
+      alertas.push({tipo:"oportuna",icon:"💡",urgencia:diasSin>30?"critica":"semana",d:diasSin,
+        titulo:`Oportunidad parada: ${esc((o.idea_cruda||"").slice(0,60))}`,
+        sub:`${o.estado} · sin actualizar hace ${diasSin} días`,
+        fecha:o.updated_at?.split("T")[0],
+        onclick:`goPage('oportunidades',document.getElementById('nav-oportunidades'))`});
+    });
+  }
+
   alertas.sort((a,b)=>(a.d??999)-(b.d??999));
 
   // ── Stats ──
