@@ -1044,6 +1044,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="2"/><path d="m9 14 2 2 4-4"/></svg>
         Cotizaciones
       </div>
+      <div class="sitem" onclick="goPage('nomenclador',this)" id="nav-nomenclador">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        Nomenclador
+      </div>
     </div>
   </div>
   <div class="sgroup" id="sg-config">
@@ -2343,6 +2347,111 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
   <div id="cuentas-list" style="max-width:640px">
     <div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>
+  </div>
+</div>
+
+<!-- ══ NOMENCLADOR ══ -->
+<div id="pg-nomenclador" style="display:none">
+  <div class="pg-header">
+    <div><div class="pg-title">Nomenclador</div><div class="pg-title-sub">Parámetros de precios y catálogo de actividades</div></div>
+  </div>
+  <div class="fbar" style="margin-bottom:16px">
+    <button class="fb on" onclick="nomTab('params',this)" id="nom-tab-params-btn">Parámetros globales</button>
+    <button class="fb" onclick="nomTab('catalogo',this)" id="nom-tab-catalogo-btn">Catálogo de actividades</button>
+  </div>
+
+  <!-- TAB PARÁMETROS -->
+  <div id="nom-tab-params">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:20px">
+      <!-- Tipo de cambio -->
+      <div class="card" style="padding:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Tipo de cambio</div>
+        <div class="fg"><label class="fl">TC USD/ARS</label><input class="fi" type="number" id="np-TC_USD_ARS" placeholder="1400" oninput="nomParamDirty()"></div>
+      </div>
+      <!-- Tarifas instructores -->
+      <div class="card" style="padding:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Hora instructor (USD)</div>
+        <div class="fg"><label class="fl">Básico (N1-2)</label><input class="fi" type="number" id="np-HORA_INSTRUCTOR_BASICO" placeholder="22" oninput="nomParamDirty()"></div>
+        <div class="fg"><label class="fl">Avanzado (N3-4)</label><input class="fi" type="number" id="np-HORA_INSTRUCTOR_AVANZADO" placeholder="45" oninput="nomParamDirty()"></div>
+        <div class="fg"><label class="fl">Experto (N5+)</label><input class="fi" type="number" id="np-HORA_INSTRUCTOR_EXPERTO" placeholder="80" oninput="nomParamDirty()"></div>
+      </div>
+      <!-- Amortización equipos -->
+      <div class="card" style="padding:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Amortización equipos (USD/h)</div>
+        <div class="fg"><label class="fl">Box básico</label><input class="fi" type="number" id="np-AMORT_BOX_BASICO" placeholder="5" oninput="nomParamDirty()"></div>
+        <div class="fg"><label class="fl">Box laparoscopía</label><input class="fi" type="number" id="np-AMORT_BOX_LAPARO" placeholder="12" oninput="nomParamDirty()"></div>
+        <div class="fg"><label class="fl">Box avanzado</label><input class="fi" type="number" id="np-AMORT_BOX_AVANZADO" placeholder="25" oninput="nomParamDirty()"></div>
+      </div>
+      <!-- Márgenes y cánones -->
+      <div class="card" style="padding:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Márgenes y cánones (%)</div>
+        <div class="fg"><label class="fl">Overhead %</label><input class="fi" type="number" id="np-OVERHEAD_PCT" placeholder="15" step="0.1" oninput="nomParamDirty()"><span style="font-size:11px;color:var(--tx3);margin-top:2px">Se aplica sobre costos directos</span></div>
+        <div class="fg"><label class="fl">Margen Vía B %</label><input class="fi" type="number" id="np-MARGEN_VIA_B" placeholder="40" step="0.1" oninput="nomParamDirty()"><span style="font-size:11px;color:var(--tx3);margin-top:2px">Sobre subtotal + overhead</span></div>
+        <div class="fg"><label class="fl">Canon CM % (externos)</label><input class="fi" type="number" id="np-CANON_CM_PCT" placeholder="10" step="0.1" oninput="nomParamDirty()"><span style="font-size:11px;color:var(--tx3);margin-top:2px">Se aplica al precio externo</span></div>
+      </div>
+    </div>
+    <div id="nom-params-dirty" style="display:none;padding:12px 16px;background:rgba(245,158,11,.1);border:1px solid var(--am);border-radius:var(--r);align-items:center;gap:12px;margin-bottom:12px">
+      <span style="font-size:13px;color:var(--am);font-weight:600">Hay cambios sin guardar</span>
+      <button class="btn pri" onclick="nomSaveParams()" style="margin-left:auto">Guardar parámetros</button>
+    </div>
+    <button class="btn pri" onclick="nomSaveParams()" id="nom-params-save-btn">Guardar parámetros</button>
+  </div>
+
+  <!-- TAB CATÁLOGO -->
+  <div id="nom-tab-catalogo" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <input class="fi" type="search" id="nom-cat-search" placeholder="Buscar por código o descripción..." style="width:240px" oninput="nomRenderCatalogo()">
+      <div style="display:flex;gap:8px;align-items:center">
+        <select class="fs" id="nom-cat-tipo" style="width:120px" onchange="nomRenderCatalogo()">
+          <option value="">Todos los tipos</option>
+          <option>PRC</option><option>SIM</option><option>CUR</option><option>ABO</option><option>EVT</option>
+        </select>
+        <button class="btn pri" onclick="nomOpenNewItem()">+ Nuevo ítem</button>
+      </div>
+    </div>
+    <div id="nom-catalogo-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div></div>
+  </div>
+</div>
+
+<!-- MODAL ÍTEM CATÁLOGO -->
+<div class="mov" id="modal-nom-item" onclick="if(event.target===this)closeModal('modal-nom-item')">
+  <div class="mc" style="max-width:520px">
+    <div class="mh"><div class="mt" id="nom-item-title">Nuevo ítem</div><button class="mcl" onclick="closeModal('modal-nom-item')">✕</button></div>
+    <div class="mb">
+      <input type="hidden" id="nom-item-id">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="fg form-full"><label class="fl">Descripción</label><input class="fi" id="nom-item-desc" placeholder="Ej: Instructor N1-2 simulación básica"></div>
+        <div class="fg"><label class="fl">Código</label><input class="fi" id="nom-item-codigo" placeholder="Ej: SIM-001" style="font-family:monospace"></div>
+        <div class="fg"><label class="fl">Tipo</label>
+          <select class="fs" id="nom-item-tipo">
+            <option value="SIM">SIM — Simulación</option>
+            <option value="PRC">PRC — Procedimental</option>
+            <option value="CUR">CUR — Curso</option>
+            <option value="ABO">ABO — Abono</option>
+            <option value="EVT">EVT — Evento</option>
+          </select>
+        </div>
+        <div class="fg"><label class="fl">Nivel (1-7)</label><input class="fi" type="number" id="nom-item-nivel" min="1" max="7" value="1"></div>
+        <div class="fg form-full"><label class="fl">Modalidad</label><input class="fi" id="nom-item-modalidad" placeholder="Ej: Presencial, Virtual, Híbrido"></div>
+      </div>
+      <div style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:12px;margin-top:8px">
+        <div style="font-size:12px;font-weight:700;color:var(--tx3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Precios y costos (USD/hora)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div class="fg"><label class="fl" style="color:var(--re)">Costo real</label><input class="fi" type="number" id="nom-item-costo" placeholder="0.00" step="0.01" oninput="nomCalcMargen()"></div>
+          <div class="fg"><label class="fl" style="color:var(--ve)">P. Afiliado CM</label><input class="fi" type="number" id="nom-item-pafl" placeholder="0.00" step="0.01" oninput="nomCalcMargen()"></div>
+          <div class="fg"><label class="fl" style="color:var(--am)">P. Externo</label><input class="fi" type="number" id="nom-item-pext" placeholder="0.00" step="0.01" oninput="nomCalcMargen()"></div>
+        </div>
+        <div id="nom-item-margen" style="margin-top:8px;font-size:12px;color:var(--tx3)"></div>
+      </div>
+      <div class="toggle-row" style="margin-top:12px">
+        <label class="toggle"><input type="checkbox" id="nom-item-activo" checked><span class="tslider"></span></label>
+        <span class="toggle-label">Activo (visible en cotizador)</span>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn sec" onclick="closeModal('modal-nom-item')">Cancelar</button>
+      <button class="btn pri" onclick="nomSaveItem()">Guardar ítem</button>
+    </div>
   </div>
 </div>
 
@@ -4242,6 +4351,7 @@ function goPage(name,el){
   if(name==="usuarios")loadUsuariosPage();
   if(name==="cuentas")loadCuentasPage();
   if(name==="cotizaciones")loadCotizacionesPage();
+  if(name==="nomenclador")loadNomencladorPage();
   if(name==="reportes")initReportesPage();
   if(name==="oportunidades")loadOportunidades();
   if(name==="cofradia")loadCofradia();
@@ -16088,6 +16198,190 @@ function oportLeerTexto(file){
 
 // ══ COTIZACIONES ══
 let cotizaciones=[], nomParams={}, nomCatalogo=[], cotizFilter='all', cotizVia='A', cotizItems=[], cotizPevItems=[];
+let nomCatalogoAll=[];
+
+/* ── NOMENCLADOR ── */
+async function loadNomencladorPage(){
+  try{
+    const [params,catalogo]=await Promise.all([
+      sb("nomenclador_params?select=variable,valor"),
+      sb("nomenclador_catalogo?select=*&order=nivel,codigo")
+    ]);
+    nomParams={};
+    (params||[]).forEach(p=>nomParams[p.variable]=parseFloat(p.valor));
+    nomCatalogoAll=catalogo||[];
+    nomCatalogo=nomCatalogoAll.filter(x=>x.activo!==false);
+    nomFillParams();
+    nomRenderCatalogo();
+    nomTab('params',document.getElementById('nom-tab-params-btn'));
+  }catch(e){console.error(e);toast("Error cargando nomenclador","err");}
+}
+
+function nomTab(tab,el){
+  document.querySelectorAll("#pg-nomenclador .fbar .fb").forEach(b=>b.classList.remove("on"));
+  if(el)el.classList.add("on");
+  document.getElementById("nom-tab-params").style.display=tab==="params"?"":"none";
+  document.getElementById("nom-tab-catalogo").style.display=tab==="catalogo"?"":"none";
+}
+
+function nomFillParams(){
+  const campos=["TC_USD_ARS","HORA_INSTRUCTOR_BASICO","HORA_INSTRUCTOR_AVANZADO","HORA_INSTRUCTOR_EXPERTO",
+    "AMORT_BOX_BASICO","AMORT_BOX_LAPARO","AMORT_BOX_AVANZADO","OVERHEAD_PCT","MARGEN_VIA_B","CANON_CM_PCT"];
+  campos.forEach(k=>{
+    const el=document.getElementById("np-"+k);
+    if(el){
+      const v=nomParams[k];
+      // Mostrar como porcentaje si corresponde
+      el.value=v!=null?(k.endsWith("_PCT")||k.startsWith("MARGEN")||k.startsWith("CANON")?+(v*100).toFixed(2):v):"";
+    }
+  });
+  document.getElementById("nom-params-dirty").style.display="none";
+}
+
+function nomParamDirty(){
+  const el=document.getElementById("nom-params-dirty");
+  if(el){el.style.display="flex";}
+}
+
+async function nomSaveParams(){
+  const campos=["TC_USD_ARS","HORA_INSTRUCTOR_BASICO","HORA_INSTRUCTOR_AVANZADO","HORA_INSTRUCTOR_EXPERTO",
+    "AMORT_BOX_BASICO","AMORT_BOX_LAPARO","AMORT_BOX_AVANZADO","OVERHEAD_PCT","MARGEN_VIA_B","CANON_CM_PCT"];
+  const updates=[];
+  campos.forEach(k=>{
+    const el=document.getElementById("np-"+k);
+    if(!el||el.value==="")return;
+    let v=parseFloat(el.value);
+    if(k.endsWith("_PCT")||k.startsWith("MARGEN")||k.startsWith("CANON"))v=v/100;
+    updates.push({variable:k,valor:String(v)});
+  });
+  try{
+    for(const u of updates){
+      await sb(`nomenclador_params?variable=eq.${u.variable}`,{method:"PATCH",body:JSON.stringify({valor:u.valor})});
+    }
+    updates.forEach(u=>{nomParams[u.variable]=parseFloat(u.valor);});
+    nomCatalogo=nomCatalogoAll.filter(x=>x.activo!==false);
+    document.getElementById("nom-params-dirty").style.display="none";
+    toast("Parámetros guardados","ok");
+  }catch(e){console.error(e);toast("Error guardando parámetros","err");}
+}
+
+function nomRenderCatalogo(){
+  const q=(document.getElementById("nom-cat-search")?.value||"").toLowerCase();
+  const tipo=document.getElementById("nom-cat-tipo")?.value||"";
+  const lista=nomCatalogoAll.filter(it=>{
+    if(tipo&&it.tipo!==tipo)return false;
+    if(q&&!it.descripcion?.toLowerCase().includes(q)&&!it.codigo?.toLowerCase().includes(q))return false;
+    return true;
+  });
+  const cont=document.getElementById("nom-catalogo-container");
+  if(!cont)return;
+  if(!lista.length){cont.innerHTML='<div class="empty-state" style="padding:40px;text-align:center;color:var(--tx3)">No hay ítems</div>';return;}
+  const tipoBadge={PRC:"var(--tx2)",SIM:"var(--bl)",CUR:"var(--ve)",ABO:"var(--am)",EVT:"var(--re)"};
+  cont.innerHTML=`<div class="tbl-wrap"><table class="tbl"><thead><tr>
+    <th>Código</th><th>Descripción</th><th>Tipo</th><th>Nivel</th><th>Modalidad</th>
+    <th style="color:var(--re)">Costo USD/h</th>
+    <th style="color:var(--ve)">P.Afiliado USD/h</th>
+    <th style="color:var(--am)">P.Externo USD/h</th>
+    <th>Margen afl.</th><th>Estado</th><th></th>
+  </tr></thead><tbody>${lista.map(it=>{
+    const costo=it.costo_usd||0;
+    const pafl=it.precio_afiliado_usd||0;
+    const pext=it.precio_externo_usd||0;
+    const margenAfl=pafl>0?Math.round((pafl-costo)/pafl*100):null;
+    const margenColor=margenAfl>=30?"var(--ve)":margenAfl>=10?"var(--am)":"var(--re)";
+    const color=tipoBadge[it.tipo]||"var(--tx3)";
+    return`<tr style="opacity:${it.activo===false?.5:1}">
+      <td style="font-family:monospace;font-size:11px;font-weight:700;color:${color}">${esc(it.codigo||"")}</td>
+      <td>${esc(it.descripcion||"")}</td>
+      <td><span style="font-size:11px;font-weight:600;color:${color}">${it.tipo||""}</span></td>
+      <td style="text-align:center">N${it.nivel||1}</td>
+      <td style="font-size:12px;color:var(--tx3)">${esc(it.modalidad||"")}</td>
+      <td style="color:var(--re);font-weight:600">${costo>0?"$"+costo.toFixed(0):"—"}</td>
+      <td style="color:var(--ve);font-weight:600">${pafl>0?"$"+pafl.toFixed(0):"—"}</td>
+      <td style="color:var(--am);font-weight:600">${pext>0?"$"+pext.toFixed(0):"—"}</td>
+      <td style="font-weight:600;color:${margenColor}">${margenAfl!=null?margenAfl+"%":"—"}</td>
+      <td><span style="font-size:11px;padding:2px 8px;border-radius:8px;background:${it.activo===false?"var(--re)22":"var(--ve)22"};color:${it.activo===false?"var(--re)":"var(--ve)"}">${it.activo===false?"Inactivo":"Activo"}</span></td>
+      <td><button class="btn sm sec" onclick="nomOpenEditItem('${it.id}')">Editar</button></td>
+    </tr>`;
+  }).join("")}</tbody></table></div>`;
+}
+
+function nomCalcMargen(){
+  const costo=parseFloat(document.getElementById("nom-item-costo")?.value)||0;
+  const pafl=parseFloat(document.getElementById("nom-item-pafl")?.value)||0;
+  const pext=parseFloat(document.getElementById("nom-item-pext")?.value)||0;
+  const el=document.getElementById("nom-item-margen");
+  if(!el)return;
+  if(!pafl&&!pext){el.textContent="";return;}
+  const mafl=pafl>0&&costo>0?((pafl-costo)/pafl*100).toFixed(1):null;
+  const mext=pext>0&&costo>0?((pext-costo)/pext*100).toFixed(1):null;
+  const col=v=>v>=30?"var(--ve)":v>=10?"var(--am)":"var(--re)";
+  el.innerHTML=[
+    mafl!=null?`<span style="color:${col(mafl)}">Margen afiliado: <strong>${mafl}%</strong></span>`:"",
+    mext!=null?`<span style="margin-left:16px;color:${col(mext)}">Margen externo: <strong>${mext}%</strong></span>`:""
+  ].filter(Boolean).join("");
+}
+
+function nomOpenNewItem(){
+  document.getElementById("nom-item-id").value="";
+  document.getElementById("nom-item-title").textContent="Nuevo ítem";
+  ["nom-item-desc","nom-item-codigo","nom-item-modalidad","nom-item-costo","nom-item-pafl","nom-item-pext"].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.value="";
+  });
+  document.getElementById("nom-item-nivel").value=1;
+  document.getElementById("nom-item-tipo").value="SIM";
+  document.getElementById("nom-item-activo").checked=true;
+  document.getElementById("nom-item-margen").textContent="";
+  openModal("modal-nom-item");
+}
+
+function nomOpenEditItem(id){
+  const it=nomCatalogoAll.find(x=>x.id===id);
+  if(!it)return;
+  document.getElementById("nom-item-id").value=it.id;
+  document.getElementById("nom-item-title").textContent="Editar ítem";
+  document.getElementById("nom-item-desc").value=it.descripcion||"";
+  document.getElementById("nom-item-codigo").value=it.codigo||"";
+  document.getElementById("nom-item-tipo").value=it.tipo||"SIM";
+  document.getElementById("nom-item-nivel").value=it.nivel||1;
+  document.getElementById("nom-item-modalidad").value=it.modalidad||"";
+  document.getElementById("nom-item-costo").value=it.costo_usd||"";
+  document.getElementById("nom-item-pafl").value=it.precio_afiliado_usd||"";
+  document.getElementById("nom-item-pext").value=it.precio_externo_usd||"";
+  document.getElementById("nom-item-activo").checked=it.activo!==false;
+  nomCalcMargen();
+  openModal("modal-nom-item");
+}
+
+async function nomSaveItem(){
+  const id=document.getElementById("nom-item-id").value;
+  const payload={
+    descripcion:document.getElementById("nom-item-desc").value.trim(),
+    codigo:document.getElementById("nom-item-codigo").value.trim().toUpperCase(),
+    tipo:document.getElementById("nom-item-tipo").value,
+    nivel:parseInt(document.getElementById("nom-item-nivel").value)||1,
+    modalidad:document.getElementById("nom-item-modalidad").value.trim()||null,
+    costo_usd:parseFloat(document.getElementById("nom-item-costo").value)||null,
+    precio_afiliado_usd:parseFloat(document.getElementById("nom-item-pafl").value)||null,
+    precio_externo_usd:parseFloat(document.getElementById("nom-item-pext").value)||null,
+    activo:document.getElementById("nom-item-activo").checked,
+  };
+  if(!payload.descripcion||!payload.codigo){toast("Completá descripción y código","err");return;}
+  try{
+    if(id){
+      await sb(`nomenclador_catalogo?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(payload)});
+      const i=nomCatalogoAll.findIndex(x=>x.id===id);
+      if(i>=0)nomCatalogoAll[i]={...nomCatalogoAll[i],...payload};
+    }else{
+      const [nuevo]=await sb("nomenclador_catalogo",{method:"POST",body:JSON.stringify(payload)});
+      if(nuevo)nomCatalogoAll.push(nuevo);
+    }
+    nomCatalogo=nomCatalogoAll.filter(x=>x.activo!==false);
+    nomRenderCatalogo();
+    closeModal("modal-nom-item");
+    toast(id?"Ítem actualizado":"Ítem creado","ok");
+  }catch(e){console.error(e);toast("Error guardando ítem","err");}
+}
 const COT_PEV_BLOQUES=[
   {key:"pedagogico",label:"Bloque 1 — Pedagógico",icon:"📚"},
   {key:"procedimental",label:"Bloque 2 — Procedimental",icon:"🔬"},
@@ -16130,20 +16424,23 @@ const COT_PEV_TEMPLATES={
   ],
 };
 
+let cotizEnCF=new Set();
+
 async function loadCotizacionesPage(){
   try{
-    const [params,catalogo,cotz]=await Promise.all([
+    const [params,catalogo,cotz,cobCF]=await Promise.all([
       sb("nomenclador_params?select=variable,valor"),
       sb("nomenclador_catalogo?select=*&order=nivel,codigo&activo=eq.true"),
-      sb("cotizaciones?select=*&order=created_at.desc")
+      sb("cotizaciones?select=*&order=created_at.desc"),
+      sb("cf_cobranzas?select=cotizacion_id&cotizacion_id=not.is.null").catch(()=>[])
     ]);
     nomParams={};
     (params||[]).forEach(p=>nomParams[p.variable]=parseFloat(p.valor));
     nomCatalogo=catalogo||[];
     cotizaciones=cotz||[];
+    cotizEnCF=new Set((cobCF||[]).map(x=>x.cotizacion_id).filter(Boolean));
     renderCotizaciones();
     updateCotizStats();
-    // nomCatalogo disponible para el dropdown custom cotizFiltrarCatalogo()
   }catch(e){console.error(e);toast("Error cargando cotizaciones","err");}
 }
 
@@ -16185,7 +16482,8 @@ function renderCotizaciones(){
     <td><span style="font-size:11px;font-weight:700;color:${c.via==="PEV"?"var(--am)":"var(--bl)"}">${c.via==="PEV"?"PEV "+(c.pev_etapa||""):"VÍA "+(c.via||"A")}</span></td>
     <td>USD ${(c.total_usd||0).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
     <td>$${(c.total_ars||0).toLocaleString("es-AR",{maximumFractionDigits:0})}</td>
-    <td><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:8px;background:${col[c.estado]||"var(--tx3)"}22;color:${col[c.estado]||"var(--tx3)"}">${c.estado||"—"}</span></td>
+    <td><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:8px;background:${col[c.estado]||"var(--tx3)"}22;color:${col[c.estado]||"var(--tx3)"}">${c.estado||"—"}</span>${cotizEnCF.has(c.id)?` <span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;background:var(--ve)22;color:var(--ve)" title="Cobranza creada en Cash Flow">CF ✓</span>`:""}
+    </td>
     <td style="font-size:12px;color:var(--tx3)">${c.created_at?new Date(c.created_at).toLocaleDateString("es-AR"):""}</td>
     <td><div style="display:flex;gap:4px">
       <button class="btn sm sec" onclick="openEditCotizacion('${c.id}')">Editar</button>
@@ -16645,7 +16943,33 @@ async function rotarEstadoCotiz(id){
     renderCotizaciones();
     updateCotizStats();
     toast(`Estado: ${next}`,"ok");
+    if(next==="aceptada") await cotizCrearCobranzaCF(c);
   }catch(e){toast("Error","err");}
+}
+
+async function cotizCrearCobranzaCF(c){
+  // Evitar duplicado si ya existe una cobranza para esta cotización
+  try{
+    const existe=await sb(`cf_cobranzas?cotizacion_id=eq.${c.id}&select=id&limit=1`);
+    if(existe&&existe.length>0)return;
+    // Fecha vencimiento: 30 días desde hoy
+    const fv=new Date();fv.setDate(fv.getDate()+30);
+    const fecha=fv.toISOString().slice(0,10);
+    const numero=c.numero?` #${c.numero}`:"";
+    const cobranza={
+      nombre:`Cotización${numero} — ${c.cliente||"Sin cliente"}`,
+      tipo:"Transferencia",
+      remitente:c.cliente||"",
+      sociedad:"SUDES",
+      estado:"Pendiente",
+      monto:Math.round(c.total_ars||0),
+      fecha_vencimiento:fecha,
+      notas:`Generada automáticamente al aceptar cotización${numero}. Vía ${c.via||"A"}.`,
+      cotizacion_id:c.id,
+    };
+    await sb("cf_cobranzas",{method:"POST",body:JSON.stringify(cobranza)});
+    toast("Cobranza creada en Cash Flow ✓","ok");
+  }catch(e){console.error("cotizCrearCobranzaCF:",e);}
 }
 
 async function deleteCotizacion(id){
