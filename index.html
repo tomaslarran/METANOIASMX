@@ -5973,7 +5973,7 @@ async function loadCursoClases(cursoId){
     let items=[];
     if(clases.length){
       const ids=clases.map(c=>c.id).join(",");
-      items=await sb(`clase_items?select=*,nomenclador_catalogo(descripcion,codigo,tipo,nivel)&clase_id=in.(${ids})`);
+      items=await sb(`clase_items?clase_id=in.(${ids})`);
     }
     _cursoClases[cursoId]=clases.map(cl=>({...cl,items:items.filter(it=>it.clase_id===cl.id)}));
     renderCursoClases(cursoId);
@@ -6006,8 +6006,7 @@ function renderCursoClases(cursoId){
           ${cl.items.length===0?`<div style="font-size:11px;color:var(--tx3);padding:6px 0">Sin prácticas cargadas</div>`:""}
           ${cl.items.map(it=>`
             <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--b)">
-              <span style="font-size:10px;font-family:monospace;color:var(--tx3);min-width:70px">${it.nomenclador_catalogo?.codigo||""}</span>
-              <span style="flex:1;font-size:12px">${esc(it.nomenclador_catalogo?.descripcion||"Práctica")}</span>
+              ${(()=>{const cat=(nomCatalogoAll||[]).find(n=>n.codigo===it.catalogo_codigo);return`<span style="font-size:10px;font-family:monospace;color:var(--tx3);min-width:70px">${esc(it.catalogo_codigo||"")}</span><span style="flex:1;font-size:12px">${esc(cat?.descripcion||it.catalogo_codigo||"Práctica")}</span>`;})()}
               <input type="number" value="${it.horas||1}" min="0.5" step="0.5" style="width:52px;font-size:12px" class="fi" onchange="updateClaseItemHoras('${it.id}','${cursoId}',this.value)" title="Horas">
               <span style="font-size:11px;color:var(--tx3)">h</span>
               <button class="btn sm sec" onclick="removeClaseItem('${it.id}','${cursoId}')" style="color:var(--re);padding:2px 5px">✕</button>
@@ -6015,7 +6014,7 @@ function renderCursoClases(cursoId){
           <div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <select class="fi" id="cls-cat-sel-${cl.id}" style="flex:1;min-width:180px;font-size:12px">
               <option value="">— Agregar práctica del catálogo —</option>
-              ${(nomCatalogo||[]).filter(n=>n.activo!==false).map(n=>`<option value="${n.id}">${n.codigo} — ${n.descripcion}</option>`).join("")}
+              ${(nomCatalogo||[]).filter(n=>n.activo!==false).map(n=>`<option value="${esc(n.codigo||"")}">${n.codigo} — ${n.descripcion}</option>`).join("")}
             </select>
             <input type="number" id="cls-cat-hrs-${cl.id}" value="1" min="0.5" step="0.5" style="width:56px;font-size:12px" class="fi" title="Horas">
             <button class="btn sm" onclick="addClaseItem('${cl.id}','${cursoId}')">+ Agregar</button>
@@ -6080,7 +6079,7 @@ async function addClaseItem(claseId,cursoId){
   if(!sel?.value){toast("Seleccioná una práctica","err");return;}
   const horas=parseFloat(hrsEl?.value)||1;
   try{
-    await sb("clase_items",{method:"POST",body:JSON.stringify({clase_id:claseId,catalogo_id:sel.value,horas})});
+    await sb("clase_items",{method:"POST",body:JSON.stringify({clase_id:claseId,catalogo_codigo:sel.value,horas})});
     await loadCursoClases(cursoId);
   }catch(e){toast("Error: "+e.message,"err");}
 }
@@ -16622,7 +16621,7 @@ function nomRenderCatalogo(){
       <td style="color:var(--am);font-weight:600">${pext>0?"$"+pext.toFixed(0):"—"}</td>
       <td style="font-weight:600;color:${margenColor}">${margenAfl!=null?margenAfl+"%":"—"}</td>
       <td><span style="font-size:11px;padding:2px 8px;border-radius:8px;background:${it.activo===false?"var(--re)22":"var(--ve)22"};color:${it.activo===false?"var(--re)":"var(--ve)"}">${it.activo===false?"Inactivo":"Activo"}</span></td>
-      <td><button class="btn sm sec" onclick="nomOpenEditItem('${it.id}')">Editar</button></td>
+      <td><button class="btn sm sec" onclick="nomOpenEditItem('${esc(it.codigo||"")}')">Editar</button></td>
     </tr>`;
   }).join("")}</tbody></table></div>`;
 }
@@ -16657,9 +16656,9 @@ function nomOpenNewItem(){
 }
 
 function nomOpenEditItem(id){
-  const it=nomCatalogoAll.find(x=>x.id===id);
+  const it=nomCatalogoAll.find(x=>x.codigo===id);
   if(!it)return;
-  document.getElementById("nom-item-id").value=it.id;
+  document.getElementById("nom-item-id").value=it.codigo;
   document.getElementById("nom-item-title").textContent="Editar ítem";
   document.getElementById("nom-item-desc").value=it.descripcion||"";
   document.getElementById("nom-item-codigo").value=it.codigo||"";
@@ -16690,8 +16689,8 @@ async function nomSaveItem(){
   if(!payload.descripcion||!payload.codigo){toast("Completá descripción y código","err");return;}
   try{
     if(id){
-      await sb(`nomenclador_catalogo?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(payload)});
-      const i=nomCatalogoAll.findIndex(x=>x.id===id);
+      await sb(`nomenclador_catalogo?codigo=eq.${id}`,{method:"PATCH",body:JSON.stringify(payload)});
+      const i=nomCatalogoAll.findIndex(x=>x.codigo===id);
       if(i>=0)nomCatalogoAll[i]={...nomCatalogoAll[i],...payload};
     }else{
       const [nuevo]=await sb("nomenclador_catalogo",{method:"POST",body:JSON.stringify(payload)});
