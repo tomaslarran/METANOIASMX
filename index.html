@@ -3346,6 +3346,35 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 </div>
 
+<!-- ══ MODAL NUEVA CLASE ══ -->
+<div class="mov" id="modal-nueva-clase" onclick="if(event.target===this)closeModal('modal-nueva-clase')">
+  <div class="modal" style="max-width:420px">
+    <div class="mt"><span id="nueva-clase-title">Nueva clase</span><button class="mc" onclick="closeModal('modal-nueva-clase')">✕</button></div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+      <input type="hidden" id="nc-curso-id">
+      <input type="hidden" id="nc-clase-id">
+      <div>
+        <div class="fl">Nombre de la clase *</div>
+        <input class="fi" id="nc-nombre" placeholder="Ej: Clase 1 — Introducción a simulación" style="width:100%">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <div class="fl">Fecha</div>
+          <input class="fi" id="nc-fecha" type="date">
+        </div>
+        <div>
+          <div class="fl">Duración (minutos)</div>
+          <input class="fi" id="nc-duracion" type="number" min="30" step="30" placeholder="120">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+        <button class="btn sec" onclick="closeModal('modal-nueva-clase')">Cancelar</button>
+        <button class="btn" onclick="saveNuevaClase()">Guardar clase</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL NUEVO CURSO -->
 <!-- ══ MODAL CREAR CURSO CON IA ══ -->
 <div class="mov" id="modal-solicitar-edicion" onclick="if(event.target===this)closeModal('modal-solicitar-edicion')">
@@ -5996,21 +6025,34 @@ function renderCursoClases(cursoId){
     }).join("")}`;
 }
 
-async function openNuevaClase(cursoId){
-  const nombre=prompt("Nombre de la clase (ej: Clase 1 — Introducción):");
-  if(!nombre)return;
-  const fecha=prompt("Fecha (YYYY-MM-DD) — opcional:");
-  const duracion=prompt("Duración en minutos — opcional:");
+function openNuevaClase(cursoId){
+  document.getElementById("nc-curso-id").value=cursoId;
+  document.getElementById("nc-clase-id").value="";
+  document.getElementById("nueva-clase-title").textContent="Nueva clase";
+  document.getElementById("nc-nombre").value="";
+  document.getElementById("nc-fecha").value="";
+  document.getElementById("nc-duracion").value="";
+  openModal("modal-nueva-clase");
+  setTimeout(()=>document.getElementById("nc-nombre")?.focus(),200);
+}
+
+async function saveNuevaClase(){
+  const cursoId=document.getElementById("nc-curso-id").value;
+  const nombre=document.getElementById("nc-nombre").value.trim();
+  if(!nombre){toast("El nombre es obligatorio","err");return;}
+  const fecha=document.getElementById("nc-fecha").value||null;
+  const duracion=document.getElementById("nc-duracion").value;
   const orden=(_cursoClases[cursoId]||[]).length;
   try{
     await sb("curso_clases",{method:"POST",body:JSON.stringify({
       curso_id:cursoId,nombre,
-      fecha:fecha||null,
+      fecha,
       duracion_min:duracion?parseInt(duracion):null,
       orden
     })});
+    closeModal("modal-nueva-clase");
     await loadCursoClases(cursoId);
-    toast("Clase agregada","ok");
+    toast("Clase agregada ✓","ok");
   }catch(e){toast("Error: "+e.message,"err");}
 }
 
