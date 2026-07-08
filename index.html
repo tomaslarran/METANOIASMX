@@ -3455,11 +3455,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg"><label class="fl">Instructor</label><input class="fi" id="c-instructor" type="text" placeholder="Nombre del instructor"></div>
     <div class="fg"><label class="fl">Proveedor</label><select class="fs" id="c-proveedor"><option value="">Sin proveedor</option></select></div>
     <div class="fg form-full"><label class="fl">Respaldo institucional</label><input class="fi" id="c-respaldo" type="text" placeholder="Ej: Colegio de Médicos de Salta"></div>
-    <div class="fg form-full"><label class="fl">Descripción del curso</label><textarea class="fta" id="c-desc" placeholder="Descripción del curso, objetivos, contenido..."></textarea></div>
+    <div class="fg form-full" id="c-desc-wrap"><label class="fl">Descripción del curso</label><textarea class="fta" id="c-desc" placeholder="Descripción del curso, objetivos, contenido..."></textarea></div>
     <div class="fg form-full" id="c-desc-clases-wrap"><label class="fl">Descripción de clases</label><textarea class="fta" id="c-desc-clases" placeholder="Detalle de clases, módulos, actividades..."></textarea></div>
   </div>
   <div class="toggle-row">
-    <label class="toggle"><input type="checkbox" id="c-tiene-clases" onchange="document.getElementById('c-desc-clases-wrap').style.display=this.checked?'none':'block'"><span class="tslider"></span></label>
+    <label class="toggle"><input type="checkbox" id="c-tiene-clases" onchange="document.getElementById('c-desc-clases-wrap').style.display=this.checked?'none':'block';document.getElementById('c-desc-wrap').style.display='block';"><span class="tslider"></span></label>
     <span class="toggle-label">Este curso tiene múltiples clases y prácticas <span style="font-size:10px;color:var(--tx3)">(habilita curriculo estructurado)</span></span>
   </div>
   <div class="toggle-row" style="margin-top:6px">
@@ -4465,6 +4465,7 @@ function openNewModal(){
     const cb=document.getElementById("c-after");if(cb)cb.checked=false;
     const cbc=document.getElementById("c-tiene-clases");if(cbc)cbc.checked=false;
     const dw=document.getElementById("c-desc-clases-wrap");if(dw)dw.style.display="block";
+    const dw2=document.getElementById("c-desc-wrap");if(dw2)dw2.style.display="block";
     document.getElementById("c-after-desc-wrap").style.display="none";
     openModal("modal-curso");
   }
