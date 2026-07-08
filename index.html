@@ -16988,10 +16988,10 @@ function setCotizVia(via){
   if(lblC)lblC.textContent=via==="PEV"?"Overhead + Margen (15%+40%)":"Canon CM (10%)";
   if(lblT)lblT.textContent=via==="PEV"?"Precio sugerido":"Total USD";
   const desc=via==="A"
-    ?"<strong>Vía A</strong>: Colmedsa organiza y avala el curso. SUDES actúa como proveedor de simulación. El precio para alumnos afiliados tiene descuento; los externos pagan canon del 10% a CM. Usá cuando el cliente es el propio Colegio Médico."
+    ?"<strong>Vía A — Cursos independientes</strong>: SUDES organiza y ofrece el curso de forma autónoma. La certificación de Colmedsa es <em>opcional</em> y debe solicitarse expresamente — no está incluida por defecto. El canon CM (10%) aplica solo si se incluye aval del Colegio. Usá cuando el cliente es una institución externa, grupo de profesionales o un comercial propio."
     :via==="B"
-    ?"<strong>Vía B</strong>: SUDES organiza el curso y presta el servicio directamente a Colmedsa. La tarifa por hora incluye instructor, amortización de equipos, overhead (15%) y margen (40%). Usá cuando facturás a CM por horas de servicio."
-    :"<strong>Vía PEV</strong>: Cotización para una actividad nueva en desarrollo. Estimá los costos por bloque (pedagógico, procedimental, insumos, informatización, aprobación). El precio sugerido aplica overhead 15% y margen 40% automáticamente.";
+    ?"<strong>Vía B — Servicio de simulación a Colmedsa</strong>: Colmedsa organiza el evento y genera el contenido para certificación de especialidades. SUDES vende el soporte de simulación: equipos, instructores e instalaciones. Facturás a Colmedsa por el uso de tus recursos; ellos gestionan la convocatoria y los contenidos. La tarifa por hora incluye instructor, amortización, overhead (15%) y margen (40%)."
+    :"<strong>Vía PEV — Validación de actividad nueva</strong>: Herramienta interna para estimar el costo de una actividad antes de aprobarla comercialmente. <em>No es una línea comercial ni un producto terminado.</em> El resultado informa si la actividad es viable y a qué precio. Estimá por bloques (pedagógico, procedimental, insumos, informatización, aprobación). Overhead 15% + margen 40% automáticos.";
   document.getElementById("cot-via-desc").innerHTML=desc;
   if(via==="PEV"){renderPevBlocks();cotizPevCalc();}
   else{cotizFiltrarCatalogo(document.getElementById("cot-item-search")?.value||"");renderCotizItemsTable();cotizCalc();}
@@ -17374,7 +17374,7 @@ function cotizAbrirCrearCurso(cotizId){
   // Arancel: total ARS (puede ajustarse después)
   if(c.total_ars)document.getElementById("c-arancel").value=Math.round(c.total_ars);
   // Línea de negocio según vía
-  const lineaMap={"A":"Colmedsa","B":"Colmedsa","PEV":"Comercial"};
+  const lineaMap={"A":"Comercial","B":"Colmedsa"};
   const lineaSel=document.getElementById("c-linea");
   if(lineaSel&&lineaMap[c.via])lineaSel.value=lineaMap[c.via];
   // Instructor desde items (buscar ítem de tipo instructor)
