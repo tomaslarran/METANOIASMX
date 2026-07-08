@@ -4867,6 +4867,10 @@ async function selectCurso(id){
             <label class="toggle"><input type="checkbox" ${curso.tiene_after?"checked":""} onchange="updateCursoField('${id}','tiene_after',this.checked)"><span class="tslider"></span></label>
             <span class="toggle-label">Tiene catering</span>
           </div>
+          <div class="toggle-row">
+            <label class="toggle"><input type="checkbox" ${curso.tiene_clases?"checked":""} onchange="updateCursoField('${id}','tiene_clases',this.checked);selectCurso('${id}')"><span class="tslider"></span></label>
+            <span class="toggle-label">Múltiples clases y prácticas <span style="font-size:10px;color:var(--tx3)">(curriculo estructurado)</span></span>
+          </div>
         </div>
         ${curso.tiene_after?`<div class="fg" style="margin-top:8px"><label class="fl">Descripción del catering</label><input class="fi" value="${esc(curso.descripcion_after||"")}" onchange="updateCursoField('${id}','descripcion_after',this.value)" placeholder="Ej: Cena en Restaurante El Portal, 21hs"></div>`:""}
       </div>
