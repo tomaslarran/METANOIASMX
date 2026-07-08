@@ -3454,6 +3454,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg"><label class="fl">Arancel ($)</label><input class="fi" id="c-arancel" type="number" placeholder="0"></div>
     <div class="fg"><label class="fl">Desc. Colegio Médicos (%)</label><input class="fi" id="c-descuento" type="number" placeholder="0" min="0" max="100"></div>
     <div class="fg"><label class="fl">Línea de negocio</label><select class="fs" id="c-linea"><option value="">Sin asignar</option><option value="MSP / Convenio">MSP / Convenio</option><option value="Colmedsa">Colmedsa</option><option value="Comercial">Comercial</option><option value="EMC / Gratuito">EMC / Gratuito</option></select></div>
+    <div class="fg"><label class="fl">Recurrencia</label><select class="fs" id="c-recurrencia"><option value="">Única vez</option><option value="Mensual">Mensual</option><option value="Cuatrimestral">Cuatrimestral</option><option value="Semestral">Semestral</option><option value="Anual">Anual</option></select></div>
     <div class="fg"><label class="fl">Instructor</label><input class="fi" id="c-instructor" type="text" placeholder="Nombre del instructor"></div>
     <div class="fg"><label class="fl">Proveedor</label><select class="fs" id="c-proveedor"><option value="">Sin proveedor</option></select></div>
     <div class="fg form-full"><label class="fl">Respaldo institucional</label><input class="fi" id="c-respaldo" type="text" placeholder="Ej: Colegio de Médicos de Salta"></div>
@@ -4462,6 +4463,7 @@ function openNewModal(){
     document.getElementById("c-modalidad").value="Presencial";
     document.getElementById("c-estado").value="Borrador";
     document.getElementById("c-linea").value="";
+    document.getElementById("c-recurrencia").value="";
     document.getElementById("c-proveedor").value="";
     document.getElementById("c-plantilla").value="";
     const cb=document.getElementById("c-after");if(cb)cb.checked=false;
@@ -4785,6 +4787,7 @@ function renderCursos(){
           ${curso.cupos_max?`<span class="cc-pill">👥 ${curso.cupos_inscriptos||0}/${curso.cupos_max}</span>`:""}
           ${curso.arancel?`<span class="cc-pill">💰 $${curso.arancel.toLocaleString()}</span>`:""}
           ${curso.tiene_after?`<span class="cc-pill" style="color:#C4B5FD">🍽️ Catering</span>`:""}
+          ${curso.recurrencia?`<span class="cc-pill" style="color:#059669">🔁 ${esc(curso.recurrencia)}</span>`:""}
           ${prov?`<span class="cc-pill">🏢 ${esc(prov.nombre)}</span>`:""}
         </div>
         <div class="cc-progress">
@@ -4854,6 +4857,7 @@ async function selectCurso(id){
           <div class="fg"><label class="fl">Instructor</label><input class="fi" value="${esc(curso.instructor_nombre||"")}" onchange="updateCursoField('${id}','instructor_nombre',this.value)"></div>
           <div class="fg"><label class="fl">Proveedor</label><select class="fs" onchange="updateCursoField('${id}','proveedor_id',this.value)"><option value="">Sin proveedor</option>${proveedores.map(p=>`<option value="${p.id}"${p.id===curso.proveedor_id?" selected":""}>${p.nombre}</option>`).join("")}</select></div>
           <div class="fg"><label class="fl">Línea de negocio</label><select class="fs" onchange="updateCursoField('${id}','linea_negocio',this.value||null)"><option value="">Sin asignar</option>${["MSP / Convenio","Colmedsa","Comercial","EMC / Gratuito"].map(l=>`<option value="${l}"${curso.linea_negocio===l?" selected":""}>${l}</option>`).join("")}</select></div>
+          <div class="fg"><label class="fl">Recurrencia</label><select class="fs" onchange="updateCursoField('${id}','recurrencia',this.value||null)"><option value="">Única vez</option>${["Mensual","Cuatrimestral","Semestral","Anual"].map(r=>`<option value="${r}"${curso.recurrencia===r?" selected":""}>${r}</option>`).join("")}</select></div>
           <div class="fg form-full"><label class="fl">Respaldo institucional</label><input class="fi" value="${esc(curso.respaldo_institucional||"")}" onchange="updateCursoField('${id}','respaldo_institucional',this.value)"></div>
           <div class="fg form-full"><label class="fl">Descripción del curso</label><textarea class="fta" onchange="updateCursoField('${id}','descripcion',this.value)">${esc(curso.descripcion||"")}</textarea></div>
           <div class="fg form-full"><label class="fl">Descripción de clases</label><textarea class="fta" onchange="updateCursoField('${id}','descripcion_clases',this.value)">${esc(curso.descripcion_clases||"")}</textarea></div>
@@ -5911,6 +5915,7 @@ async function createCurso(){
     arancel:document.getElementById("c-arancel").value?Number(document.getElementById("c-arancel").value):null,
     descuento_colegio:document.getElementById("c-descuento").value?Number(document.getElementById("c-descuento").value):null,
     linea_negocio:document.getElementById("c-linea").value||null,
+    recurrencia:document.getElementById("c-recurrencia").value||null,
     instructor_nombre:document.getElementById("c-instructor").value||null,
     proveedor_id:document.getElementById("c-proveedor").value||null,
     respaldo_institucional:document.getElementById("c-respaldo").value||null,
@@ -6056,6 +6061,16 @@ async function saveNuevaClase(){
   const nombre=document.getElementById("nc-nombre").value.trim();
   if(!nombre){toast("El nombre es obligatorio","err");return;}
   const fecha=document.getElementById("nc-fecha").value||null;
+  if(fecha){
+    const curso=cursos.find(c=>c.id===cursoId);
+    if(curso&&(curso.fecha_inicio||curso.fecha_fin)){
+      const f=new Date(fecha),fi=curso.fecha_inicio?new Date(curso.fecha_inicio):null,ff=curso.fecha_fin?new Date(curso.fecha_fin):null;
+      if((fi&&f<fi)||(ff&&f>ff)){
+        const rango=`${fi?fi.toLocaleDateString("es-AR"):""} – ${ff?ff.toLocaleDateString("es-AR"):""}`;
+        if(!confirm(`⚠ La fecha de la clase está fuera del rango del curso (${rango}).\n¿Agregar igual?`))return;
+      }
+    }
+  }
   const duracion=document.getElementById("nc-duracion").value;
   const orden=(_cursoClases[cursoId]||[]).length;
   try{
