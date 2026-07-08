@@ -3427,9 +3427,13 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg"><label class="fl">Proveedor</label><select class="fs" id="c-proveedor"><option value="">Sin proveedor</option></select></div>
     <div class="fg form-full"><label class="fl">Respaldo institucional</label><input class="fi" id="c-respaldo" type="text" placeholder="Ej: Colegio de Médicos de Salta"></div>
     <div class="fg form-full"><label class="fl">Descripción del curso</label><textarea class="fta" id="c-desc" placeholder="Descripción del curso, objetivos, contenido..."></textarea></div>
-    <div class="fg form-full"><label class="fl">Descripción de clases</label><textarea class="fta" id="c-desc-clases" placeholder="Detalle de clases, módulos, actividades..."></textarea></div>
+    <div class="fg form-full" id="c-desc-clases-wrap"><label class="fl">Descripción de clases</label><textarea class="fta" id="c-desc-clases" placeholder="Detalle de clases, módulos, actividades..."></textarea></div>
   </div>
   <div class="toggle-row">
+    <label class="toggle"><input type="checkbox" id="c-tiene-clases" onchange="document.getElementById('c-desc-clases-wrap').style.display=this.checked?'none':'block'"><span class="tslider"></span></label>
+    <span class="toggle-label">Este curso tiene múltiples clases y prácticas <span style="font-size:10px;color:var(--tx3)">(habilita curriculo estructurado)</span></span>
+  </div>
+  <div class="toggle-row" style="margin-top:6px">
     <label class="toggle"><input type="checkbox" id="c-after"><span class="tslider"></span></label>
     <span class="toggle-label">¿Tiene catering? (evento social post-curso)</span>
   </div>
@@ -4430,6 +4434,8 @@ function openNewModal(){
     document.getElementById("c-proveedor").value="";
     document.getElementById("c-plantilla").value="";
     const cb=document.getElementById("c-after");if(cb)cb.checked=false;
+    const cbc=document.getElementById("c-tiene-clases");if(cbc)cbc.checked=false;
+    const dw=document.getElementById("c-desc-clases-wrap");if(dw)dw.style.display="block";
     document.getElementById("c-after-desc-wrap").style.display="none";
     openModal("modal-curso");
   }
@@ -4802,6 +4808,7 @@ async function selectCurso(id){
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-inscriptos-${id}');loadInscriptos('${id}')">📋 Inscriptos</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-cotiz-${id}');loadCursoCotizaciones('${id}')">💼 Cotizaciones</div>
       <div class="cd-tab cd-tab-archivos" onclick="showCdTab(this,'cd-archivos-${id}');loadCursoArchivos('${id}')">📁 Archivos</div>
+      ${curso.tiene_clases?`<div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-clases-${id}');loadCursoClases('${id}')">📚 Clases</div>`:""}
     </div>
     <div class="cd-body">
       <div id="cd-info-${id}">
@@ -4878,6 +4885,9 @@ async function selectCurso(id){
       </div>
       <div id="cd-cotiz-${id}" style="display:none">
         <div id="cotiz-curso-content-${id}" style="padding:4px 0"><div style="color:var(--tx3);padding:24px;text-align:center">Cargando...</div></div>
+      </div>
+      <div id="cd-clases-${id}" style="display:none">
+        <div id="clases-content-${id}"><div style="color:var(--tx3);padding:24px;text-align:center">Cargando curriculo...</div></div>
       </div>
       <div id="cd-archivos-${id}" style="display:none">
         <div id="archivos-content-${id}" style="padding:4px 0"><div style="color:var(--tx3);padding:24px;text-align:center">Cargando...</div></div>
@@ -5875,6 +5885,7 @@ async function createCurso(){
     plantilla_usada:plantillaId||null,progreso:0,
     creado_por:loggedUser?.nombre||null,
     cotizacion_id:document.getElementById("c-cotizacion-id")?.value||null,
+    tiene_clases:document.getElementById("c-tiene-clases")?.checked||false,
     conversacion_ia:cursoIAHistorial.length>0?cursoIAHistorial:null,
     updated_at:new Date().toISOString()
   };
@@ -5899,8 +5910,14 @@ async function createCurso(){
     }
     closeModal("modal-curso");renderCursos();updateSideBadges();toast(`"${nombre}" creado`,"ok");
     await selectCurso(created.id);
-    const archivosTab=document.querySelector(`[onclick*="cd-archivos-${created.id}"]`);
-    if(archivosTab)archivosTab.click();
+    const tieneCls=document.getElementById("c-tiene-clases")?.checked;
+    if(tieneCls){
+      const clasesTab=document.querySelector(`[onclick*="cd-clases-${created.id}"]`);
+      if(clasesTab)clasesTab.click();
+    } else {
+      const archivosTab=document.querySelector(`[onclick*="cd-archivos-${created.id}"]`);
+      if(archivosTab)archivosTab.click();
+    }
     // Notificar a usuarios con alerta_nuevo_curso activa
     try{
       const destinos=notifConfigs.filter(c=>c.alerta_nuevo_curso&&c.usuario_id!==loggedUser?.id);
@@ -5915,6 +5932,126 @@ async function createCurso(){
 }
 
 function openPlantillaModal(){toast("Plantillas: podés editar la plantilla base directamente en Supabase > curso_tareas","inf")}
+
+// ── CLASES DE CURSO ────────────────────────────────────────────────────────
+let _cursoClases={};// {cursoId: [{...clase, items:[...]}]}
+
+async function loadCursoClases(cursoId){
+  const cont=document.getElementById(`clases-content-${cursoId}`);
+  if(!cont)return;
+  try{
+    const clases=await sb(`curso_clases?curso_id=eq.${cursoId}&order=orden.asc,created_at.asc`);
+    let items=[];
+    if(clases.length){
+      const ids=clases.map(c=>c.id).join(",");
+      items=await sb(`clase_items?select=*,nomenclador_catalogo(descripcion,codigo,tipo,nivel)&clase_id=in.(${ids})`);
+    }
+    _cursoClases[cursoId]=clases.map(cl=>({...cl,items:items.filter(it=>it.clase_id===cl.id)}));
+    renderCursoClases(cursoId);
+  }catch(e){cont.innerHTML=`<div style="color:var(--re);padding:16px">Error: ${e.message}</div>`;}
+}
+
+function renderCursoClases(cursoId){
+  const cont=document.getElementById(`clases-content-${cursoId}`);
+  if(!cont)return;
+  const clases=_cursoClases[cursoId]||[];
+  const totalHoras=clases.reduce((s,cl)=>s+cl.items.reduce((ss,it)=>ss+(parseFloat(it.horas)||0),0),0);
+  cont.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div style="font-size:12px;color:var(--tx3)">${clases.length} clase${clases.length!==1?"s":""} · ${totalHoras.toFixed(1)}h total de prácticas</div>
+      <button class="btn sm" onclick="openNuevaClase('${cursoId}')">+ Nueva clase</button>
+    </div>
+    ${clases.length===0?`<div style="color:var(--tx3);text-align:center;padding:32px">Sin clases cargadas. Agregá la primera clase.</div>`:""}
+    ${clases.map((cl,idx)=>{
+      const hCl=cl.items.reduce((s,it)=>s+(parseFloat(it.horas)||0),0);
+      return`<div style="border:1px solid var(--b);border-radius:var(--rlg);margin-bottom:12px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surf2);border-bottom:1px solid var(--b)">
+          <div style="font-size:12px;font-weight:700;color:var(--ac);min-width:24px">${idx+1}</div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600">${esc(cl.nombre)}</div>
+            <div style="font-size:11px;color:var(--tx3)">${cl.fecha?new Date(cl.fecha).toLocaleDateString("es-AR"):""} ${cl.duracion_min?`· ${cl.duracion_min} min`:""}${hCl?` · ${hCl}h prácticas`:""}</div>
+          </div>
+          <button class="btn sm sec" onclick="deleteClase('${cl.id}','${cursoId}')" style="color:var(--re)">✕</button>
+        </div>
+        <div style="padding:10px 14px">
+          ${cl.items.length===0?`<div style="font-size:11px;color:var(--tx3);padding:6px 0">Sin prácticas cargadas</div>`:""}
+          ${cl.items.map(it=>`
+            <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--b)">
+              <span style="font-size:10px;font-family:monospace;color:var(--tx3);min-width:70px">${it.nomenclador_catalogo?.codigo||""}</span>
+              <span style="flex:1;font-size:12px">${esc(it.nomenclador_catalogo?.descripcion||"Práctica")}</span>
+              <input type="number" value="${it.horas||1}" min="0.5" step="0.5" style="width:52px;font-size:12px" class="fi" onchange="updateClaseItemHoras('${it.id}','${cursoId}',this.value)" title="Horas">
+              <span style="font-size:11px;color:var(--tx3)">h</span>
+              <button class="btn sm sec" onclick="removeClaseItem('${it.id}','${cursoId}')" style="color:var(--re);padding:2px 5px">✕</button>
+            </div>`).join("")}
+          <div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select class="fi" id="cls-cat-sel-${cl.id}" style="flex:1;min-width:180px;font-size:12px">
+              <option value="">— Agregar práctica del catálogo —</option>
+              ${(nomCatalogo||[]).filter(n=>n.activo!==false).map(n=>`<option value="${n.id}">${n.codigo} — ${n.descripcion}</option>`).join("")}
+            </select>
+            <input type="number" id="cls-cat-hrs-${cl.id}" value="1" min="0.5" step="0.5" style="width:56px;font-size:12px" class="fi" title="Horas">
+            <button class="btn sm" onclick="addClaseItem('${cl.id}','${cursoId}')">+ Agregar</button>
+          </div>
+        </div>
+      </div>`;
+    }).join("")}`;
+}
+
+async function openNuevaClase(cursoId){
+  const nombre=prompt("Nombre de la clase (ej: Clase 1 — Introducción):");
+  if(!nombre)return;
+  const fecha=prompt("Fecha (YYYY-MM-DD) — opcional:");
+  const duracion=prompt("Duración en minutos — opcional:");
+  const orden=(_cursoClases[cursoId]||[]).length;
+  try{
+    await sb("curso_clases",{method:"POST",body:JSON.stringify({
+      curso_id:cursoId,nombre,
+      fecha:fecha||null,
+      duracion_min:duracion?parseInt(duracion):null,
+      orden
+    })});
+    await loadCursoClases(cursoId);
+    toast("Clase agregada","ok");
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function deleteClase(claseId,cursoId){
+  if(!confirm("¿Eliminar esta clase y todas sus prácticas?"))return;
+  try{
+    await sb(`curso_clases?id=eq.${claseId}`,{method:"DELETE"});
+    await loadCursoClases(cursoId);
+    toast("Clase eliminada","ok");
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function addClaseItem(claseId,cursoId){
+  const sel=document.getElementById(`cls-cat-sel-${claseId}`);
+  const hrsEl=document.getElementById(`cls-cat-hrs-${claseId}`);
+  if(!sel?.value){toast("Seleccioná una práctica","err");return;}
+  const horas=parseFloat(hrsEl?.value)||1;
+  try{
+    await sb("clase_items",{method:"POST",body:JSON.stringify({clase_id:claseId,catalogo_id:sel.value,horas})});
+    await loadCursoClases(cursoId);
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function removeClaseItem(itemId,cursoId){
+  try{
+    await sb(`clase_items?id=eq.${itemId}`,{method:"DELETE"});
+    await loadCursoClases(cursoId);
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function updateClaseItemHoras(itemId,cursoId,val){
+  try{
+    await sb(`clase_items?id=eq.${itemId}`,{method:"PATCH",body:JSON.stringify({horas:parseFloat(val)||1})});
+    // Actualizar local sin recargar
+    for(const cl of (_cursoClases[cursoId]||[])){
+      const it=cl.items.find(i=>i.id===itemId);
+      if(it){it.horas=parseFloat(val)||1;break;}
+    }
+    renderCursoClases(cursoId);
+  }catch(e){toast("Error: "+e.message,"err");}
+}
 
 // ── ARCHIVOS DE CURSO ────────────────────────────────────────────────────────
 async function loadCursoArchivos(cursoId){
