@@ -2751,6 +2751,9 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
           <option value="C">Factura C</option>
           <option value="M">Factura M</option>
           <option value="X">Ticket / Otro</option>
+          <option value="NC-A">Nota de Crédito A</option>
+          <option value="NC-B">Nota de Crédito B</option>
+          <option value="NC-C">Nota de Crédito C</option>
         </select>
       </div>
     </div>
@@ -14600,11 +14603,11 @@ function renderComprobantes(){
     const desglose=(c.neto_21||0)+(c.neto_105||0)+(c.neto_27||0)+(c.neto_exento||0);
     const faltaDesglose=esDeProveedor&&(c.monto_neto||0)>0&&desglose===0&&c.estado!=="enviado_finnegans";
     return`<div class="item-row" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surf);border:1px solid ${faltaDesglose?"rgba(245,158,11,.5)":c.estado==="pendiente"&&esDeProveedor?"rgba(124,58,237,.3)":"var(--b)"};border-radius:var(--r);margin-bottom:6px">
-      <div style="font-size:20px;width:36px;text-align:center;flex-shrink:0">${c.tipo==="A"?"🟦":c.tipo==="B"?"🟩":c.tipo==="C"?"🟨":"📄"}</div>
+      <div style="font-size:20px;width:36px;text-align:center;flex-shrink:0">${c.tipo==="A"?"🟦":c.tipo==="B"?"🟩":c.tipo==="C"?"🟨":c.tipo?.startsWith("NC")?"🔴":"📄"}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.proveedor||"Sin proveedor")}</div>
         <div style="font-size:11px;color:var(--tx3);margin-top:2px">
-          Fact. ${c.tipo||"?"} ${c.numero?`· ${esc(c.numero)}`:""} · ${fecha}
+          ${c.tipo?.startsWith("NC")?`NC ${c.tipo.replace("NC-","")}`:`Fact. ${c.tipo||"?"}`} ${c.numero?`· ${esc(c.numero)}`:""} · ${fecha}
           ${c.sociedad?`<span style="margin-left:6px;font-size:9px;font-weight:700;color:var(--pu)">${c.sociedad}</span>`:""}
         </div>
         ${c.concepto?`<div style="font-size:11px;color:var(--tx3);margin-top:1px">${esc(c.concepto)}</div>`:""}
@@ -14680,13 +14683,16 @@ async function confirmarPagoComp(){
     c.estado="pagado";c.medio_pago=medio;c.fecha_pago=fecha;
     // Egreso en caja (anti-duplicado)
     const existe=await sb(`caja_movimientos?observaciones=like.*comp-${id}*&limit=1`).catch(()=>[]);
-    const descCaja=`Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"}`;
+    const esNC=c.tipo?.startsWith("NC");
+    const tipoMov=esNC?"ingreso":"egreso";
+    const prefijo=esNC?`NC ${c.tipo.replace("NC-","")}`:`Fact. ${c.tipo||""}`;
+    const descCaja=`${prefijo}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"}`;
     const obsStr=`${medio}${obs?` · ${obs}`:""} · comp-${id}`;
     if(existe?.length){
-      await sb(`caja_movimientos?observaciones=like.*comp-${id}*`,{method:"PATCH",body:JSON.stringify({observaciones:obsStr})});
+      await sb(`caja_movimientos?observaciones=like.*comp-${id}*`,{method:"PATCH",body:JSON.stringify({observaciones:obsStr,tipo:tipoMov})});
     } else {
       await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
-        sociedad:c.sociedad||"SUDES",fecha,tipo:"egreso",concepto:descCaja,
+        sociedad:c.sociedad||"SUDES",fecha,tipo:tipoMov,concepto:descCaja,
         categoria:"Proveedor",monto:Math.abs(parseFloat(c.total)||0),
         observaciones:obsStr,creado_por:loggedUser?.nombre||null
       })});
@@ -14730,11 +14736,14 @@ async function marcarEstadoComp(id,estado){
       try{
         const existe=await sb(`caja_movimientos?observaciones=like.*comp-${id}*&limit=1`);
         if(!existe?.length){
-          const descCaja=`Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""} — ${esc(c.proveedor||"Proveedor")}`;
+          const esNC=c.tipo?.startsWith("NC");
+          const tipoMov=esNC?"ingreso":"egreso";
+          const prefijo=esNC?`NC ${c.tipo.replace("NC-","")}`:`Fact. ${c.tipo||""}`;
+          const descCaja=`${prefijo}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"}`;
           await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
             sociedad:c.sociedad||"SUDES",
             fecha:c.fecha||today(),
-            tipo:"egreso",
+            tipo:tipoMov,
             concepto:descCaja,
             categoria:"Proveedor",
             monto:Math.abs(parseFloat(c.total)||0),
@@ -15282,7 +15291,8 @@ async function saveComprobante(){
     const tipo=document.getElementById("comp-tipo").value;
     if(nro){
       const dup=comprobantes.find(c=>c.numero===nro&&c.tipo===tipo&&c.proveedor.toLowerCase()===prov.toLowerCase());
-      if(dup&&!confirm(`⚠️ Ya existe una Factura ${tipo} N° ${nro} de ${prov}.\n¿Querés cargarla igual?`))return;
+      const tipoLabel=tipo.startsWith("NC")?`NC ${tipo.replace("NC-","")}`:`Factura ${tipo}`;
+      if(dup&&!confirm(`⚠️ Ya existe una ${tipoLabel} N° ${nro} de ${prov}.\n¿Querés cargarla igual?`))return;
     }
   }
   const data={
