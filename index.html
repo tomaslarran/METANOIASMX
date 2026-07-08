@@ -3477,6 +3477,27 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 </div>
 
+<!-- MODAL PAGAR COMPROBANTE -->
+<div class="mov" id="modal-pagar-comp" onclick="if(event.target===this)closeModal('modal-pagar-comp')">
+<div class="modal" style="max-width:380px">
+  <div class="mt">Registrar pago</div>
+  <input type="hidden" id="pagar-comp-id">
+  <div class="form-grid" style="grid-template-columns:1fr">
+    <div class="fg"><label class="fl">Medio de pago *</label>
+      <select class="fs" id="pagar-comp-medio">
+        <option value="Transferencia">Transferencia bancaria</option>
+        <option value="Efectivo">Efectivo</option>
+        <option value="Tarjeta">Tarjeta</option>
+        <option value="Cheque">Cheque</option>
+      </select>
+    </div>
+    <div class="fg"><label class="fl">Fecha de pago</label><input class="fi" id="pagar-comp-fecha" type="date"></div>
+    <div class="fg"><label class="fl">Observaciones</label><input class="fi" id="pagar-comp-obs" type="text" placeholder="Opcional — referencia, CBU, etc."></div>
+  </div>
+  <div class="ma"><button class="bc" onclick="closeModal('modal-pagar-comp')">Cancelar</button><button class="bk" onclick="confirmarPagoComp()">💳 Confirmar pago</button></div>
+</div>
+</div>
+
 <!-- MODAL NUEVO PROVEEDOR -->
 <div class="mov" id="modal-proveedor" onclick="if(event.target===this)closeModal('modal-proveedor')">
 <div class="modal">
@@ -14566,8 +14587,8 @@ function renderComprobantes(){
   if(!list.length){el.innerHTML=`<div class="empty"><div class="ei">📄</div><div class="et">Sin comprobantes</div><div class="es">Cargá una factura con el botón "Nueva factura"</div></div>`;return;}
 
   const estadoBadge=(e)=>{
-    const m={"pendiente":"background:rgba(245,158,11,.15);color:#FCD34D","revisado":"background:rgba(16,185,129,.15);color:#6EE7B7","enviado_finnegans":"background:rgba(59,130,246,.15);color:#93C5FD"};
-    const lbl={"pendiente":"⏳ Pendiente","revisado":"✅ Revisado","enviado_finnegans":"🔗 En Finnegans"};
+    const m={"pendiente":"background:rgba(245,158,11,.15);color:#FCD34D","revisado":"background:rgba(16,185,129,.15);color:#6EE7B7","enviado_finnegans":"background:rgba(59,130,246,.15);color:#93C5FD","pagado":"background:rgba(16,185,129,.3);color:#059669"};
+    const lbl={"pendiente":"⏳ Pendiente","revisado":"✅ Revisado","enviado_finnegans":"🔗 En Finnegans","pagado":"💰 Pagada"};
     return`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;${m[e]||"background:var(--surf2);color:var(--tx3)"}">${lbl[e]||e}</span>`;
   };
 
@@ -14596,13 +14617,15 @@ function renderComprobantes(){
         <div style="font-size:14px;font-weight:700;color:var(--tx)">${total}</div>
         ${iva?`<div style="font-size:10px;color:var(--tx3)">IVA ${iva}</div>`:""}
         <div style="margin-top:4px">${estadoBadge(c.estado)}</div>
+        ${c.estado==="pagado"&&c.medio_pago?`<div style="font-size:10px;color:var(--tx3);margin-top:2px">💳 ${esc(c.medio_pago)}</div>`:""}
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
         ${c.archivo_url?`<button onclick="window.open('${c.archivo_url}','_blank')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Ver archivo">👁</button>`:""}
         <button onclick="editComprobante('${c.id}')" style="background:none;border:1px solid ${faltaDesglose?"rgba(245,158,11,.6)":"var(--b)"};border-radius:5px;color:${faltaDesglose?"#FCD34D":"var(--tx3)"};font-size:10px;padding:3px 7px;cursor:pointer" title="${faltaDesglose?"Completar para Finnegans":"Editar"}">${faltaDesglose?"✏️":"✎"}</button>
-        ${c.estado!=="enviado_finnegans"
+        ${c.estado==="revisado"?`<button onclick="abrirPagarComp('${c.id}')" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);border-radius:5px;color:#059669;font-size:10px;padding:3px 7px;cursor:pointer" title="Registrar pago">💳</button>`:""}
+        ${c.estado!=="enviado_finnegans"&&c.estado!=="pagado"
           ?`<button onclick="marcarEstadoComp('${c.id}','${c.estado==="pendiente"?"revisado":"enviado_finnegans"}')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="${c.estado==="pendiente"?"Marcar revisado":"Enviar a Finnegans"}">${c.estado==="pendiente"?"✓":"→F"}</button>`
-          :`<button onclick="marcarEstadoComp('${c.id}','revisado')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Revertir a Revisado">↩</button>`}
+          :c.estado==="enviado_finnegans"?`<button onclick="marcarEstadoComp('${c.id}','revisado')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Revertir a Revisado">↩</button>`:""}
         <button onclick="delComprobante('${c.id}','${esc(c.proveedor||"")}','${esc(c.numero||"")}')" style="background:none;border:1px solid rgba(239,68,68,.4);border-radius:5px;color:#f87171;font-size:10px;padding:3px 7px;cursor:pointer" title="Eliminar">🗑</button>
       </div>
     </div>`;
@@ -14636,6 +14659,43 @@ function updateCompStats(){
   if(vEl){vEl.textContent=venc||"✓";vEl.style.color=venc?"var(--re)":"var(--gr)";}
 }
 
+function abrirPagarComp(id){
+  document.getElementById("pagar-comp-id").value=id;
+  document.getElementById("pagar-comp-medio").value="Transferencia";
+  document.getElementById("pagar-comp-fecha").value=today();
+  document.getElementById("pagar-comp-obs").value="";
+  openModal("modal-pagar-comp");
+}
+async function confirmarPagoComp(){
+  const id=document.getElementById("pagar-comp-id").value;
+  const medio=document.getElementById("pagar-comp-medio").value;
+  const fecha=document.getElementById("pagar-comp-fecha").value||today();
+  const obs=document.getElementById("pagar-comp-obs").value.trim();
+  const c=comprobantes.find(x=>x.id===id);
+  if(!c)return;
+  try{
+    await sb(`comprobantes_compra?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({
+      estado:"pagado",medio_pago:medio,fecha_pago:fecha,updated_at:new Date().toISOString()
+    })});
+    c.estado="pagado";c.medio_pago=medio;c.fecha_pago=fecha;
+    // Egreso en caja (anti-duplicado)
+    const existe=await sb(`caja_movimientos?observaciones=like.*comp-${id}*&limit=1`).catch(()=>[]);
+    const descCaja=`Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"}`;
+    const obsStr=`${medio}${obs?` · ${obs}`:""} · comp-${id}`;
+    if(existe?.length){
+      await sb(`caja_movimientos?observaciones=like.*comp-${id}*`,{method:"PATCH",body:JSON.stringify({observaciones:obsStr})});
+    } else {
+      await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
+        sociedad:c.sociedad||"SUDES",fecha,tipo:"egreso",concepto:descCaja,
+        categoria:"Proveedor",monto:Math.abs(parseFloat(c.total)||0),
+        observaciones:obsStr,creado_por:loggedUser?.nombre||null
+      })});
+    }
+    closeModal("modal-pagar-comp");
+    renderComprobantes();updateCompStats();
+    toast(`💰 Pagada · ${medio} · $${Math.round(c.total||0).toLocaleString("es-AR")}`,"ok");
+  }catch(e){toast("Error: "+e.message,"err");}
+}
 async function marcarEstadoComp(id,estado){
   try{
     await sb(`comprobantes_compra?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado,updated_at:new Date().toISOString()})});
