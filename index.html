@@ -6020,6 +6020,15 @@ function renderCursoClases(cursoId){
             <input type="number" id="cls-cat-hrs-${cl.id}" value="1" min="0.5" step="0.5" style="width:56px;font-size:12px" class="fi" title="Horas">
             <button class="btn sm" onclick="addClaseItem('${cl.id}','${cursoId}')">+ Agregar</button>
           </div>
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--b);display:flex;gap:6px;align-items:center">
+            <span style="font-size:11px;color:var(--tx3);white-space:nowrap">📁 Drive:</span>
+            ${cl.drive_url
+              ?`<a href="${esc(cl.drive_url)}" target="_blank" rel="noopener" class="btn sm sec" style="font-size:11px">Ver archivos →</a>
+                 <button class="btn sm sec" onclick="editClaseDriveUrl('${cl.id}','${cursoId}','${esc(cl.drive_url)}')" style="font-size:11px">Cambiar</button>
+                 <button class="btn sm sec" onclick="updateClaseDriveUrl('${cl.id}','${cursoId}','')" style="font-size:11px;color:var(--re)">✕</button>`
+              :`<input class="fi" id="cls-drive-${cl.id}" placeholder="Pegar link de carpeta Drive..." style="flex:1;font-size:11px" onkeydown="if(event.key==='Enter')updateClaseDriveUrl('${cl.id}','${cursoId}',this.value)">
+                <button class="btn sm" onclick="updateClaseDriveUrl('${cl.id}','${cursoId}',document.getElementById('cls-drive-${cl.id}').value)" style="font-size:11px">Guardar</button>`}
+          </div>
         </div>
       </div>`;
     }).join("")}`;
@@ -6081,6 +6090,25 @@ async function removeClaseItem(itemId,cursoId){
     await sb(`clase_items?id=eq.${itemId}`,{method:"DELETE"});
     await loadCursoClases(cursoId);
   }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function updateClaseDriveUrl(claseId,cursoId,url){
+  const drive_url=url.trim()||null;
+  try{
+    await sb(`curso_clases?id=eq.${claseId}`,{method:"PATCH",body:JSON.stringify({drive_url})});
+    for(const cl of (_cursoClases[cursoId]||[])){if(cl.id===claseId){cl.drive_url=drive_url;break;}}
+    renderCursoClases(cursoId);
+    toast(drive_url?"Link guardado ✓":"Link eliminado","ok");
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+function editClaseDriveUrl(claseId,cursoId,currentUrl){
+  for(const cl of (_cursoClases[cursoId]||[])){if(cl.id===claseId){cl.drive_url=null;break;}}
+  renderCursoClases(cursoId);
+  setTimeout(()=>{
+    const inp=document.getElementById(`cls-drive-${claseId}`);
+    if(inp){inp.value=currentUrl;inp.focus();inp.select();}
+  },50);
 }
 
 async function updateClaseItemHoras(itemId,cursoId,val){
