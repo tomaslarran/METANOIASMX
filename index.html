@@ -3279,7 +3279,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div id="mpe-resumen" style="background:var(--surf2);border-radius:var(--r);padding:12px 14px;font-size:13px;border:1px solid var(--b)"></div>
       <div class="fg"><label class="fl">Fecha de pago</label><input type="date" id="mpe-fecha" class="fi"></div>
       <div class="fg"><label class="fl">Monto abonado</label><input type="number" id="mpe-monto" class="fi" step="0.01" placeholder="0"></div>
-      <div class="fg"><label class="fl">Notas (opcional)</label><input type="text" id="mpe-notas" class="fi" placeholder="Ej: Transferencia banco"></div>
+      <div class="fg"><label class="fl">Medio de pago</label><select class="fi" id="mpe-medio"></select></div>
+      <div class="fg"><label class="fl">Notas (opcional)</label><input type="text" id="mpe-notas" class="fi" placeholder="Referencia, número de transferencia..."></div>
       <div style="display:flex;gap:8px;padding-top:4px">
         <button class="bc" onclick="closeM('modal-pago-empleado')" style="flex:1">Cancelar</button>
         <button class="bk" id="mpe-save-btn" onclick="confirmarPagoEmpleado()" style="flex:1">✓ Confirmar pago</button>
@@ -10211,6 +10212,9 @@ function abrirPagoEmpleado(empId,periodo){
   document.getElementById("mpe-fecha").value=today();
   document.getElementById("mpe-monto").value=emp.monto_mensual!=null?parseFloat(emp.monto_mensual).toFixed(2):"";
   document.getElementById("mpe-notas").value="";
+  const mpeSel=document.getElementById("mpe-medio");
+  const mpeActivos=mediosPago.filter(m=>m.activo&&(m.sociedad==="Ambas"||m.sociedad===emp.sociedad));
+  mpeSel.innerHTML=`<option value="">— Sin especificar —</option>`+(mpeActivos.length?mpeActivos:mediosPago.filter(m=>m.activo)).map(m=>`<option value="${esc(m.nombre)}">${esc(m.nombre)}${m.banco?` — ${esc(m.banco)}`:""}</option>`).join("");
   openM("modal-pago-empleado");
   setTimeout(()=>document.getElementById("mpe-fecha").focus(),80);
 }
@@ -10219,9 +10223,10 @@ async function confirmarPagoEmpleado(){
   const fecha=document.getElementById("mpe-fecha").value||today();
   const monto=parseFloat(document.getElementById("mpe-monto").value)||null;
   const notas=document.getElementById("mpe-notas").value.trim()||null;
+  const medio=document.getElementById("mpe-medio").value||null;
   const btn=document.getElementById("mpe-save-btn");btn.disabled=true;
   try{
-    const data={empleado_id:_mpeEmpId,periodo:_mpePeriodo,monto,pagado:true,fecha_pago:fecha,notas,updated_at:new Date().toISOString()};
+    const data={empleado_id:_mpeEmpId,periodo:_mpePeriodo,monto,pagado:true,fecha_pago:fecha,notas,medio_pago:medio||null,updated_at:new Date().toISOString()};
     const existe=cfPagosEmpleados.find(p=>p.empleado_id===_mpeEmpId&&p.periodo===_mpePeriodo);
     if(existe){
       await sb(`cf_pagos_empleados?id=eq.${existe.id}`,{method:"PATCH",body:JSON.stringify(data)});
