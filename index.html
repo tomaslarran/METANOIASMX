@@ -3088,6 +3088,24 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="fg"><label class="fl">Monto rescatado ($) *</label><input class="fi" id="cfr-monto" type="number" placeholder="0" step="0.01" oninput="updateCfrResumen()"></div>
     </div>
     <div id="cfr-resumen" style="font-size:12px;color:var(--tx3);margin-bottom:10px;display:none"></div>
+    <div class="fg"><label class="fl">Medio de acreditación</label>
+      <select class="fi" id="cfr-medio" onchange="toggleCfrEcheck()">
+        <option value="Transferencia">Transferencia bancaria</option>
+        <option value="eCheck">eCheck (echeque diferido)</option>
+        <option value="Efectivo">Efectivo</option>
+      </select>
+    </div>
+    <div id="cfr-echeck-wrap" style="display:none;background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:12px;margin-top:-4px;margin-bottom:8px">
+      <div style="font-size:11px;color:var(--ac);font-weight:600;margin-bottom:8px">📋 Datos del eCheck</div>
+      <div class="fgrid">
+        <div class="fg"><label class="fl">Fecha de acreditación *</label><input class="fi" id="cfr-eck-fecha" type="date"></div>
+        <div class="fg"><label class="fl">Nro. eCheck (opcional)</label><input class="fi" id="cfr-eck-nro" type="text" placeholder="Ej: 000123456"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+        <input type="checkbox" id="cfr-eck-cobranza" checked style="accent-color:var(--ac);width:14px;height:14px">
+        <label for="cfr-eck-cobranza" style="font-size:12px;color:var(--tx2);cursor:pointer">Crear cobranza pendiente hasta la fecha de acreditación</label>
+      </div>
+    </div>
     <div class="fg"><label class="fl">Notas</label><input class="fi" id="cfr-notas" type="text" placeholder="Ej: rescate anticipado, TNA obtenida..."></div>
     <div id="cfr-reinvertir-wrap" style="display:none;align-items:center;gap:8px;padding:10px 0 6px;border-top:1px solid var(--b);margin-top:8px">
       <input type="checkbox" id="cfr-reinvertir" style="accent-color:var(--ac);width:15px;height:15px">
@@ -10740,11 +10758,21 @@ function openRescateModal(id){
   document.getElementById("cfr-fecha").value=today();
   document.getElementById("cfr-monto").value="";
   document.getElementById("cfr-notas").value="";
+  document.getElementById("cfr-medio").value="Transferencia";
+  document.getElementById("cfr-eck-fecha").value="";
+  document.getElementById("cfr-eck-nro").value="";
+  document.getElementById("cfr-eck-cobranza").checked=true;
+  document.getElementById("cfr-echeck-wrap").style.display="none";
   document.getElementById("cfr-reinvertir").checked=false;
   document.getElementById("cfr-resumen").style.display="none";
   document.getElementById("cfr-save-btn").disabled=false;
   setCfrTipo("parcial");
   openModal("modal-cf-rescate");
+}
+
+function toggleCfrEcheck(){
+  const esEck=document.getElementById("cfr-medio")?.value==="eCheck";
+  document.getElementById("cfr-echeck-wrap").style.display=esEck?"":"none";
 }
 
 async function saveRescate(){
@@ -10753,20 +10781,41 @@ async function saveRescate(){
   const monto=parseFloat(document.getElementById("cfr-monto").value)||null;
   const notas=document.getElementById("cfr-notas").value.trim()||null;
   const tipo=document.getElementById("cfr-tipo").value;
+  const medio=document.getElementById("cfr-medio").value||"Transferencia";
+  const esEck=medio==="eCheck";
+  const eckFecha=document.getElementById("cfr-eck-fecha").value;
+  const eckNro=document.getElementById("cfr-eck-nro").value.trim();
+  const eckCobranza=document.getElementById("cfr-eck-cobranza").checked;
   const reinvertir=document.getElementById("cfr-reinvertir").checked;
   if(!fecha){toast("Elegí una fecha de rescate","err");return}
   if(!monto){toast("Ingresá el monto rescatado","err");return}
+  if(esEck&&!eckFecha){toast("Ingresá la fecha de acreditación del eCheck","err");return}
   const btn=document.getElementById("cfr-save-btn");btn.disabled=true;
   try{
     const inv=cfInversiones.find(i=>i.id===id);
 
     // 1. Guardar movimiento
+    const notasCompletas=[notas,esEck?`eCheck${eckNro?" N°"+eckNro:""} — acredita ${eckFecha}`:null].filter(Boolean).join(" · ")||null;
     const [mov]=await sb("cf_inversiones_movimientos",{method:"POST",body:JSON.stringify({
       inversion_id:id,
       tipo:tipo==="parcial"?"Rescate Parcial":"Rescate Total",
-      fecha,monto,notas
+      fecha,monto,notas:notasCompletas,medio_pago:medio
     })});
     cfInvMovs.unshift(mov);
+
+    // 1b. Si es eCheck, crear cobranza pendiente hasta fecha de acreditación
+    if(esEck&&eckCobranza){
+      const inv2=cfInversiones.find(i=>i.id===id);
+      const nombre=`eCheck rescate — ${inv2?.nombre||"Inversión"}${eckNro?" N°"+eckNro:""}`;
+      const [cob]=await sb("cf_cobranzas",{method:"POST",body:JSON.stringify({
+        nombre,tipo:"ECheque",remitente:inv2?.entidad||inv2?.sociedad||"",
+        sociedad:inv2?.sociedad||"SUDES",estado:"Pendiente",
+        monto,fecha_vencimiento:eckFecha,
+        notas:`Rescate ${tipo} de ${inv2?.nombre||"inversión"} del ${fecha}${eckNro?" · eCheck N°"+eckNro:""}`
+      })}).catch(()=>[null]);
+      if(cob)cfCobranzas.push(cob);
+      toast("📋 Cobranza eCheck creada hasta "+eckFecha,"inf");
+    }
 
     // 2. Actualizar inversión
     const patch={updated_at:new Date().toISOString()};
