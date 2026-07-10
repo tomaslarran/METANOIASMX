@@ -1917,6 +1917,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="cd-tab" id="cftab-conciliacion" onclick="setCFTab('conciliacion',this)">🏦 Conciliación bancaria</button>
     <button class="cd-tab" id="cftab-caja" onclick="setCFTab('caja',this)">💰 Caja</button>
     <button class="cd-tab" id="cftab-resumen-sem" onclick="setCFTab('resumen-sem',this)">📊 Resumen semanal</button>
+    <button class="cd-tab" id="cftab-cuentas" onclick="setCFTab('cuentas',this)">💳 Cuentas y tarjetas</button>
   </div>
 
   <!-- TAB: RESUMEN MENSUAL -->
@@ -2095,6 +2096,15 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div id="rsem-content"><div style="text-align:center;padding:40px;color:var(--tx3)">Cargando resumen...</div></div>
   </div>
 
+  <!-- TAB: CUENTAS Y TARJETAS -->
+  <div id="cfpg-cuentas" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <div style="font-size:13px;color:var(--tx3)">Medios de pago parametrizados — bancos, tarjetas y efectivo por sociedad.</div>
+      <button class="btn pri" onclick="openModalMedioPago()">＋ Agregar</button>
+    </div>
+    <div id="medios-pago-list"></div>
+  </div>
+
   <!-- TAB: CAJA -->
   <div id="cfpg-caja" style="display:none">
     <!-- Selector sociedad -->
@@ -2147,6 +2157,12 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <div style="margin-bottom:8px">
           <label class="fl">Concepto</label>
           <input class="fi" type="text" id="caja-form-concepto" placeholder="Ej: Pago inscripción curso...">
+        </div>
+        <div style="margin-bottom:8px">
+          <label class="fl">Medio de pago</label>
+          <select class="fi" id="caja-form-medio">
+            <option value="">— Sin especificar —</option>
+          </select>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
           <div>
@@ -3481,18 +3497,42 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- MODAL PAGAR COMPROBANTE -->
+<div class="mov" id="modal-medio-pago" onclick="if(event.target===this)closeModal('modal-medio-pago')">
+<div class="modal" style="max-width:400px">
+  <div class="mt" id="mmp-title">Agregar medio de pago</div>
+  <input type="hidden" id="mmp-id">
+  <div class="form-grid" style="grid-template-columns:1fr 1fr">
+    <div class="fg"><label class="fl">Tipo *</label>
+      <select class="fs" id="mmp-tipo" onchange="toggleMmpBanco()">
+        <option value="cuenta_bancaria">Cuenta bancaria</option>
+        <option value="tarjeta">Tarjeta</option>
+        <option value="efectivo">Efectivo</option>
+        <option value="cheque">Cheque</option>
+      </select>
+    </div>
+    <div class="fg"><label class="fl">Sociedad</label>
+      <select class="fs" id="mmp-sociedad">
+        <option value="Ambas">Ambas</option>
+        <option value="SUDES">SUDES</option>
+        <option value="POINTERS">POINTERS</option>
+      </select>
+    </div>
+    <div class="fg" style="grid-column:1/-1"><label class="fl">Nombre / Alias *</label><input class="fi" id="mmp-nombre" type="text" placeholder="Ej: Macro SUDES, Visa Débito, Caja chica..."></div>
+    <div class="fg" id="mmp-banco-wrap"><label class="fl">Banco</label><input class="fi" id="mmp-banco" type="text" placeholder="Ej: Banco Macro"></div>
+    <div class="fg"><label class="fl">Orden</label><input class="fi" id="mmp-orden" type="number" value="0" min="0"></div>
+    <div class="fg" style="grid-column:1/-1"><label class="fl">Detalle / CBU / Nro. tarjeta (opcional)</label><input class="fi" id="mmp-detalle" type="text" placeholder="Ej: CBU 070..., terminada en 1234"></div>
+  </div>
+  <div class="ma"><button class="bc" onclick="closeModal('modal-medio-pago')">Cancelar</button><button class="bk" onclick="saveMedioPago()">Guardar</button></div>
+</div>
+</div>
+
 <div class="mov" id="modal-pagar-comp" onclick="if(event.target===this)closeModal('modal-pagar-comp')">
 <div class="modal" style="max-width:380px">
   <div class="mt">Registrar pago</div>
   <input type="hidden" id="pagar-comp-id">
   <div class="form-grid" style="grid-template-columns:1fr">
     <div class="fg"><label class="fl">Medio de pago *</label>
-      <select class="fs" id="pagar-comp-medio">
-        <option value="Transferencia">Transferencia bancaria</option>
-        <option value="Efectivo">Efectivo</option>
-        <option value="Tarjeta">Tarjeta</option>
-        <option value="Cheque">Cheque</option>
-      </select>
+      <select class="fs" id="pagar-comp-medio"></select>
     </div>
     <div class="fg"><label class="fl">Fecha de pago</label><input class="fi" id="pagar-comp-fecha" type="date"></div>
     <div class="fg"><label class="fl">Observaciones</label><input class="fi" id="pagar-comp-obs" type="text" placeholder="Opcional — referencia, CBU, etc."></div>
@@ -7911,6 +7951,7 @@ async function doDelRutina(id){
 /* ── CASH FLOW ── */
 let cfConceptos=[],cfValores=[],cfPrestamos=[],cfCobranzas=[],cfInversiones=[],cfInvMovs=[],cfPrestCuotas=[];
 let cfEmpleados=[],cfPagosEmpleados=[],rendDiarios=[],inflacionMensual=[];
+let mediosPago=[];
 let chartRend=null;
 let cfSueldosFiltro="all",cfSueldosMes=null;
 let editEmpId=null,_mpeEmpId=null,_mpePeriodo=null;
@@ -7939,6 +7980,7 @@ async function loadCF(){
       sb("ganancias_anticipos?select=*&order=anio.desc,nro.asc").catch(()=>[]),
       sb("impuestos_declaraciones?select=*").catch(()=>[])
     ]);
+    mediosPago=await sb("medios_pago?select=*&order=orden.asc,nombre.asc").catch(()=>[]);
     // Badge: cobranzas vencidas + préstamos próximos
     const hoy=today();
     const venc=cfCobranzas.filter(c=>c.estado==="Pendiente"&&c.fecha_vencimiento<=hoy).length;
@@ -7953,7 +7995,7 @@ function setCFTab(tab,btn){
   document.querySelectorAll("#pg-cashflow .cd-tab").forEach(b=>b.classList.remove("on"));
   const tabBtn=btn||document.getElementById("cftab-"+tab);
   if(tabBtn)tabBtn.classList.add("on");
-  ["resumen","prestamos","cobranzas","inversiones","historial","conciliacion","caja","resumen-sem"].forEach(t=>{
+  ["resumen","prestamos","cobranzas","inversiones","historial","conciliacion","caja","resumen-sem","cuentas"].forEach(t=>{
     const el=document.getElementById("cfpg-"+t);
     if(el)el.style.display=t===tab?"":"none";
   });
@@ -7965,6 +8007,7 @@ function setCFTab(tab,btn){
   if(tab==="conciliacion")renderConciliacion();
   if(tab==="caja")renderCaja();
   if(tab==="resumen-sem")renderResumenSemanal();
+  if(tab==="cuentas")renderMediosPago();
 }
 
 // ══════════════════════════════════════════════
@@ -8444,6 +8487,99 @@ function renderCFChart(){
   });
 }
 
+// ── MEDIOS DE PAGO ───────────────────────────────────────────────────────────
+const TIPO_MP_LABEL={cuenta_bancaria:"🏦 Cuenta bancaria",tarjeta:"💳 Tarjeta",efectivo:"💵 Efectivo",cheque:"📋 Cheque"};
+
+function renderMediosPago(){
+  const el=document.getElementById("medios-pago-list");
+  if(!el)return;
+  if(!mediosPago.length){el.innerHTML=`<div style="text-align:center;padding:40px;color:var(--tx3)">No hay medios de pago cargados. Hacé clic en <strong>Agregar</strong> para empezar.</div>`;return;}
+  const grupos={cuenta_bancaria:[],tarjeta:[],efectivo:[],cheque:[]};
+  mediosPago.forEach(m=>{const k=m.tipo||"efectivo";if(grupos[k])grupos[k].push(m);else grupos[k]=[m];});
+  el.innerHTML=Object.entries(grupos).filter(([,arr])=>arr.length).map(([tipo,arr])=>`
+    <div style="margin-bottom:20px">
+      <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">${TIPO_MP_LABEL[tipo]||tipo}</div>
+      ${arr.map(m=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf);border:1px solid var(--b);border-radius:var(--r);margin-bottom:6px;opacity:${m.activo?1:.5}">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:13px">${esc(m.nombre)}</div>
+            <div style="font-size:11px;color:var(--tx3)">${m.banco?esc(m.banco)+" · ":""}${esc(m.sociedad||"Ambas")}${m.detalle?" · "+esc(m.detalle):""}</div>
+          </div>
+          <span class="badge" style="font-size:10px;background:${m.activo?"var(--gr)":"var(--tx3)"};color:#fff">${m.activo?"Activo":"Inactivo"}</span>
+          <button class="btn sm" onclick="openModalMedioPago('${m.id}')">✏️</button>
+          <button class="btn sm" onclick="toggleMedioPago('${m.id}',${!m.activo})">${m.activo?"Desactivar":"Activar"}</button>
+          <button class="btn sm" style="color:var(--re)" onclick="deleteMedioPago('${m.id}')">🗑</button>
+        </div>`).join("")}
+    </div>`).join("");
+}
+
+function openModalMedioPago(id){
+  const m=id?mediosPago.find(x=>x.id===id):null;
+  document.getElementById("mmp-id").value=m?.id||"";
+  document.getElementById("mmp-title").textContent=m?"Editar medio de pago":"Agregar medio de pago";
+  document.getElementById("mmp-tipo").value=m?.tipo||"cuenta_bancaria";
+  document.getElementById("mmp-sociedad").value=m?.sociedad||"Ambas";
+  document.getElementById("mmp-nombre").value=m?.nombre||"";
+  document.getElementById("mmp-banco").value=m?.banco||"";
+  document.getElementById("mmp-detalle").value=m?.detalle||"";
+  document.getElementById("mmp-orden").value=m?.orden??0;
+  toggleMmpBanco();
+  openModal("modal-medio-pago");
+}
+
+function toggleMmpBanco(){
+  const tipo=document.getElementById("mmp-tipo")?.value;
+  const wrap=document.getElementById("mmp-banco-wrap");
+  if(wrap)wrap.style.display=(tipo==="cuenta_bancaria"||tipo==="tarjeta")?"":"none";
+}
+
+async function saveMedioPago(){
+  const id=document.getElementById("mmp-id").value;
+  const nombre=document.getElementById("mmp-nombre").value.trim();
+  if(!nombre){toast("Ingresá un nombre","err");return;}
+  const payload={
+    tipo:document.getElementById("mmp-tipo").value,
+    sociedad:document.getElementById("mmp-sociedad").value,
+    nombre,
+    banco:document.getElementById("mmp-banco").value.trim()||null,
+    detalle:document.getElementById("mmp-detalle").value.trim()||null,
+    orden:parseInt(document.getElementById("mmp-orden").value)||0,
+    activo:true
+  };
+  try{
+    if(id){
+      await sb(`medios_pago?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(payload)});
+      const idx=mediosPago.findIndex(x=>x.id===id);
+      if(idx>=0)mediosPago[idx]={...mediosPago[idx],...payload};
+    } else {
+      const [created]=await sb("medios_pago",{method:"POST",body:JSON.stringify(payload)});
+      if(created)mediosPago.push(created);
+    }
+    closeModal("modal-medio-pago");
+    renderMediosPago();
+    toast(id?"Actualizado":"Creado","ok");
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function toggleMedioPago(id,activo){
+  try{
+    await sb(`medios_pago?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({activo})});
+    const m=mediosPago.find(x=>x.id===id);if(m)m.activo=activo;
+    renderMediosPago();
+    toast(activo?"Activado":"Desactivado","ok");
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function deleteMedioPago(id){
+  if(!confirm("¿Eliminar este medio de pago?"))return;
+  try{
+    await sb(`medios_pago?id=eq.${id}`,{method:"DELETE"});
+    mediosPago=mediosPago.filter(x=>x.id!==id);
+    renderMediosPago();
+    toast("Eliminado","ok");
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
 // ── MÓDULO CAJA ──────────────────────────────────────────────────────────────
 let cajaMovimientos=[];
 let cajaSociedad="SUDES";
@@ -8534,6 +8670,14 @@ async function renderCajaChart(){
 }
 
 async function renderCaja(){
+  // Poblar select de medio de pago
+  const medioSel=document.getElementById("caja-form-medio");
+  if(medioSel){
+    const prev=medioSel.value;
+    const opts=mediosPago.filter(m=>m.activo&&(m.sociedad==="Ambas"||m.sociedad===cajaSociedad));
+    medioSel.innerHTML=`<option value="">— Sin especificar —</option>`+opts.map(m=>`<option value="${esc(m.nombre)}">${esc(m.nombre)}${m.banco?` — ${esc(m.banco)}`:""}</option>`).join("");
+    if(prev)medioSel.value=prev;
+  }
   // Inicializar fecha de hoy si no está seteada
   const fechaInput=document.getElementById("caja-fecha-filtro");
   if(fechaInput&&!fechaInput.value){
@@ -8610,7 +8754,7 @@ async function renderCaja(){
       else egresos+=parseFloat(m.monto)||0;
       return`<tr style="border-bottom:1px solid var(--b)">
         <td style="padding:8px 10px"><span style="background:${ing?"color-mix(in srgb,var(--gr) 15%,var(--surf))":"color-mix(in srgb,var(--re) 15%,var(--surf));"};color:${ing?"var(--gr)":"var(--re)"};padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600">${ing?"↑ Ingreso":"↓ Egreso"}</span></td>
-        <td style="padding:8px 10px;color:var(--tx)">${esc(m.concepto)}</td>
+        <td style="padding:8px 10px;color:var(--tx)">${esc(m.concepto)}${m.medio_pago?`<span style="margin-left:6px;font-size:10px;color:var(--tx3);background:var(--surf2);padding:1px 6px;border-radius:8px">${esc(m.medio_pago)}</span>`:""}</td>
         <td style="padding:8px 10px;color:var(--tx3)">${esc(m.categoria||"—")}</td>
         <td style="padding:8px 10px;text-align:right;font-weight:600;color:${ing?"var(--gr)":"var(--re)"}">${ing?"+":"-"}${fmtM(m.monto)}</td>
         <td style="padding:8px 10px;text-align:center"><button onclick="deleteCajaMovimiento('${m.id}')" style="background:none;border:none;color:var(--re);cursor:pointer;font-size:13px" title="Eliminar">🗑</button></td>
@@ -8677,6 +8821,7 @@ async function saveCajaMovimiento(){
   const cat=document.getElementById("caja-form-cat")?.value;
   const fecha=document.getElementById("caja-form-fecha")?.value||new Date().toISOString().split("T")[0];
   const obs=document.getElementById("caja-form-obs")?.value?.trim();
+  const medio=document.getElementById("caja-form-medio")?.value||null;
 
   if(!concepto){toast("Ingresá un concepto","err");return;}
   if(!monto||monto<=0){toast("Ingresá un monto válido","err");return;}
@@ -8684,12 +8829,13 @@ async function saveCajaMovimiento(){
   try{
     await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
       sociedad:cajaSociedad,fecha,tipo,concepto,categoria:cat||null,
-      monto,observaciones:obs||null,creado_por:loggedUser?.nombre||null
+      monto,medio_pago:medio||null,observaciones:obs||null,creado_por:loggedUser?.nombre||null
     })});
     // Limpiar formulario
     document.getElementById("caja-form-monto").value="";
     document.getElementById("caja-form-concepto").value="";
     document.getElementById("caja-form-obs").value="";
+    document.getElementById("caja-form-medio").value="";
     toast(`${tipo==="ingreso"?"Ingreso":"Egreso"} registrado`,"ok");
     renderCaja();
   }catch(e){toast("Error: "+e.message,"err");}
@@ -14664,9 +14810,17 @@ function updateCompStats(){
 
 function abrirPagarComp(id){
   document.getElementById("pagar-comp-id").value=id;
-  document.getElementById("pagar-comp-medio").value="Transferencia";
   document.getElementById("pagar-comp-fecha").value=today();
   document.getElementById("pagar-comp-obs").value="";
+  const c=comprobantes.find(x=>x.id===id);
+  const soc=c?.sociedad||"";
+  const sel=document.getElementById("pagar-comp-medio");
+  const activos=mediosPago.filter(m=>m.activo&&(m.sociedad==="Ambas"||!soc||m.sociedad===soc));
+  if(activos.length){
+    sel.innerHTML=activos.map(m=>`<option value="${esc(m.nombre)}">${esc(m.nombre)}${m.banco?` — ${esc(m.banco)}`:""}</option>`).join("");
+  } else {
+    sel.innerHTML=`<option value="Transferencia">Transferencia bancaria</option><option value="Efectivo">Efectivo</option><option value="Tarjeta">Tarjeta</option><option value="Cheque">Cheque</option>`;
+  }
   openModal("modal-pagar-comp");
 }
 async function confirmarPagoComp(){
