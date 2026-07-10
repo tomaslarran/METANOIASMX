@@ -1963,6 +1963,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </div>
     <!-- Cuotas préstamos integradas -->
     <div id="cf-cuotas-wrap"></div>
+    <!-- Inscripciones pendientes de cobro -->
+    <div id="cf-insc-pendientes" style="margin-top:16px"></div>
   </div>
 
   <!-- TAB: PRÉSTAMOS -->
@@ -3354,11 +3356,25 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <input type="hidden" id="rcob-monto">
   <div id="rcob-resumen" style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:12px 14px;font-size:13px;margin-bottom:4px"></div>
   <div class="form-grid" style="grid-template-columns:1fr 1fr">
-    <div class="fg"><label class="fl">Medio de cobro *</label><select class="fi" id="rcob-medio"></select></div>
     <div class="fg"><label class="fl">Fecha de cobro</label><input class="fi" id="rcob-fecha" type="date"></div>
-    <div class="fg" style="grid-column:1/-1"><label class="fl">N° de factura (opcional)</label><input class="fi" id="rcob-factura" type="text" placeholder="Ej: A-0001-00000123"></div>
-    <div class="fg" style="grid-column:1/-1"><label class="fl">Observaciones (opcional)</label><input class="fi" id="rcob-obs" type="text" placeholder="CBU, referencia, etc."></div>
+    <div class="fg"><label class="fl">N° de factura (opcional)</label><input class="fi" id="rcob-factura" type="text" placeholder="Ej: A-0001-00000123"></div>
   </div>
+  <!-- Destino del cobro -->
+  <div style="margin-bottom:10px">
+    <label class="fl">Destino del cobro</label>
+    <div style="display:flex;gap:6px;margin-top:4px">
+      <button id="rcob-dest-caja-btn" class="btn sm on" style="flex:1;justify-content:center" onclick="setRcobDest('caja')">💰 Caja / banco</button>
+      <button id="rcob-dest-inv-btn" class="btn sm" style="flex:1;justify-content:center" onclick="setRcobDest('inversion')">📈 Inversión</button>
+    </div>
+  </div>
+  <input type="hidden" id="rcob-dest" value="caja">
+  <div id="rcob-caja-wrap">
+    <div class="fg"><label class="fl">Medio de cobro *</label><select class="fi" id="rcob-medio"></select></div>
+  </div>
+  <div id="rcob-inv-wrap" style="display:none">
+    <div class="fg"><label class="fl">Acreditar en inversión *</label><select class="fi" id="rcob-inv-sel"></select></div>
+  </div>
+  <div class="fg"><label class="fl">Observaciones (opcional)</label><input class="fi" id="rcob-obs" type="text" placeholder="CBU, referencia, etc."></div>
   <div class="ma"><button class="bc" onclick="closeModal('modal-registrar-cobro')">Cancelar</button><button class="bk" id="rcob-save-btn" onclick="confirmarRegistrarCobro()">💰 Confirmar cobro</button></div>
 </div>
 </div>
@@ -9522,8 +9538,66 @@ function renderCFResumen(){
   const cfCuotasWrap=document.getElementById("cf-cuotas-wrap");
   if(cfCuotasWrap)cfCuotasWrap.innerHTML="";
 
+  // Inscripciones pendientes de cobro
+  renderInscPendientesCF();
+
   // Renderizar gráfico ingresos vs egresos
   renderCFChart();
+}
+
+async function renderInscPendientesCF(){
+  const wrap=document.getElementById("cf-insc-pendientes");
+  if(!wrap)return;
+  wrap.innerHTML=`<div style="font-size:11px;color:var(--tx4);padding:6px 0">Cargando inscripciones...</div>`;
+  try{
+    const soc=cfSociedad;
+    let query=`inscripciones?estado=in.(Inscripto,Lista espera)&select=id,monto,created_at,curso_id,alumno_id,alumnos(nombre,apellido),cursos(id,nombre,sociedad,fecha_inicio)&order=created_at.desc`;
+    const all=await sb(query);
+    // Filtrar por sociedad del curso
+    const rows=all.filter(i=>i.cursos&&(i.cursos.sociedad===soc||(!i.cursos.sociedad&&soc==="SUDES")));
+    if(!rows.length){wrap.innerHTML="";return;}
+    const fmt=v=>"$"+Math.round(v||0).toLocaleString("es-AR");
+    const total=rows.reduce((s,r)=>s+(parseFloat(r.monto)||0),0);
+    wrap.innerHTML=`
+    <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--r);overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(245,158,11,.08);border-bottom:1px solid var(--b)">
+        <span style="font-size:13px;font-weight:700;color:var(--am)">💰 Inscripciones pendientes de cobro</span>
+        <span style="font-size:11px;color:var(--tx3)">${rows.length} alumno${rows.length!==1?"s":""} · ${fmt(total)} total</span>
+        <span style="font-size:11px;color:var(--tx4);margin-left:auto">Registrá el cobro y se genera el movimiento automáticamente</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="color:var(--tx3);border-bottom:1px solid var(--b);background:var(--surf2)">
+          <th style="padding:7px 12px;text-align:left;font-weight:600">Alumno</th>
+          <th style="padding:7px 12px;text-align:left;font-weight:600">Curso</th>
+          <th style="padding:7px 12px;text-align:left;font-weight:600">Fecha insc.</th>
+          <th style="padding:7px 12px;text-align:right;font-weight:600">Monto</th>
+          <th style="padding:7px 12px;text-align:center;font-weight:600"></th>
+        </tr></thead>
+        <tbody>
+        ${rows.map(r=>{
+          const nombre=r.alumnos?`${esc(r.alumnos.apellido||"")} ${esc(r.alumnos.nombre||"")}`.trim():"—";
+          const curso=r.cursos?esc(r.cursos.nombre):"—";
+          const fecha=r.created_at?r.created_at.slice(0,10):"—";
+          const monto=parseFloat(r.monto)||0;
+          return`<tr style="border-bottom:1px solid var(--b)">
+            <td style="padding:7px 12px;color:var(--tx)">${nombre}</td>
+            <td style="padding:7px 12px;color:var(--tx2)">${curso}</td>
+            <td style="padding:7px 12px;color:var(--tx3)">${fecha}</td>
+            <td style="padding:7px 12px;text-align:right;font-weight:700;color:var(--am)">${monto?fmt(monto):"—"}</td>
+            <td style="padding:7px 12px;text-align:center">
+              <button class="btn sm pri" onclick="abrirRegistrarCobro('${r.id}','inscripcion',${monto||0},'${r.curso_id}')" style="padding:3px 10px;font-size:11px">💰 Cobrar</button>
+            </td>
+          </tr>`;
+        }).join("")}
+        <tr style="background:var(--surf2);border-top:2px solid var(--b)">
+          <td colspan="3" style="padding:8px 12px;font-weight:700;color:var(--tx)">TOTAL PENDIENTE</td>
+          <td style="padding:8px 12px;text-align:right;font-weight:800;font-size:14px;color:var(--am)">${fmt(total)}</td>
+          <td></td>
+        </tr>
+        </tbody>
+      </table>
+    </div>`;
+  }catch(e){wrap.innerHTML="";}
 }
 
 let _cfCeldaConceptoId=null,_cfCeldaPeriodo=null,_cfCeldaTipo=null;
@@ -10349,6 +10423,14 @@ async function marcarCobrado(id,estado){
   catch(e){toast("Error","err")}
 }
 
+function setRcobDest(dest){
+  document.getElementById("rcob-dest").value=dest;
+  document.getElementById("rcob-caja-wrap").style.display=dest==="caja"?"":"none";
+  document.getElementById("rcob-inv-wrap").style.display=dest==="inversion"?"":"none";
+  document.getElementById("rcob-dest-caja-btn").classList.toggle("on",dest==="caja");
+  document.getElementById("rcob-dest-inv-btn").classList.toggle("on",dest==="inversion");
+}
+
 function abrirRegistrarCobro(id,tipo,montoOverride,cursoId){
   document.getElementById("rcob-id").value=id;
   document.getElementById("rcob-tipo").value=tipo;
@@ -10356,6 +10438,7 @@ function abrirRegistrarCobro(id,tipo,montoOverride,cursoId){
   document.getElementById("rcob-factura").value="";
   document.getElementById("rcob-obs").value="";
   document.getElementById("rcob-save-btn").disabled=false;
+  setRcobDest("caja");
 
   let nombre="",monto=0,soc="SUDES";
   if(tipo==="cobranza"){
@@ -10385,6 +10468,13 @@ function abrirRegistrarCobro(id,tipo,montoOverride,cursoId){
     .map(m=>`<option value="${esc(m.nombre)}">${esc(m.nombre)}${m.banco?` — ${esc(m.banco)}`:""}</option>`).join("")
     ||`<option value="Transferencia">Transferencia bancaria</option><option value="Efectivo">Efectivo</option><option value="Cheque">Cheque</option>`;
 
+  // Poblar inversiones activas de la sociedad
+  const invSel=document.getElementById("rcob-inv-sel");
+  const invsActivas=cfInversiones.filter(i=>i.estado==="Activa"&&(i.sociedad===soc||i.sociedad==="Ambas"||["AMPARO","MARIO","Personal"].includes(i.sociedad)));
+  invSel.innerHTML=invsActivas.length
+    ? invsActivas.map(i=>`<option value="${i.id}">${esc(i.nombre)} — ${i.tipo||""}${i.entidad?" ("+esc(i.entidad)+")":""}  $${Math.round(i.valor_actual||i.capital||0).toLocaleString("es-AR")}</option>`).join("")
+    : `<option value="">— Sin inversiones activas —</option>`;
+
   openModal("modal-registrar-cobro");
 }
 
@@ -10392,6 +10482,8 @@ async function confirmarRegistrarCobro(){
   const tipo=document.getElementById("rcob-tipo").value;
   const rawId=document.getElementById("rcob-id").value;
   const medio=document.getElementById("rcob-medio").value;
+  const dest=document.getElementById("rcob-dest").value;
+  const invId=document.getElementById("rcob-inv-sel").value;
   const fecha=document.getElementById("rcob-fecha").value||today();
   const factura=document.getElementById("rcob-factura").value.trim()||null;
   const obs=document.getElementById("rcob-obs").value.trim()||null;
@@ -10399,62 +10491,66 @@ async function confirmarRegistrarCobro(){
   const soc=document.getElementById("rcob-sociedad").value||"SUDES";
   const btn=document.getElementById("rcob-save-btn");btn.disabled=true;
 
+  // Helper: generar movimiento contable según destino
+  async function generarMovimientoContable(concepto,categoria,medioVal,obsStr){
+    if(dest==="inversion"){
+      if(!invId){toast("Seleccioná una inversión","err");throw new Error("Sin inversión");}
+      const inv=cfInversiones.find(i=>i.id===invId);if(!inv)throw new Error("Inversión no encontrada");
+      const notasInv=[`Cobro: ${concepto}`,factura?`Fac. ${factura}`:"",obsStr].filter(Boolean).join(" · ");
+      const[mov]=await sb("cf_inversiones_movimientos",{method:"POST",body:JSON.stringify({
+        inversion_id:invId,tipo:"Aporte de capital",fecha,monto,notas:notasInv
+      })});
+      cfInvMovs.unshift(mov);
+      const nuevoCapital=(parseFloat(inv.capital)||0)+monto;
+      const nuevoValor=(parseFloat(inv.valor_actual)||parseFloat(inv.capital)||0)+monto;
+      const patch={capital:nuevoCapital,valor_actual:nuevoValor,updated_at:new Date().toISOString()};
+      await sb(`cf_inversiones?id=eq.${invId}`,{method:"PATCH",body:JSON.stringify(patch)});
+      Object.assign(inv,patch);
+      return `📈 Cobrado · acreditado en ${inv.nombre}`;
+    }
+    const medioObj=mediosPago.find(m=>m.nombre===medioVal);
+    const esBanco=medioObj?.tipo==="cuenta_bancaria";
+    if(esBanco){
+      await sb("banco_movimientos",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify({
+        sociedad:soc,fecha,concepto,importe:monto,saldo:null,conciliado:false,referencia:factura||"Manual"
+      })}).catch(()=>{});
+      return "💰 Cobrado · movimiento en banco pendiente de conciliación";
+    } else {
+      await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
+        sociedad:soc,fecha,tipo:"ingreso",concepto,categoria,
+        monto,medio_pago:medioVal,observaciones:obsStr||null,creado_por:loggedUser?.nombre||null
+      })});
+      return `💰 Cobrado · ingreso en caja`;
+    }
+  }
+
   try{
     if(tipo==="cobranza"){
       const id=rawId;
       const c=cfCobranzas.find(x=>x.id===id);if(!c)return;
       await sb(`cf_cobranzas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({
-        estado:"Cobrado",fecha_cobro:fecha,medio_cobro:medio,
+        estado:"Cobrado",fecha_cobro:fecha,medio_cobro:dest==="inversion"?("📈 "+cfInversiones.find(i=>i.id===invId)?.nombre):medio,
         numero_factura:factura,updated_at:new Date().toISOString()
       })});
-      Object.assign(c,{estado:"Cobrado",fecha_cobro:fecha,medio_cobro:medio,numero_factura:factura});
-
-      // Movimiento contable
-      const medioObj=mediosPago.find(m=>m.nombre===medio);
-      const esBanco=medioObj?.tipo==="cuenta_bancaria";
-      const concepto=`Cobro: ${c.nombre}${factura?` · Fac. ${factura}`:""}`;
-      const obsStr=[medio,obs].filter(Boolean).join(" · ");
-      if(esBanco){
-        await sb("banco_movimientos",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify({
-          sociedad:soc,fecha,concepto,importe:monto,saldo:null,conciliado:false,referencia:factura||"Manual"
-        })}).catch(()=>{});
-        toast("💰 Cobrado · movimiento en banco pendiente de conciliación","ok");
-      } else {
-        await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
-          sociedad:soc,fecha,tipo:"ingreso",concepto,categoria:"Cobranzas",
-          monto,medio_pago:medio,observaciones:obsStr||null,creado_por:loggedUser?.nombre||null
-        })});
-        toast(`💰 Cobrado · ingreso en caja registrado`,"ok");
-      }
+      Object.assign(c,{estado:"Cobrado",fecha_cobro:fecha,numero_factura:factura});
+      const msg=await generarMovimientoContable(`Cobro: ${c.nombre}${factura?` · Fac. ${factura}`:""}`, "Cobranzas", medio, [medio,obs].filter(Boolean).join(" · "));
+      toast(msg,"ok");
       renderCFCobranzas();
 
     } else {
-      // inscripcion
       const[inscId,cursoId]=rawId.split("||");
+      const medioGuardar=dest==="inversion"?("📈 "+(cfInversiones.find(i=>i.id===invId)?.nombre||"Inversión")):medio;
       await sb(`inscripciones?id=eq.${inscId}`,{method:"PATCH",body:JSON.stringify({
-        estado:"Pagado",fecha_pago_real:fecha,medio_pago:medio,
+        estado:"Pagado",fecha_pago_real:fecha,medio_pago:medioGuardar,
         numero_factura:factura,updated_at:new Date().toISOString()
       })});
-      const concepto=`Inscripción curso${factura?` · Fac. ${factura}`:""}`;
-      const obsStr=[medio,obs].filter(Boolean).join(" · ");
-      const medioObj=mediosPago.find(m=>m.nombre===medio);
-      const esBanco=medioObj?.tipo==="cuenta_bancaria";
-      if(esBanco){
-        await sb("banco_movimientos",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify({
-          sociedad:soc,fecha,concepto,importe:monto,saldo:null,conciliado:false,referencia:factura||"Manual"
-        })}).catch(()=>{});
-        toast("💰 Pago registrado · movimiento en banco pendiente de conciliación","ok");
-      } else {
-        await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
-          sociedad:soc,fecha,tipo:"ingreso",concepto,categoria:"Inscripciones",
-          monto,medio_pago:medio,observaciones:obsStr||null,creado_por:loggedUser?.nombre||null
-        })});
-        toast(`💰 Pago registrado · ingreso en caja`,"ok");
-      }
+      const msg=await generarMovimientoContable(`Inscripción curso${factura?` · Fac. ${factura}`:""}`, "Inscripciones", medio, [medio,obs].filter(Boolean).join(" · "));
+      toast(msg,"ok");
       if(cursoId)await selectCurso(cursoId);
     }
     closeModal("modal-registrar-cobro");
-  }catch(e){toast("Error: "+e.message,"err");}
+    if(dest==="inversion")renderCFInversiones();
+  }catch(e){if(e.message!=="Sin inversión")toast("Error: "+e.message,"err");}
   finally{btn.disabled=false;}
 }
 
