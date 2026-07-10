@@ -1761,7 +1761,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- Modal oportunidad -->
-<div class="mov" id="modal-oportunidad" onclick="if(event.target===this)closeModal('modal-oportunidad')">
+<div class="mov" id="modal-oportunidad" onclick="if(event.target===this&&_movDown===this)closeModal('modal-oportunidad')">
   <div class="mbox" style="width:min(860px,96vw);max-height:94vh;overflow-y:auto;background:var(--bg2);border-radius:var(--rl);border:1px solid var(--b2)">
     <div class="mh"><div class="mt" id="oport-modal-title">Nueva Oportunidad</div><button class="mc" onclick="closeModal('modal-oportunidad')">✕</button></div>
     <div class="mb">
@@ -2432,7 +2432,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- MODAL ÍTEM CATÁLOGO -->
-<div class="mov" id="modal-nom-item" onclick="if(event.target===this)closeModal('modal-nom-item')">
+<div class="mov" id="modal-nom-item" onclick="if(event.target===this&&_movDown===this)closeModal('modal-nom-item')">
   <div class="mc" style="max-width:520px">
     <div class="mh"><div class="mt" id="nom-item-title">Nuevo ítem</div><button class="mcl" onclick="closeModal('modal-nom-item')">✕</button></div>
     <div class="mb">
@@ -2507,7 +2507,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- MODAL COTIZACIÓN -->
-<div class="mov" id="modal-cotizacion" onclick="if(event.target===this)closeModal('modal-cotizacion')">
+<div class="mov" id="modal-cotizacion" onclick="if(event.target===this&&_movDown===this)closeModal('modal-cotizacion')">
   <div class="mbox" style="width:min(900px,96vw);max-height:92vh;overflow-y:auto;background:var(--bg2);border-radius:var(--rl);border:1px solid var(--b2)">
     <div class="mhdr">
       <div class="mt" id="cot-modal-title">Nueva Cotización</div>
@@ -2733,7 +2733,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- MODAL NUEVO COMPROBANTE -->
-<div class="mov" id="modal-comprobante" onclick="if(event.target===this)closeModal('modal-comprobante')">
+<div class="mov" id="modal-comprobante" onclick="if(event.target===this&&_movDown===this)closeModal('modal-comprobante')">
   <div class="modal" style="max-width:520px">
     <div class="mt">
       <span id="mcomp-title">Nueva Factura de Compra</span>
@@ -2922,7 +2922,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div><!-- /layout -->
 
 <!-- ══ MODAL RUTINA ══ -->
-<div class="mov" id="modal-rutina" onclick="if(event.target===this)closeModal('modal-rutina')">
+<div class="mov" id="modal-rutina" onclick="if(event.target===this&&_movDown===this)closeModal('modal-rutina')">
   <div class="modal">
     <div class="mt"><span id="mr-title">Nueva Rutina</span><button class="mt-close" onclick="closeModal('modal-rutina')">✕</button></div>
     <div class="fg"><label class="fl">Nombre *</label><input class="fi" id="r-nombre" type="text" placeholder="Ej: Pagar sueldos, Facturación mensual..."></div>
@@ -2942,7 +2942,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
 <!-- ══ MODAL INVERSIÓN ══ -->
 <!-- MODAL REGISTRAR RENDIMIENTO DIARIO -->
-<div class="mov" id="modal-rend-diario" onclick="if(event.target===this)closeModal('modal-rend-diario')">
+<div class="mov" id="modal-rend-diario" onclick="if(event.target===this&&_movDown===this)closeModal('modal-rend-diario')">
   <div class="modal" style="max-width:520px">
     <div class="mt">📊 Registrar rendimiento <button class="mt-close" onclick="closeModal('modal-rend-diario')">✕</button></div>
     <div style="font-size:12px;color:var(--tx3);margin-bottom:4px" id="rend-fecha-label"></div>
@@ -2955,7 +2955,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 </div>
 
-<div class="mov" id="modal-cf-inversion" onclick="if(event.target===this)closeModal('modal-cf-inversion')">
+<div class="mov" id="modal-cf-inversion" onclick="if(event.target===this&&_movDown===this)closeModal('modal-cf-inversion')">
   <div class="modal">
     <div class="mt"><span id="mci-title">Nueva Inversión</span><button class="mt-close" onclick="closeModal('modal-cf-inversion')">✕</button></div>
     <div class="fg"><label class="fl">Nombre *</label><input class="fi" id="cfi-nombre" type="text" placeholder="Ej: Pionero Renta Pesos FCI"></div>
@@ -2992,7 +2992,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- ══ MODAL ANALIZAR PRÉSTAMO CON IA ══ -->
-<div class="mov" id="modal-analizar-prestamo" onclick="if(event.target===this)closeModal('modal-analizar-prestamo')">
+<div class="mov" id="modal-analizar-prestamo" onclick="if(event.target===this&&_movDown===this)closeModal('modal-analizar-prestamo')">
   <div class="modal" style="max-width:680px">
     <div class="mt"><span>🤖 Analizar plan de pagos con IA</span><button class="mt-close" onclick="closeModal('modal-analizar-prestamo')">✕</button></div>
 
@@ -3055,7 +3055,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
 <!-- ══ MODAL RESCATE/CICLO INVERSIÓN ══ -->
 <!-- Modal: Agregar capital a inversión -->
-<div class="mov" id="modal-agregar-capital" onclick="if(event.target===this)closeModal('modal-agregar-capital')">
+<div class="mov" id="modal-agregar-capital" onclick="if(event.target===this&&_movDown===this)closeModal('modal-agregar-capital')">
   <div class="modal">
     <div class="mt"><span id="mac-title">Agregar capital</span><button class="mt-close" onclick="closeModal('modal-agregar-capital')">✕</button></div>
     <input type="hidden" id="mac-inv-id">
@@ -3070,7 +3070,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 </div>
 
-<div class="mov" id="modal-cf-rescate" onclick="if(event.target===this)closeModal('modal-cf-rescate')">
+<div class="mov" id="modal-cf-rescate" onclick="if(event.target===this&&_movDown===this)closeModal('modal-cf-rescate')">
   <div class="modal">
     <div class="mt"><span id="mcr-title">Rescatar inversión</span><button class="mt-close" onclick="closeModal('modal-cf-rescate')">✕</button></div>
     <input type="hidden" id="cfr-inv-id">
@@ -3098,7 +3098,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- ══ MODALES CASH FLOW ══ -->
-<div class="mov" id="modal-cf-concepto" onclick="if(event.target===this)closeModal('modal-cf-concepto')">
+<div class="mov" id="modal-cf-concepto" onclick="if(event.target===this&&_movDown===this)closeModal('modal-cf-concepto')">
   <div class="modal">
     <div class="mt"><span id="mcc-title">Nuevo Concepto</span><button class="mt-close" onclick="closeModal('modal-cf-concepto')">✕</button></div>
     <div class="fg"><label class="fl">Nombre *</label><input class="fi" id="cfc-nombre" type="text" placeholder="Ej: Abono Ministerio Salud"></div>
@@ -3115,7 +3115,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 </div>
 
-<div class="mov" id="modal-cf-prestamo" onclick="if(event.target===this)closeModal('modal-cf-prestamo')">
+<div class="mov" id="modal-cf-prestamo" onclick="if(event.target===this&&_movDown===this)closeModal('modal-cf-prestamo')">
   <div class="modal" style="max-width:680px">
     <div class="mt"><span id="mcp-title">Nuevo Préstamo</span><button class="mt-close" onclick="closeModal('modal-cf-prestamo')">✕</button></div>
 
@@ -3172,7 +3172,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- ══ MODAL NUEVA REUNIÓN ══ -->
-<div class="mov" id="modal-reunion" onclick="if(event.target===this)closeModal('modal-reunion')">
+<div class="mov" id="modal-reunion" onclick="if(event.target===this&&_movDown===this)closeModal('modal-reunion')">
   <div class="modal" style="max-width:560px">
     <div class="mt"><span>🎙️ Nueva Reunión</span><button class="mt-close" onclick="closeModal('modal-reunion')">✕</button></div>
 
@@ -3220,7 +3220,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- ══ MODAL DETALLE REUNIÓN ══ -->
-<div class="mov" id="modal-reunion-detalle" onclick="if(event.target===this)closeModal('modal-reunion-detalle')">
+<div class="mov" id="modal-reunion-detalle" onclick="if(event.target===this&&_movDown===this)closeModal('modal-reunion-detalle')">
   <div class="modal" style="max-width:720px;max-height:88vh;overflow-y:auto">
     <div class="mt"><span id="mrd-titulo">Detalle de reunión</span><button class="mt-close" onclick="closeModal('modal-reunion-detalle')">✕</button></div>
     <div id="mrd-contenido" style="padding-bottom:8px"></div>
@@ -3304,7 +3304,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 </div>
 
-<div class="mov" id="modal-cf-cobranza" onclick="if(event.target===this)closeModal('modal-cf-cobranza')">
+<div class="mov" id="modal-cf-cobranza" onclick="if(event.target===this&&_movDown===this)closeModal('modal-cf-cobranza')">
   <div class="modal">
     <div class="mt"><span id="mco-title">Nueva Cobranza</span><button class="mt-close" onclick="closeModal('modal-cf-cobranza')">✕</button></div>
     <div class="fg"><label class="fl">Nombre *</label><input class="fi" id="cfo-nombre" type="text" placeholder="Ej: Cheque Fenix Abr-26"></div>
@@ -3326,7 +3326,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- MODAL EDITAR CELDA CF -->
-<div class="mov" id="modal-cf-celda" onclick="if(event.target===this)closeModal('modal-cf-celda')">
+<div class="mov" id="modal-cf-celda" onclick="if(event.target===this&&_movDown===this)closeModal('modal-cf-celda')">
   <div class="modal" style="max-width:420px">
     <div class="mt"><span id="mcel-title">Editar valor</span><button class="mt-close" onclick="closeModal('modal-cf-celda')">✕</button></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -3345,7 +3345,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- MODAL NUEVA TAREA -->
-<div class="mov" id="modal-tarea" onclick="if(event.target===this)closeModal('modal-tarea')">
+<div class="mov" id="modal-tarea" onclick="if(event.target===this&&_movDown===this)closeModal('modal-tarea')">
 <div class="modal">
   <div class="mt" id="modal-tarea-title">Nueva Tarea</div>
   <div class="form-grid-2">
@@ -3368,7 +3368,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- ══ MODAL NUEVA CLASE ══ -->
-<div class="mov" id="modal-nueva-clase" onclick="if(event.target===this)closeModal('modal-nueva-clase')">
+<div class="mov" id="modal-nueva-clase" onclick="if(event.target===this&&_movDown===this)closeModal('modal-nueva-clase')">
   <div class="modal" style="max-width:420px">
     <div class="mt"><span id="nueva-clase-title">Nueva clase</span><button class="mc" onclick="closeModal('modal-nueva-clase')">✕</button></div>
     <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
@@ -3398,7 +3398,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
 <!-- MODAL NUEVO CURSO -->
 <!-- ══ MODAL CREAR CURSO CON IA ══ -->
-<div class="mov" id="modal-solicitar-edicion" onclick="if(event.target===this)closeModal('modal-solicitar-edicion')">
+<div class="mov" id="modal-solicitar-edicion" onclick="if(event.target===this&&_movDown===this)closeModal('modal-solicitar-edicion')">
   <div class="modal" style="max-width:540px">
     <div class="mt"><span>🎬 Solicitar edición de video</span><button class="mc" onclick="closeModal('modal-solicitar-edicion')">✕</button></div>
     <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
@@ -3424,7 +3424,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 </div>
 
-<div class="mov" id="modal-curso-ia" onclick="if(event.target===this)closeModal('modal-curso-ia')">
+<div class="mov" id="modal-curso-ia" onclick="if(event.target===this&&_movDown===this)closeModal('modal-curso-ia')">
   <div class="modal" style="max-width:600px;height:80vh;display:flex;flex-direction:column">
     <div class="mt" style="display:flex;justify-content:space-between;align-items:center">
       <span>✨ Crear curso con IA</span>
@@ -3457,7 +3457,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 </div>
 
-<div class="mov" id="modal-curso" onclick="if(event.target===this)closeModal('modal-curso')">
+<div class="mov" id="modal-curso" onclick="if(event.target===this&&_movDown===this)closeModal('modal-curso')">
 <div class="modal">
   <div class="mt">Nuevo Curso</div>
   <input type="hidden" id="c-cotizacion-id">
@@ -3497,7 +3497,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- MODAL PAGAR COMPROBANTE -->
-<div class="mov" id="modal-medio-pago" onclick="if(event.target===this)closeModal('modal-medio-pago')">
+<div class="mov" id="modal-medio-pago" onclick="if(event.target===this&&_movDown===this)closeModal('modal-medio-pago')">
 <div class="modal" style="max-width:400px">
   <div class="mt" id="mmp-title">Agregar medio de pago</div>
   <input type="hidden" id="mmp-id">
@@ -3526,7 +3526,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 </div>
 
-<div class="mov" id="modal-pagar-comp" onclick="if(event.target===this)closeModal('modal-pagar-comp')">
+<div class="mov" id="modal-pagar-comp" onclick="if(event.target===this&&_movDown===this)closeModal('modal-pagar-comp')">
 <div class="modal" style="max-width:380px">
   <div class="mt">Registrar pago</div>
   <input type="hidden" id="pagar-comp-id">
@@ -3542,7 +3542,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- MODAL NUEVO PROVEEDOR -->
-<div class="mov" id="modal-proveedor" onclick="if(event.target===this)closeModal('modal-proveedor')">
+<div class="mov" id="modal-proveedor" onclick="if(event.target===this&&_movDown===this)closeModal('modal-proveedor')">
 <div class="modal">
   <div class="mt" id="modal-prov-title">Nuevo Proveedor</div>
   <input type="hidden" id="prov-edit-id">
@@ -3559,7 +3559,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- MODAL NUEVO INSTRUCTOR -->
-<div class="mov" id="modal-instructor" onclick="if(event.target===this)closeModal('modal-instructor')">
+<div class="mov" id="modal-instructor" onclick="if(event.target===this&&_movDown===this)closeModal('modal-instructor')">
 <div class="modal">
   <div class="mt" id="modal-inst-title">Nuevo Instructor</div>
   <input type="hidden" id="inst-edit-id">
@@ -3586,7 +3586,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- MODAL NUEVO ALUMNO -->
-<div class="mov" id="modal-alumno" onclick="if(event.target===this)closeModal('modal-alumno')">
+<div class="mov" id="modal-alumno" onclick="if(event.target===this&&_movDown===this)closeModal('modal-alumno')">
 <div class="modal">
   <div class="mt" id="modal-alum-title">Nuevo Alumno</div>
   <input type="hidden" id="alum-edit-id">
@@ -4544,6 +4544,9 @@ function openNewModal(){
 }
 function openModal(id){const el=document.getElementById(id);el.style.display="flex";el.classList.add("on")}
 function closeModal(id){const el=document.getElementById(id);el.classList.remove("on");el.style.display="none"}
+// Previene cerrar modal cuando el mousedown empezó dentro del contenido y el mouseup terminó en el overlay
+let _movDown=null;
+document.addEventListener('mousedown',e=>{_movDown=e.target.classList.contains('mov')?e.target:null;},{capture:true});
 function openM(id){openModal(id)}
 function closeM(id){closeModal(id)}
 function closeMovOuter(e,id){if(e.target===document.getElementById(id))closeModal(id)}
@@ -13936,7 +13939,7 @@ document.head.appendChild(shakeStyle);
 initLogin();
 </script>
 <!-- MODAL CUENTA CORRIENTE -->
-<div class="mov" id="modal-cuenta" onclick="if(event.target===this)closeModal('modal-cuenta')">
+<div class="mov" id="modal-cuenta" onclick="if(event.target===this&&_movDown===this)closeModal('modal-cuenta')">
   <div class="modal" style="max-width:580px">
     <div class="mt">
       <span id="modal-cuenta-title">Cuenta corriente</span>
@@ -18102,7 +18105,7 @@ if('serviceWorker' in navigator){
 </script>
 
 <!-- MODAL CIERRE MENSUAL -->
-<div class="mov" id="modal-cierre-mes" onclick="if(event.target===this)closeModal('modal-cierre-mes')">
+<div class="mov" id="modal-cierre-mes" onclick="if(event.target===this&&_movDown===this)closeModal('modal-cierre-mes')">
   <div class="mbox" style="width:min(680px,96vw);max-height:92vh;overflow-y:auto;background:var(--bg2);border-radius:var(--rl);border:1px solid var(--b2)">
     <div class="mh">
       <div class="mt">📋 Cierre mensual</div>
@@ -18324,7 +18327,7 @@ if('serviceWorker' in navigator){
 </script>
 
 <!-- MODAL COMUNICACIONES: Nueva publicación -->
-<div class="mov" id="modal-com-post" onclick="if(event.target===this)closeModal('modal-com-post')">
+<div class="mov" id="modal-com-post" onclick="if(event.target===this&&_movDown===this)closeModal('modal-com-post')">
   <div class="modal" style="max-width:560px">
     <div class="modal-header">
       <div class="modal-title" id="modal-post-titulo">Nueva publicación</div>
@@ -18370,7 +18373,7 @@ if('serviceWorker' in navigator){
 </div>
 
 <!-- MODAL COMUNICACIONES: Nuevo video IA -->
-<div class="mov" id="modal-com-video" onclick="if(event.target===this)closeModal('modal-com-video')">
+<div class="mov" id="modal-com-video" onclick="if(event.target===this&&_movDown===this)closeModal('modal-com-video')">
   <div class="modal" style="max-width:520px">
     <div class="modal-header">
       <div class="modal-title" id="modal-video-titulo">Nuevo script de video</div>
