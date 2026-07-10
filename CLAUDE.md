@@ -290,27 +290,45 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 
 ### Bloqueados por externos
 - [ ] LinkedIn sync — esperando aprobación Community Management API (app "Metanoia CMS", enviado 2 Jun 2026)
-- [ ] Integración E-learning — transmisión automática de cursos a plataforma.metanoiasmx.com + facturación automática vía Finnegans API
-- [ ] **Meta Business — resubmisión app Instagram DM** — se presentó la app para el permiso `instagram_manage_messages` (responder DMs desde el agente-mensajes) y fue rechazada. Pendiente revisar motivo del rechazo y reenviar con documentación completa (política de privacidad, caso de uso, capturas de pantalla del flujo). Ver mañana con Tomás.
+- [ ] **Meta Business — resubmisión app Instagram DM** — 4 permisos resubmitidos el 7 Jul 2026 con textos mejorados (3 puntos Meta), videos correctos (flujo IG, no WA) y System User token declarado. Esperando revisión (3-7 días hábiles).
 
-### Alumnos / Integración Finnegans
-- [ ] Importador masivo Excel → Supabase + Finnegans API — leer plantilla, validar CUIT, crear cliente en Finnegans por cada alumno, insertar en `alumnos` solo si Finnegans responde OK
-- [ ] Alta individual con Finnegans — `saveAlumno()` debe disparar POST a Finnegans API al guardar (crear cliente, obtener comprobante)
-- [ ] Seguimiento e-learning por CUIT — usar CUIT como key de lookup en la plataforma e-learning para gestión de alumno
+### Pendiente de prueba (implementado, validar esta tarde)
+- [ ] Integración E-learning + Finnegans — transmisión automática de cursos a plataforma.metanoiasmx.com + facturación vía Finnegans API. Implementado en teoría. Probar a la tarde del 7 Jul 2026.
 
-### Contabilidad y finanzas
+### Alumnos / Integración Finnegans (próxima prioridad)
+- [ ] Interceptar comunicación E-learning ↔ Finnegans — cuando un alumno se inscribe en la plataforma E-learning, Finnegans crea el cliente y gestiona la cuenta contable. El panel debe interceptar ese evento (vía webhook o polling de Finnegans) para capturar el estado de cuenta, factura y recibo. CUIT es el identificador maestro. La comunicación E-learning ↔ Finnegans ya está resuelta; el panel debe sumarse como observador/consumidor de esos eventos.
+
+### Contabilidad y finanzas (baja prioridad)
 - [ ] Importador Finnegans — leer archivos exportados de Finnegans (semanal/mensual) y conciliar con comprobantes, cobranzas y caja del panel
 - [ ] Resumen mensual ejecutivo — agente IA que lee todos los módulos y genera balance en lenguaje natural (financiero + cursos + comunicaciones)
 
-### Producto
+### Proyecto a largo plazo: reemplazar Finnegans con sistema contable propio
+**Decisión (Jul 2026):** construir de a poco un módulo contable dentro del panel con el objetivo de reemplazar Finnegans a futuro. No hacerlo de golpe — cada feature nueva de finanzas debe ir en esa dirección.
+
+**Criterio de diseño:** cada cosa que construyamos en finanzas debe dejar los datos suficientemente estructurados para soportar contabilidad real (doble entrada, plan de cuentas, asientos). No es prioridad inmediata pero es el norte.
+
+**Hoja de ruta tentativa (acumulativa, sin fecha):**
+1. ✅ `medios_pago` — catálogo de cuentas bancarias y tarjetas por sociedad (Jul 2026)
+2. [ ] Reporte diario exportable — Excel/CSV con formato importable a Finnegans (puente)
+3. [ ] `plan_cuentas` — tabla de cuentas contables (activo, pasivo, resultado, etc.)
+4. [ ] Asientos automáticos — cuando se paga un comprobante o se registra un ingreso, generar el asiento contable correspondiente
+5. [ ] Libro IVA digital — consolidar comprobantes de compra y venta en formato AFIP
+6. [ ] Balance / Estado de resultados — reporte ejecutivo mensual generado desde los asientos
+7. [ ] Reemplazar Finnegans — cuando los pasos anteriores estén maduros y validados
+
+**Bloqueantes antes de reemplazar Finnegans:**
+- Facturación electrónica AFIP (CAE) — requiere integración con web services de AFIP
+- Libro IVA digital en formato legal
+- Validación con contador externo
+
+### Producto (baja prioridad)
 - [ ] Módulo COFRADIA — gestión de planes, suscriptores y contenido (Línea D)
 - [ ] Agentes cloud autónomos para automatizaciones (gstack instalado en `~/.claude/skills/gstack/`)
 
-### Cursos / E-learning
-- [ ] Palmier Pro (palmier.io) — editor de video open source que permite a Claude editar videos con comandos de texto. Evaluar para: cortar grabaciones de cursos, agregar intro/outro Metanoia, dividir una grabación larga en módulos, generar subtítulos. Útil antes de subir a la plataforma e-learning.
-
 ### Cancelado
 - ~~Darwin integration~~ — reemplazado por respuesta manual desde el panel (tab Mensajes)
+- ~~Importador masivo Excel → Supabase + Finnegans~~ — reemplazado por interceptación directa de eventos E-learning ↔ Finnegans
+- ~~Palmier Pro / edición de video~~ — lo gestiona Flor directamente
 
 ## Implementado (4 Jun 2026)
 - ✅ Sistema de diplomas: Canvas + envío automático por email (SMTP) al finalizar curso
