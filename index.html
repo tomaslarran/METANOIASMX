@@ -3354,6 +3354,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <input type="hidden" id="rcob-tipo">
   <input type="hidden" id="rcob-id">
   <input type="hidden" id="rcob-sociedad">
+  <input type="hidden" id="rcob-curso-id">
   <input type="hidden" id="rcob-monto">
   <div id="rcob-resumen" style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:12px 14px;font-size:13px;margin-bottom:4px"></div>
   <!-- Campos sólo para cobro libre -->
@@ -10445,8 +10446,8 @@ function abrirCobroCurso(cursoId){
   const c=cursos.find(x=>x.id===cursoId);if(!c)return;
   const monto=c.ingreso_estimado||((c.arancel||0)*(c.cupos_inscriptos||c.cupos_max||0))||0;
   abrirRegistrarCobro('','libre',0,null);
-  // Pre-cargar concepto y monto con datos del curso
   setTimeout(()=>{
+    document.getElementById("rcob-curso-id").value=cursoId;
     const conc=document.getElementById("rcob-concepto");
     const mont=document.getElementById("rcob-monto-libre");
     if(conc)conc.value=`Cobro — ${c.nombre}`;
@@ -10472,6 +10473,7 @@ function rcobActualizarSoc(soc){
 function abrirRegistrarCobro(id,tipo,montoOverride,cursoId){
   document.getElementById("rcob-id").value=id;
   document.getElementById("rcob-tipo").value=tipo;
+  document.getElementById("rcob-curso-id").value="";
   document.getElementById("rcob-fecha").value=today();
   document.getElementById("rcob-factura").value="";
   document.getElementById("rcob-obs").value="";
@@ -10609,6 +10611,15 @@ async function confirmarRegistrarCobro(){
         }
       })();
       toast(msgLibre,"ok");
+      // Si es cobro de curso, marcar todas sus inscripciones pendientes como Pagado
+      const cIdLibre=document.getElementById("rcob-curso-id").value;
+      if(cIdLibre){
+        const medioGuardarLibre=dest==="inversion"?("📈 "+(cfInversiones.find(i=>i.id===invId)?.nombre||"Inversión")):medio;
+        await sb(`inscripciones?curso_id=eq.${cIdLibre}&estado=in.(Inscripto,Lista espera)`,{
+          method:"PATCH",
+          body:JSON.stringify({estado:"Pagado",fecha_pago_real:fecha,medio_pago:medioGuardarLibre,numero_factura:factura||null})
+        }).catch(()=>{});
+      }
       renderInscPendientesCF();
 
     } else if(tipo==="cobranza"){
