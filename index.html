@@ -9292,6 +9292,7 @@ function renderCFResumen(){
                 <span style="font-size:10px;color:var(--tx4)">📚</span>
                 <span style="flex:1">${esc(c.nombre)}</span>
                 <span style="font-size:9px;color:var(--tx4)">${c.estado||""}</span>
+                <button onclick="abrirCobroCurso('${c.id}')" style="background:none;border:1px solid var(--gr);color:var(--gr);cursor:pointer;font-size:10px;padding:2px 7px;border-radius:10px;white-space:nowrap;opacity:0;transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0" title="Registrar cobro de este curso">💰 Cobrar</button>
               </div>
             </td>${celdas}
           </tr>`;
@@ -10438,6 +10439,20 @@ function setRcobDest(dest){
   document.getElementById("rcob-inv-wrap").style.display=dest==="inversion"?"":"none";
   document.getElementById("rcob-dest-caja-btn").classList.toggle("on",dest==="caja");
   document.getElementById("rcob-dest-inv-btn").classList.toggle("on",dest==="inversion");
+}
+
+function abrirCobroCurso(cursoId){
+  const c=cursos.find(x=>x.id===cursoId);if(!c)return;
+  const monto=c.ingreso_estimado||((c.arancel||0)*(c.cupos_inscriptos||c.cupos_max||0))||0;
+  abrirRegistrarCobro('','libre',0,null);
+  // Pre-cargar concepto y monto con datos del curso
+  setTimeout(()=>{
+    const conc=document.getElementById("rcob-concepto");
+    const mont=document.getElementById("rcob-monto-libre");
+    if(conc)conc.value=`Cobro — ${c.nombre}`;
+    if(mont)mont.value=monto||"";
+    document.getElementById("rcob-title").textContent=`Cobrar: ${c.nombre}`;
+  },30);
 }
 
 function rcobActualizarSoc(soc){
