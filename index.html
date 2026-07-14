@@ -14805,7 +14805,7 @@ initLogin();
 /* ══════════════════════════════════════
    MÓDULO IMPUESTOS
    ══════════════════════════════════════ */
-let impuestosIngresos=[],autonomosCuotas=[],gananciasAnticipos=[],impuestosDeclaraciones=[];
+let impuestosIngresos=[],autonomosCuotas=[],gananciasAnticipos=[],impuestosDeclaraciones=[],ordenesGanancias=[];
 let impTab="iva";
 const AUTONOMOS_NOMBRES=["Tomás","Mario","Valentina","Amparo"];
 const IIBB_TASA=0.06; // 6% Salta
@@ -14828,11 +14828,12 @@ function setImpTab(tab,btn){
 
 async function loadImpuestos(){
   try{
-    [impuestosIngresos,autonomosCuotas,gananciasAnticipos,impuestosDeclaraciones]=await Promise.all([
+    [impuestosIngresos,autonomosCuotas,gananciasAnticipos,impuestosDeclaraciones,ordenesGanancias]=await Promise.all([
       sb("impuestos_ingresos?select=*&order=periodo.desc"),
       sb("autonomos_cuotas?select=*&order=periodo.desc"),
       sb("ganancias_anticipos?select=*&order=anio.desc,nro.asc").catch(()=>[]),
-      sb("impuestos_declaraciones?select=*").catch(()=>[])
+      sb("impuestos_declaraciones?select=*").catch(()=>[]),
+      sb("ordenes_pago?select=*&order=fecha_pago.desc").catch(()=>[])
     ]);
     if(!comprobantes.length) comprobantes=await sb("comprobantes_compra?select=*&order=fecha.desc").catch(()=>[]);
   }catch(e){impuestosIngresos=[];autonomosCuotas=[];gananciasAnticipos=[];}
@@ -15291,11 +15292,34 @@ function renderImpGanancias(){
     </tr>`;
   }).join("");
 
+  // ── Retenciones practicadas (ordenes_pago del año) ──────────────────────
+  const opAnio=(ordenesGanancias||[]).filter(op=>(op.fecha_pago||"").startsWith(String(anio))&&(parseFloat(op.monto_retencion)||0)>0);
+  const totalPracticadas=opAnio.reduce((s,op)=>s+(parseFloat(op.monto_retencion)||0),0);
+  const opGroups={};
+  opAnio.forEach(op=>{
+    const k=(op.fecha_pago||"").slice(0,7)+"|"+(op.codigo_sicore||"SC");
+    if(!opGroups[k])opGroups[k]={periodo:(op.fecha_pago||"").slice(0,7),cod:op.codigo_sicore||"—",desc:op.descripcion_sicore||"Sin categoría",count:0,total:0};
+    opGroups[k].count++;opGroups[k].total+=parseFloat(op.monto_retencion)||0;
+  });
+  const opGroupRows=Object.values(opGroups).sort((a,b)=>a.periodo.localeCompare(b.periodo));
+  const fmtPer2=(p)=>{if(!p)return"—";const[y,m]=p.split("-");return["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][parseInt(m)-1]+" "+y;};
+
+  // ── Retenciones sufridas (comprobantes.retencion_ganancias del año) ──────
+  const compGanAnio=comprobantes.filter(c=>{
+    const f=c.fecha_imputacion||c.fecha||"";
+    return f.startsWith(String(anio))&&(parseFloat(c.retencion_ganancias)||0)>0;
+  }).sort((a,b)=>(a.fecha_imputacion||a.fecha||"").localeCompare(b.fecha_imputacion||b.fecha||""));
+  const totalSufridas=compGanAnio.reduce((s,c)=>s+(parseFloat(c.retencion_ganancias)||0),0);
+  const saldoNeto=Math.max(0,impuestoTotal-totalPagado-totalSufridas);
+
   wrap.innerHTML=`
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:20px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin-bottom:20px">
       <div class="sc"><div class="sc-l">Impuesto estimado</div><div class="sc-v" style="color:var(--re)">${impuestoTotal?fmtImp(impuestoTotal):"Sin datos"}</div><div class="sc-s">35% ganancia imponible</div></div>
+      <div class="sc"><div class="sc-l">Ret. sufridas ${anio}</div><div class="sc-v" style="color:var(--gr)">${totalSufridas?fmtImp(totalSufridas):"—"}</div><div class="sc-s">crédito · nos retuvieron</div></div>
+      <div class="sc"><div class="sc-l">Ret. practicadas ${anio}</div><div class="sc-v" style="color:#A78BFA">${totalPracticadas?fmtImp(totalPracticadas):"—"}</div><div class="sc-s">retuvimos · a depositar SICORE</div></div>
       <div class="sc"><div class="sc-l">Anticipos pagados</div><div class="sc-v" style="color:var(--gr)">${totalPagado?fmtImp(totalPagado):"—"}</div><div class="sc-s">${ANTICIPO_MESES.filter((_,i)=>getAnticipo(i+1)?.pagado).length}/10 cuotas</div></div>
       <div class="sc"><div class="sc-l">Anticipos pendientes</div><div class="sc-v" style="color:var(--am)">${totalPendiente?fmtImp(totalPendiente):"—"}</div><div class="sc-s">${ANTICIPO_MESES.filter((_,i)=>!getAnticipo(i+1)?.pagado).length} restantes</div></div>
+      <div class="sc"><div class="sc-l">Saldo estimado ${anio}</div><div class="sc-v" style="color:${saldoNeto>0?"var(--re)":"var(--gr)"}">${impuestoTotal?fmtImp(saldoNeto):"—"}</div><div class="sc-s">imp − anticipos − créditos</div></div>
       <div class="sc"><div class="sc-l">Próximo anticipo</div><div class="sc-v" style="font-size:14px;color:var(--ac)">${proximoLabel}</div><div class="sc-s">vencimiento</div></div>
     </div>
 
@@ -15368,6 +15392,70 @@ function renderImpGanancias(){
         </div>
       </div>
     </div>
+    <!-- Retenciones practicadas -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+      <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#A78BFA">RET. PRACTICADAS ${anio} — SICORE</div>
+          <span style="font-size:11px;color:var(--tx3)">${opAnio.length} OP</span>
+        </div>
+        ${opGroupRows.length?`
+        <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:var(--surf2)">
+            <th style="text-align:left;padding:5px 8px;font-size:10px;color:var(--tx3)">Período</th>
+            <th style="text-align:left;padding:5px 8px;font-size:10px;color:var(--tx3)">SICORE</th>
+            <th style="text-align:left;padding:5px 8px;font-size:10px;color:var(--tx3)">Concepto</th>
+            <th style="text-align:center;padding:5px 8px;font-size:10px;color:var(--tx3)">OP</th>
+            <th style="text-align:right;padding:5px 8px;font-size:10px;color:var(--tx3)">Retenido</th>
+          </tr></thead>
+          <tbody>
+            ${opGroupRows.map(r=>`<tr style="border-bottom:1px solid var(--b)">
+              <td style="padding:6px 8px;font-size:11px;color:var(--tx2)">${fmtPer2(r.periodo)}</td>
+              <td style="padding:6px 8px;font-size:11px;font-weight:700;color:#A78BFA">${esc(r.cod)}</td>
+              <td style="padding:6px 8px;font-size:11px;color:var(--tx3)">${esc(r.desc)}</td>
+              <td style="padding:6px 8px;font-size:11px;text-align:center;color:var(--tx3)">${r.count}</td>
+              <td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:600;color:var(--re)">${fmtImp(r.total)}</td>
+            </tr>`).join("")}
+          </tbody>
+          <tfoot><tr style="background:var(--surf2);border-top:2px solid var(--b2)">
+            <td colspan="4" style="padding:6px 8px;font-size:12px;font-weight:700;color:var(--tx)">TOTAL</td>
+            <td style="text-align:right;padding:6px 8px;font-size:12px;font-weight:700;color:var(--re)">${fmtImp(totalPracticadas)}</td>
+          </tr></tfoot>
+        </table></div>`
+        :`<div style="color:var(--tx3);font-size:12px;padding:20px;text-align:center">Sin retenciones practicadas en ${anio}<br><span style="font-size:11px">Se cargan al generar Órdenes de Pago</span></div>`}
+      </div>
+
+      <!-- Retenciones sufridas -->
+      <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--gr)">RET. SUFRIDAS ${anio} — NOS RETUVIERON</div>
+          <span style="font-size:11px;color:var(--tx3)">${compGanAnio.length} comprobantes</span>
+        </div>
+        ${compGanAnio.length?`
+        <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:var(--surf2)">
+            <th style="text-align:left;padding:5px 8px;font-size:10px;color:var(--tx3)">Fecha</th>
+            <th style="text-align:left;padding:5px 8px;font-size:10px;color:var(--tx3)">Proveedor / cliente</th>
+            <th style="text-align:right;padding:5px 8px;font-size:10px;color:var(--tx3)">Retenido</th>
+          </tr></thead>
+          <tbody>
+            ${compGanAnio.map(c=>`<tr style="border-bottom:1px solid var(--b)">
+              <td style="padding:6px 8px;font-size:11px;color:var(--tx3)">${c.fecha_imputacion||c.fecha||"—"}</td>
+              <td style="padding:6px 8px;font-size:11px;font-weight:500;color:var(--tx2)">${esc(c.proveedor||"—")}</td>
+              <td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:600;color:var(--gr)">${fmtImp(parseFloat(c.retencion_ganancias))}</td>
+            </tr>`).join("")}
+          </tbody>
+          <tfoot><tr style="background:var(--surf2);border-top:2px solid var(--b2)">
+            <td colspan="2" style="padding:6px 8px;font-size:12px;font-weight:700;color:var(--tx)">TOTAL</td>
+            <td style="text-align:right;padding:6px 8px;font-size:12px;font-weight:700;color:var(--gr)">${fmtImp(totalSufridas)}</td>
+          </tr></tfoot>
+        </table></div>`
+        :`<div style="color:var(--tx3);font-size:12px;padding:20px;text-align:center">Sin retenciones sufridas en ${anio}<br><span style="font-size:11px">Se cargan al analizar facturas con IA</span></div>`}
+      </div>
+    </div>
+
     <div style="background:var(--surf);border:1px solid var(--b2);border-radius:8px;padding:12px;font-size:11px;color:var(--tx3)">
       ⚠️ <strong>Importante:</strong> Estimación simplificada. La base imponible real considera ajuste por inflación, amortizaciones y otros conceptos específicos. Consultá con tu contador para la declaración jurada. Vencimiento: <strong>julio ${anio+1}</strong>.
     </div>`;

@@ -56,6 +56,7 @@ Deno.serve(async (req) => {
       "  \"percepcion_iva_15\": numero o 0,\n" +
       "  \"percepcion_iibb\": numero o 0,\n" +
       "  \"impuesto_interno\": numero o 0,\n" +
+      "  \"retencion_ganancias\": numero o 0,\n" +
       "  \"otros_impuestos\": numero o 0,\n" +
       "  \"total\": numero,\n" +
       "  \"sociedad\": \"SUDES o POINTERS\",\n" +
@@ -66,8 +67,9 @@ Deno.serve(async (req) => {
       "2. cuit_receptor: CUIT de quien compra/recibe (datos del cliente).\n" +
       "3. sociedad: mira el RECEPTOR. Si es SUDES o CUIT 30-71699117-9 -> SUDES. Si es POINTERS o CUIT 30-71696585-2 -> POINTERS. Si no se puede determinar -> SUDES por defecto.\n" +
       "4. Desglose neto: neto_21 (21%), neto_105 (10.5%), neto_27 (27% gas/luz/telefonia entre empresas), neto_exento. Si no podes distinguir pon 0 en todos y usa solo monto_neto.\n" +
-      "5. iva: IVA discriminado total. percepcion_iva: percepcion IVA 3%. percepcion_iva_15: percepcion IVA 1.5%. percepcion_iibb: retenciones/percepciones IIBB. impuesto_interno: imp. internos. otros_impuestos: otros cargos.\n" +
-      "6. null si no encontras el campo. Numeros sin puntos de miles (1234.56 no 1.234,56).";
+      "5. iva: IVA discriminado total. percepcion_iva: percepcion IVA 3%. percepcion_iva_15: percepcion IVA 1.5%. percepcion_iibb: retenciones/percepciones IIBB. impuesto_interno: imp. internos. otros_impuestos: otros cargos no clasificados.\n" +
+      "6. retencion_ganancias: monto de retencion de Impuesto a las Ganancias que figura en la factura o comprobante de retencion adjunto (campo 'Ret. Ganancias', 'Retencion Gcias', codigo SICORE, etc). Si no hay, 0.\n" +
+      "7. null si no encontras el campo. Numeros sin puntos de miles (1234.56 no 1.234,56).";
 
     const content = isPdf
       ? [{ type:"document", source:{type:"base64", media_type:"application/pdf", data:base64} }, { type:"text", text:promptText }]
