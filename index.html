@@ -3612,6 +3612,80 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 </div>
 
+<!-- MODAL ORDEN DE PAGO -->
+<div class="mov" id="modal-orden-pago" onclick="if(event.target===this&&_movDown===this)closeModal('modal-orden-pago')">
+<div class="modal" style="max-width:520px">
+  <div class="mt">📄 Orden de Pago</div>
+  <input type="hidden" id="mop-comp-id">
+  <div style="background:var(--bg2);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <div><span style="color:var(--tx3);font-size:11px">Proveedor</span><br><strong id="mop-proveedor">—</strong></div>
+      <div><span style="color:var(--tx3);font-size:11px">CUIT</span><br><span id="mop-cuit" style="font-weight:600">—</span></div>
+      <div><span style="color:var(--tx3);font-size:11px">Comprobante</span><br><span id="mop-comp-info">—</span></div>
+      <div><span style="color:var(--tx3);font-size:11px">Sociedad</span><br><span id="mop-sociedad">—</span></div>
+    </div>
+  </div>
+  <div class="form-grid" style="grid-template-columns:1fr 1fr;margin-bottom:12px">
+    <div class="fg"><label class="fl">Tipo de factura</label>
+      <select class="fs" id="mop-tipo" onchange="mopActualizarTipo()">
+        <option value="A">Factura A (RI — aplica retención)</option>
+        <option value="B">Factura B (Monotributo)</option>
+        <option value="C">Factura C (Exento)</option>
+        <option value="NC">Nota de Crédito</option>
+      </select>
+    </div>
+    <div class="fg"><label class="fl">Monto bruto</label>
+      <input class="fi" id="mop-monto-bruto" type="number" step="0.01" oninput="mopRecalcular()" placeholder="0">
+    </div>
+  </div>
+  <div id="mop-retencion-section" style="background:rgba(139,92,246,.06);border:1px solid rgba(139,92,246,.2);border-radius:8px;padding:12px 14px;margin-bottom:12px;display:none">
+    <div style="font-size:12px;font-weight:700;color:#A78BFA;margin-bottom:8px">Retención Ganancias (SICORE)</div>
+    <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:8px">
+      <div class="fg" style="grid-column:1/-1"><label class="fl">Código SICORE</label>
+        <select class="fs" id="mop-sicore" onchange="mopSelSicore()">
+          <option value="">— Sin retención —</option>
+          <option value="029|2">029 — Locación y prest. de servicios (2%)</option>
+          <option value="031|2">031 — Industria de la construcción (2%)</option>
+          <option value="079|0.5">079 — Compraventa de bienes muebles (0.5%)</option>
+          <option value="011|6">011 — Alquileres (6%)</option>
+          <option value="028|6">028 — Honorarios profesionales (6%)</option>
+          <option value="093|2">093 — Servicios médicos y similares (2%)</option>
+        </select>
+      </div>
+      <div class="fg"><label class="fl">Base de retención</label>
+        <input class="fi" id="mop-base-ret" type="number" step="0.01" oninput="mopRecalcular()" placeholder="0">
+      </div>
+      <div class="fg"><label class="fl">% Retención</label>
+        <input class="fi" id="mop-pct-ret" type="number" step="0.01" oninput="mopRecalcular()" placeholder="0">
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid rgba(139,92,246,.2)">
+      <span style="font-size:12px;color:var(--tx3)">Monto retención Ganancias</span>
+      <span id="mop-monto-ret" style="font-size:14px;font-weight:700;color:#f87171">$0</span>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:8px;padding:10px 14px;margin-bottom:14px">
+    <span style="font-size:13px;font-weight:600">Neto a pagar</span>
+    <span id="mop-neto" style="font-size:20px;font-weight:800;color:var(--gr)">$0</span>
+  </div>
+  <div class="form-grid" style="grid-template-columns:1fr 1fr">
+    <div class="fg"><label class="fl">Fecha de pago *</label><input class="fi" id="mop-fecha" type="date"></div>
+    <div class="fg"><label class="fl">Medio de pago *</label><select class="fs" id="mop-medio"></select></div>
+    <div class="fg" style="grid-column:1/-1"><label class="fl">CBU / Referencia</label>
+      <input class="fi" id="mop-cbu" type="text" placeholder="CBU, número de cuenta, cheque Nº...">
+    </div>
+    <div class="fg" style="grid-column:1/-1"><label class="fl">Observaciones</label>
+      <input class="fi" id="mop-obs-op" type="text" placeholder="Opcional">
+    </div>
+  </div>
+  <div class="ma" style="gap:8px">
+    <button class="bc" onclick="closeModal('modal-orden-pago')">Cancelar</button>
+    <button style="background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);border-radius:8px;padding:8px 16px;color:#A78BFA;cursor:pointer;font-size:13px" onclick="confirmarOrdenPago(false)">📄 Solo PDF</button>
+    <button class="bk" onclick="confirmarOrdenPago(true)">💸 Pagar + OP</button>
+  </div>
+</div>
+</div>
+
 <!-- MODAL NUEVO PROVEEDOR -->
 <div class="mov" id="modal-proveedor" onclick="if(event.target===this&&_movDown===this)closeModal('modal-proveedor')">
 <div class="modal">
@@ -8196,7 +8270,10 @@ async function renderCFPendientes(){
               <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--tx)">$${Math.round(c.total||0).toLocaleString("es-AR")}</td>
               <td style="padding:8px 12px;text-align:center;color:${days(fv)<0?"var(--re)":days(fv)<=7?"#F97316":"var(--tx3)"}">${fv?fmt(fv):"—"}</td>
               <td style="padding:8px 6px;text-align:center">
-                <button onclick="abrirPagarComp('${c.id}')" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:6px;color:var(--gr);font-size:11px;padding:4px 10px;cursor:pointer;white-space:nowrap">💳 Pagar</button>
+                <div style="display:flex;gap:4px;justify-content:center">
+                  <button onclick="abrirPagarComp('${c.id}')" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:6px;color:var(--gr);font-size:11px;padding:4px 10px;cursor:pointer;white-space:nowrap">💳 Pagar</button>
+                  ${!c.tipo?.startsWith("NC")?`<button onclick="abrirOrdenPago('${c.id}')" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.3);border-radius:6px;color:#A78BFA;font-size:11px;padding:4px 8px;cursor:pointer;white-space:nowrap" title="Generar Orden de Pago">📄 OP</button>`:""}
+                </div>
               </td>
             </tr>`;
           }).join("")}
@@ -15477,6 +15554,7 @@ function renderComprobantes(){
         ${c.archivo_url?`<button onclick="window.open('${c.archivo_url}','_blank')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Ver archivo">👁</button>`:""}
         <button onclick="editComprobante('${c.id}')" style="background:none;border:1px solid ${faltaDesglose?"rgba(245,158,11,.6)":"var(--b)"};border-radius:5px;color:${faltaDesglose?"#FCD34D":"var(--tx3)"};font-size:10px;padding:3px 7px;cursor:pointer" title="${faltaDesglose?"Completar para Finnegans":"Editar"}">${faltaDesglose?"✏️":"✎"}</button>
         ${c.estado==="revisado"?`<button onclick="abrirPagarComp('${c.id}')" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);border-radius:5px;color:#059669;font-size:10px;padding:3px 7px;cursor:pointer" title="Registrar pago">💳</button>`:""}
+        ${c.estado!=="pagado"&&!c.tipo?.startsWith("NC")?`<button onclick="abrirOrdenPago('${c.id}')" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.4);border-radius:5px;color:#A78BFA;font-size:10px;padding:3px 7px;cursor:pointer" title="Generar Orden de Pago">📄 OP</button>`:""}
         ${c.estado!=="enviado_finnegans"&&c.estado!=="pagado"
           ?`<button onclick="marcarEstadoComp('${c.id}','${c.estado==="pendiente"?"revisado":"enviado_finnegans"}')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="${c.estado==="pendiente"?"Marcar revisado":"Enviar a Finnegans"}">${c.estado==="pendiente"?"✓":"→F"}</button>`
           :c.estado==="enviado_finnegans"?`<button onclick="marcarEstadoComp('${c.id}','revisado')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Revertir a Revisado">↩</button>`:""}
@@ -15614,6 +15692,214 @@ async function marcarEstadoComp(id,estado){
     }
   }catch(e){toast("Error","err")}
 }
+
+// ── ÓRDENES DE PAGO ─────────────────────────────────────────────────────────
+const SICORE_CAT={
+  "029":{desc:"Locación y prest. de servicios",pct:2},
+  "031":{desc:"Industria de la construcción",pct:2},
+  "079":{desc:"Compraventa de bienes muebles",pct:0.5},
+  "011":{desc:"Alquileres",pct:6},
+  "028":{desc:"Honorarios profesionales",pct:6},
+  "093":{desc:"Servicios médicos y similares",pct:2},
+};
+
+function abrirOrdenPago(compId){
+  const c=comprobantes.find(x=>x.id===compId);
+  if(!c)return;
+  document.getElementById("mop-comp-id").value=compId;
+  document.getElementById("mop-proveedor").textContent=c.proveedor||"Sin proveedor";
+  document.getElementById("mop-cuit").textContent=c.cuit||"—";
+  document.getElementById("mop-comp-info").textContent=`Fact. ${c.tipo||"?"} ${c.numero?`N°${c.numero}`:""}`;
+  document.getElementById("mop-sociedad").textContent=c.sociedad||"—";
+  document.getElementById("mop-fecha").value=today();
+  document.getElementById("mop-cbu").value="";
+  document.getElementById("mop-obs-op").value="";
+  document.getElementById("mop-sicore").value="";
+  document.getElementById("mop-pct-ret").value="";
+  const tipoVal=c.tipo?.startsWith("NC")?"NC":(c.tipo||"B");
+  const tipoSel=document.getElementById("mop-tipo");
+  tipoSel.value=["A","B","C","NC"].includes(tipoVal)?tipoVal:"B";
+  const bruto=Math.abs(parseFloat(c.total)||0);
+  document.getElementById("mop-monto-bruto").value=bruto||"";
+  document.getElementById("mop-base-ret").value=bruto||"";
+  const soc=c.sociedad||"";
+  const activos=mediosPago.filter(m=>m.activo&&(m.sociedad==="Ambas"||!soc||m.sociedad===soc));
+  const ms=document.getElementById("mop-medio");
+  ms.innerHTML=activos.length
+    ?activos.map(m=>`<option value="${esc(m.nombre)}">${esc(m.nombre)}${m.banco?` — ${esc(m.banco)}`:""}</option>`).join("")
+    :`<option value="Transferencia">Transferencia bancaria</option><option value="Efectivo">Efectivo</option><option value="Cheque">Cheque</option>`;
+  mopActualizarTipo();
+  mopRecalcular();
+  openModal("modal-orden-pago");
+}
+
+function mopActualizarTipo(){
+  const esA=document.getElementById("mop-tipo").value==="A";
+  document.getElementById("mop-retencion-section").style.display=esA?"":"none";
+  if(!esA){document.getElementById("mop-sicore").value="";document.getElementById("mop-pct-ret").value="";}
+  mopRecalcular();
+}
+
+function mopSelSicore(){
+  const val=document.getElementById("mop-sicore").value;
+  document.getElementById("mop-pct-ret").value=val?val.split("|")[1]:"";
+  mopRecalcular();
+}
+
+function mopRecalcular(){
+  const bruto=parseFloat(document.getElementById("mop-monto-bruto").value)||0;
+  const esA=document.getElementById("mop-tipo").value==="A";
+  let ret=0;
+  if(esA){
+    const base=parseFloat(document.getElementById("mop-base-ret").value)||0;
+    const pct=parseFloat(document.getElementById("mop-pct-ret").value)||0;
+    ret=Math.round(base*pct/100*100)/100;
+  }
+  const neto=Math.round((bruto-ret)*100)/100;
+  document.getElementById("mop-monto-ret").textContent="$"+ret.toLocaleString("es-AR");
+  document.getElementById("mop-neto").textContent="$"+neto.toLocaleString("es-AR");
+}
+
+async function confirmarOrdenPago(pagarTambien){
+  const compId=document.getElementById("mop-comp-id").value;
+  const c=comprobantes.find(x=>x.id===compId);
+  if(!c)return;
+  const tipo=document.getElementById("mop-tipo").value;
+  const bruto=parseFloat(document.getElementById("mop-monto-bruto").value)||0;
+  const esA=tipo==="A";
+  const sicoreVal=document.getElementById("mop-sicore").value;
+  const base=esA?(parseFloat(document.getElementById("mop-base-ret").value)||0):0;
+  const pct=esA?(parseFloat(document.getElementById("mop-pct-ret").value)||0):0;
+  const ret=esA?Math.round(base*pct/100*100)/100:0;
+  const neto=Math.round((bruto-ret)*100)/100;
+  const fecha=document.getElementById("mop-fecha").value||today();
+  const medio=document.getElementById("mop-medio").value;
+  const cbu=document.getElementById("mop-cbu").value.trim();
+  const obs=document.getElementById("mop-obs-op").value.trim();
+  if(!bruto){toast("Ingresá el monto bruto","err");return;}
+  if(!medio){toast("Seleccioná un medio de pago","err");return;}
+  const [cod]=(sicoreVal?sicoreVal.split("|"):["",""]);
+  const sicoreDesc=cod?SICORE_CAT[cod]?.desc||"":"";
+  const numero=`OP-${fecha.slice(0,7).replace("-","")}-${String(Date.now()).slice(-4)}`;
+  const opData={
+    comprobante_id:compId,numero,proveedor:c.proveedor||"",cuit:c.cuit||"",
+    tipo_factura:tipo,sociedad:c.sociedad||"SUDES",monto_bruto:bruto,
+    base_retencion:base,codigo_sicore:cod||null,descripcion_sicore:sicoreDesc||null,
+    porcentaje_retencion:pct,monto_retencion:ret,neto_a_pagar:neto,
+    medio_pago:medio,cbu_destino:cbu||null,observaciones:obs||null,
+    fecha_pago:fecha,estado:pagarTambien?"pagado":"borrador",
+    creado_por:loggedUser?.nombre||null,
+  };
+  try{
+    const[op]=await sb("ordenes_pago",{method:"POST",body:JSON.stringify(opData)});
+    if(pagarTambien){
+      await sb(`comprobantes_compra?id=eq.${compId}`,{method:"PATCH",body:JSON.stringify({
+        estado:"pagado",medio_pago:medio,fecha_pago:fecha,updated_at:new Date().toISOString()
+      })});
+      c.estado="pagado";c.medio_pago=medio;c.fecha_pago=fecha;
+      const medioObj=mediosPago.find(m=>m.nombre===medio);
+      const esBanco=medioObj?.tipo==="cuenta_bancaria";
+      const descPago=`Fact. ${tipo}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"}`;
+      const obsStr=`${medio}${obs?` · ${obs}`:""} · comp-${compId}`;
+      if(esBanco){
+        await sb("banco_movimientos",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify({
+          sociedad:c.sociedad||"SUDES",fecha,concepto:descPago,importe:-neto,
+          saldo:null,conciliado:false,referencia:c.numero||"OP"
+        })}).catch(()=>{});
+      }else{
+        await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
+          sociedad:c.sociedad||"SUDES",fecha,tipo:"egreso",concepto:descPago,
+          categoria:"Proveedor",monto:neto,medio_pago:medio,
+          observaciones:obsStr,creado_por:loggedUser?.nombre||null
+        })});
+      }
+      renderComprobantes();updateCompStats();
+    }
+    generarPDFOrdenPago({...opData,id:op?.id,numero_comp:c.numero});
+    closeModal("modal-orden-pago");
+    toast(`📄 OP ${numero} generada${pagarTambien?" · Comprobante pagado":""}`,"ok");
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+function generarPDFOrdenPago(op){
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  const W=210,M=20;
+  let y=M;
+  // Header
+  doc.setFillColor(20,22,35);doc.rect(0,0,W,40,"F");
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(22);doc.setFont("helvetica","bold");
+  doc.text("ORDEN DE PAGO",M,19);
+  doc.setFontSize(9);doc.setFont("helvetica","normal");
+  doc.text("Metanoia SMX · "+(op.sociedad||"SUDES"),M,27);
+  doc.setFontSize(9);
+  doc.text(`N° ${op.numero}`,W-M,14,{align:"right"});
+  doc.text(`Fecha: ${op.fecha_pago||""}`,W-M,21,{align:"right"});
+  doc.text(`Estado: ${op.estado||"borrador"}`,W-M,28,{align:"right"});
+  y=52;
+  doc.setTextColor(20,20,30);
+  // Bloque proveedor
+  doc.setFillColor(245,246,249);doc.roundedRect(M-2,y-6,W-2*M+4,34,2,2,"F");
+  doc.setFontSize(8);doc.setFont("helvetica","bold");doc.setTextColor(110,110,130);
+  doc.text("PROVEEDOR / BENEFICIARIO",M+2,y);
+  doc.setTextColor(15,15,25);doc.setFontSize(13);doc.setFont("helvetica","bold");
+  doc.text(op.proveedor||"—",M+2,y+9);
+  doc.setFontSize(9);doc.setFont("helvetica","normal");doc.setTextColor(80,80,105);
+  doc.text(`CUIT: ${op.cuit||"—"}`,M+2,y+17);
+  doc.text(`Comprobante: Fact. ${op.tipo_factura||"?"} ${op.numero_comp?`N°${op.numero_comp}`:""}`,M+2,y+23);
+  y+=42;
+  // Divisor
+  doc.setDrawColor(210,212,225);doc.setLineWidth(0.3);doc.line(M,y,W-M,y);y+=9;
+  // Liquidación
+  doc.setFontSize(9);doc.setFont("helvetica","bold");doc.setTextColor(100,100,120);
+  doc.text("LIQUIDACIÓN",M,y);y+=8;
+  const addRow=(label,valor,bold,rgb)=>{
+    doc.setFontSize(10);doc.setFont("helvetica",bold?"bold":"normal");
+    doc.setTextColor(rgb?rgb[0]:40,rgb?rgb[1]:40,rgb?rgb[2]:55);
+    doc.text(label,M+2,y);
+    doc.text("$"+Number(valor).toLocaleString("es-AR",{minimumFractionDigits:2}),W-M-2,y,{align:"right"});
+    y+=7;
+  };
+  addRow("Monto bruto del comprobante",op.monto_bruto);
+  if(op.tipo_factura==="A"&&op.monto_retencion>0){
+    y+=2;
+    doc.setFontSize(8);doc.setFont("helvetica","italic");doc.setTextColor(120,80,190);
+    doc.text(`Retención Ganancias — SICORE ${op.codigo_sicore||""} · ${op.descripcion_sicore||""}`,M+4,y);y+=5;
+    doc.text(`Base: $${Number(op.base_retencion).toLocaleString("es-AR",{minimumFractionDigits:2})}   ×   ${op.porcentaje_retencion}%`,M+4,y);y+=2;
+    doc.setFont("helvetica","normal");
+    addRow("(-) Monto retención",-op.monto_retencion,false,[200,50,50]);
+  }
+  // Neto
+  y+=3;
+  doc.setFillColor(230,248,242);doc.roundedRect(M-2,y-5,W-2*M+4,14,2,2,"F");
+  doc.setFontSize(12);doc.setFont("helvetica","bold");doc.setTextColor(5,140,95);
+  doc.text("NETO A PAGAR",M+2,y+3);
+  doc.text("$"+Number(op.neto_a_pagar).toLocaleString("es-AR",{minimumFractionDigits:2}),W-M-2,y+3,{align:"right"});
+  y+=20;
+  // Datos pago
+  doc.setDrawColor(210,212,225);doc.line(M,y,W-M,y);y+=9;
+  doc.setFontSize(9);doc.setFont("helvetica","bold");doc.setTextColor(100,100,120);
+  doc.text("DATOS DEL PAGO",M,y);y+=8;
+  doc.setTextColor(40,40,55);doc.setFont("helvetica","normal");doc.setFontSize(10);
+  doc.text(`Medio de pago: ${op.medio_pago||"—"}`,M+2,y);y+=7;
+  if(op.cbu_destino){doc.text(`Referencia / CBU: ${op.cbu_destino}`,M+2,y);y+=7;}
+  if(op.observaciones){doc.text(`Observaciones: ${op.observaciones}`,M+2,y);y+=7;}
+  // Firmas
+  y=Math.max(y+22,228);
+  doc.setDrawColor(180,182,200);doc.setLineWidth(0.3);
+  const fw=(W-2*M-16)/2;
+  doc.line(M,y,M+fw,y);doc.line(W-M-fw,y,W-M,y);
+  doc.setFontSize(8);doc.setTextColor(120,122,145);
+  doc.text("Autorizado por",M+fw/2,y+5,{align:"center"});
+  doc.text("Recibí conforme",W-M-fw/2,y+5,{align:"center"});
+  // Footer
+  doc.setFillColor(245,246,249);doc.rect(0,282,W,15,"F");
+  doc.setFontSize(7);doc.setTextColor(155,157,175);
+  doc.text(`Generado por Panel Metanoia SMX · ${op.numero} · ${op.fecha_pago||""}`,W/2,289,{align:"center"});
+  doc.save(`OP_${op.numero}.pdf`);
+}
+// ────────────────────────────────────────────────────────────────────────────
 
 function delComprobante(id,proveedor,numero){
   const desc=proveedor+(numero?` N° ${numero}`:"");
