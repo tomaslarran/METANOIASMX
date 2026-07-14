@@ -3355,6 +3355,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <input type="hidden" id="rcob-id">
   <input type="hidden" id="rcob-sociedad">
   <input type="hidden" id="rcob-curso-id">
+  <input type="hidden" id="rcob-concepto-id">
   <input type="hidden" id="rcob-monto">
   <div id="rcob-resumen" style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:12px 14px;font-size:13px;margin-bottom:4px"></div>
   <!-- Campos sólo para cobro libre -->
@@ -9263,12 +9264,14 @@ function renderCFResumen(){
           title="Click para editar · Tab=siguiente · Enter=abajo · Arrastrá ↘ para copiar">${display}</td>`;
       }).join("");
       const cat=c.categoria?`<span style="font-size:9px;color:var(--tx4);margin-left:4px">${esc(c.categoria)}</span>`:"";
+      const _mAct=meses.find(m=>m.actual);const _mDef=_mAct?Math.round(getVal(c,_mAct.key)||0):0;
       rows+=`<tr style="border-bottom:1px solid var(--b)">
         <td style="padding:6px 12px;font-size:12px;color:var(--tx2);min-width:240px">
           <div style="display:flex;align-items:center;gap:4px">
             <span style="flex:1">${esc(c.nombre)}</span>${cat}
             <button onclick="editCFConc('${c.id}')" style="background:none;border:none;cursor:pointer;color:var(--tx4);font-size:10px;padding:2px 3px;border-radius:3px;opacity:0;transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0" title="Editar">✎</button>
             <button onclick="delCFConc('${c.id}')" style="background:none;border:none;cursor:pointer;color:var(--tx4);font-size:10px;padding:2px 3px;border-radius:3px;opacity:0;transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0" title="Eliminar">✕</button>
+            ${tipo==="Egreso"?`<button onclick="abrirPagarConcepto('${c.id}')" style="background:none;border:1px solid var(--re);color:var(--re);cursor:pointer;font-size:10px;padding:2px 7px;border-radius:10px;white-space:nowrap;opacity:0;transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0" title="Registrar pago de este concepto">💸 Pagar</button>`:""}
           </div>
         </td>${celdas}
       </tr>`;
@@ -10456,6 +10459,25 @@ function abrirCobroCurso(cursoId){
   },30);
 }
 
+function abrirPagarConcepto(conceptoId){
+  const c=cfConceptos.find(x=>x.id===conceptoId);if(!c)return;
+  const soc=cfSociedad==="POINTERS"?"POINTERS":"SUDES";
+  const periodoActual=today().slice(0,7);
+  const valActual=cfValores.find(v=>v.concepto_id===conceptoId&&v.periodo===periodoActual);
+  const mDef=Math.round(valActual?.monto||0);
+  abrirRegistrarCobro('','pago_concepto',0,null);
+  setTimeout(()=>{
+    document.getElementById("rcob-concepto-id").value=conceptoId;
+    document.getElementById("rcob-concepto").value=c.nombre;
+    document.getElementById("rcob-monto-libre").value=mDef||"";
+    document.getElementById("rcob-soc-libre").value=soc;
+    rcobActualizarSoc(soc);
+    document.getElementById("rcob-title").textContent=`Pagar: ${c.nombre}`;
+    document.getElementById("rcob-save-btn").textContent="💸 Confirmar pago";
+    document.getElementById("rcob-dest-inv-btn").style.display="none";
+  },30);
+}
+
 function rcobActualizarSoc(soc){
   document.getElementById("rcob-sociedad").value=soc;
   const sel=document.getElementById("rcob-medio");
@@ -10474,10 +10496,13 @@ function abrirRegistrarCobro(id,tipo,montoOverride,cursoId){
   document.getElementById("rcob-id").value=id;
   document.getElementById("rcob-tipo").value=tipo;
   document.getElementById("rcob-curso-id").value="";
+  document.getElementById("rcob-concepto-id").value="";
   document.getElementById("rcob-fecha").value=today();
   document.getElementById("rcob-factura").value="";
   document.getElementById("rcob-obs").value="";
   document.getElementById("rcob-save-btn").disabled=false;
+  document.getElementById("rcob-save-btn").textContent="💰 Confirmar cobro";
+  document.getElementById("rcob-dest-inv-btn").style.display="";
   setRcobDest("caja");
 
   const libreWrap=document.getElementById("rcob-libre-wrap");
@@ -10485,10 +10510,10 @@ function abrirRegistrarCobro(id,tipo,montoOverride,cursoId){
 
   let monto=0,soc=cfSociedad==="POINTERS"?"POINTERS":"SUDES";
 
-  if(tipo==="libre"){
+  if(tipo==="libre"||tipo==="pago_concepto"){
     resumenWrap.style.display="none";
     libreWrap.style.display="block";
-    document.getElementById("rcob-title").textContent="Registrar cobro / ingreso";
+    document.getElementById("rcob-title").textContent=tipo==="pago_concepto"?"Registrar pago / egreso":"Registrar cobro / ingreso";
     document.getElementById("rcob-concepto").value="";
     document.getElementById("rcob-monto-libre").value="";
     document.getElementById("rcob-soc-libre").value=soc;
@@ -10567,7 +10592,47 @@ async function confirmarRegistrarCobro(){
   }
 
   try{
-    if(tipo==="libre"){
+    if(tipo==="pago_concepto"){
+      const concepto=document.getElementById("rcob-concepto").value.trim();
+      const montoLibre=parseFloat(document.getElementById("rcob-monto-libre").value)||0;
+      if(!concepto){toast("Ingresá un concepto","err");btn.disabled=false;return;}
+      if(!montoLibre){toast("Ingresá el monto","err");btn.disabled=false;return;}
+      const conceptoFull=`${concepto}${factura?` · Fac. ${factura}`:""}`;
+      const medioObj=mediosPago.find(m=>m.nombre===medio);
+      const esBanco=medioObj?.tipo==="cuenta_bancaria";
+      let msg;
+      if(esBanco){
+        await sb("banco_movimientos",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify({
+          sociedad:soc,fecha,concepto:conceptoFull,importe:-montoLibre,saldo:null,conciliado:false,referencia:factura||"Manual"
+        })}).catch(()=>{});
+        msg="💸 Pagado · movimiento en banco pendiente de conciliación";
+      } else {
+        await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
+          sociedad:soc,fecha,tipo:"egreso",concepto:conceptoFull,categoria:"CF Egresos",
+          monto:montoLibre,medio_pago:medio,observaciones:obs||null,creado_por:loggedUser?.nombre||null
+        })});
+        msg="💸 Pagado · egreso en caja";
+      }
+      // Actualizar monto_real en cf_valores para que el resumen muestre el valor real
+      const cncId=document.getElementById("rcob-concepto-id").value;
+      if(cncId){
+        const periodo=fecha.slice(0,7);
+        const existing=await sb(`cf_valores?concepto_id=eq.${cncId}&periodo=eq.${periodo}&select=id,monto`).catch(()=>[]);
+        if(existing?.[0]?.id){
+          await sb(`cf_valores?id=eq.${existing[0].id}`,{method:"PATCH",body:JSON.stringify({monto_real:montoLibre})});
+          const vi=cfValores.findIndex(v=>v.id===existing[0].id);
+          if(vi>=0)cfValores[vi]={...cfValores[vi],monto_real:montoLibre};
+        } else {
+          const[nv]=await sb("cf_valores",{method:"POST",body:JSON.stringify({concepto_id:cncId,periodo,monto:0,monto_real:montoLibre,sociedad:soc})});
+          if(nv)cfValores.push(nv);
+        }
+      }
+      toast(msg,"ok");
+      closeModal("modal-registrar-cobro");
+      renderCFResumen();
+      return;
+
+    } else if(tipo==="libre"){
       const concepto=document.getElementById("rcob-concepto").value.trim();
       const montoLibre=parseFloat(document.getElementById("rcob-monto-libre").value)||0;
       if(!concepto){toast("Ingresá un concepto","err");btn.disabled=false;return;}
