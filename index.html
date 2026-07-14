@@ -15808,8 +15808,10 @@ function abrirOrdenPago(compId){
   const tipoSel=document.getElementById("mop-tipo");
   tipoSel.value=["A","B","C","NC"].includes(tipoVal)?tipoVal:"B";
   const bruto=Math.abs(parseFloat(c.total)||0);
+  // Base de retención = neto sin IVA (Ganancias se retiene sobre el neto)
+  const baseRet=Math.abs(parseFloat(c.monto_neto)||0)||bruto;
   document.getElementById("mop-monto-bruto").value=bruto||"";
-  document.getElementById("mop-base-ret").value=bruto||"";
+  document.getElementById("mop-base-ret").value=baseRet||"";
   const soc=c.sociedad||"";
   const activos=mediosPago.filter(m=>m.activo&&(m.sociedad==="Ambas"||!soc||m.sociedad===soc));
   const ms=document.getElementById("mop-medio");
