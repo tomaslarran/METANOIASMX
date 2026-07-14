@@ -1918,6 +1918,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="cd-tab" id="cftab-caja" onclick="setCFTab('caja',this)">💰 Caja</button>
     <button class="cd-tab" id="cftab-resumen-sem" onclick="setCFTab('resumen-sem',this)">📊 Resumen semanal</button>
     <button class="cd-tab" id="cftab-cuentas" onclick="setCFTab('cuentas',this)">💳 Cuentas y tarjetas</button>
+    <button class="cd-tab" id="cftab-pendientes" onclick="setCFTab('pendientes',this)">💸 Pendientes de pago</button>
   </div>
 
   <!-- TAB: RESUMEN MENSUAL -->
@@ -2106,6 +2107,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <button class="btn pri" onclick="openModalMedioPago()">＋ Agregar</button>
     </div>
     <div id="medios-pago-list"></div>
+  </div>
+
+  <!-- TAB: PENDIENTES DE PAGO -->
+  <div id="cfpg-pendientes" style="display:none">
+    <div id="pendientes-content"><div style="color:var(--tx3);font-size:13px;padding:40px;text-align:center">Cargando pendientes...</div></div>
   </div>
 
   <!-- TAB: CAJA -->
@@ -8062,12 +8068,242 @@ async function loadCF(){
   }catch(e){cfConceptos=[];cfValores=[];cfPrestamos=[];cfCobranzas=[]}
 }
 
+async function renderCFPendientes(){
+  const wrap=document.getElementById("pendientes-content");
+  if(!wrap)return;
+  wrap.innerHTML=`<div style="color:var(--tx3);font-size:13px;padding:40px;text-align:center">Cargando...</div>`;
+
+  // Cargar comprobantes si no están en memoria
+  if(!comprobantes.length){
+    comprobantes=await sb("comprobantes_compra?select=*&order=fecha.desc,created_at.desc").catch(()=>[]);
+  }
+
+  const todayStr=today();
+
+  // ── 1. FACTURAS PENDIENTES ──────────────────────────────
+  const facturas=comprobantes.filter(c=>c.estado!=="pagado").sort((a,b)=>{
+    const fa=a.fecha_vencimiento||a.fecha||"9999";
+    const fb=b.fecha_vencimiento||b.fecha||"9999";
+    return fa.localeCompare(fb);
+  });
+
+  // ── 2. CUOTAS DE PRÉSTAMOS PENDIENTES ──────────────────
+  const cuotas=cfPrestCuotas.filter(c=>!c.pagada&&c.fecha).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+
+  // ── 3. SUELDOS PENDIENTES ──────────────────────────────
+  // Buscar los 3 períodos más recientes (mes actual y dos anteriores)
+  const periodos=[];
+  for(let i=0;i<3;i++){
+    const d=new Date(todayStr);d.setMonth(d.getMonth()-i);
+    periodos.push(d.toISOString().slice(0,7));
+  }
+  const sueldosPend=[];
+  cfEmpleados.filter(e=>e.activo&&e.tipo!=="Variable").forEach(e=>{
+    periodos.forEach(p=>{
+      const pago=cfPagosEmpleados.find(x=>x.empleado_id===e.id&&x.periodo===p&&x.pagado);
+      if(!pago&&(e.monto_mensual||0)>0){
+        sueldosPend.push({emp:e,periodo:p});
+      }
+    });
+  });
+  sueldosPend.sort((a,b)=>a.periodo.localeCompare(b.periodo));
+
+  // ── TOTALES ─────────────────────────────────────────────
+  const totalFact=facturas.reduce((s,c)=>s+(parseFloat(c.total)||0),0);
+  const totalCuot=cuotas.reduce((s,c)=>s+(parseFloat(c.monto_total)||0),0);
+  const totalSuel=sueldosPend.reduce((s,x)=>s+(parseFloat(x.emp.monto_mensual)||0),0);
+  const totalGral=totalFact+totalCuot+totalSuel;
+
+  // ── HELPERS ─────────────────────────────────────────────
+  const urgDot=(fechaStr)=>{
+    if(!fechaStr)return`<span style="width:8px;height:8px;border-radius:50%;background:var(--tx4);display:inline-block;margin-right:6px;flex-shrink:0"></span>`;
+    const d=days(fechaStr);
+    if(d<0)return`<span style="width:8px;height:8px;border-radius:50%;background:#EF4444;display:inline-block;margin-right:6px;flex-shrink:0" title="Vencido hace ${-d} día${d<-1?'s':''}"></span>`;
+    if(d<=7)return`<span style="width:8px;height:8px;border-radius:50%;background:#F97316;display:inline-block;margin-right:6px;flex-shrink:0" title="Vence en ${d} día${d!==1?'s':''}"></span>`;
+    if(d<=30)return`<span style="width:8px;height:8px;border-radius:50%;background:#EAB308;display:inline-block;margin-right:6px;flex-shrink:0" title="Vence en ${d} días"></span>`;
+    return`<span style="width:8px;height:8px;border-radius:50%;background:var(--tx4);display:inline-block;margin-right:6px;flex-shrink:0" title="Vence en ${d} días"></span>`;
+  };
+  const urgBg=(fechaStr)=>{
+    if(!fechaStr)return"";
+    const d=days(fechaStr);
+    if(d<0)return"background:rgba(239,68,68,.06)";
+    if(d<=7)return"background:rgba(249,115,22,.05)";
+    return"";
+  };
+  const badgeEstado=(estado)=>{
+    const map={pendiente:"color:#F97316;background:rgba(249,115,22,.12)",revisado:"color:#8B5CF6;background:rgba(139,92,246,.12)",enviado_finnegans:"color:#3B82F6;background:rgba(59,130,246,.12)"};
+    const s=map[estado]||"color:var(--tx3);background:var(--surf2)";
+    return`<span style="font-size:9px;padding:2px 6px;border-radius:8px;${s};white-space:nowrap">${estado||"—"}</span>`;
+  };
+  const fmtPeriodo=(p)=>{
+    if(!p)return"—";
+    const [y,m]=p.split("-");
+    const nombres=["Ene","Feb","Mar","Apr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+    return`${nombres[parseInt(m)-1]||m} ${y}`;
+  };
+
+  // ── RENDER ──────────────────────────────────────────────
+  wrap.innerHTML=`
+  <!-- Resumen -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px">
+    <div style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px">
+      <div style="font-size:10px;color:var(--tx4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Total pendiente</div>
+      <div style="font-size:20px;font-weight:700;color:var(--re)">$${Math.round(totalGral).toLocaleString("es-AR")}</div>
+    </div>
+    <div style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px">
+      <div style="font-size:10px;color:var(--tx4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Facturas (${facturas.length})</div>
+      <div style="font-size:16px;font-weight:700;color:var(--tx)">$${Math.round(totalFact).toLocaleString("es-AR")}</div>
+    </div>
+    <div style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px">
+      <div style="font-size:10px;color:var(--tx4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Cuotas préstamos (${cuotas.length})</div>
+      <div style="font-size:16px;font-weight:700;color:var(--tx)">$${Math.round(totalCuot).toLocaleString("es-AR")}</div>
+    </div>
+    <div style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px">
+      <div style="font-size:10px;color:var(--tx4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Sueldos (${sueldosPend.length})</div>
+      <div style="font-size:16px;font-weight:700;color:var(--tx)">$${Math.round(totalSuel).toLocaleString("es-AR")}</div>
+    </div>
+  </div>
+
+  <!-- FACTURAS -->
+  <div style="margin-bottom:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700;color:var(--tx)">🧾 Facturas sin pagar</div>
+      <span style="font-size:11px;color:var(--tx3)">${facturas.length} comprobante${facturas.length!==1?"s":""}</span>
+    </div>
+    ${facturas.length?`
+    <div style="border:1px solid var(--b);border-radius:var(--r);overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="background:var(--surf2);border-bottom:1px solid var(--b)">
+            <th style="padding:8px 12px;text-align:left;color:var(--tx3);font-weight:600">Proveedor</th>
+            <th style="padding:8px 12px;text-align:left;color:var(--tx3);font-weight:600">Sociedad</th>
+            <th style="padding:8px 12px;text-align:left;color:var(--tx3);font-weight:600">Estado</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--tx3);font-weight:600">Total</th>
+            <th style="padding:8px 12px;text-align:center;color:var(--tx3);font-weight:600">Vencimiento</th>
+            <th style="padding:8px 4px;text-align:center;color:var(--tx3);font-weight:600"></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${facturas.map(c=>{
+            const fv=c.fecha_vencimiento||c.fecha;
+            return`<tr style="border-bottom:1px solid var(--b);${urgBg(fv)}">
+              <td style="padding:8px 12px">
+                <div style="display:flex;align-items:center">${urgDot(fv)}<span style="font-weight:500">${esc(c.proveedor||"—")}</span></div>
+                ${c.numero?`<div style="font-size:10px;color:var(--tx4);margin-left:14px">Nro ${esc(c.numero)}</div>`:""}
+              </td>
+              <td style="padding:8px 12px;color:var(--tx3)">${esc(c.sociedad||"—")}</td>
+              <td style="padding:8px 12px">${badgeEstado(c.estado)}</td>
+              <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--tx)">$${Math.round(c.total||0).toLocaleString("es-AR")}</td>
+              <td style="padding:8px 12px;text-align:center;color:${days(fv)<0?"var(--re)":days(fv)<=7?"#F97316":"var(--tx3)"}">${fv?fmt(fv):"—"}</td>
+              <td style="padding:8px 6px;text-align:center">
+                <button onclick="abrirPagarComp('${c.id}')" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:6px;color:var(--gr);font-size:11px;padding:4px 10px;cursor:pointer;white-space:nowrap">💳 Pagar</button>
+              </td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>`:`<div style="color:var(--tx3);font-size:12px;padding:20px;text-align:center;border:1px solid var(--b);border-radius:var(--r)">Sin facturas pendientes ✓</div>`}
+  </div>
+
+  <!-- CUOTAS PRÉSTAMOS -->
+  <div style="margin-bottom:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700;color:var(--tx)">🏦 Cuotas de préstamos</div>
+      <span style="font-size:11px;color:var(--tx3)">${cuotas.length} cuota${cuotas.length!==1?"s":""} · próximas primero</span>
+    </div>
+    ${cuotas.length?`
+    <div style="border:1px solid var(--b);border-radius:var(--r);overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="background:var(--surf2);border-bottom:1px solid var(--b)">
+            <th style="padding:8px 12px;text-align:left;color:var(--tx3);font-weight:600">Préstamo</th>
+            <th style="padding:8px 12px;text-align:left;color:var(--tx3);font-weight:600">Sociedad</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--tx3);font-weight:600">Capital</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--tx3);font-weight:600">Intereses</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--tx3);font-weight:600">Total cuota</th>
+            <th style="padding:8px 12px;text-align:center;color:var(--tx3);font-weight:600">Vencimiento</th>
+            <th style="padding:8px 4px;text-align:center;color:var(--tx3);font-weight:600"></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${cuotas.map(c=>{
+            const p=cfPrestamos.find(x=>x.id===c.prestamo_id);
+            return`<tr style="border-bottom:1px solid var(--b);${urgBg(c.fecha)}">
+              <td style="padding:8px 12px">
+                <div style="display:flex;align-items:center">${urgDot(c.fecha)}<span style="font-weight:500">${esc(p?.nombre||"—")}</span></div>
+                ${c.nro_cuota?`<div style="font-size:10px;color:var(--tx4);margin-left:14px">Cuota #${c.nro_cuota}</div>`:""}
+              </td>
+              <td style="padding:8px 12px;color:var(--tx3)">${esc(p?.sociedad||"—")}</td>
+              <td style="padding:8px 12px;text-align:right;color:var(--gr)">${c.capital!=null?"$"+Math.round(c.capital).toLocaleString("es-AR"):"—"}</td>
+              <td style="padding:8px 12px;text-align:right;color:#FCA5A5">${c.intereses!=null?"$"+Math.round(c.intereses).toLocaleString("es-AR"):"—"}</td>
+              <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--tx)">$${Math.round(c.monto_total||0).toLocaleString("es-AR")}</td>
+              <td style="padding:8px 12px;text-align:center;color:${days(c.fecha)<0?"var(--re)":days(c.fecha)<=7?"#F97316":"var(--tx3)"}">${fmt(c.fecha)}</td>
+              <td style="padding:8px 6px;text-align:center">
+                ${p?`<button onclick="abrirModalPago('${c.id}','${c.prestamo_id}')" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:6px;color:var(--gr);font-size:11px;padding:4px 10px;cursor:pointer;white-space:nowrap">💰 Pagar</button>`:""}
+              </td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>`:`<div style="color:var(--tx3);font-size:12px;padding:20px;text-align:center;border:1px solid var(--b);border-radius:var(--r)">Sin cuotas pendientes ✓</div>`}
+  </div>
+
+  <!-- SUELDOS -->
+  <div style="margin-bottom:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700;color:var(--tx)">👤 Sueldos y honorarios</div>
+      <span style="font-size:11px;color:var(--tx3)">${sueldosPend.length} pago${sueldosPend.length!==1?"s":""} pendiente${sueldosPend.length!==1?"s":""}</span>
+    </div>
+    ${sueldosPend.length?`
+    <div style="border:1px solid var(--b);border-radius:var(--r);overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="background:var(--surf2);border-bottom:1px solid var(--b)">
+            <th style="padding:8px 12px;text-align:left;color:var(--tx3);font-weight:600">Persona</th>
+            <th style="padding:8px 12px;text-align:left;color:var(--tx3);font-weight:600">Categoría</th>
+            <th style="padding:8px 12px;text-align:left;color:var(--tx3);font-weight:600">Sociedad</th>
+            <th style="padding:8px 12px;text-align:center;color:var(--tx3);font-weight:600">Período</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--tx3);font-weight:600">Monto</th>
+            <th style="padding:8px 4px;text-align:center;color:var(--tx3);font-weight:600"></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sueldosPend.map(({emp,periodo})=>{
+            const esAtrasado=periodo<todayStr.slice(0,7);
+            return`<tr style="border-bottom:1px solid var(--b);${esAtrasado?"background:rgba(239,68,68,.04)":""}">
+              <td style="padding:8px 12px">
+                <div style="display:flex;align-items:center">
+                  ${esAtrasado?`<span style="width:8px;height:8px;border-radius:50%;background:#EF4444;display:inline-block;margin-right:6px;flex-shrink:0" title="Período atrasado"></span>`:`<span style="width:8px;height:8px;border-radius:50%;background:#EAB308;display:inline-block;margin-right:6px;flex-shrink:0"></span>`}
+                  <span style="font-weight:500">${esc(emp.nombre)}</span>
+                </div>
+              </td>
+              <td style="padding:8px 12px;color:var(--tx3)">${esc(emp.categoria||"—")}</td>
+              <td style="padding:8px 12px;color:var(--tx3)">${esc(emp.sociedad||"—")}</td>
+              <td style="padding:8px 12px;text-align:center;color:${esAtrasado?"var(--re)":"var(--tx3)"};font-weight:${esAtrasado?700:400}">${fmtPeriodo(periodo)}</td>
+              <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--tx)">$${Math.round(emp.monto_mensual||0).toLocaleString("es-AR")}</td>
+              <td style="padding:8px 6px;text-align:center">
+                <button onclick="abrirPagoEmpleado('${emp.id}','${periodo}')" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:6px;color:var(--gr);font-size:11px;padding:4px 10px;cursor:pointer;white-space:nowrap">💰 Pagar</button>
+              </td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>`:`<div style="color:var(--tx3);font-size:12px;padding:20px;text-align:center;border:1px solid var(--b);border-radius:var(--r)">Sin sueldos pendientes ✓</div>`}
+  </div>`;
+
+  // Tras pagar desde este tab, refrescar la vista
+  const origPagarComp=window._origConfirmarPagoComp;
+  if(!origPagarComp){
+    window._origConfirmarPagoComp=window.confirmarPagoComp;
+  }
+}
+
 function setCFTab(tab,btn){
   cfTab=tab;
   document.querySelectorAll("#pg-cashflow .cd-tab").forEach(b=>b.classList.remove("on"));
   const tabBtn=btn||document.getElementById("cftab-"+tab);
   if(tabBtn)tabBtn.classList.add("on");
-  ["resumen","prestamos","cobranzas","inversiones","historial","conciliacion","caja","resumen-sem","cuentas"].forEach(t=>{
+  ["resumen","prestamos","cobranzas","inversiones","historial","conciliacion","caja","resumen-sem","cuentas","pendientes"].forEach(t=>{
     const el=document.getElementById("cfpg-"+t);
     if(el)el.style.display=t===tab?"":"none";
   });
@@ -8080,6 +8316,7 @@ function setCFTab(tab,btn){
   if(tab==="caja")renderCaja();
   if(tab==="resumen-sem")renderResumenSemanal();
   if(tab==="cuentas")renderMediosPago();
+  if(tab==="pendientes")renderCFPendientes();
 }
 
 // ══════════════════════════════════════════════
