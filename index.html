@@ -2111,6 +2111,27 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
   <!-- TAB: PENDIENTES DE PAGO -->
   <div id="cfpg-pendientes" style="display:none">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+      <div class="fbar">
+        <button class="fb on" onclick="setPendFiltro('tipo','all',this)">Todos</button>
+        <button class="fb" onclick="setPendFiltro('tipo','facturas',this)">🧾 Facturas</button>
+        <button class="fb" onclick="setPendFiltro('tipo','cuotas',this)">🏦 Cuotas</button>
+        <button class="fb" onclick="setPendFiltro('tipo','sueldos',this)">👤 Sueldos</button>
+      </div>
+      <div class="fbar">
+        <button class="fb on" onclick="setPendFiltro('sociedad','all',this)">Ambas</button>
+        <button class="fb" onclick="setPendFiltro('sociedad','SUDES',this)">SUDES</button>
+        <button class="fb" onclick="setPendFiltro('sociedad','POINTERS',this)">POINTERS</button>
+      </div>
+      <select id="pend-periodo-sel" class="sel" onchange="pendFiltros.periodo=this.value;renderCFPendientes()">
+        <option value="all">Todos los períodos</option>
+      </select>
+      <div class="fbar" style="margin-left:auto">
+        <button class="fb on" onclick="setPendFiltro('urgencia','all',this)">Todos</button>
+        <button class="fb" onclick="setPendFiltro('urgencia','vencido',this)" style="color:var(--re)">● Vencidos</button>
+        <button class="fb" onclick="setPendFiltro('urgencia','proximo',this)" style="color:#F97316">● Próximos 7d</button>
+      </div>
+    </div>
     <div id="pendientes-content"><div style="color:var(--tx3);font-size:13px;padding:40px;text-align:center">Cargando pendientes...</div></div>
   </div>
 
@@ -3680,7 +3701,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
   <div class="ma" style="gap:8px">
     <button class="bc" onclick="closeModal('modal-orden-pago')">Cancelar</button>
-    <button style="background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);border-radius:8px;padding:8px 16px;color:#A78BFA;cursor:pointer;font-size:13px" onclick="confirmarOrdenPago(false)">📄 Solo PDF</button>
+    <button id="mop-btn-solo-pdf" style="background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);border-radius:8px;padding:8px 16px;color:#A78BFA;cursor:pointer;font-size:13px" onclick="confirmarOrdenPago(false)">📄 Solo PDF</button>
     <button class="bk" onclick="confirmarOrdenPago(true)">💸 Pagar + OP</button>
   </div>
 </div>
@@ -8108,6 +8129,7 @@ let chartRend=null;
 let cfSueldosFiltro="all",cfSueldosMes=null;
 let editEmpId=null,_mpeEmpId=null,_mpePeriodo=null;
 let cfSociedad="SUDES",cfTab="resumen",cfPFilter="all",cfCobFilter="all",cfInvFilter="all";
+let pendFiltros={tipo:"all",sociedad:"all",urgencia:"all",periodo:"all"};
 let cfSaldoInicial=0;
 function setCFSaldoInicial(v){cfSaldoInicial=parseFloat(String(v).replace(/\./g,"").replace(",","."))||0;renderCFResumen();}
 let editCFConcId=null,editCFPrestId=null,editCFCobId=null,editCFInvId=null;
@@ -8142,6 +8164,17 @@ async function loadCF(){
   }catch(e){cfConceptos=[];cfValores=[];cfPrestamos=[];cfCobranzas=[]}
 }
 
+function setPendFiltro(key,val,btn){
+  pendFiltros[key]=val;
+  // Toggle botones del grupo
+  if(btn){
+    const bar=btn.closest(".fbar");
+    if(bar)bar.querySelectorAll(".fb").forEach(b=>b.classList.remove("on"));
+    btn.classList.add("on");
+  }
+  renderCFPendientes();
+}
+
 async function renderCFPendientes(){
   const wrap=document.getElementById("pendientes-content");
   if(!wrap)return;
@@ -8153,34 +8186,64 @@ async function renderCFPendientes(){
   }
 
   const todayStr=today();
+  const {tipo,sociedad,urgencia,periodo}=pendFiltros;
+
+  // ── Helpers de urgencia ──────────────────────────────────
+  const pasaUrgencia=(fechaStr)=>{
+    if(urgencia==="all")return true;
+    if(!fechaStr)return urgencia==="all";
+    const d=days(fechaStr);
+    if(urgencia==="vencido")return d<0;
+    if(urgencia==="proximo")return d>=0&&d<=7;
+    return true;
+  };
+  const pasaPeriodo=(fechaStr)=>{
+    if(periodo==="all"||!fechaStr)return true;
+    return fechaStr.startsWith(periodo);
+  };
 
   // ── 1. FACTURAS PENDIENTES ──────────────────────────────
-  const facturas=comprobantes.filter(c=>c.estado!=="pagado").sort((a,b)=>{
-    const fa=a.fecha_vencimiento||a.fecha||"9999";
-    const fb=b.fecha_vencimiento||b.fecha||"9999";
-    return fa.localeCompare(fb);
-  });
+  let facturas=comprobantes.filter(c=>c.estado!=="pagado");
+  if(sociedad!=="all")facturas=facturas.filter(c=>c.sociedad===sociedad);
+  facturas=facturas.filter(c=>pasaUrgencia(c.fecha_vencimiento||c.fecha)&&pasaPeriodo(c.fecha_vencimiento||c.fecha));
+  facturas.sort((a,b)=>(a.fecha_vencimiento||a.fecha||"9999").localeCompare(b.fecha_vencimiento||b.fecha||"9999"));
 
   // ── 2. CUOTAS DE PRÉSTAMOS PENDIENTES ──────────────────
-  const cuotas=cfPrestCuotas.filter(c=>!c.pagada&&c.fecha).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  let cuotas=cfPrestCuotas.filter(c=>!c.pagada&&c.fecha);
+  if(sociedad!=="all")cuotas=cuotas.filter(c=>{const p=cfPrestamos.find(x=>x.id===c.prestamo_id);return p?.sociedad===sociedad;});
+  cuotas=cuotas.filter(c=>pasaUrgencia(c.fecha)&&pasaPeriodo(c.fecha));
+  cuotas.sort((a,b)=>a.fecha.localeCompare(b.fecha));
 
   // ── 3. SUELDOS PENDIENTES ──────────────────────────────
-  // Buscar los 3 períodos más recientes (mes actual y dos anteriores)
-  const periodos=[];
-  for(let i=0;i<3;i++){
-    const d=new Date(todayStr);d.setMonth(d.getMonth()-i);
-    periodos.push(d.toISOString().slice(0,7));
-  }
+  const periodosBase=[];
+  for(let i=0;i<3;i++){const d=new Date(todayStr);d.setMonth(d.getMonth()-i);periodosBase.push(d.toISOString().slice(0,7));}
   const sueldosPend=[];
   cfEmpleados.filter(e=>e.activo&&e.tipo!=="Variable").forEach(e=>{
-    periodos.forEach(p=>{
+    periodosBase.forEach(p=>{
       const pago=cfPagosEmpleados.find(x=>x.empleado_id===e.id&&x.periodo===p&&x.pagado);
       if(!pago&&(e.monto_mensual||0)>0){
-        sueldosPend.push({emp:e,periodo:p});
+        if(sociedad==="all"||e.sociedad===sociedad||!e.sociedad)
+          if(periodo==="all"||p===periodo)
+            sueldosPend.push({emp:e,periodo:p});
       }
     });
   });
   sueldosPend.sort((a,b)=>a.periodo.localeCompare(b.periodo));
+
+  // ── Poblar selector de períodos ─────────────────────────
+  const sel=document.getElementById("pend-periodo-sel");
+  if(sel){
+    const periodoSet=new Set();
+    comprobantes.filter(c=>c.estado!=="pagado").forEach(c=>{const f=(c.fecha_vencimiento||c.fecha||"").slice(0,7);if(f)periodoSet.add(f);});
+    cfPrestCuotas.filter(c=>!c.pagada&&c.fecha).forEach(c=>periodoSet.add(c.fecha.slice(0,7)));
+    const opts=[`<option value="all">Todos los períodos</option>`];
+    [...periodoSet].sort().reverse().forEach(p=>{
+      const[y,m]=p.split("-");
+      const lab=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][parseInt(m)-1]+" "+y;
+      opts.push(`<option value="${p}"${periodo===p?" selected":""}>${lab}</option>`);
+    });
+    sel.innerHTML=opts.join("");
+  }
 
   // ── TOTALES ─────────────────────────────────────────────
   const totalFact=facturas.reduce((s,c)=>s+(parseFloat(c.total)||0),0);
@@ -8239,6 +8302,7 @@ async function renderCFPendientes(){
   </div>
 
   <!-- FACTURAS -->
+  ${tipo==="all"||tipo==="facturas"?`
   <div style="margin-bottom:24px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div style="font-size:13px;font-weight:700;color:var(--tx)">🧾 Facturas sin pagar</div>
@@ -8260,29 +8324,32 @@ async function renderCFPendientes(){
         <tbody>
           ${facturas.map(c=>{
             const fv=c.fecha_vencimiento||c.fecha;
-            return`<tr style="border-bottom:1px solid var(--b);${urgBg(fv)}">
+            return\`<tr style="border-bottom:1px solid var(--b);\${urgBg(fv)}">
               <td style="padding:8px 12px">
-                <div style="display:flex;align-items:center">${urgDot(fv)}<span style="font-weight:500">${esc(c.proveedor||"—")}</span></div>
-                ${c.numero?`<div style="font-size:10px;color:var(--tx4);margin-left:14px">Nro ${esc(c.numero)}</div>`:""}
+                <div style="display:flex;align-items:center">\${urgDot(fv)}<span style="font-weight:500">\${esc(c.proveedor||"—")}</span></div>
+                \${c.numero?\`<div style="font-size:10px;color:var(--tx4);margin-left:14px">Nro \${esc(c.numero)}</div>\`:""}
               </td>
-              <td style="padding:8px 12px;color:var(--tx3)">${esc(c.sociedad||"—")}</td>
-              <td style="padding:8px 12px">${badgeEstado(c.estado)}</td>
-              <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--tx)">$${Math.round(c.total||0).toLocaleString("es-AR")}</td>
-              <td style="padding:8px 12px;text-align:center;color:${days(fv)<0?"var(--re)":days(fv)<=7?"#F97316":"var(--tx3)"}">${fv?fmt(fv):"—"}</td>
+              <td style="padding:8px 12px;color:var(--tx3)">\${esc(c.sociedad||"—")}</td>
+              <td style="padding:8px 12px">\${badgeEstado(c.estado)}</td>
+              <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--tx)">$\${Math.round(c.total||0).toLocaleString("es-AR")}</td>
+              <td style="padding:8px 12px;text-align:center;color:\${days(fv)<0?"var(--re)":days(fv)<=7?"#F97316":"var(--tx3)"}">\${fv?fmt(fv):"—"}</td>
               <td style="padding:8px 6px;text-align:center">
                 <div style="display:flex;gap:4px;justify-content:center">
-                  <button onclick="abrirPagarComp('${c.id}')" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:6px;color:var(--gr);font-size:11px;padding:4px 10px;cursor:pointer;white-space:nowrap">💳 Pagar</button>
-                  ${!c.tipo?.startsWith("NC")?`<button onclick="abrirOrdenPago('${c.id}')" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.3);border-radius:6px;color:#A78BFA;font-size:11px;padding:4px 8px;cursor:pointer;white-space:nowrap" title="Generar Orden de Pago">📄 OP</button>`:""}
+                  \${!c.tipo?.startsWith("NC")
+                    ?\`<button onclick="abrirOrdenPago('\${c.id}',true)" style="background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);border-radius:6px;color:#A78BFA;font-size:11px;padding:4px 10px;cursor:pointer;white-space:nowrap;font-weight:600">📄 Orden de Pago</button>\`
+                    :\`<button onclick="abrirPagarComp('\${c.id}')" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:6px;color:var(--gr);font-size:11px;padding:4px 10px;cursor:pointer;white-space:nowrap">💳 Pagar</button>\`
+                  }
                 </div>
               </td>
-            </tr>`;
+            </tr>\`;
           }).join("")}
         </tbody>
       </table>
     </div>`:`<div style="color:var(--tx3);font-size:12px;padding:20px;text-align:center;border:1px solid var(--b);border-radius:var(--r)">Sin facturas pendientes ✓</div>`}
-  </div>
+  </div>`:""}
 
-  <!-- CUOTAS PRÉSTAMOS -->
+
+  ${tipo==="all"||tipo==="cuotas"?`<!-- CUOTAS PRÉSTAMOS -->
   <div style="margin-bottom:24px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div style="font-size:13px;font-weight:700;color:var(--tx)">🏦 Cuotas de préstamos</div>
@@ -8323,9 +8390,9 @@ async function renderCFPendientes(){
         </tbody>
       </table>
     </div>`:`<div style="color:var(--tx3);font-size:12px;padding:20px;text-align:center;border:1px solid var(--b);border-radius:var(--r)">Sin cuotas pendientes ✓</div>`}
-  </div>
+  </div>`:""}
 
-  <!-- SUELDOS -->
+  ${tipo==="all"||tipo==="sueldos"?`<!-- SUELDOS -->
   <div style="margin-bottom:24px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div style="font-size:13px;font-weight:700;color:var(--tx)">👤 Sueldos y honorarios</div>
@@ -8366,13 +8433,7 @@ async function renderCFPendientes(){
         </tbody>
       </table>
     </div>`:`<div style="color:var(--tx3);font-size:12px;padding:20px;text-align:center;border:1px solid var(--b);border-radius:var(--r)">Sin sueldos pendientes ✓</div>`}
-  </div>`;
-
-  // Tras pagar desde este tab, refrescar la vista
-  const origPagarComp=window._origConfirmarPagoComp;
-  if(!origPagarComp){
-    window._origConfirmarPagoComp=window.confirmarPagoComp;
-  }
+  </div>`:""}`;
 }
 
 function setCFTab(tab,btn){
@@ -15791,7 +15852,7 @@ const SICORE_CAT={
   "093":{desc:"Servicios médicos y similares",pct:2},
 };
 
-function abrirOrdenPago(compId){
+function abrirOrdenPago(compId,fromPendientes=false){
   const c=comprobantes.find(x=>x.id===compId);
   if(!c)return;
   document.getElementById("mop-comp-id").value=compId;
@@ -15820,6 +15881,7 @@ function abrirOrdenPago(compId){
     :`<option value="Transferencia">Transferencia bancaria</option><option value="Efectivo">Efectivo</option><option value="Cheque">Cheque</option>`;
   mopActualizarTipo();
   mopRecalcular();
+  document.getElementById("mop-btn-solo-pdf").style.display=fromPendientes?"none":"";
   openModal("modal-orden-pago");
 }
 
@@ -15904,6 +15966,7 @@ async function confirmarOrdenPago(pagarTambien){
         })});
       }
       renderComprobantes();updateCompStats();
+      if(cfTab==="pendientes")renderCFPendientes();
     }
     generarPDFOrdenPago({...opData,id:op?.id,numero_comp:c.numero});
     closeModal("modal-orden-pago");
