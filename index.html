@@ -8931,7 +8931,7 @@ async function renderResumenSemanal(){
       sb(`caja_movimientos?select=sociedad,tipo,monto,concepto,fecha${sf}&order=fecha.desc&limit=50`).catch(()=>[]),
       sb(`banco_movimientos?select=fecha,concepto,importe,sociedad,conciliado${sf}&order=fecha.desc&limit=10`).catch(()=>[]),
       sb(`cf_cobranzas?select=descripcion,monto,fecha_vencimiento,estado,empresa&order=fecha_vencimiento.asc`).catch(()=>[]),
-      sb(`cf_prestamos?select=nombre,sociedad,saldo_pendiente,cuota_mensual&activo=eq.true`).catch(()=>[]),
+      sb(`cf_prestamos?select=nombre,sociedad,saldo_actual,cuota_mensual&activo=eq.true`).catch(()=>[]),
       sb(`cf_inversiones?select=nombre,sociedad,capital,valor_actual,tna&order=valor_actual.desc`).catch(()=>[]),
     ]);
 
@@ -8950,7 +8950,7 @@ async function renderResumenSemanal(){
     bancoMovs.forEach(m=>{if(!bancoSaldo[m.sociedad])bancoSaldo[m.sociedad]=m.importe;});
 
     // Cobranzas pendientes/vencidas
-    const cobPend=cobranzas.filter(c=>c.estado!=="cobrado"&&c.estado!=="acreditado");
+    const cobPend=cobranzas.filter(c=>c.estado==="Pendiente");
     const cobVenc=cobPend.filter(c=>c.fecha_vencimiento&&c.fecha_vencimiento<hoy);
     const cobProx=cobPend.filter(c=>{
       if(!c.fecha_vencimiento||c.fecha_vencimiento<hoy)return false;
@@ -8960,7 +8960,7 @@ async function renderResumenSemanal(){
     const totalCobPend=cobPend.reduce((s,c)=>s+(parseFloat(c.monto)||0),0);
 
     // Préstamos
-    const totalDeuda=prestamos.reduce((s,p)=>s+(parseFloat(p.saldo_pendiente)||0),0);
+    const totalDeuda=prestamos.reduce((s,p)=>s+(parseFloat(p.saldo_actual)||0),0);
     const totalCuota=prestamos.reduce((s,p)=>s+(parseFloat(p.cuota_mensual)||0),0);
 
     // Inversiones
@@ -9026,7 +9026,7 @@ async function renderResumenSemanal(){
         <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">💳 Préstamos — Deuda total: ${fmtM(totalDeuda)} · Cuota mensual: ${fmtM(totalCuota)}</div>
         ${prestamos.map(p=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--b);font-size:11px">
           <span style="color:var(--tx)">${esc(p.nombre||"")} <span style="color:var(--tx3)">${p.sociedad||""}</span></span>
-          <span style="color:var(--re);font-weight:600">$${Math.round(parseFloat(p.saldo_pendiente)||0).toLocaleString("es-AR")}</span>
+          <span style="color:var(--re);font-weight:600">$${Math.round(parseFloat(p.saldo_actual)||0).toLocaleString("es-AR")}</span>
         </div>`).join("")}
       </div>`;
     }
@@ -9325,7 +9325,7 @@ async function renderCaja(){
   },0);
 
   // Inversiones: suma de valor_actual
-  const invTotal=cfInversiones.reduce((s,i)=>s+(parseFloat(i.valor_actual)||0),0);
+  const invTotal=cfInversiones.filter(i=>i.estado==="Activa").reduce((s,i)=>s+(parseFloat(i.valor_actual)||0),0);
 
   const total=saldoBanco+efectivoHoy+invTotal;
   const totalColor=total>=0?"var(--gr)":"var(--re)";
@@ -9388,7 +9388,7 @@ function renderCajaProyeccion(){
   const fmtM=v=>"$"+(Math.round(Math.abs(v))).toLocaleString("es-AR");
 
   // Próximas cobranzas pendientes
-  const cobrPend=(cfCobranzas||[]).filter(c=>c.estado!=="cobrado"&&c.fecha_vencimiento).map(c=>({
+  const cobrPend=(cfCobranzas||[]).filter(c=>c.estado==="Pendiente"&&c.fecha_vencimiento).map(c=>({
     fecha:c.fecha_vencimiento,
     concepto:c.descripcion||"Cobranza",
     monto:parseFloat(c.monto)||0,
@@ -9396,9 +9396,9 @@ function renderCajaProyeccion(){
   }));
 
   // Próximas cuotas de préstamos
-  const cuotasPend=(cfPrestCuotas||[]).filter(c=>!c.pagada&&c.fecha_vencimiento).slice(0,5).map(c=>{
+  const cuotasPend=(cfPrestCuotas||[]).filter(c=>!c.pagada&&c.fecha).slice(0,5).map(c=>{
     const p=cfPrestamos.find(x=>x.id===c.prestamo_id);
-    return{fecha:c.fecha_vencimiento,concepto:`Cuota ${p?.nombre||"Préstamo"}`,monto:parseFloat(c.monto_total||c.capital)||0,tipo:"egreso"};
+    return{fecha:c.fecha,concepto:`Cuota ${p?.nombre||"Préstamo"}`,monto:parseFloat(c.monto_total||c.capital)||0,tipo:"egreso"};
   });
 
   const eventos=[...cobrPend,...cuotasPend]
@@ -10713,7 +10713,7 @@ async function renderSueldos(){
 
   const totalS=activos.filter(e=>e.sociedad==="SUDES").reduce((s,e)=>s+(parseFloat(e.monto_mensual)||0),0);
   const totalP=activos.filter(e=>e.sociedad==="POINTERS").reduce((s,e)=>s+(parseFloat(e.monto_mensual)||0),0);
-  const pend=activos.filter(e=>{const p=cfPagosEmpleados.find(x=>x.empleado_id===e.id&&x.periodo===cfSueldosMes);return!p?.pagado;}).length;
+  const pend=activos.filter(e=>{if(e.tipo==="Variable")return false;const p=cfPagosEmpleados.find(x=>x.empleado_id===e.id&&x.periodo===cfSueldosMes);return!p?.pagado;}).length;
 
   const s=document.getElementById("sue-total-s");if(s)s.textContent="$"+Math.round(totalS).toLocaleString("es-AR");
   const p=document.getElementById("sue-total-p");if(p)p.textContent="$"+Math.round(totalP).toLocaleString("es-AR");
@@ -10723,7 +10723,7 @@ async function renderSueldos(){
   // Badge sidebar
   const badge=document.getElementById("badge-sueldos");
   const hoyMes=`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`;
-  const pendHoy=activos.filter(e=>{const pg=cfPagosEmpleados.find(x=>x.empleado_id===e.id&&x.periodo===hoyMes);return!pg?.pagado;}).length;
+  const pendHoy=activos.filter(e=>{if(e.tipo==="Variable")return false;const pg=cfPagosEmpleados.find(x=>x.empleado_id===e.id&&x.periodo===hoyMes);return!pg?.pagado;}).length;
   if(badge){badge.style.display=pendHoy?"":"none";badge.textContent=pendHoy||"";}
 
   const cont=document.getElementById("sueldos-list");
