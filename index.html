@@ -1009,7 +1009,6 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="sitem ssub" onclick="cfTab='prestamos';goTo('cashflow',document.getElementById('nav-cashflow'))">Préstamos</div>
       <div class="sitem ssub" onclick="cfTab='cobranzas';goTo('cashflow',document.getElementById('nav-cashflow'))">Cobranzas</div>
       <div class="sitem ssub" onclick="cfTab='inversiones';goTo('cashflow',document.getElementById('nav-cashflow'))">Inversiones</div>
-      <div class="sitem ssub" onclick="cfTab='historial';goTo('cashflow',document.getElementById('nav-cashflow'))">📋 Historial pagos</div>
       <div class="sitem" onclick="goPage('sueldos',this)" id="nav-sueldos">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/><line x1="20" y1="8" x2="20" y2="14"/></svg>
         Sueldos
@@ -1913,7 +1912,6 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="cd-tab" id="cftab-prestamos" onclick="setCFTab('prestamos',this)">🏦 Préstamos y cuotas</button>
     <button class="cd-tab" id="cftab-cobranzas" onclick="setCFTab('cobranzas',this)">📥 Cobranzas</button>
     <button class="cd-tab" id="cftab-inversiones" onclick="setCFTab('inversiones',this)">📈 Inversiones</button>
-    <button class="cd-tab" id="cftab-historial" onclick="setCFTab('historial',this)">📋 Historial pagos</button>
     <button class="cd-tab" id="cftab-conciliacion" onclick="setCFTab('conciliacion',this)">🏦 Conciliación bancaria</button>
     <button class="cd-tab" id="cftab-caja" onclick="setCFTab('caja',this)">💰 Caja</button>
     <button class="cd-tab" id="cftab-resumen-sem" onclick="setCFTab('resumen-sem',this)">📊 Resumen semanal</button>
@@ -2065,26 +2063,6 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </div>
   </div>
 
-  <!-- TAB: HISTORIAL DE PAGOS -->
-  <div id="cfpg-historial" style="display:none">
-    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
-      <div class="fbar">
-        <button class="fb on" id="hf-todo" onclick="setHistFiltro('todo',this)">Todos</button>
-        <button class="fb" id="hf-cuotas" onclick="setHistFiltro('cuotas',this)">🏦 Cuotas</button>
-        <button class="fb" id="hf-sueldos" onclick="setHistFiltro('sueldos',this)">👥 Sueldos</button>
-      </div>
-      <div class="fsep"></div>
-      <input type="month" id="hist-mes-input" style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:5px 10px;font-size:12px;color:var(--tx);outline:none" onchange="renderHistorial()">
-      <button class="btn sm" onclick="document.getElementById('hist-mes-input').value='';renderHistorial()">Todos los meses</button>
-      <button class="btn sm pri" onclick="exportarResumen()">📄 Exportar resumen</button>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
-      <div class="sc"><div class="sc-l">Cuotas pagadas</div><div class="sc-v" id="hist-cuotas-count" style="color:var(--gr)">—</div><div class="sc-s" id="hist-cuotas-monto">—</div></div>
-      <div class="sc"><div class="sc-l">Sueldos pagados</div><div class="sc-v" id="hist-sueldos-count" style="color:var(--am)">—</div><div class="sc-s" id="hist-sueldos-monto">—</div></div>
-      <div class="sc"><div class="sc-l">Total pagado</div><div class="sc-v" id="hist-total" style="color:var(--re)">—</div><div class="sc-s">en el período seleccionado</div></div>
-    </div>
-    <div id="hist-tabla"></div>
-  </div>
 
   <!-- TAB: RESUMEN SEMANAL -->
   <div id="cfpg-resumen-sem" style="display:none">
@@ -2111,28 +2089,56 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
   <!-- TAB: PENDIENTES DE PAGO -->
   <div id="cfpg-pendientes" style="display:none">
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
-      <div class="fbar">
-        <button class="fb on" onclick="setPendFiltro('tipo','all',this)">Todos</button>
-        <button class="fb" onclick="setPendFiltro('tipo','facturas',this)">🧾 Facturas</button>
-        <button class="fb" onclick="setPendFiltro('tipo','cuotas',this)">🏦 Cuotas</button>
-        <button class="fb" onclick="setPendFiltro('tipo','sueldos',this)">👤 Sueldos</button>
-      </div>
-      <div class="fbar">
-        <button class="fb on" onclick="setPendFiltro('sociedad','all',this)">Ambas</button>
-        <button class="fb" onclick="setPendFiltro('sociedad','SUDES',this)">SUDES</button>
-        <button class="fb" onclick="setPendFiltro('sociedad','POINTERS',this)">POINTERS</button>
-      </div>
-      <select id="pend-periodo-sel" class="sel" onchange="pendFiltros.periodo=this.value;renderCFPendientes()">
-        <option value="all">Todos los períodos</option>
-      </select>
-      <div class="fbar" style="margin-left:auto">
-        <button class="fb on" onclick="setPendFiltro('urgencia','all',this)">Todos</button>
-        <button class="fb" onclick="setPendFiltro('urgencia','vencido',this)" style="color:var(--re)">● Vencidos</button>
-        <button class="fb" onclick="setPendFiltro('urgencia','proximo',this)" style="color:#F97316">● Próximos 7d</button>
-      </div>
+    <!-- Sub-tabs -->
+    <div style="display:flex;gap:4px;border-bottom:1px solid var(--b);margin-bottom:16px">
+      <button class="cd-tab on" id="pend-sub-btn-pendientes" onclick="setPendSubTab('pendientes',this)">💸 Pendientes</button>
+      <button class="cd-tab" id="pend-sub-btn-historial" onclick="setPendSubTab('historial',this)">📋 Historial</button>
     </div>
-    <div id="pendientes-content"><div style="color:var(--tx3);font-size:13px;padding:40px;text-align:center">Cargando pendientes...</div></div>
+    <!-- Panel: Pendientes -->
+    <div id="pend-panel-pendientes">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+        <div class="fbar">
+          <button class="fb on" onclick="setPendFiltro('tipo','all',this)">Todos</button>
+          <button class="fb" onclick="setPendFiltro('tipo','facturas',this)">🧾 Facturas</button>
+          <button class="fb" onclick="setPendFiltro('tipo','cuotas',this)">🏦 Cuotas</button>
+          <button class="fb" onclick="setPendFiltro('tipo','sueldos',this)">👤 Sueldos</button>
+        </div>
+        <div class="fbar">
+          <button class="fb on" onclick="setPendFiltro('sociedad','all',this)">Ambas</button>
+          <button class="fb" onclick="setPendFiltro('sociedad','SUDES',this)">SUDES</button>
+          <button class="fb" onclick="setPendFiltro('sociedad','POINTERS',this)">POINTERS</button>
+        </div>
+        <select id="pend-periodo-sel" class="sel" onchange="pendFiltros.periodo=this.value;renderCFPendientes()">
+          <option value="all">Todos los períodos</option>
+        </select>
+        <div class="fbar" style="margin-left:auto">
+          <button class="fb on" onclick="setPendFiltro('urgencia','all',this)">Todos</button>
+          <button class="fb" onclick="setPendFiltro('urgencia','vencido',this)" style="color:var(--re)">● Vencidos</button>
+          <button class="fb" onclick="setPendFiltro('urgencia','proximo',this)" style="color:#F97316">● Próximos 7d</button>
+        </div>
+      </div>
+      <div id="pendientes-content"><div style="color:var(--tx3);font-size:13px;padding:40px;text-align:center">Cargando pendientes...</div></div>
+    </div>
+    <!-- Panel: Historial -->
+    <div id="pend-panel-historial" style="display:none">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+        <div class="fbar">
+          <button class="fb on" id="phf-todo" onclick="setPendHistFiltro('todo',this)">Todos</button>
+          <button class="fb" id="phf-facturas" onclick="setPendHistFiltro('facturas',this)">🧾 Facturas</button>
+          <button class="fb" id="phf-cuotas" onclick="setPendHistFiltro('cuotas',this)">🏦 Cuotas</button>
+          <button class="fb" id="phf-sueldos" onclick="setPendHistFiltro('sueldos',this)">👤 Sueldos</button>
+        </div>
+        <div class="fbar">
+          <button class="fb on" id="phf-soc-all" onclick="setPendHistFiltro('soc','all',this)">Ambas</button>
+          <button class="fb" id="phf-soc-sudes" onclick="setPendHistFiltro('soc','SUDES',this)">SUDES</button>
+          <button class="fb" id="phf-soc-ptr" onclick="setPendHistFiltro('soc','POINTERS',this)">POINTERS</button>
+        </div>
+        <input type="month" id="pend-hist-mes" style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:5px 10px;font-size:12px;color:var(--tx);outline:none" onchange="renderPendHistorial()">
+        <button class="btn sm" onclick="document.getElementById('pend-hist-mes').value='';renderPendHistorial()">Todos los meses</button>
+      </div>
+      <div id="pend-hist-kpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px"></div>
+      <div id="pend-hist-tabla"></div>
+    </div>
   </div>
 
   <!-- TAB: CAJA -->
@@ -8137,7 +8143,7 @@ const MESES_CF=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov
 
 async function loadCF(){
   try{
-    [cfConceptos,cfValores,cfPrestamos,cfCobranzas,cfInversiones,cfInvMovs,cfPrestCuotas,cfEmpleados,cfPagosEmpleados,rendDiarios,inflacionMensual,impuestosIngresos,autonomosCuotas,gananciasAnticipos,impuestosDeclaraciones]=await Promise.all([
+    [cfConceptos,cfValores,cfPrestamos,cfCobranzas,cfInversiones,cfInvMovs,cfPrestCuotas,cfEmpleados,cfPagosEmpleados,rendDiarios,inflacionMensual,impuestosIngresos,autonomosCuotas,gananciasAnticipos,impuestosDeclaraciones,ordenesGanancias]=await Promise.all([
       sb("cf_conceptos?select=*&order=tipo,nombre"),
       sb("cf_valores?select=*"),
       sb("cf_prestamos?select=*&order=sociedad,tipo"),
@@ -8152,7 +8158,8 @@ async function loadCF(){
       sb("impuestos_ingresos?select=*&order=periodo.desc").catch(()=>[]),
       sb("autonomos_cuotas?select=*&order=periodo.desc").catch(()=>[]),
       sb("ganancias_anticipos?select=*&order=anio.desc,nro.asc").catch(()=>[]),
-      sb("impuestos_declaraciones?select=*").catch(()=>[])
+      sb("impuestos_declaraciones?select=*").catch(()=>[]),
+      sb("ordenes_pago?select=*&order=fecha_pago.desc").catch(()=>[])
     ]);
     mediosPago=await sb("medios_pago?select=*&order=orden.asc,nombre.asc").catch(()=>[]);
     // Badge: cobranzas vencidas + préstamos próximos
@@ -8162,6 +8169,167 @@ async function loadCF(){
     const badge=document.getElementById("badge-cf");
     if(badge)badge.textContent=(venc+prest)||"✓";
   }catch(e){cfConceptos=[];cfValores=[];cfPrestamos=[];cfCobranzas=[]}
+}
+
+let pendSubTab='pendientes';
+let pendHistFiltroTipo='todo', pendHistFiltroSoc='all';
+
+function setPendSubTab(tab,btn){
+  pendSubTab=tab;
+  document.querySelectorAll("#cfpg-pendientes .cd-tab").forEach(b=>b.classList.remove("on"));
+  if(btn)btn.classList.add("on");
+  document.getElementById("pend-panel-pendientes").style.display=tab==="pendientes"?"":"none";
+  document.getElementById("pend-panel-historial").style.display=tab==="historial"?"":"none";
+  if(tab==="pendientes")renderCFPendientes();
+  else renderPendHistorial();
+}
+
+function setPendHistFiltro(key,val,btn){
+  if(key==="soc"){
+    pendHistFiltroSoc=val;
+    document.querySelectorAll("#pend-panel-historial .fbar:nth-child(2) .fb").forEach(b=>b.classList.remove("on"));
+  } else {
+    pendHistFiltroTipo=val;
+    document.querySelectorAll("#pend-panel-historial .fbar:first-child .fb").forEach(b=>b.classList.remove("on"));
+  }
+  if(btn)btn.classList.add("on");
+  renderPendHistorial();
+}
+
+function renderPendHistorial(){
+  const mesInput=document.getElementById("pend-hist-mes");
+  const mesFilter=mesInput?mesInput.value:"";
+  const tipo=pendHistFiltroTipo||"todo";
+  const soc=pendHistFiltroSoc||"all";
+  const fmt=v=>"$"+Math.round(Math.abs(v)).toLocaleString("es-AR");
+  const MN=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+  const pasaMes=(fecha)=>!mesFilter||!fecha||fecha.startsWith(mesFilter);
+  const pasaSoc=(sociedad)=>soc==="all"||!sociedad||sociedad===soc;
+
+  const rows=[];
+
+  // ── Facturas pagadas ──
+  if(tipo==="todo"||tipo==="facturas"){
+    (comprobantes||[]).filter(c=>c.estado==="pagado"&&pasaMes(c.fecha_pago||c.fecha)&&pasaSoc(c.sociedad)).forEach(c=>{
+      const op=(ordenesGanancias||[]).find(o=>o.comprobante_id===c.id);
+      const bruto=parseFloat(c.total)||0;
+      const retGan=op?parseFloat(op.monto_retencion)||0:parseFloat(c.retencion_ganancias)||0;
+      const retIIBB=parseFloat(c.percepcion_iibb)||0;
+      const neto=op?parseFloat(op.neto_a_pagar)||0:(bruto-retGan-retIIBB);
+      const detalles=[];
+      if(retGan>0)detalles.push(`Ret.Gcias: ${fmt(retGan)}`);
+      if(retIIBB>0)detalles.push(`Ret.IIBB: ${fmt(retIIBB)}`);
+      if(op?.codigo_sicore)detalles.push(`SICORE ${op.codigo_sicore}`);
+      rows.push({
+        tipo:"factura",icon:"🧾",color:"var(--re)",
+        fecha:c.fecha_pago||c.fecha||"",
+        desc:`Fact. ${c.tipo||"?"} — ${esc(c.proveedor||"Sin proveedor")}`,
+        sub:c.numero?`N°${c.numero}`:"",
+        sociedad:c.sociedad||"",
+        bruto,neto,
+        detalle:detalles.join(" · "),
+        medio:op?.medio_pago||c.medio_pago||""
+      });
+    });
+  }
+
+  // ── Cuotas pagadas ──
+  if(tipo==="todo"||tipo==="cuotas"){
+    (cfPrestCuotas||[]).filter(c=>c.pagada&&c.fecha_pago&&pasaMes(c.fecha_pago)).forEach(c=>{
+      const prest=cfPrestamos.find(p=>p.id===c.prestamo_id);
+      if(!pasaSoc(prest?.sociedad))return;
+      const capital=parseFloat(c.capital)||0;
+      const intereses=parseFloat(c.intereses)||0;
+      const total=parseFloat(c.monto_total)||capital+intereses;
+      rows.push({
+        tipo:"cuota",icon:"🏦",color:"#818CF8",
+        fecha:c.fecha_pago,
+        desc:prest?esc(prest.nombre):"Préstamo",
+        sub:c.nro_cuota?`Cuota #${c.nro_cuota}`:"",
+        sociedad:prest?.sociedad||"",
+        bruto:total,neto:total,
+        detalle:intereses>0?`Capital: ${fmt(capital)} · Int: ${fmt(intereses)}`:`Capital: ${fmt(capital)}`,
+        medio:""
+      });
+    });
+  }
+
+  // ── Sueldos pagados ──
+  if(tipo==="todo"||tipo==="sueldos"){
+    (cfPagosEmpleados||[]).filter(p=>p.pagado&&pasaMes(p.periodo)).forEach(pg=>{
+      const emp=cfEmpleados.find(e=>e.id===pg.empleado_id);
+      if(!pasaSoc(emp?.sociedad))return;
+      const monto=pg.monto!=null?parseFloat(pg.monto):(emp?parseFloat(emp.monto_mensual)||0:0);
+      const [y,m]=(pg.periodo||"").split("-");
+      rows.push({
+        tipo:"sueldo",icon:"👤",color:"var(--am)",
+        fecha:pg.fecha_pago||(pg.periodo+"-01"),
+        desc:emp?esc(emp.nombre):"Empleado",
+        sub:m&&y?`${MN[parseInt(m)-1]} ${y}`:pg.periodo||"",
+        sociedad:emp?.sociedad||"",
+        bruto:monto,neto:monto,
+        detalle:emp?.categoria||"",
+        medio:""
+      });
+    });
+  }
+
+  rows.sort((a,b)=>b.fecha.localeCompare(a.fecha));
+
+  // KPIs
+  const factRows=rows.filter(r=>r.tipo==="factura");
+  const cuotRows=rows.filter(r=>r.tipo==="cuota");
+  const sueldRows=rows.filter(r=>r.tipo==="sueldo");
+  const totFact=factRows.reduce((s,r)=>s+r.neto,0);
+  const totCuot=cuotRows.reduce((s,r)=>s+r.bruto,0);
+  const totSuel=sueldRows.reduce((s,r)=>s+r.bruto,0);
+  const totGral=totFact+totCuot+totSuel;
+
+  const kpis=document.getElementById("pend-hist-kpis");
+  if(kpis)kpis.innerHTML=`
+    <div class="sc"><div class="sc-l">🧾 Facturas pagadas</div><div class="sc-v" style="color:var(--re)">${fmt(totFact)}</div><div class="sc-s">${factRows.length} comprobante${factRows.length!==1?"s":""}</div></div>
+    <div class="sc"><div class="sc-l">🏦 Cuotas pagadas</div><div class="sc-v" style="color:#818CF8">${fmt(totCuot)}</div><div class="sc-s">${cuotRows.length} cuota${cuotRows.length!==1?"s":""}</div></div>
+    <div class="sc"><div class="sc-l">👤 Sueldos pagados</div><div class="sc-v" style="color:var(--am)">${fmt(totSuel)}</div><div class="sc-s">${sueldRows.length} pago${sueldRows.length!==1?"s":""}</div></div>
+    <div class="sc"><div class="sc-l">Total egresado</div><div class="sc-v" style="color:var(--re);font-size:18px">${fmt(totGral)}</div><div class="sc-s">en el período</div></div>`;
+
+  const tabla=document.getElementById("pend-hist-tabla");
+  if(!tabla)return;
+  if(!rows.length){tabla.innerHTML=`<div class="empty"><div class="ei">📋</div>Sin pagos en el período seleccionado</div>`;return;}
+
+  tabla.innerHTML=`<div style="border:1px solid var(--b);border-radius:var(--r);overflow:hidden">
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:var(--surf2);border-bottom:1px solid var(--b)">
+      <th style="padding:8px 12px;text-align:left;color:var(--tx3);font-weight:600">Tipo</th>
+      <th style="padding:8px 12px;text-align:left;color:var(--tx3);font-weight:600">Descripción</th>
+      <th style="padding:8px 12px;text-align:left;color:var(--tx3);font-weight:600">Detalle</th>
+      <th style="padding:8px 12px;text-align:left;color:var(--tx3);font-weight:600">Sociedad</th>
+      <th style="padding:8px 12px;text-align:right;color:var(--tx3);font-weight:600">Bruto</th>
+      <th style="padding:8px 12px;text-align:right;color:var(--tx3);font-weight:600">Neto pagado</th>
+      <th style="padding:8px 12px;text-align:center;color:var(--tx3);font-weight:600">Fecha pago</th>
+      <th style="padding:8px 12px;text-align:left;color:var(--tx3);font-weight:600">Medio</th>
+    </tr></thead>
+    <tbody>
+    ${rows.map(r=>`<tr style="border-bottom:1px solid var(--b)">
+      <td style="padding:8px 12px"><span style="font-size:15px">${r.icon}</span> <span style="font-size:10px;padding:2px 6px;border-radius:8px;background:var(--surf2);color:var(--tx3)">${r.tipo}</span></td>
+      <td style="padding:8px 12px">
+        <div style="font-weight:500;color:var(--tx)">${r.desc}</div>
+        ${r.sub?`<div style="font-size:10px;color:var(--tx4)">${r.sub}</div>`:""}
+      </td>
+      <td style="padding:8px 12px;color:var(--tx3);font-size:11px">${r.detalle||"—"}</td>
+      <td style="padding:8px 12px;color:var(--tx3);font-size:11px">${r.sociedad||"—"}</td>
+      <td style="padding:8px 12px;text-align:right;color:var(--tx3)">${r.bruto!==r.neto?fmt(r.bruto):"—"}</td>
+      <td style="padding:8px 12px;text-align:right;font-weight:700;color:${r.color}">${fmt(r.neto)}</td>
+      <td style="padding:8px 12px;text-align:center;color:var(--tx2)">${r.fecha&&r.fecha.length>=10?r.fecha.slice(0,10):"—"}</td>
+      <td style="padding:8px 12px;font-size:11px;color:var(--tx3)">${r.medio||"—"}</td>
+    </tr>`).join("")}
+    <tr style="border-top:2px solid var(--b);background:var(--surf2)">
+      <td colspan="5" style="padding:10px;font-weight:700;color:var(--tx)">TOTAL EGRESADO</td>
+      <td style="padding:10px;text-align:right;font-weight:800;font-size:15px;color:var(--re)">${fmt(totGral)}</td>
+      <td colspan="2"></td>
+    </tr>
+    </tbody>
+  </table></div>`;
 }
 
 function setPendFiltro(key,val,btn){
@@ -8441,7 +8609,7 @@ function setCFTab(tab,btn){
   document.querySelectorAll("#pg-cashflow .cd-tab").forEach(b=>b.classList.remove("on"));
   const tabBtn=btn||document.getElementById("cftab-"+tab);
   if(tabBtn)tabBtn.classList.add("on");
-  ["resumen","prestamos","cobranzas","inversiones","historial","conciliacion","caja","resumen-sem","cuentas","pendientes"].forEach(t=>{
+  ["resumen","prestamos","cobranzas","inversiones","conciliacion","caja","resumen-sem","cuentas","pendientes"].forEach(t=>{
     const el=document.getElementById("cfpg-"+t);
     if(el)el.style.display=t===tab?"":"none";
   });
@@ -8449,7 +8617,6 @@ function setCFTab(tab,btn){
   if(tab==="prestamos")renderCFPrestamos();
   if(tab==="cobranzas")renderCFCobranzas();
   if(tab==="inversiones")renderCFInversiones();
-  if(tab==="historial")renderHistorial();
   if(tab==="conciliacion")renderConciliacion();
   if(tab==="caja")renderCaja();
   if(tab==="resumen-sem")renderResumenSemanal();
