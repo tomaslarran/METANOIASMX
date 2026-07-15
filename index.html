@@ -1913,9 +1913,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="cd-tab" id="cftab-cobranzas" onclick="setCFTab('cobranzas',this)">📥 Cobranzas</button>
     <button class="cd-tab" id="cftab-inversiones" onclick="setCFTab('inversiones',this)">📈 Inversiones</button>
     <button class="cd-tab" id="cftab-conciliacion" onclick="setCFTab('conciliacion',this)">🏦 Conciliación bancaria</button>
-    <button class="cd-tab" id="cftab-caja" onclick="setCFTab('caja',this)">💰 Caja</button>
     <button class="cd-tab" id="cftab-resumen-sem" onclick="setCFTab('resumen-sem',this)">📊 Resumen semanal</button>
-    <button class="cd-tab" id="cftab-cuentas" onclick="setCFTab('cuentas',this)">💳 Cuentas y tarjetas</button>
+    <button class="cd-tab" id="cftab-cuentas" onclick="setCFTab('cuentas',this)">🏦 Cuentas & Caja</button>
     <button class="cd-tab" id="cftab-pendientes" onclick="setCFTab('pendientes',this)">💸 Pendientes de pago</button>
   </div>
 
@@ -2078,13 +2077,119 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div id="rsem-content"><div style="text-align:center;padding:40px;color:var(--tx3)">Cargando resumen...</div></div>
   </div>
 
-  <!-- TAB: CUENTAS Y TARJETAS -->
+  <!-- TAB: CUENTAS & CAJA -->
   <div id="cfpg-cuentas" style="display:none">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
-      <div style="font-size:13px;color:var(--tx3)">Medios de pago parametrizados — bancos, tarjetas y efectivo por sociedad.</div>
-      <button class="btn pri" onclick="openModalMedioPago()">＋ Agregar</button>
+    <!-- Sub-tabs -->
+    <div style="display:flex;gap:4px;border-bottom:1px solid var(--b);margin-bottom:16px">
+      <button class="cd-tab on" id="cuentas-sub-btn-medios" onclick="setCuentasSubTab('medios',this)">💳 Cuentas y tarjetas</button>
+      <button class="cd-tab" id="cuentas-sub-btn-caja" onclick="setCuentasSubTab('caja',this)">💵 Caja</button>
     </div>
-    <div id="medios-pago-list"></div>
+    <!-- Panel: Cuentas y tarjetas -->
+    <div id="cuentas-panel-medios">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+        <div style="font-size:13px;color:var(--tx3)">Medios de pago parametrizados — bancos, tarjetas y efectivo por sociedad.</div>
+        <button class="btn pri" onclick="openModalMedioPago()">＋ Agregar</button>
+      </div>
+      <div id="medios-pago-list"></div>
+    </div>
+    <!-- Panel: Caja (contenido movido desde cfpg-caja) -->
+    <div id="cuentas-panel-caja" style="display:none">
+      <!-- Selector sociedad -->
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+        <div class="fbar">
+          <button class="fb on" id="caja-soc-sudes" onclick="cajaSetSociedad('SUDES',this)">SUDES</button>
+          <button class="fb" id="caja-soc-ptr" onclick="cajaSetSociedad('POINTERS',this)">POINTERS</button>
+        </div>
+        <input type="date" id="caja-fecha-filtro" style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:5px 10px;font-size:12px;color:var(--tx);outline:none" onchange="renderCaja()">
+        <button class="btn sm" onclick="document.getElementById('caja-fecha-filtro').value='';renderCaja()">Hoy</button>
+      </div>
+
+      <!-- KPIs posición actual -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px" id="caja-kpis">
+        <div class="sc"><div class="sc-l">Saldo banco</div><div class="sc-v vb" id="caja-k-banco">—</div><div class="sc-s">Banco Macro</div></div>
+        <div class="sc"><div class="sc-l">Efectivo caja</div><div class="sc-v va" id="caja-k-efectivo">—</div><div class="sc-s">registrado hoy</div></div>
+        <div class="sc"><div class="sc-l">Inversiones</div><div class="sc-v vp" id="caja-k-inversiones">—</div><div class="sc-s">valor actual</div></div>
+        <div class="sc" style="border:1px solid var(--ac)"><div class="sc-l">Total disponible</div><div class="sc-v" id="caja-k-total" style="color:var(--ac)">—</div><div class="sc-s">posición consolidada</div></div>
+      </div>
+
+      <!-- Gráfico evolución de caja 30 días -->
+      <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:16px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px">📈 Evolución de caja — últimos 30 días</div>
+          <div class="fbar">
+            <button class="fb on" id="caja-chart-sudes" onclick="cajaChartSetSoc('SUDES',this)">SUDES</button>
+            <button class="fb" id="caja-chart-ptr" onclick="cajaChartSetSoc('POINTERS',this)">POINTERS</button>
+          </div>
+        </div>
+        <canvas id="caja-chart" height="80"></canvas>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <!-- Formulario ingreso rápido -->
+        <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:16px">
+          <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">➕ Registrar movimiento</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <div>
+              <label class="fl">Tipo</label>
+              <select class="fi" id="caja-form-tipo">
+                <option value="ingreso">💚 Ingreso</option>
+                <option value="egreso">🔴 Egreso</option>
+              </select>
+            </div>
+            <div>
+              <label class="fl">Monto ($)</label>
+              <input class="fi" type="number" id="caja-form-monto" placeholder="0">
+            </div>
+          </div>
+          <div style="margin-bottom:8px">
+            <label class="fl">Concepto</label>
+            <input class="fi" type="text" id="caja-form-concepto" placeholder="Ej: Pago inscripción curso...">
+          </div>
+          <div style="margin-bottom:8px">
+            <label class="fl">Medio de pago</label>
+            <select class="fi" id="caja-form-medio">
+              <option value="">— Sin especificar —</option>
+            </select>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+            <div>
+              <label class="fl">Categoría</label>
+              <select class="fi" id="caja-form-cat">
+                <option value="">Sin categoría</option>
+                <option value="Inscripciones">Inscripciones</option>
+                <option value="Honorarios">Honorarios</option>
+                <option value="Proveedores">Proveedores</option>
+                <option value="Impuestos">Impuestos</option>
+                <option value="Servicios">Servicios</option>
+                <option value="Sueldos">Sueldos</option>
+                <option value="Otros">Otros</option>
+              </select>
+            </div>
+            <div>
+              <label class="fl">Fecha</label>
+              <input class="fi" type="date" id="caja-form-fecha">
+            </div>
+          </div>
+          <div style="margin-bottom:12px">
+            <label class="fl">Observaciones</label>
+            <input class="fi" type="text" id="caja-form-obs" placeholder="Opcional...">
+          </div>
+          <button class="btn pri" style="width:100%" onclick="saveCajaMovimiento()">Guardar movimiento</button>
+        </div>
+
+        <!-- Proyección 30 días -->
+        <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:16px">
+          <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">📅 Proyección próximos 30 días</div>
+          <div id="caja-proyeccion" style="font-size:12px"></div>
+        </div>
+      </div>
+
+      <!-- Tabla de movimientos -->
+      <div style="margin-top:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">📋 Movimientos registrados</div>
+        <div id="caja-tabla"></div>
+      </div>
+    </div>
   </div>
 
   <!-- TAB: PENDIENTES DE PAGO -->
@@ -2138,105 +2243,6 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       </div>
       <div id="pend-hist-kpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px"></div>
       <div id="pend-hist-tabla"></div>
-    </div>
-  </div>
-
-  <!-- TAB: CAJA -->
-  <div id="cfpg-caja" style="display:none">
-    <!-- Selector sociedad -->
-    <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
-      <div class="fbar">
-        <button class="fb on" id="caja-soc-sudes" onclick="cajaSetSociedad('SUDES',this)">SUDES</button>
-        <button class="fb" id="caja-soc-ptr" onclick="cajaSetSociedad('POINTERS',this)">POINTERS</button>
-      </div>
-      <input type="date" id="caja-fecha-filtro" style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:5px 10px;font-size:12px;color:var(--tx);outline:none" onchange="renderCaja()">
-      <button class="btn sm" onclick="document.getElementById('caja-fecha-filtro').value='';renderCaja()">Hoy</button>
-    </div>
-
-    <!-- KPIs posición actual -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px" id="caja-kpis">
-      <div class="sc"><div class="sc-l">Saldo banco</div><div class="sc-v vb" id="caja-k-banco">—</div><div class="sc-s">Banco Macro</div></div>
-      <div class="sc"><div class="sc-l">Efectivo caja</div><div class="sc-v va" id="caja-k-efectivo">—</div><div class="sc-s">registrado hoy</div></div>
-      <div class="sc"><div class="sc-l">Inversiones</div><div class="sc-v vp" id="caja-k-inversiones">—</div><div class="sc-s">valor actual</div></div>
-      <div class="sc" style="border:1px solid var(--ac)"><div class="sc-l">Total disponible</div><div class="sc-v" id="caja-k-total" style="color:var(--ac)">—</div><div class="sc-s">posición consolidada</div></div>
-    </div>
-
-    <!-- Gráfico evolución de caja 30 días -->
-    <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:16px;margin-bottom:16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px">📈 Evolución de caja — últimos 30 días</div>
-        <div class="fbar">
-          <button class="fb on" id="caja-chart-sudes" onclick="cajaChartSetSoc('SUDES',this)">SUDES</button>
-          <button class="fb" id="caja-chart-ptr" onclick="cajaChartSetSoc('POINTERS',this)">POINTERS</button>
-        </div>
-      </div>
-      <canvas id="caja-chart" height="80"></canvas>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <!-- Formulario ingreso rápido -->
-      <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:16px">
-        <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">➕ Registrar movimiento</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-          <div>
-            <label class="fl">Tipo</label>
-            <select class="fi" id="caja-form-tipo">
-              <option value="ingreso">💚 Ingreso</option>
-              <option value="egreso">🔴 Egreso</option>
-            </select>
-          </div>
-          <div>
-            <label class="fl">Monto ($)</label>
-            <input class="fi" type="number" id="caja-form-monto" placeholder="0">
-          </div>
-        </div>
-        <div style="margin-bottom:8px">
-          <label class="fl">Concepto</label>
-          <input class="fi" type="text" id="caja-form-concepto" placeholder="Ej: Pago inscripción curso...">
-        </div>
-        <div style="margin-bottom:8px">
-          <label class="fl">Medio de pago</label>
-          <select class="fi" id="caja-form-medio">
-            <option value="">— Sin especificar —</option>
-          </select>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-          <div>
-            <label class="fl">Categoría</label>
-            <select class="fi" id="caja-form-cat">
-              <option value="">Sin categoría</option>
-              <option value="Inscripciones">Inscripciones</option>
-              <option value="Honorarios">Honorarios</option>
-              <option value="Proveedores">Proveedores</option>
-              <option value="Impuestos">Impuestos</option>
-              <option value="Servicios">Servicios</option>
-              <option value="Sueldos">Sueldos</option>
-              <option value="Otros">Otros</option>
-            </select>
-          </div>
-          <div>
-            <label class="fl">Fecha</label>
-            <input class="fi" type="date" id="caja-form-fecha">
-          </div>
-        </div>
-        <div style="margin-bottom:12px">
-          <label class="fl">Observaciones</label>
-          <input class="fi" type="text" id="caja-form-obs" placeholder="Opcional...">
-        </div>
-        <button class="btn pri" style="width:100%" onclick="saveCajaMovimiento()">Guardar movimiento</button>
-      </div>
-
-      <!-- Proyección 30 días -->
-      <div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:16px">
-        <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">📅 Proyección próximos 30 días</div>
-        <div id="caja-proyeccion" style="font-size:12px"></div>
-      </div>
-    </div>
-
-    <!-- Tabla de movimientos -->
-    <div style="margin-top:16px">
-      <div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">📋 Movimientos registrados</div>
-      <div id="caja-tabla"></div>
     </div>
   </div>
 
@@ -8609,7 +8615,7 @@ function setCFTab(tab,btn){
   document.querySelectorAll("#pg-cashflow .cd-tab").forEach(b=>b.classList.remove("on"));
   const tabBtn=btn||document.getElementById("cftab-"+tab);
   if(tabBtn)tabBtn.classList.add("on");
-  ["resumen","prestamos","cobranzas","inversiones","conciliacion","caja","resumen-sem","cuentas","pendientes"].forEach(t=>{
+  ["resumen","prestamos","cobranzas","inversiones","conciliacion","resumen-sem","cuentas","pendientes"].forEach(t=>{
     const el=document.getElementById("cfpg-"+t);
     if(el)el.style.display=t===tab?"":"none";
   });
@@ -8618,9 +8624,8 @@ function setCFTab(tab,btn){
   if(tab==="cobranzas")renderCFCobranzas();
   if(tab==="inversiones")renderCFInversiones();
   if(tab==="conciliacion")renderConciliacion();
-  if(tab==="caja")renderCaja();
   if(tab==="resumen-sem")renderResumenSemanal();
-  if(tab==="cuentas")renderMediosPago();
+  if(tab==="cuentas"){if(cuentasSubTab==="medios")renderMediosPago();else renderCaja();}
   if(tab==="pendientes")renderCFPendientes();
 }
 
@@ -9103,6 +9108,18 @@ function renderCFChart(){
 
 // ── MEDIOS DE PAGO ───────────────────────────────────────────────────────────
 const TIPO_MP_LABEL={cuenta_bancaria:"🏦 Cuenta bancaria",tarjeta:"💳 Tarjeta",efectivo:"💵 Efectivo",cheque:"📋 Cheque"};
+
+let cuentasSubTab='medios';
+
+function setCuentasSubTab(tab,btn){
+  cuentasSubTab=tab;
+  document.querySelectorAll("#cfpg-cuentas .cd-tab").forEach(b=>b.classList.remove("on"));
+  if(btn)btn.classList.add("on");
+  document.getElementById("cuentas-panel-medios").style.display=tab==="medios"?"":"none";
+  document.getElementById("cuentas-panel-caja").style.display=tab==="caja"?"":"none";
+  if(tab==="medios")renderMediosPago();
+  else renderCaja();
+}
 
 function renderMediosPago(){
   const el=document.getElementById("medios-pago-list");
