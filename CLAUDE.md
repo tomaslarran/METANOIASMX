@@ -10,6 +10,8 @@ Panel web interno para **Metanoia SMX**, empresa de capacitación médica en sim
 **Repo:** https://github.com/tomaslarran/METANOIASMX  
 **Supabase project:** jppxmdvddvbsvymogvcp.supabase.co
 
+**Cierre de balance:** El balance se cierra el **30 de junio** de cada año. Las facturas (`comprobantes_compra`) con fecha ≤ 30/06 de cada ejercicio se marcan con `estado = 'cerrado'` — quedan archivadas sin generar movimiento de caja ni aparecer como pendientes de pago. El ejercicio limpio arranca el 01/07.
+
 ---
 
 ## Arquitectura

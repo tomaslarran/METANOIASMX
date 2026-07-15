@@ -4223,7 +4223,7 @@ async function renderAlertas(){
   });
 
   // Comprobantes vencidos o por vencer
-  comprobantes.filter(c=>c.fecha_vencimiento&&c.estado!=="enviado_finnegans").forEach(c=>{
+  comprobantes.filter(c=>c.fecha_vencimiento&&c.estado!=="enviado_finnegans"&&c.estado!=="cerrado").forEach(c=>{
     const d=days(c.fecha_vencimiento);
     if(d===null||d>30)return;
     alertas.push({tipo:"comp",icon:"🧾",urgencia:d<0?"critica":d===0?"hoy":d<=7?"semana":"mes",d,
@@ -8371,7 +8371,7 @@ async function renderCFPendientes(){
   };
 
   // ── 1. FACTURAS PENDIENTES ──────────────────────────────
-  let facturas=comprobantes.filter(c=>c.estado!=="pagado");
+  let facturas=comprobantes.filter(c=>c.estado!=="pagado"&&c.estado!=="cerrado");
   if(sociedad!=="all")facturas=facturas.filter(c=>c.sociedad===sociedad);
   facturas=facturas.filter(c=>pasaUrgencia(c.fecha_vencimiento||c.fecha)&&pasaPeriodo(c.fecha_vencimiento||c.fecha));
   facturas.sort((a,b)=>(a.fecha_vencimiento||a.fecha||"9999").localeCompare(b.fecha_vencimiento||b.fecha||"9999"));
@@ -8402,7 +8402,7 @@ async function renderCFPendientes(){
   const sel=document.getElementById("pend-periodo-sel");
   if(sel){
     const periodoSet=new Set();
-    comprobantes.filter(c=>c.estado!=="pagado").forEach(c=>{const f=(c.fecha_vencimiento||c.fecha||"").slice(0,7);if(f)periodoSet.add(f);});
+    comprobantes.filter(c=>c.estado!=="pagado"&&c.estado!=="cerrado").forEach(c=>{const f=(c.fecha_vencimiento||c.fecha||"").slice(0,7);if(f)periodoSet.add(f);});
     cfPrestCuotas.filter(c=>!c.pagada&&c.fecha).forEach(c=>periodoSet.add(c.fecha.slice(0,7)));
     const opts=[`<option value="all">Todos los períodos</option>`];
     [...periodoSet].sort().reverse().forEach(p=>{
@@ -13676,7 +13676,7 @@ function buildEventos(){
   }
 
   if(calFiltro==="todo"||calFiltro==="finanzas"){
-    comprobantes.filter(c=>c.en_calendario&&c.fecha_vencimiento&&c.estado!=="enviado_finnegans").forEach(c=>{
+    comprobantes.filter(c=>c.en_calendario&&c.fecha_vencimiento&&c.estado!=="enviado_finnegans"&&c.estado!=="cerrado").forEach(c=>{
       addEvento(c.fecha_vencimiento,{tipo:"ev-comp",dot:"#F97316",nombre:c.proveedor||"Factura",sub:`Venc. factura ${c.tipo||""} — ${c.sociedad} — $${Math.round(c.total||0).toLocaleString("es-AR")}`});
     });
     cfCobranzas.filter(c=>c.estado==="Pendiente").forEach(c=>{
@@ -15817,7 +15817,7 @@ function renderComprobantes(){
     const desglose=(c.neto_21||0)+(c.neto_105||0)+(c.neto_27||0)+(c.neto_exento||0);
     return esDeProveedor&&(c.monto_neto||0)>0&&desglose===0&&c.estado!=="enviado_finnegans";
   });
-  else if(compFilter==="vencida")list=list.filter(c=>c.fecha_vencimiento&&c.estado!=="enviado_finnegans"&&days(c.fecha_vencimiento)<0);
+  else if(compFilter==="vencida")list=list.filter(c=>c.fecha_vencimiento&&c.estado!=="enviado_finnegans"&&c.estado!=="cerrado"&&days(c.fecha_vencimiento)<0);
   else if(compFilter!=="all")list=list.filter(c=>c.estado===compFilter);
   // Actualizar badge "por completar"
   const totalPorCompletar=comprobantes.filter(c=>{
@@ -15834,8 +15834,8 @@ function renderComprobantes(){
   if(!list.length){el.innerHTML=`<div class="empty"><div class="ei">📄</div><div class="et">Sin comprobantes</div><div class="es">Cargá una factura con el botón "Nueva factura"</div></div>`;return;}
 
   const estadoBadge=(e)=>{
-    const m={"pendiente":"background:rgba(245,158,11,.15);color:#FCD34D","revisado":"background:rgba(16,185,129,.15);color:#6EE7B7","enviado_finnegans":"background:rgba(59,130,246,.15);color:#93C5FD","pagado":"background:rgba(16,185,129,.3);color:#059669"};
-    const lbl={"pendiente":"⏳ Pendiente","revisado":"✅ Revisado","enviado_finnegans":"🔗 En Finnegans","pagado":"💰 Pagada"};
+    const m={"pendiente":"background:rgba(245,158,11,.15);color:#FCD34D","revisado":"background:rgba(16,185,129,.15);color:#6EE7B7","enviado_finnegans":"background:rgba(59,130,246,.15);color:#93C5FD","pagado":"background:rgba(16,185,129,.3);color:#059669","cerrado":"background:rgba(148,163,184,.15);color:#94A3B8"};
+    const lbl={"pendiente":"⏳ Pendiente","revisado":"✅ Revisado","enviado_finnegans":"🔗 En Finnegans","pagado":"💰 Pagada","cerrado":"🗂 Cierre balance"};
     return`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;${m[e]||"background:var(--surf2);color:var(--tx3)"}">${lbl[e]||e}</span>`;
   };
 
@@ -15870,8 +15870,8 @@ function renderComprobantes(){
         ${c.archivo_url?`<button onclick="window.open('${c.archivo_url}','_blank')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Ver archivo">👁</button>`:""}
         <button onclick="editComprobante('${c.id}')" style="background:none;border:1px solid ${faltaDesglose?"rgba(245,158,11,.6)":"var(--b)"};border-radius:5px;color:${faltaDesglose?"#FCD34D":"var(--tx3)"};font-size:10px;padding:3px 7px;cursor:pointer" title="${faltaDesglose?"Completar para Finnegans":"Editar"}">${faltaDesglose?"✏️":"✎"}</button>
         ${c.estado==="revisado"?`<button onclick="abrirPagarComp('${c.id}')" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);border-radius:5px;color:#059669;font-size:10px;padding:3px 7px;cursor:pointer" title="Registrar pago">💳</button>`:""}
-        ${c.estado!=="pagado"&&!c.tipo?.startsWith("NC")?`<button onclick="abrirOrdenPago('${c.id}')" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.4);border-radius:5px;color:#A78BFA;font-size:10px;padding:3px 7px;cursor:pointer" title="Generar Orden de Pago">📄 OP</button>`:""}
-        ${c.estado!=="enviado_finnegans"&&c.estado!=="pagado"
+        ${c.estado!=="pagado"&&c.estado!=="cerrado"&&!c.tipo?.startsWith("NC")?`<button onclick="abrirOrdenPago('${c.id}')" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.4);border-radius:5px;color:#A78BFA;font-size:10px;padding:3px 7px;cursor:pointer" title="Generar Orden de Pago">📄 OP</button>`:""}
+        ${c.estado!=="enviado_finnegans"&&c.estado!=="pagado"&&c.estado!=="cerrado"
           ?`<button onclick="marcarEstadoComp('${c.id}','${c.estado==="pendiente"?"revisado":"enviado_finnegans"}')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="${c.estado==="pendiente"?"Marcar revisado":"Enviar a Finnegans"}">${c.estado==="pendiente"?"✓":"→F"}</button>`
           :c.estado==="enviado_finnegans"?`<button onclick="marcarEstadoComp('${c.id}','revisado')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Revertir a Revisado">↩</button>`:""}
         <button onclick="delComprobante('${c.id}','${esc(c.proveedor||"")}','${esc(c.numero||"")}')" style="background:none;border:1px solid rgba(239,68,68,.4);border-radius:5px;color:#f87171;font-size:10px;padding:3px 7px;cursor:pointer" title="Eliminar">🗑</button>
