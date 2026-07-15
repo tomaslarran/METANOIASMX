@@ -8324,24 +8324,24 @@ async function renderCFPendientes(){
         <tbody>
           ${facturas.map(c=>{
             const fv=c.fecha_vencimiento||c.fecha;
-            return\`<tr style="border-bottom:1px solid var(--b);\${urgBg(fv)}">
+            return`<tr style="border-bottom:1px solid var(--b);${urgBg(fv)}">
               <td style="padding:8px 12px">
-                <div style="display:flex;align-items:center">\${urgDot(fv)}<span style="font-weight:500">\${esc(c.proveedor||"—")}</span></div>
-                \${c.numero?\`<div style="font-size:10px;color:var(--tx4);margin-left:14px">Nro \${esc(c.numero)}</div>\`:""}
+                <div style="display:flex;align-items:center">${urgDot(fv)}<span style="font-weight:500">${esc(c.proveedor||"—")}</span></div>
+                ${c.numero?`<div style="font-size:10px;color:var(--tx4);margin-left:14px">Nro ${esc(c.numero)}</div>`:""}
               </td>
-              <td style="padding:8px 12px;color:var(--tx3)">\${esc(c.sociedad||"—")}</td>
-              <td style="padding:8px 12px">\${badgeEstado(c.estado)}</td>
-              <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--tx)">$\${Math.round(c.total||0).toLocaleString("es-AR")}</td>
-              <td style="padding:8px 12px;text-align:center;color:\${days(fv)<0?"var(--re)":days(fv)<=7?"#F97316":"var(--tx3)"}">\${fv?fmt(fv):"—"}</td>
+              <td style="padding:8px 12px;color:var(--tx3)">${esc(c.sociedad||"—")}</td>
+              <td style="padding:8px 12px">${badgeEstado(c.estado)}</td>
+              <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--tx)">$${Math.round(c.total||0).toLocaleString("es-AR")}</td>
+              <td style="padding:8px 12px;text-align:center;color:${days(fv)<0?"var(--re)":days(fv)<=7?"#F97316":"var(--tx3)"}">${fv?fmt(fv):"—"}</td>
               <td style="padding:8px 6px;text-align:center">
                 <div style="display:flex;gap:4px;justify-content:center">
-                  \${!c.tipo?.startsWith("NC")
-                    ?\`<button onclick="abrirOrdenPago('\${c.id}',true)" style="background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);border-radius:6px;color:#A78BFA;font-size:11px;padding:4px 10px;cursor:pointer;white-space:nowrap;font-weight:600">📄 Orden de Pago</button>\`
-                    :\`<button onclick="abrirPagarComp('\${c.id}')" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:6px;color:var(--gr);font-size:11px;padding:4px 10px;cursor:pointer;white-space:nowrap">💳 Pagar</button>\`
+                  ${!c.tipo?.startsWith("NC")
+                    ?`<button onclick="abrirOrdenPago('${c.id}',true)" style="background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);border-radius:6px;color:#A78BFA;font-size:11px;padding:4px 10px;cursor:pointer;white-space:nowrap;font-weight:600">📄 Orden de Pago</button>`
+                    :`<button onclick="abrirPagarComp('${c.id}')" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:6px;color:var(--gr);font-size:11px;padding:4px 10px;cursor:pointer;white-space:nowrap">💳 Pagar</button>`
                   }
                 </div>
               </td>
-            </tr>\`;
+            </tr>`;
           }).join("")}
         </tbody>
       </table>
