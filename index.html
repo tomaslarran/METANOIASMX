@@ -16062,7 +16062,8 @@ function renderComprobantes(){
     const desglose=(c.neto_21||0)+(c.neto_105||0)+(c.neto_27||0)+(c.neto_exento||0);
     return esDeProveedor&&(c.monto_neto||0)>0&&desglose===0&&c.estado!=="enviado_finnegans";
   });
-  else if(compFilter==="vencida")list=list.filter(c=>c.fecha_vencimiento&&c.estado!=="enviado_finnegans"&&c.estado!=="cerrado"&&days(c.fecha_vencimiento)<0);
+  else if(compFilter==="vencida")list=list.filter(c=>c.fecha_vencimiento&&c.estado!=="enviado_finnegans"&&c.estado!=="cerrado"&&!c.importado_finnegans&&days(c.fecha_vencimiento)<0);
+  else if(compFilter==="enviado_finnegans")list=list.filter(c=>c.importado_finnegans||c.estado==="enviado_finnegans");
   else if(compFilter!=="all")list=list.filter(c=>c.estado===compFilter);
   // Actualizar badge "por completar"
   const totalPorCompletar=comprobantes.filter(c=>{
@@ -16110,15 +16111,20 @@ function renderComprobantes(){
         ${iva?`<div style="font-size:10px;color:var(--tx3)">IVA ${iva}</div>`:""}
         <div style="margin-top:4px">${estadoBadge(c.estado)}</div>
         ${c.estado==="pagado"&&c.medio_pago?`<div style="font-size:10px;color:var(--tx3);margin-top:2px">💳 ${esc(c.medio_pago)}</div>`:""}
+        ${c.importado_finnegans?`<div style="font-size:10px;color:#60A5FA;margin-top:2px">🔗 En Finnegans</div>`:""}
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
         ${c.archivo_url?`<button onclick="window.open('${c.archivo_url}','_blank')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Ver archivo">👁</button>`:""}
         <button onclick="editComprobante('${c.id}')" style="background:none;border:1px solid ${faltaDesglose?"rgba(245,158,11,.6)":"var(--b)"};border-radius:5px;color:${faltaDesglose?"#FCD34D":"var(--tx3)"};font-size:10px;padding:3px 7px;cursor:pointer" title="${faltaDesglose?"Completar para Finnegans":"Editar"}">${faltaDesglose?"✏️":"✎"}</button>
         ${c.estado==="revisado"?`<button onclick="abrirPagarComp('${c.id}')" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);border-radius:5px;color:#059669;font-size:10px;padding:3px 7px;cursor:pointer" title="Registrar pago">💳</button>`:""}
         ${c.estado!=="pagado"&&c.estado!=="cerrado"&&!c.tipo?.startsWith("NC")?`<button onclick="abrirOrdenPago('${c.id}')" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.4);border-radius:5px;color:#A78BFA;font-size:10px;padding:3px 7px;cursor:pointer" title="Generar Orden de Pago">📄 OP</button>`:""}
-        ${c.estado!=="enviado_finnegans"&&c.estado!=="pagado"&&c.estado!=="cerrado"
-          ?`<button onclick="marcarEstadoComp('${c.id}','${c.estado==="pendiente"?"revisado":"enviado_finnegans"}')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="${c.estado==="pendiente"?"Marcar revisado":"Enviar a Finnegans"}">${c.estado==="pendiente"?"✓":"→F"}</button>`
-          :c.estado==="enviado_finnegans"?`<button onclick="marcarEstadoComp('${c.id}','revisado')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Revertir a Revisado">↩</button>`:""}
+        ${c.estado==="pendiente"
+          ?`<button onclick="marcarEstadoComp('${c.id}','revisado')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Marcar revisado">✓</button>`
+          :c.estado==="enviado_finnegans"
+            ?`<button onclick="marcarEstadoComp('${c.id}','revisado')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Revertir a Revisado">↩</button>`
+            :(c.estado==="revisado"||c.estado==="pagado")&&!c.importado_finnegans&&!c.tipo?.startsWith("NC")
+              ?`<button onclick="marcarImportadoFinnegans('${c.id}')" style="background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.4);border-radius:5px;color:#60A5FA;font-size:10px;padding:3px 7px;cursor:pointer" title="Marcar como importado a Finnegans">→F</button>`
+              :""}
         <button onclick="delComprobante('${c.id}','${esc(c.proveedor||"")}','${esc(c.numero||"")}')" style="background:none;border:1px solid rgba(239,68,68,.4);border-radius:5px;color:#f87171;font-size:10px;padding:3px 7px;cursor:pointer" title="Eliminar">🗑</button>
       </div>
     </div>`;
@@ -16141,7 +16147,7 @@ function updateCompStats(){
   const totalMes=base.reduce((s,c)=>s+(Number(c.total)||0),0);
   const ivaMes=base.reduce((s,c)=>s+(Number(c.iva)||0),0);
   const pend=base.filter(c=>c.estado==="pendiente").length;
-  const finn=base.filter(c=>c.estado==="enviado_finnegans").length;
+  const finn=base.filter(c=>c.importado_finnegans||c.estado==="enviado_finnegans").length;
   const venc=comprobantes.filter(c=>c.fecha_vencimiento&&c.estado!=="enviado_finnegans"&&days(c.fecha_vencimiento)<0).length;
   document.getElementById("comp-stat-total").textContent="$"+Math.round(totalMes).toLocaleString("es-AR");
   document.getElementById("comp-stat-iva").textContent="$"+Math.round(ivaMes).toLocaleString("es-AR");
@@ -16252,6 +16258,15 @@ async function marcarEstadoComp(id,estado){
       }catch(e){toast(`Error al registrar egreso en caja: ${e.message.slice(0,60)}`,"err");}
     }
   }catch(e){toast("Error","err")}
+}
+
+async function marcarImportadoFinnegans(id){
+  try{
+    await sb(`comprobantes_compra?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({importado_finnegans:true,updated_at:new Date().toISOString()})});
+    const c=comprobantes.find(c=>c.id===id);if(c)c.importado_finnegans=true;
+    renderComprobantes();updateCompStats();
+    toast("🔗 Marcado como importado a Finnegans","ok");
+  }catch(e){toast("Error: "+e.message,"err")}
 }
 
 // ── ÓRDENES DE PAGO ─────────────────────────────────────────────────────────
