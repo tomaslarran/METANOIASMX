@@ -6457,12 +6457,12 @@ async function loadCursoArchivos(cursoId){
         <span class="btn" style="font-size:12px;padding:5px 14px">⬆ Subir archivo</span>
       </label>
     </div>
-    <div id="video-link-wrap-${cursoId}" style="display:none;margin-bottom:12px">
-      <div style="font-size:11px;color:var(--tx3);margin-bottom:5px">🎥 Los videos se publican en YouTube. Pegá el link una vez publicado:</div>
+    <div id="ext-link-wrap-${cursoId}" style="display:none;margin-bottom:12px;background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:10px 12px">
+      <div id="ext-link-label-${cursoId}" style="font-size:11px;color:var(--tx3);margin-bottom:7px">🔗 Pegá un link externo (Google Drive, YouTube, OneDrive, etc.):</div>
       <div style="display:flex;gap:6px">
-        <input class="fi" id="video-link-input-${cursoId}" placeholder="https://youtube.com/watch?v=..." style="flex:1;font-size:12px">
-        <input class="fi" id="video-link-nombre-${cursoId}" placeholder="Nombre del video" style="flex:1;font-size:12px">
-        <button class="btn" style="font-size:12px;padding:5px 12px;white-space:nowrap" onclick="addVideoLink('${cursoId}')">Agregar</button>
+        <input class="fi" id="ext-link-input-${cursoId}" placeholder="https://..." style="flex:1;font-size:12px">
+        <input class="fi" id="ext-link-nombre-${cursoId}" placeholder="Nombre del archivo" style="flex:1;font-size:12px">
+        <button class="btn" style="font-size:12px;padding:5px 12px;white-space:nowrap" onclick="addLinkExterno('${cursoId}')">Agregar</button>
       </div>
     </div>`;
     if(!rows.length){
@@ -6615,20 +6615,24 @@ async function marcarVideoListo(colaId,cursoId){
 }
 
 function toggleVideoLink(cursoId,tipo){
-  const wrap=document.getElementById(`video-link-wrap-${cursoId}`);
-  if(wrap)wrap.style.display=tipo==="video"?"block":"none";
+  const wrap=document.getElementById(`ext-link-wrap-${cursoId}`);
+  const lbl=document.getElementById(`ext-link-label-${cursoId}`);
+  if(!wrap)return;
+  wrap.style.display="block";
+  if(lbl)lbl.textContent=tipo==="video"?"🎥 Los videos van a YouTube. Pegá el link una vez publicado:":"🔗 Archivo muy grande? Pegá un link externo (Google Drive, OneDrive, Dropbox...):";
 }
 
-async function addVideoLink(cursoId){
-  const urlEl=document.getElementById(`video-link-input-${cursoId}`);
-  const nomEl=document.getElementById(`video-link-nombre-${cursoId}`);
+async function addLinkExterno(cursoId){
+  const tipo=document.getElementById(`upload-tipo-${cursoId}`)?.value||"otro";
+  const urlEl=document.getElementById(`ext-link-input-${cursoId}`);
+  const nomEl=document.getElementById(`ext-link-nombre-${cursoId}`);
   const url=(urlEl?.value||"").trim();
   const nombre=(nomEl?.value||"").trim()||url;
   if(!url.startsWith("http")){toast("Pegá una URL válida","err");return;}
   try{
     const sess=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
-    await sb("curso_archivos",{method:"POST",body:JSON.stringify({curso_id:cursoId,tipo:"video",nombre,storage_path:url,size_bytes:null,subido_por:sess.id||null,generado_ia:false})});
-    toast("Video agregado","ok");
+    await sb("curso_archivos",{method:"POST",body:JSON.stringify({curso_id:cursoId,tipo,nombre,storage_path:url,size_bytes:null,subido_por:sess.id||null,generado_ia:false})});
+    toast("Link agregado","ok");
     if(urlEl)urlEl.value="";if(nomEl)nomEl.value="";
     loadCursoArchivos(cursoId);
   }catch(e){toast("Error: "+e.message,"err");}
@@ -6643,10 +6647,13 @@ async function uploadCursoArchivo(cursoId,input){
   for(const file of files){
     const mb=file.size/1024/1024;
     if(mb>MAX_MB){
+      toggleVideoLink(cursoId,tipo);
+      const nomEl=document.getElementById(`ext-link-nombre-${cursoId}`);
+      if(nomEl&&!nomEl.value)nomEl.value=file.name.replace(/\.[^.]+$/,"");
       if(tipo==="video"){
-        toast(`"${file.name}" (${mb.toFixed(0)} MB) — Los videos van a YouTube. Agregá el link de YouTube una vez publicado.`,"inf");
+        toast(`"${file.name}" (${mb.toFixed(0)} MB) — pegá el link de YouTube abajo.`,"inf");
       }else{
-        toast(`"${file.name}" supera el límite de ${MAX_MB} MB. Dividilo o usá un link externo.`,"err");
+        toast(`"${file.name}" (${mb.toFixed(0)} MB) supera ${MAX_MB}MB — subilo a Drive y pegá el link abajo.`,"inf");
       }
       continue;
     }
