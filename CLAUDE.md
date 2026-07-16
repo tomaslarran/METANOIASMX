@@ -309,19 +309,22 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 
 **Criterio de diseño:** cada cosa que construyamos en finanzas debe dejar los datos suficientemente estructurados para soportar contabilidad real (doble entrada, plan de cuentas, asientos). No es prioridad inmediata pero es el norte.
 
-**Hoja de ruta tentativa (acumulativa, sin fecha):**
+**Spec contable completo en:** `plan_modulo_contable_metanoia.md` (generado 16/07/2026 con Claude chat — incluye plan de cuentas SQL, asientos automáticos, cuenta corriente alumnos, parametros impositivos, auditoría de tasas hardcodeadas y estrategia de migración de proveedores).
+
+**ARCA:** AFIP pasó a llamarse ARCA (Agencia de Recaudación y Control Aduanero). Los endpoints de facturación electrónica (CAE), Libro IVA y SICORE corren bajo `arca.gob.ar`.
+
+**Hoja de ruta contable (4 fases, acumulativa):**
 1. ✅ `medios_pago` — catálogo de cuentas bancarias y tarjetas por sociedad (Jul 2026)
-2. [ ] Reporte diario exportable — Excel/CSV con formato importable a Finnegans (puente)
-3. [ ] `plan_cuentas` — tabla de cuentas contables (activo, pasivo, resultado, etc.)
-4. [ ] Asientos automáticos — cuando se paga un comprobante o se registra un ingreso, generar el asiento contable correspondiente
-5. [ ] Libro IVA digital — consolidar comprobantes de compra y venta en formato AFIP
-6. [ ] Balance / Estado de resultados — reporte ejecutivo mensual generado desde los asientos
-7. [ ] Reemplazar Finnegans — cuando los pasos anteriores estén maduros y validados
+2. ✅ **Fase 0** — Reporte exportable Excel: facturas pagadas (bruto/neto/retenciones SICORE+IIBB), sueldos, cuotas préstamos, resumen. Botón "📄 Exportar Excel" en Historial de pagos (Jul 2026)
+3. [ ] **Fase 1** — `plan_cuentas` + `parametros_impositivos` (reemplaza `IVA_TASA=0.21` hardcodeada en línea ~15057 y `SICORE_CAT`) + `proveedor_id` en comprobantes + CUIT y condición fiscal en tabla `proveedores`. **Requiere validación con contadora antes de implementar** (4 preguntas en el spec, especialmente: ¿IVA en cursos SUDES?)
+4. [ ] **Fase 2** — Asientos automáticos doble entrada: tablas `asientos_contables` + `asientos_movimientos`. Se disparan al pasar comprobante a "revisado" (devengado) y al pagar OP (pago). Gap más barato: 100% interno, no depende de Finnegans.
+5. [ ] **Fase 3** — `cuenta_corriente_alumnos` + importador Finnegans (cruce por CUIT). Conecta inscripciones con facturación real.
+6. [ ] **Fase 4** — Libro IVA ARCA, balance/estado de resultados desde asientos, reemplazo Finnegans (bloqueado por facturación electrónica CAE).
 
 **Bloqueantes antes de reemplazar Finnegans:**
-- Facturación electrónica AFIP (CAE) — requiere integración con web services de AFIP
+- Facturación electrónica ARCA (CAE) — requiere integración web services
 - Libro IVA digital en formato legal
-- Validación con contador externo
+- Validación con contador externo (al menos un cierre mensual completo con el sistema nuevo)
 
 ### Producto (baja prioridad)
 - [ ] Módulo COFRADIA — gestión de planes, suscriptores y contenido (Línea D)
@@ -437,6 +440,15 @@ ALTER TABLE cursos ADD CONSTRAINT cursos_estado_check CHECK (estado IN ('Borrado
 - ✅ 5 planes cargados: Médico COLMEDSA, Médico Externo, Residente MSP, PEMCS, Personal No Médico
 - ✅ `agente-mensajes` lee los planes dinámicamente en cada request — precios actualizables sin redeploy
 - ✅ Módulo `pg-planes` en el panel (nav Cursos → Planes plataforma): CRUD de planes con modal, toggle sin costo
+
+## Implementado (16 Jul 2026) — Finanzas: KPIs, cierre balance, historial integrado, reporte contable
+
+- ✅ Historial de pagos integrado como sub-tab dentro de "Pendientes de pago" — eliminado tab separado. Muestra facturas pagadas con retenciones Ganancias/IIBB desglosadas, cuotas con capital+intereses, sueldos. `ordenes_pago` se carga en `loadCF`.
+- ✅ 6 bugs de KPIs corregidos: `saldo_pendiente` → `saldo_actual`, filtros cobranzas case-sensitive (`"cobrado"` → `"Pendiente"`), `fecha_vencimiento` inexistente en cuotas proyección caja → `fecha`, inversiones filtradas solo activas, sueldos variables excluidos del badge pendiente.
+- ✅ Estado `cerrado` en `comprobantes_compra` — facturas pre-30/06/2026 (198 registros vía SQL). No aparecen en Pendientes, alertas ni calendario. Badge gris "🗂 Cierre balance". Sin botones Pagar/OP.
+- ✅ Tab Caja unificado dentro de "🏦 Cuentas & Caja" — sub-tabs: "💳 Cuentas y tarjetas" / "💵 Caja". Tab bar con un tab menos.
+- ✅ **Fase 0 contable** — Reporte exportable Excel (4 hojas: Facturas pagadas, Sueldos, Cuotas préstamos, Resumen con totales y retenciones SICORE+IIBB practicadas). Respeta filtros de sociedad y mes activos. Botón en sub-tab Historial.
+- ✅ CLAUDE.md actualizado con spec contable completo (`plan_modulo_contable_metanoia.md`), roadmap 4 fases y nota ARCA.
 
 ## Implementado (23 Jun 2026) — Agente mensajes y mejoras continuas
 - ✅ agente-mensajes: bot 24/7 para IG DM / FB Messenger / WhatsApp — Claude Haiku, escalación al equipo vía WA, transcripción de audio con Groq/Whisper, visión para imágenes
