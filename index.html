@@ -297,6 +297,9 @@ body.rol-logistica .sitem.logi-visible,
 body.rol-logistica .ssub.logi-visible{display:flex!important}
 body.rol-logistica .sgroup-items{max-height:600px!important}
 body.rol-instructor.perm-cofradia #nav-cofradia{display:flex!important}
+body.rol-comunicaciones .admin-only-el,
+body.rol-instructor .admin-only-el,
+body.rol-logistica .admin-only-el{display:none!important}
 /* Cash flow inline edit */
 td.cf-editing{padding:0!important;outline:2px solid var(--ac);outline-offset:-2px;background:color-mix(in srgb,var(--ac) 8%,var(--surf))!important;position:relative;z-index:5}
 td.cf-editing:hover{background:color-mix(in srgb,var(--ac) 8%,var(--surf))!important}
@@ -1344,7 +1347,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
   <div style="display:flex;gap:4px;border-bottom:1px solid var(--b);margin-bottom:16px">
     <button class="cd-tab on" id="prov-tab-dir" onclick="setProvTab('dir',this)">📋 Directorio</button>
-    <button class="cd-tab" id="prov-tab-fiscal" onclick="setProvTab('fiscal',this)">🏛️ Maestro Fiscal</button>
+    <button class="cd-tab admin-only-el" id="prov-tab-fiscal" onclick="setProvTab('fiscal',this)">🏛️ Maestro Fiscal</button>
   </div>
   <div id="prov-panel-dir">
     <div id="proveedores-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando proveedores...</div></div></div>
@@ -7269,6 +7272,7 @@ function setProvFiscalFiltro(f,btn){
 }
 
 function renderMaestroFiscal(){
+  if(loggedUser?.rol!=="admin"){document.getElementById("pf-tabla").innerHTML="";return;}
   const search=(document.getElementById("pf-search")?.value||"").toLowerCase();
   const condBadge={responsable_inscripto:"background:#3B82F620;color:#3B82F6",monotributo:"background:#7C3AED20;color:#7C3AED",exento:"background:#10B98120;color:#10B981",no_categorizado:"background:#F59E0B20;color:#F59E0B","":" background:var(--bg3);color:var(--tx3)"};
   const condLabel={responsable_inscripto:"Resp. Inscripto",monotributo:"Monotributo",exento:"Exento",no_categorizado:"Sin categoría","":" Sin definir"};
