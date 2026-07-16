@@ -316,7 +316,7 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 **Hoja de ruta contable (4 fases, acumulativa):**
 1. ✅ `medios_pago` — catálogo de cuentas bancarias y tarjetas por sociedad (Jul 2026)
 2. ✅ **Fase 0** — Reporte exportable Excel: facturas pagadas (bruto/neto/retenciones SICORE+IIBB), sueldos, cuotas préstamos, resumen. Botón "📄 Exportar Excel" en Historial de pagos (Jul 2026)
-3. [ ] **Fase 1** — `plan_cuentas` + `parametros_impositivos` (reemplaza `IVA_TASA=0.21` hardcodeada en línea ~15057 y `SICORE_CAT`) + `proveedor_id` en comprobantes + CUIT y condición fiscal en tabla `proveedores`. **Requiere validación con contadora antes de implementar** (4 preguntas en el spec, especialmente: ¿IVA en cursos SUDES?)
+3. [ ] **Fase 1** — `plan_cuentas` + `parametros_impositivos` (reemplaza `IVA_TASA=0.21` hardcodeada en línea ~15057 y `SICORE_CAT`) + `proveedor_id` en comprobantes + CUIT y condición fiscal en tabla `proveedores`. 3 preguntas pendientes para la contadora (ver spec sección 6). **IVA confirmado:** cursos y prácticas exentos/no alcanzados; suscripciones COFRADIA sí gravadas.
 4. [ ] **Fase 2** — Asientos automáticos doble entrada: tablas `asientos_contables` + `asientos_movimientos`. Se disparan al pasar comprobante a "revisado" (devengado) y al pagar OP (pago). Gap más barato: 100% interno, no depende de Finnegans.
 5. [ ] **Fase 3** — `cuenta_corriente_alumnos` + importador Finnegans (cruce por CUIT). Conecta inscripciones con facturación real.
 6. [ ] **Fase 4** — Libro IVA ARCA, balance/estado de resultados desde asientos, reemplazo Finnegans (bloqueado por facturación electrónica CAE).
