@@ -3769,6 +3769,46 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         </select>
       </div>
       <div class="fg form-full"><label class="fl">Domicilio fiscal</label><input class="fi" id="p-domicilio" type="text" placeholder="Calle, número, ciudad"></div>
+      <div class="fg"><label class="fl">Provincia</label>
+        <select class="fs" id="p-provincia">
+          <option value="">Sin definir</option>
+          <option value="Salta">Salta</option>
+          <option value="Buenos Aires">Buenos Aires</option>
+          <option value="CABA">CABA</option>
+          <option value="Córdoba">Córdoba</option>
+          <option value="Santa Fe">Santa Fe</option>
+          <option value="Mendoza">Mendoza</option>
+          <option value="Tucumán">Tucumán</option>
+          <option value="Entre Ríos">Entre Ríos</option>
+          <option value="Chaco">Chaco</option>
+          <option value="Corrientes">Corrientes</option>
+          <option value="Misiones">Misiones</option>
+          <option value="Santiago del Estero">Santiago del Estero</option>
+          <option value="San Juan">San Juan</option>
+          <option value="Jujuy">Jujuy</option>
+          <option value="Río Negro">Río Negro</option>
+          <option value="Neuquén">Neuquén</option>
+          <option value="Formosa">Formosa</option>
+          <option value="Chubut">Chubut</option>
+          <option value="San Luis">San Luis</option>
+          <option value="Catamarca">Catamarca</option>
+          <option value="La Rioja">La Rioja</option>
+          <option value="La Pampa">La Pampa</option>
+          <option value="Santa Cruz">Santa Cruz</option>
+          <option value="Tierra del Fuego">Tierra del Fuego</option>
+        </select>
+      </div>
+      <div class="fg"><label class="fl">Código Postal</label><input class="fi" id="p-cp" type="text" placeholder="A4400" maxlength="8"></div>
+      <div class="fg form-full"><label class="fl">Situación IIBB</label>
+        <select class="fs" id="p-situacion-iibb">
+          <option value="">Sin definir</option>
+          <option value="exento">Exento / No alcanzado</option>
+          <option value="retencion_aplica">Sujeto a retención</option>
+          <option value="convenio_multilateral">Convenio Multilateral</option>
+          <option value="contribuyente_directo">Contribuyente directo (no retener)</option>
+          <option value="no_inscripto">No inscripto</option>
+        </select>
+      </div>
     </div>
     <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;font-size:13px;color:var(--tx2)">
       <input type="checkbox" id="p-revisado"> Datos fiscales revisados ✅
@@ -4758,7 +4798,7 @@ function openNewModal(){
     openModal("modal-curso");
   }
   else if(curPage==="alumnos"){document.getElementById("alum-edit-id").value="";document.getElementById("modal-alum-title").textContent="Nuevo Alumno";["a-nombre","a-apellido","a-dni","a-cuit","a-matricula","a-esp","a-inst","a-email","a-tel","a-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("alum-cursos-section").style.display="none";openModal("modal-alumno")}
-  else if(curPage==="proveedores"){document.getElementById("prov-edit-id").value="";document.getElementById("modal-prov-title").textContent="Nuevo Proveedor";["p-nombre","p-email","p-tel","p-esp","p-notas","p-cuit","p-domicilio"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("p-tipo").value="Empresa";document.getElementById("p-condicion-iva").value="";document.getElementById("p-revisado").checked=false;openModal("modal-proveedor")}
+  else if(curPage==="proveedores"){document.getElementById("prov-edit-id").value="";document.getElementById("modal-prov-title").textContent="Nuevo Proveedor";["p-nombre","p-email","p-tel","p-esp","p-notas","p-cuit","p-domicilio","p-cp"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("p-tipo").value="Empresa";document.getElementById("p-condicion-iva").value="";document.getElementById("p-provincia").value="";document.getElementById("p-situacion-iibb").value="";document.getElementById("p-revisado").checked=false;openModal("modal-proveedor")}
   else if(curPage==="instructores"){document.getElementById("inst-edit-id").value="";document.getElementById("modal-inst-title").textContent="Nuevo Instructor";["i-nombre","i-apellido","i-esp","i-matricula","i-email","i-tel","i-inst","i-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("i-activo").checked=true;document.getElementById("ibtn-del").style.display="none";openModal("modal-instructor")}
   else if(curPage==="comunicaciones")openModalNuevoPost();
 }
@@ -7237,6 +7277,9 @@ function editProveedor(id){
   document.getElementById("p-cuit").value=p.cuit||"";
   document.getElementById("p-condicion-iva").value=p.condicion_iva||"";
   document.getElementById("p-domicilio").value=p.domicilio||"";
+  document.getElementById("p-provincia").value=p.provincia||"";
+  document.getElementById("p-cp").value=p.cp||"";
+  document.getElementById("p-situacion-iibb").value=p.situacion_iibb||"";
   document.getElementById("p-revisado").checked=!!p.revisado;
   openModal("modal-proveedor");
 }
@@ -7244,7 +7287,7 @@ function editProveedor(id){
 async function saveProveedor(){
   const nombre=document.getElementById("p-nombre").value.trim();if(!nombre){toast("Escribí un nombre","err");return}
   const id=document.getElementById("prov-edit-id").value;
-  const data={nombre,tipo:document.getElementById("p-tipo").value,especialidad:document.getElementById("p-esp").value||null,email:document.getElementById("p-email").value||null,telefono:document.getElementById("p-tel").value||null,notas:document.getElementById("p-notas").value||null,cuit:document.getElementById("p-cuit").value.trim()||null,condicion_iva:document.getElementById("p-condicion-iva").value||null,domicilio:document.getElementById("p-domicilio").value.trim()||null,revisado:document.getElementById("p-revisado").checked,updated_at:new Date().toISOString()};
+  const data={nombre,tipo:document.getElementById("p-tipo").value,especialidad:document.getElementById("p-esp").value||null,email:document.getElementById("p-email").value||null,telefono:document.getElementById("p-tel").value||null,notas:document.getElementById("p-notas").value||null,cuit:document.getElementById("p-cuit").value.trim()||null,condicion_iva:document.getElementById("p-condicion-iva").value||null,domicilio:document.getElementById("p-domicilio").value.trim()||null,provincia:document.getElementById("p-provincia").value||null,cp:document.getElementById("p-cp").value.trim()||null,situacion_iibb:document.getElementById("p-situacion-iibb").value||null,revisado:document.getElementById("p-revisado").checked,updated_at:new Date().toISOString()};
   const pbtn=document.getElementById("pbtn");pbtn.disabled=true;pbtn.textContent="Guardando...";
   try{
     if(id){await sb(`proveedores?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(data)});const i=proveedores.findIndex(p=>p.id===id);if(i>=0)proveedores[i]={...proveedores[i],...data};}
@@ -7300,25 +7343,31 @@ function renderMaestroFiscal(){
 
   if(!lista.length){document.getElementById("pf-tabla").innerHTML=`<div class="empty"><div class="ei">🏛️</div>No hay proveedores${provFiscalFiltro!=="todos"?" con ese filtro":". Importalos desde Supabase con el SQL de alta"}.</div>`;return}
 
+  const ibbBadge={exento:"background:#10B98120;color:#10B981",retencion_aplica:"background:#EF444420;color:#EF4444",convenio_multilateral:"background:#7C3AED20;color:#7C3AED",contribuyente_directo:"background:#3B82F620;color:#3B82F6",no_inscripto:"background:#F59E0B20;color:#F59E0B","":" background:var(--bg3);color:var(--tx3)"};
+  const ibbLabel={exento:"Exento",retencion_aplica:"Retención",convenio_multilateral:"Conv. Multilateral",contribuyente_directo:"Contrib. directo",no_inscripto:"No inscripto","":" Sin definir"};
+
   document.getElementById("pf-tabla").innerHTML=`
   <table style="width:100%;border-collapse:collapse;font-size:13px">
     <thead><tr style="border-bottom:2px solid var(--b);text-align:left">
       <th style="padding:8px 10px;color:var(--tx3);font-weight:600">CUIT</th>
       <th style="padding:8px 10px;color:var(--tx3);font-weight:600">Nombre</th>
-      <th style="padding:8px 10px;color:var(--tx3);font-weight:600">Condición IVA</th>
-      <th style="padding:8px 10px;color:var(--tx3);font-weight:600">Domicilio</th>
-      <th style="padding:8px 10px;color:var(--tx3);font-weight:600;text-align:center">Facturas</th>
+      <th style="padding:8px 10px;color:var(--tx3);font-weight:600">IVA</th>
+      <th style="padding:8px 10px;color:var(--tx3);font-weight:600">IIBB</th>
+      <th style="padding:8px 10px;color:var(--tx3);font-weight:600">Domicilio / Prov.</th>
+      <th style="padding:8px 10px;color:var(--tx3);font-weight:600;text-align:center">Fact.</th>
       <th style="padding:8px 10px;color:var(--tx3);font-weight:600;text-align:center">Estado</th>
       <th style="padding:8px 10px"></th>
     </tr></thead>
     <tbody>${lista.map(p=>{
       const fc=factPorCuit[normCuit(p.cuit)]||0;
-      const ok=p.revisado&&p.condicion_iva&&p.condicion_iva!=="no_categorizado";
+      const ok=p.revisado&&p.condicion_iva&&p.condicion_iva!=="no_categorizado"&&p.situacion_iibb;
+      const domProv=[p.domicilio,p.provincia&&p.cp?`${p.provincia} ${p.cp}`:p.provincia||p.cp||null].filter(Boolean).join(" · ");
       return`<tr style="border-bottom:1px solid var(--b);transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
         <td style="padding:9px 10px;font-family:monospace;font-size:12px">${esc(p.cuit||"")}</td>
         <td style="padding:9px 10px;font-weight:500">${esc(p.nombre||"")}</td>
         <td style="padding:9px 10px"><span style="font-size:11px;padding:2px 8px;border-radius:20px;${condBadge[p.condicion_iva||""]}">${condLabel[p.condicion_iva||""]}</span></td>
-        <td style="padding:9px 10px;color:var(--tx2);font-size:12px">${p.domicilio?esc(p.domicilio):`<span style="color:var(--tx3);font-style:italic">Sin domicilio</span>`}</td>
+        <td style="padding:9px 10px"><span style="font-size:11px;padding:2px 8px;border-radius:20px;${ibbBadge[p.situacion_iibb||""]}">${ibbLabel[p.situacion_iibb||""]}</span></td>
+        <td style="padding:9px 10px;color:var(--tx2);font-size:12px">${domProv?esc(domProv):`<span style="color:var(--tx3);font-style:italic">Sin datos</span>`}</td>
         <td style="padding:9px 10px;text-align:center;color:${fc>0?"var(--tx1)":"var(--tx3)"}">${fc||"—"}</td>
         <td style="padding:9px 10px;text-align:center"><span style="font-size:11px;padding:2px 8px;border-radius:20px;${ok?"background:#10B98120;color:#10B981":"background:#F59E0B20;color:#F59E0B"}">${ok?"✅ Revisado":"⚠️ Pendiente"}</span></td>
         <td style="padding:9px 10px;text-align:right"><button class="btn sm sec" onclick="editProveedor('${p.id}')">Editar</button></td>
