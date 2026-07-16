@@ -2240,6 +2240,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         </div>
         <input type="month" id="pend-hist-mes" style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:5px 10px;font-size:12px;color:var(--tx);outline:none" onchange="renderPendHistorial()">
         <button class="btn sm" onclick="document.getElementById('pend-hist-mes').value='';renderPendHistorial()">Todos los meses</button>
+        <button class="btn sm pri" style="margin-left:auto" onclick="exportarReporteContable()">📄 Exportar Excel</button>
       </div>
       <div id="pend-hist-kpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px"></div>
       <div id="pend-hist-tabla"></div>
@@ -9589,6 +9590,119 @@ function renderHistorial(){
 }
 
 /* ── EXPORTAR RESUMEN MENSUAL ── */
+function exportarReporteContable(){
+  const mesInput=document.getElementById("pend-hist-mes");
+  const mesFilter=mesInput?mesInput.value:"";
+  const soc=pendHistFiltroSoc||"all";
+  const MN=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const fmtN=v=>Math.round(Math.abs(parseFloat(v)||0));
+  const pasaMes=fecha=>!mesFilter||!fecha||fecha.startsWith(mesFilter);
+  const pasaSoc=sociedad=>soc==="all"||!sociedad||sociedad===soc;
+
+  // ── Hoja 1: Facturas pagadas ──
+  const rowsFact=[];
+  (comprobantes||[]).filter(c=>c.estado==="pagado"&&pasaMes(c.fecha_pago||c.fecha)&&pasaSoc(c.sociedad)).forEach(c=>{
+    const op=(ordenesGanancias||[]).find(o=>o.comprobante_id===c.id);
+    const bruto=parseFloat(c.total)||0;
+    const retGan=op?parseFloat(op.monto_retencion)||0:parseFloat(c.retencion_ganancias)||0;
+    const retIIBB=parseFloat(c.percepcion_iibb)||0;
+    const neto=op?parseFloat(op.neto_a_pagar)||0:(bruto-retGan-retIIBB);
+    rowsFact.push({
+      "Fecha pago":c.fecha_pago||c.fecha||"",
+      "Sociedad":c.sociedad||"",
+      "Proveedor":c.proveedor||"",
+      "Tipo factura":c.tipo||"",
+      "N° Comprobante":c.numero||"",
+      "Concepto":c.concepto||"",
+      "Total bruto":fmtN(bruto),
+      "IVA":fmtN(c.iva),
+      "Neto sin IVA":fmtN(c.monto_neto),
+      "Ret. Ganancias":fmtN(retGan),
+      "Código SICORE":op?.codigo_sicore||"",
+      "Percepción IIBB":fmtN(retIIBB),
+      "Neto pagado":fmtN(neto),
+      "Medio de pago":op?.medio_pago||c.medio_pago||""
+    });
+  });
+
+  // ── Hoja 2: Sueldos pagados ──
+  const rowsSue=[];
+  (cfPagosEmpleados||[]).filter(p=>p.pagado&&pasaMes(p.periodo)).forEach(pg=>{
+    const emp=(cfEmpleados||[]).find(e=>e.id===pg.empleado_id);
+    if(!pasaSoc(emp?.sociedad))return;
+    const monto=pg.monto!=null?parseFloat(pg.monto):(parseFloat(emp?.monto_mensual)||0);
+    const [y,m]=(pg.periodo||"").split("-");
+    rowsSue.push({
+      "Período":m&&y?`${MN[parseInt(m)-1]} ${y}`:pg.periodo||"",
+      "Fecha pago":pg.fecha_pago||"",
+      "Sociedad":emp?.sociedad||"",
+      "Nombre":emp?.nombre||"",
+      "Categoría":emp?.categoria||"",
+      "Tipo":emp?.tipo||"",
+      "Monto":fmtN(monto)
+    });
+  });
+
+  // ── Hoja 3: Cuotas de préstamos pagadas ──
+  const rowsCuot=[];
+  (cfPrestCuotas||[]).filter(c=>c.pagada&&c.fecha_pago&&pasaMes(c.fecha_pago)).forEach(c=>{
+    const prest=(cfPrestamos||[]).find(p=>p.id===c.prestamo_id);
+    if(!pasaSoc(prest?.sociedad))return;
+    const capital=parseFloat(c.capital)||0;
+    const intereses=parseFloat(c.intereses)||0;
+    const total=parseFloat(c.monto_total)||capital+intereses;
+    rowsCuot.push({
+      "Fecha pago":c.fecha_pago||"",
+      "Sociedad":prest?.sociedad||"",
+      "Préstamo":prest?.nombre||"",
+      "N° Cuota":c.nro_cuota||"",
+      "Capital":fmtN(capital),
+      "Intereses":fmtN(intereses),
+      "Total cuota":fmtN(total)
+    });
+  });
+
+  // ── Hoja 4: Resumen ──
+  const totFact=rowsFact.reduce((s,r)=>s+r["Neto pagado"],0);
+  const totSue=rowsSue.reduce((s,r)=>s+r["Monto"],0);
+  const totCuot=rowsCuot.reduce((s,r)=>s+r["Total cuota"],0);
+  const totRetGan=rowsFact.reduce((s,r)=>s+r["Ret. Ganancias"],0);
+  const totRetIIBB=rowsFact.reduce((s,r)=>s+r["Percepción IIBB"],0);
+  const socLabel=soc==="all"?"SUDES + POINTERS":soc;
+  const perLabel=mesFilter||"Todo el período";
+  const rowsRes=[
+    {"Concepto":"Período","Valor":perLabel,"Cantidad":""},
+    {"Concepto":"Sociedad","Valor":socLabel,"Cantidad":""},
+    {"Concepto":""},
+    {"Concepto":"Facturas pagadas (neto pagado)","Valor":totFact,"Cantidad":rowsFact.length},
+    {"Concepto":"Sueldos pagados","Valor":totSue,"Cantidad":rowsSue.length},
+    {"Concepto":"Cuotas de préstamos pagadas","Valor":totCuot,"Cantidad":rowsCuot.length},
+    {"Concepto":"TOTAL EGRESADO","Valor":totFact+totSue+totCuot,"Cantidad":rowsFact.length+rowsSue.length+rowsCuot.length},
+    {"Concepto":""},
+    {"Concepto":"Retenciones Ganancias practicadas (SICORE)","Valor":totRetGan,"Cantidad":""},
+    {"Concepto":"Percepciones IIBB","Valor":totRetIIBB,"Cantidad":""}
+  ];
+
+  const wb=XLSX.utils.book_new();
+  const mkSheet=(rows,name,cols)=>{
+    if(!rows.length)return;
+    const ws=XLSX.utils.json_to_sheet(rows,{header:Object.keys(rows[0])});
+    ws["!cols"]=cols;
+    XLSX.utils.book_append_sheet(wb,ws,name);
+  };
+  mkSheet(rowsFact,"Facturas pagadas",[{wch:12},{wch:10},{wch:28},{wch:8},{wch:16},{wch:24},{wch:14},{wch:12},{wch:14},{wch:16},{wch:12},{wch:16},{wch:14},{wch:18}]);
+  mkSheet(rowsSue,"Sueldos pagados",[{wch:14},{wch:12},{wch:10},{wch:22},{wch:18},{wch:12},{wch:14}]);
+  mkSheet(rowsCuot,"Cuotas préstamos",[{wch:12},{wch:10},{wch:24},{wch:10},{wch:12},{wch:12},{wch:14}]);
+  const wsRes=XLSX.utils.json_to_sheet(rowsRes,{header:["Concepto","Valor","Cantidad"]});
+  wsRes["!cols"]=[{wch:42},{wch:20},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,wsRes,"Resumen");
+
+  const fecha=new Date().toISOString().slice(0,10);
+  const per=mesFilter||"completo";
+  XLSX.writeFile(wb,`reporte_contable_${soc==="all"?"ambas":soc}_${per}_${fecha}.xlsx`);
+  toast("Reporte exportado","ok");
+}
+
 function exportarResumen(){
   const mesInput=document.getElementById("hist-mes-input");
   const mesFilter=mesInput?mesInput.value:"";
