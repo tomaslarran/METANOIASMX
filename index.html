@@ -1021,22 +1021,24 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="sgroup" id="sg-contabilidad">
     <div class="sgroup-label" onclick="toggleSGroup('sg-contabilidad')">Contabilidad<svg class="sg-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
     <div class="sgroup-items">
-      <div class="sitem" onclick="goPage('impuestos',this)" id="nav-impuestos">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l6-6"/><circle cx="9.5" cy="9.5" r="1.5"/><circle cx="14.5" cy="14.5" r="1.5"/><rect x="2" y="3" width="20" height="18" rx="2"/></svg>
-        Impuestos
+      <div class="sitem" onclick="goPage('impuestos',this)" id="nav-impuestos" style="justify-content:space-between">
+        <span style="display:flex;align-items:center;gap:9px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l6-6"/><circle cx="9.5" cy="9.5" r="1.5"/><circle cx="14.5" cy="14.5" r="1.5"/><rect x="2" y="3" width="20" height="18" rx="2"/></svg>
+          Impuestos
+        </span>
+        <svg id="imp-sub-chev" class="sg-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" onclick="event.stopPropagation();toggleImpSub()"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
-      <div class="sitem ssub" onclick="goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('iva')">IVA</div>
-      <div class="sitem ssub" onclick="goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('iibb')">IIBB</div>
-      <div class="sitem ssub" onclick="goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('autonomos')">Autónomos</div>
-      <div class="sitem ssub" onclick="goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('ganancias')">Ganancias</div>
+      <div id="imp-sub-wrap" style="overflow:hidden;max-height:200px;transition:max-height .25s ease">
+        <div class="sitem ssub" onclick="goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('iva')">IVA</div>
+        <div class="sitem ssub" onclick="goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('iibb')">IIBB</div>
+        <div class="sitem ssub" onclick="goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('autonomos')">Autónomos</div>
+        <div class="sitem ssub" onclick="goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('ganancias')">Ganancias</div>
+      </div>
       <div class="sitem logi-visible" onclick="goPage('comprobantes',this)" id="nav-comprobantes">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
         Comprobantes
         <span class="sitem-badge" id="badge-comprobantes">—</span>
       </div>
-      <div class="sitem ssub logi-visible" onclick="goPage('comprobantes',document.getElementById('nav-comprobantes'));setCompFilter('pendiente')">Pendientes</div>
-      <div class="sitem ssub logi-visible" onclick="goPage('comprobantes',document.getElementById('nav-comprobantes'));setCompFilter('revisado')">Revisados</div>
-      <div class="sitem ssub logi-visible" onclick="goPage('comprobantes',document.getElementById('nav-comprobantes'));setCompFilter('enviado_finnegans')">En Finnegans</div>
       <div class="sitem logi-visible" onclick="goPage('cuentas',this)" id="nav-cuentas">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         Cuentas Corrientes
@@ -4785,6 +4787,14 @@ function syncMobileNavBadges(){
   const bc=document.getElementById("mn-badge-cf");
   const badgeCF=document.getElementById("badge-cf");
   if(bc&&badgeCF){const v=badgeCF.textContent;bc.textContent=v;bc.style.display=v&&v!=="✓"?"":"none";}
+}
+function toggleImpSub(){
+  const w=document.getElementById('imp-sub-wrap');
+  const c=document.getElementById('imp-sub-chev');
+  if(!w)return;
+  const open=w.style.maxHeight!=='0px';
+  w.style.maxHeight=open?'0px':'200px';
+  if(c)c.style.transform=open?'rotate(-90deg)':'rotate(0deg)';
 }
 function toggleSGroup(id){
   const g=document.getElementById(id);
