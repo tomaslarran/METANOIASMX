@@ -17800,18 +17800,27 @@ function _finnWB(listos){
   return{wb,fecha,sinCuit};
 }
 
+function _listosFinnegans(){
+  // Exportables: revisados o pagados, sin importar a Finnegans todavía, sin NC
+  return comprobantes.filter(c=>
+    (c.estado==="revisado"||c.estado==="pagado")
+    &&!c.importado_finnegans&&c.estado!=="enviado_finnegans"&&c.estado!=="cerrado"
+    &&!c.tipo?.startsWith("NC")
+  );
+}
+
 function _marcarFinnegans(listos){
   Promise.all(listos.map(c=>
-    sb(`comprobantes_compra?id=eq.${c.id}`,{method:"PATCH",body:JSON.stringify({estado:"enviado_finnegans",updated_at:new Date().toISOString()})})
-    .then(()=>{const i=comprobantes.findIndex(x=>x.id===c.id);if(i>=0)comprobantes[i].estado="enviado_finnegans";})
+    sb(`comprobantes_compra?id=eq.${c.id}`,{method:"PATCH",body:JSON.stringify({importado_finnegans:true,updated_at:new Date().toISOString()})})
+    .then(()=>{const i=comprobantes.findIndex(x=>x.id===c.id);if(i>=0)comprobantes[i].importado_finnegans=true;})
   )).then(()=>{renderComprobantes();updateCompStats();updateSideBadges();toast("Marcados como En Finnegans","ok");});
 }
 
 function exportarFinnegans(){
-  let listos=comprobantes.filter(c=>c.estado==="revisado");
+  let listos=_listosFinnegans();
   if(compMesFilter!=="all")listos=listos.filter(c=>{const fi=c.fecha_imputacion||c.fecha;return fi&&fi.startsWith(compMesFilter);});
   if(compFilter==="SUDES"||compFilter==="POINTERS")listos=listos.filter(c=>c.sociedad===compFilter);
-  if(!listos.length){toast("No hay comprobantes en estado 'Revisado' para exportar","err");return;}
+  if(!listos.length){toast("No hay comprobantes listos para exportar (revisados o pagados sin marcar en Finnegans)","err");return;}
   if(!_finnValidar(listos,"exportar"))return;
   const{wb,fecha,sinCuit}=_finnWB(listos);
   if(sinCuit.length){
@@ -17824,10 +17833,10 @@ function exportarFinnegans(){
 }
 
 async function enviarEmailFinnegans(){
-  let listos=comprobantes.filter(c=>c.estado==="revisado");
+  let listos=_listosFinnegans();
   if(compMesFilter!=="all")listos=listos.filter(c=>{const fi=c.fecha_imputacion||c.fecha;return fi&&fi.startsWith(compMesFilter);});
   if(compFilter==="SUDES"||compFilter==="POINTERS")listos=listos.filter(c=>c.sociedad===compFilter);
-  if(!listos.length){toast("No hay comprobantes 'Revisados' para enviar","err");return;}
+  if(!listos.length){toast("No hay comprobantes listos para enviar (revisados o pagados sin marcar en Finnegans)","err");return;}
   if(!_finnValidar(listos,"enviar"))return;
   const{wb,fecha,sinCuit}=_finnWB(listos);
   if(sinCuit.length){
