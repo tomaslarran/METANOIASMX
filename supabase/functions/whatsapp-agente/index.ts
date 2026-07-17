@@ -14,7 +14,7 @@ serve(async (req) => {
       const twilioSig = req.headers.get("X-Twilio-Signature") || "";
       const params2 = new URLSearchParams(body);
       const sortedParams = [...params2.entries()].sort(([a], [b]) => a.localeCompare(b));
-      let stringToSign = req.url;
+      let stringToSign = "https://jppxmdvddvbsvymogvcp.supabase.co/functions/v1/whatsapp-agente";
       for (const [k, v] of sortedParams) stringToSign += k + v;
       const encoder = new TextEncoder();
       const key = await crypto.subtle.importKey(
