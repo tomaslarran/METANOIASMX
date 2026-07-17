@@ -3721,6 +3721,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <input class="fi" id="mop-pct-ret" type="number" step="0.01" oninput="mopRecalcular()" placeholder="0">
       </div>
     </div>
+      <div class="fg" style="grid-column:1/-1"><label class="fl">N° comprobante de retención <span style="color:var(--tx3);font-weight:400">(SIAM)</span></label>
+        <input class="fi" id="mop-nro-ret" type="text" placeholder="Ej: 00001-00000123">
+      </div>
+    </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid rgba(139,92,246,.2)">
       <span style="font-size:12px;color:var(--tx3)">Monto retención Ganancias</span>
       <span id="mop-monto-ret" style="font-size:14px;font-weight:700;color:#f87171">$0</span>
@@ -16712,6 +16716,7 @@ function abrirOrdenPago(compId,fromPendientes=false){
   document.getElementById("mop-fecha").value=today();
   document.getElementById("mop-cbu").value="";
   document.getElementById("mop-obs-op").value="";
+  document.getElementById("mop-nro-ret").value="";
   document.getElementById("mop-sicore").innerHTML=buildSicoreOptions();
   document.getElementById("mop-sicore").value="";
   document.getElementById("mop-pct-ret").value="";
@@ -16790,6 +16795,7 @@ async function confirmarOrdenPago(pagarTambien){
     porcentaje_retencion:pct,monto_retencion:ret,neto_a_pagar:neto,
     medio_pago:medio,cbu_destino:cbu||null,observaciones:obs||null,
     fecha_pago:fecha,estado:pagarTambien?"pagado":"borrador",
+    nro_comprobante_retencion:document.getElementById("mop-nro-ret").value.trim()||null,
     creado_por:loggedUser?.nombre||null,
   };
   try{
