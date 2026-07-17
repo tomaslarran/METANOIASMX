@@ -16865,8 +16865,10 @@ function renderComprobantes(){
           ?`<button onclick="marcarEstadoComp('${c.id}','revisado')" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.4);border-radius:5px;color:#059669;font-size:10px;padding:3px 7px;cursor:pointer" title="Marcar como revisado — habilita OP y Finnegans">✓ OK</button>`
           :c.estado==="enviado_finnegans"
             ?`<button onclick="marcarEstadoComp('${c.id}','revisado')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Revertir a Revisado">↩</button>`
-            :(c.estado==="revisado"||c.estado==="pagado")&&!c.importado_finnegans&&!c.tipo?.startsWith("NC")
-              ?`<button onclick="marcarImportadoFinnegans('${c.id}')" style="background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.4);border-radius:5px;color:#60A5FA;font-size:10px;padding:3px 7px;cursor:pointer" title="Marcar como exportado a Finnegans">→F</button>`
+            :(c.estado==="revisado"||c.estado==="pagado")&&!c.tipo?.startsWith("NC")
+              ?c.importado_finnegans
+                ?`<button onclick="desmarcarImportadoFinnegans('${c.id}')" style="background:rgba(59,130,246,.2);border:1px solid rgba(59,130,246,.6);border-radius:5px;color:#60A5FA;font-size:10px;padding:3px 7px;cursor:pointer" title="Quitar marca Finnegans">F↩</button>`
+                :`<button onclick="marcarImportadoFinnegans('${c.id}')" style="background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.4);border-radius:5px;color:#60A5FA;font-size:10px;padding:3px 7px;cursor:pointer" title="Marcar como exportado a Finnegans">→F</button>`
               :""}
         <button onclick="delComprobante('${c.id}','${esc(c.proveedor||"")}','${esc(c.numero||"")}')" style="background:none;border:1px solid rgba(239,68,68,.4);border-radius:5px;color:#f87171;font-size:10px;padding:3px 7px;cursor:pointer" title="Eliminar">🗑</button>
       </div>
@@ -17023,6 +17025,15 @@ async function marcarImportadoFinnegans(id){
     const c=comprobantes.find(c=>c.id===id);if(c)c.importado_finnegans=true;
     renderComprobantes();updateCompStats();
     toast("🔗 Marcado como importado a Finnegans","ok");
+  }catch(e){toast("Error: "+e.message,"err")}
+}
+
+async function desmarcarImportadoFinnegans(id){
+  try{
+    await sb(`comprobantes_compra?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({importado_finnegans:false,updated_at:new Date().toISOString()})});
+    const c=comprobantes.find(c=>c.id===id);if(c)c.importado_finnegans=false;
+    renderComprobantes();updateCompStats();
+    toast("Marca Finnegans quitada","ok");
   }catch(e){toast("Error: "+e.message,"err")}
 }
 
