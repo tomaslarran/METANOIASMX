@@ -16860,14 +16860,13 @@ function renderComprobantes(){
       <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
         ${c.archivo_url?`<button onclick="window.open('${c.archivo_url}','_blank')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Ver archivo">👁</button>`:""}
         <button onclick="editComprobante('${c.id}')" style="background:none;border:1px solid ${faltaDesglose?"rgba(245,158,11,.6)":"var(--b)"};border-radius:5px;color:${faltaDesglose?"#FCD34D":"var(--tx3)"};font-size:10px;padding:3px 7px;cursor:pointer" title="${faltaDesglose?"Completar para Finnegans":"Editar"}">${faltaDesglose?"✏️":"✎"}</button>
-        ${c.estado==="revisado"?`<button onclick="abrirPagarComp('${c.id}')" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);border-radius:5px;color:#059669;font-size:10px;padding:3px 7px;cursor:pointer" title="Registrar pago">💳</button>`:""}
-        ${c.estado!=="pagado"&&c.estado!=="cerrado"&&!c.tipo?.startsWith("NC")?`<button onclick="abrirOrdenPago('${c.id}')" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.4);border-radius:5px;color:#A78BFA;font-size:10px;padding:3px 7px;cursor:pointer" title="Generar Orden de Pago">📄 OP</button>`:""}
+        ${c.estado==="revisado"&&!c.tipo?.startsWith("NC")?`<button onclick="abrirOrdenPago('${c.id}')" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.4);border-radius:5px;color:#A78BFA;font-size:10px;padding:3px 7px;cursor:pointer" title="Generar Orden de Pago">📄 OP</button>`:""}
         ${c.estado==="pendiente"
-          ?`<button onclick="marcarEstadoComp('${c.id}','revisado')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Marcar revisado">✓</button>`
+          ?`<button onclick="marcarEstadoComp('${c.id}','revisado')" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.4);border-radius:5px;color:#059669;font-size:10px;padding:3px 7px;cursor:pointer" title="Marcar como revisado — habilita OP y Finnegans">✓ OK</button>`
           :c.estado==="enviado_finnegans"
             ?`<button onclick="marcarEstadoComp('${c.id}','revisado')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Revertir a Revisado">↩</button>`
             :(c.estado==="revisado"||c.estado==="pagado")&&!c.importado_finnegans&&!c.tipo?.startsWith("NC")
-              ?`<button onclick="marcarImportadoFinnegans('${c.id}')" style="background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.4);border-radius:5px;color:#60A5FA;font-size:10px;padding:3px 7px;cursor:pointer" title="Marcar como importado a Finnegans">→F</button>`
+              ?`<button onclick="marcarImportadoFinnegans('${c.id}')" style="background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.4);border-radius:5px;color:#60A5FA;font-size:10px;padding:3px 7px;cursor:pointer" title="Marcar como exportado a Finnegans">→F</button>`
               :""}
         <button onclick="delComprobante('${c.id}','${esc(c.proveedor||"")}','${esc(c.numero||"")}')" style="background:none;border:1px solid rgba(239,68,68,.4);border-radius:5px;color:#f87171;font-size:10px;padding:3px 7px;cursor:pointer" title="Eliminar">🗑</button>
       </div>
