@@ -17745,8 +17745,8 @@ function _finnWB(listos){
   };
   const normCuit=c=>(c||"").replace(/[-\s]/g,"");
   const formatCuit=raw=>{const d=normCuit(raw);return d.length===11?`${d.slice(0,2)}-${d.slice(2,10)}-${d.slice(10)}`:d;};
-  const getFinnProv=c=>{const code=FINN_PROV[normCuit(c.cuit)];return code||c.proveedor||"";};
-  const sinCuit=listos.filter(c=>!FINN_PROV[normCuit(c.cuit)]);
+  // sinCuit: comprobantes sin CUIT cargado — no se pueden importar a Finnegans
+  const sinCuit=listos.filter(c=>!normCuit(c.cuit));
   const toSerial=d=>{if(!d)return"";const p=d.slice(0,10).split("-");const dt=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));const epoch=new Date(Date.UTC(1899,11,30));return Math.round((dt-epoch)/86400000);};
   const rows=[];
   let rowNum=0;
@@ -17778,7 +17778,7 @@ function _finnWB(listos){
     rowNum++;
     items.forEach(item=>{
       rows.push({
-        NUMERO:rowNum,FECHA:toSerial(c.fecha),CODIGO:formatCuit(c.cuit),PROVEEDOR:getFinnProv(c),COMPROBANTE:fmtComp(c),
+        NUMERO:rowNum,FECHA:toSerial(c.fecha),PROVEEDOR:formatCuit(c.cuit),COMPROBANTE:fmtComp(c),
         CONDICIONPAGO:30,SUCURSAL:"",DESCRIPCION:c.proveedor||"",PRODUCTO:item.prod,
         DESCRIPCIONITEM:c.proveedor||"",CANTIDAD:1,PRECIO:item.precio,PRECIOSOBRE:"",
         MONEDA_COTIZACION:"PES",COTIZACION:1,MONEDA:"PES",WORKFLOW:"CPRA-PROD",
@@ -17794,7 +17794,7 @@ function _finnWB(listos){
   });
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.json_to_sheet(rows,{header:Object.keys(rows[0])});
-  ws["!cols"]=[{wch:18},{wch:12},{wch:16},{wch:25},{wch:18},{wch:18},{wch:10},{wch:30},{wch:20},{wch:30},{wch:8},{wch:12},{wch:15},{wch:10},{wch:10},{wch:8},{wch:10},{wch:12},{wch:18},{wch:12},{wch:14},{wch:16},{wch:14},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:14},{wch:10},{wch:14},{wch:14},{wch:16},{wch:10},{wch:12}];
+  ws["!cols"]=[{wch:18},{wch:12},{wch:18},{wch:18},{wch:18},{wch:10},{wch:30},{wch:20},{wch:30},{wch:8},{wch:12},{wch:15},{wch:10},{wch:10},{wch:8},{wch:10},{wch:12},{wch:18},{wch:12},{wch:14},{wch:16},{wch:14},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:14},{wch:10},{wch:14},{wch:14},{wch:16},{wch:10},{wch:12}];
   XLSX.utils.book_append_sheet(wb,ws,"Sheet0");
   const fecha=new Date().toISOString().slice(0,10);
   return{wb,fecha,sinCuit};
@@ -17824,8 +17824,8 @@ function exportarFinnegans(){
   if(!_finnValidar(listos,"exportar"))return;
   const{wb,fecha,sinCuit}=_finnWB(listos);
   if(sinCuit.length){
-    const unicos=[...new Set(sinCuit.map(c=>`• ${c.proveedor} (CUIT: ${c.cuit||"sin CUIT"})`))]
-    if(!confirm(`⚠️ Los siguientes proveedores no están mapeados en Finnegans.\nSe exportarán con el nombre tal como está cargado.\nVerificá que existan en Finnegans con ese nombre exacto:\n\n${unicos.join("\n")}\n\n¿Continuar igual?`))return;
+    const unicos=[...new Set(sinCuit.map(c=>`• ${c.proveedor||"(sin nombre)"}`))]
+    if(!confirm(`⚠️ Los siguientes comprobantes no tienen CUIT cargado y no podrán identificar al proveedor en Finnegans:\n\n${unicos.join("\n")}\n\nCargá el CUIT en el comprobante antes de exportar.\n\n¿Exportar igual?`))return;
   }
   XLSX.writeFile(wb,`comprobantes_finnegans_${fecha}.xls`);
   toast(`${listos.length} comprobantes exportados`,"ok");
@@ -17840,8 +17840,8 @@ async function enviarEmailFinnegans(){
   if(!_finnValidar(listos,"enviar"))return;
   const{wb,fecha,sinCuit}=_finnWB(listos);
   if(sinCuit.length){
-    const unicos=[...new Set(sinCuit.map(c=>`• ${c.proveedor} (CUIT: ${c.cuit||"sin CUIT"})`))]
-    if(!confirm(`⚠️ Los siguientes proveedores no están mapeados en Finnegans.\nVerificá que existan en Finnegans con ese nombre exacto:\n\n${unicos.join("\n")}\n\n¿Enviar igual?`))return;
+    const unicos=[...new Set(sinCuit.map(c=>`• ${c.proveedor||"(sin nombre)"}`))]
+    if(!confirm(`⚠️ Los siguientes comprobantes no tienen CUIT cargado y no podrán identificar al proveedor en Finnegans:\n\n${unicos.join("\n")}\n\nCargá el CUIT en el comprobante antes de exportar.\n\n¿Enviar igual?`))return;
   }
   const filename=`comprobantes_finnegans_${fecha}.xls`;
   const base64=XLSX.write(wb,{bookType:"xls",type:"base64"});
