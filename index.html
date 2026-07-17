@@ -3946,7 +3946,44 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div style="color:var(--tx3);font-size:12px">Cargando...</div>
     </div>
   </div>
+  <!-- Sección cuenta corriente (solo en edición, solo admin) -->
+  <div id="alum-cc-section" class="admin-only-el" style="display:none;margin-top:16px;border-top:1px solid var(--b);padding-top:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--tx3)">💼 Cuenta Corriente</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span id="alum-cc-saldo" style="font-size:13px;font-weight:700"></span>
+        <button class="bs" style="font-size:11px;padding:4px 10px" onclick="abrirAjusteCC()">+ Ajuste</button>
+      </div>
+    </div>
+    <div id="alum-cc-list" style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto">
+      <div style="color:var(--tx3);font-size:12px">Cargando...</div>
+    </div>
+  </div>
   <div class="ma"><button class="bc" onclick="closeModal('modal-alumno')">Cancelar</button><button class="bk" id="abtn" onclick="saveAlumno()">Guardar</button></div>
+</div>
+</div>
+
+<!-- MODAL AJUSTE CUENTA CORRIENTE ALUMNO -->
+<div class="mov" id="modal-ajuste-cc" onclick="if(event.target===this&&_movDown===this)closeModal('modal-ajuste-cc')">
+<div class="modal" style="max-width:480px">
+  <div class="mt">Ajuste Cuenta Corriente</div>
+  <input type="hidden" id="acc-alumno-id">
+  <div class="form-grid">
+    <div class="fg"><label class="fl">Tipo</label>
+      <select class="fi sel" id="acc-tipo">
+        <option value="factura">🧾 Factura</option>
+        <option value="pago">💳 Pago</option>
+        <option value="nota_credito">📝 Nota crédito</option>
+        <option value="nota_debito">📋 Nota débito</option>
+        <option value="ajuste" selected>✏️ Ajuste manual</option>
+      </select>
+    </div>
+    <div class="fg"><label class="fl">Fecha</label><input class="fi" id="acc-fecha" type="date"></div>
+    <div class="fg"><label class="fl">Monto (+ cargo, - abono)</label><input class="fi" id="acc-monto" type="number" step="0.01" placeholder="Ej: 15000 o -15000"></div>
+    <div class="fg"><label class="fl">N° Comprobante Finnegans</label><input class="fi" id="acc-nro" type="text" placeholder="Opcional"></div>
+    <div class="fg form-full"><label class="fl">Descripción</label><input class="fi" id="acc-descripcion" type="text" placeholder="Detalle del ajuste"></div>
+  </div>
+  <div class="ma"><button class="bc" onclick="closeModal('modal-ajuste-cc')">Cancelar</button><button class="bk" id="acc-btn" onclick="guardarAjusteCC()">Guardar</button></div>
 </div>
 </div>
 
@@ -7559,31 +7596,116 @@ async function editAlumno(id){
   const list=document.getElementById("alum-cursos-list");
   sec.style.display="";
   list.innerHTML=`<div style="color:var(--tx3);font-size:12px">Cargando...</div>`;
+  // Mostrar sección cuenta corriente (solo admin)
+  const ccSec=document.getElementById("alum-cc-section");
+  const ccList=document.getElementById("alum-cc-list");
+  if(ccSec&&!ccSec.classList.contains("hidden-by-role")){
+    ccSec.style.display="";
+    ccList.innerHTML=`<div style="color:var(--tx3);font-size:12px">Cargando...</div>`;
+  }
   openModal("modal-alumno");
   try{
-    const insc=await sb(`inscripciones?alumno_id=eq.${id}&select=*,cursos(*)&order=created_at.desc`);
+    const [insc,cc]=await Promise.all([
+      sb(`inscripciones?alumno_id=eq.${id}&select=*,cursos(*)&order=created_at.desc`),
+      ccSec&&!ccSec.classList.contains("hidden-by-role")?sb(`cuenta_corriente_alumnos?alumno_id=eq.${id}&order=fecha.desc,created_at.desc&limit=30`):Promise.resolve([])
+    ]);
     if(!insc.length){
       list.innerHTML=`<div style="color:var(--tx3);font-size:12px;padding:8px 0">Sin inscripciones registradas</div>`;
-      return;
+    }else{
+      const estadoColor={Pagado:"var(--gr)",Certificado:"var(--gr)",Inscripto:"var(--al)",Baja:"var(--re)","Lista espera":"var(--tx3)"};
+      list.innerHTML=insc.map(i=>{
+        const c=i.cursos||{};
+        const col=estadoColor[i.estado]||"var(--tx3)";
+        return`<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surf2);border-radius:8px;border:1px solid var(--b)">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nombre||"Curso"}</div>
+            <div style="font-size:11px;color:var(--tx3);margin-top:2px">${c.fecha_inicio?fmt(c.fecha_inicio):"Sin fecha"}${c.tipo?" · "+c.tipo:""}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+            <span style="font-size:11px;font-weight:700;color:${col};background:${col}18;border:1px solid ${col}40;padding:2px 8px;border-radius:10px">${i.estado||"—"}</span>
+            ${i.monto?`<span style="font-size:11px;color:var(--tx3)">$${Number(i.monto).toLocaleString("es-AR")}</span>`:""}
+          </div>
+        </div>`;
+      }).join("");
     }
-    const estadoColor={Pagado:"var(--gr)",Certificado:"var(--gr)",Inscripto:"var(--al)",Baja:"var(--re)","Lista espera":"var(--tx3)"};
-    list.innerHTML=insc.map(i=>{
-      const c=i.cursos||{};
-      const col=estadoColor[i.estado]||"var(--tx3)";
-      return`<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surf2);border-radius:8px;border:1px solid var(--b)">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nombre||"Curso"}</div>
-          <div style="font-size:11px;color:var(--tx3);margin-top:2px">${c.fecha_inicio?fmt(c.fecha_inicio):"Sin fecha"}${c.tipo?" · "+c.tipo:""}</div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
-          <span style="font-size:11px;font-weight:700;color:${col};background:${col}18;border:1px solid ${col}40;padding:2px 8px;border-radius:10px">${i.estado||"—"}</span>
-          ${i.monto?`<span style="font-size:11px;color:var(--tx3)">$${Number(i.monto).toLocaleString("es-AR")}</span>`:""}
-        </div>
-      </div>`;
-    }).join("");
+    if(cc.length>=0)renderAlumnoCuentaCorriente(cc);
   }catch(e){
     list.innerHTML=`<div style="color:var(--re);font-size:12px">Error al cargar cursos</div>`;
   }
+}
+
+function renderAlumnoCuentaCorriente(movs){
+  const list=document.getElementById("alum-cc-list");
+  const saldoEl=document.getElementById("alum-cc-saldo");
+  if(!list)return;
+  if(!movs||!movs.length){
+    list.innerHTML=`<div style="color:var(--tx3);font-size:12px;padding:8px 0">Sin movimientos registrados</div>`;
+    if(saldoEl){saldoEl.textContent="Saldo: $0";saldoEl.style.color="var(--tx3)";}
+    return;
+  }
+  const saldo=parseFloat(movs[0].saldo_posterior)||0;
+  if(saldoEl){
+    saldoEl.textContent=`Saldo: ${fmtNum(saldo,true)}`;
+    saldoEl.style.color=saldo>0?"var(--re)":saldo<0?"var(--gr)":"var(--tx3)";
+  }
+  const tipoIcon={factura:"🧾",pago:"💳",nota_credito:"📝",nota_debito:"📋",ajuste:"✏️"};
+  const tipoLabel={factura:"Factura",pago:"Pago",nota_credito:"Nota crédito",nota_debito:"Nota débito",ajuste:"Ajuste"};
+  const origenLabel={finnegans_import:"Finnegans",panel_pago:"Panel",ajuste_manual:"Manual"};
+  list.innerHTML=movs.map(m=>{
+    const icon=tipoIcon[m.tipo_movimiento]||"•";
+    const label=tipoLabel[m.tipo_movimiento]||m.tipo_movimiento;
+    const monto=parseFloat(m.monto)||0;
+    const positivo=monto>=0;
+    return`<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--surf2);border-radius:7px;border:1px solid var(--b)">
+      <span style="font-size:14px">${icon}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--tx)">${esc(label)}${m.comprobante_finnegans_nro?` · ${esc(m.comprobante_finnegans_nro)}`:""}</div>
+        <div style="font-size:11px;color:var(--tx3)">${fmt(m.fecha)} · ${esc(origenLabel[m.origen]||m.origen)}${m.descripcion?` · ${esc(m.descripcion)}`:""}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;gap:1px">
+        <span style="font-size:12px;font-weight:700;color:${positivo?"var(--re)":"var(--gr)"}">${positivo?"+":""}${fmtNum(monto,true)}</span>
+        <span style="font-size:10px;color:var(--tx3)">${fmtNum(parseFloat(m.saldo_posterior)||0,true)}</span>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function abrirAjusteCC(){
+  const id=document.getElementById("alum-edit-id").value;
+  document.getElementById("acc-alumno-id").value=id;
+  document.getElementById("acc-fecha").value=today();
+  document.getElementById("acc-monto").value="";
+  document.getElementById("acc-nro").value="";
+  document.getElementById("acc-descripcion").value="";
+  document.getElementById("acc-tipo").value="ajuste";
+  openModal("modal-ajuste-cc");
+}
+
+async function guardarAjusteCC(){
+  const alumnoId=document.getElementById("acc-alumno-id").value;
+  const a=alumnos.find(x=>x.id===alumnoId);
+  if(!a){toast("Alumno no encontrado","err");return;}
+  const tipo=document.getElementById("acc-tipo").value;
+  const fecha=document.getElementById("acc-fecha").value;
+  const monto=parseFloat(document.getElementById("acc-monto").value);
+  if(!fecha||isNaN(monto)||monto===0){toast("Completá fecha y monto","err");return;}
+  const btn=document.getElementById("acc-btn");btn.disabled=true;btn.textContent="Guardando...";
+  try{
+    const prev=await sb(`cuenta_corriente_alumnos?alumno_id=eq.${alumnoId}&order=fecha.desc,created_at.desc&limit=1`);
+    const saldoActual=prev.length?parseFloat(prev[0].saldo_posterior)||0:0;
+    const saldoPosterior=Math.round((saldoActual+monto)*100)/100;
+    await sb("cuenta_corriente_alumnos",{method:"POST",body:JSON.stringify({
+      alumno_id:alumnoId,cuit:a.cuit||"",fecha,tipo_movimiento:tipo,monto,saldo_posterior:saldoPosterior,
+      origen:"ajuste_manual",
+      descripcion:document.getElementById("acc-descripcion").value.trim()||null,
+      comprobante_finnegans_nro:document.getElementById("acc-nro").value.trim()||null
+    })});
+    closeModal("modal-ajuste-cc");
+    toast("Ajuste guardado","ok");
+    const cc=await sb(`cuenta_corriente_alumnos?alumno_id=eq.${alumnoId}&order=fecha.desc,created_at.desc&limit=30`);
+    renderAlumnoCuentaCorriente(cc);
+  }catch(e){toast("Error al guardar ajuste","err");}
+  finally{btn.disabled=false;btn.textContent="Guardar";}
 }
 
 async function saveAlumno(){
@@ -13877,7 +13999,7 @@ document.addEventListener("keydown",e=>{
   if((e.metaKey||e.ctrlKey)&&e.key==="k"){e.preventDefault();openSearch();return;}
   if(e.key==="Escape"){
     if(document.getElementById("search-modal")?.style.display==="block"){closeSearch();return;}
-    closeConfirm();["modal-tarea","modal-curso","modal-proveedor","modal-alumno","modal-instructor"].forEach(id=>closeModal(id));
+    closeConfirm();["modal-tarea","modal-curso","modal-proveedor","modal-alumno","modal-instructor","modal-ajuste-cc"].forEach(id=>closeModal(id));
   }
 });
 
