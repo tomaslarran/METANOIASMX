@@ -14718,7 +14718,7 @@ async function analizarPFConIA(){
   try{
     const res=await fetch(`${SB}/functions/v1/leer-factura`,{
       method:"POST",
-      headers:{"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json"},
+      headers:{"apikey":KEY,"Authorization":"Bearer "+(authToken||KEY),"Content-Type":"application/json"},
       body:JSON.stringify({url:pfArchivoUrl})
     });
     if(!res.ok)throw new Error(await res.text());
