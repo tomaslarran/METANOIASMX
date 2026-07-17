@@ -12618,6 +12618,7 @@ async function confirmarPagoCuota(){
     toast(`✓ Cuota pagada — ${fmtNum(c?.monto_total,true)}`,"ok");
     renderCFPrestamos();
     renderCFResumen();
+    renderCFPendientes();
     if(curPage==="alertas")renderAlertas();
   }catch(e){toast("Error: "+e.message,"err")}
   finally{btn.disabled=false;_mpcCuotaId=null;_mpcPrestId=null;}
