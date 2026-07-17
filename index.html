@@ -2731,11 +2731,13 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="fb" id="itab-iibb" onclick="setImpTab('iibb',this)">IIBB</button>
     <button class="fb" id="itab-autonomos" onclick="setImpTab('autonomos',this)">Autónomos</button>
     <button class="fb" id="itab-ganancias" onclick="setImpTab('ganancias',this)">Ganancias</button>
+    <button class="fb admin-only-el" id="itab-parametros" onclick="setImpTab('parametros',this)">⚙️ Parámetros</button>
   </div>
   <div id="imp-tab-iva"></div>
   <div id="imp-tab-iibb" style="display:none"></div>
   <div id="imp-tab-autonomos" style="display:none"></div>
   <div id="imp-tab-ganancias" style="display:none"></div>
+  <div id="imp-tab-parametros" style="display:none"></div>
 </div>
 
 <!-- ══ COMPROBANTES DE COMPRA ══ -->
@@ -3818,6 +3820,30 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 </div>
 
+<!-- MODAL PARÁMETRO IMPOSITIVO -->
+<div class="mov" id="modal-parametro-imp" onclick="if(event.target===this&&_movDown===this)closeModal('modal-parametro-imp')">
+<div class="modal" style="max-width:480px">
+  <div class="mt" id="modal-pim-title">Parámetro fiscal</div>
+  <div class="form-grid-2">
+    <input type="hidden" id="pim-id">
+    <div class="fg"><label class="fl">Tipo</label>
+      <select class="fs" id="pim-tipo">
+        <option value="iva">IVA</option>
+        <option value="sicore_ganancias">SICORE — Ganancias</option>
+        <option value="iibb">IIBB</option>
+      </select>
+    </div>
+    <div class="fg"><label class="fl">Código</label><input class="fi" id="pim-codigo" placeholder="ej: 028, 21, 10.5"></div>
+    <div class="fg form-full"><label class="fl">Descripción</label><input class="fi" id="pim-desc" placeholder="Descripción del régimen o alícuota"></div>
+    <div class="fg"><label class="fl">Porcentaje (%)</label><input class="fi" id="pim-pct" type="number" step="0.01" placeholder="0.00"></div>
+    <div class="fg"><label class="fl">Piso sin retención ($)</label><input class="fi" id="pim-piso" type="number" step="0.01" placeholder="0"></div>
+    <div class="fg"><label class="fl">Vigente desde</label><input class="fi" id="pim-desde" type="date"></div>
+    <div class="fg"><label class="fl">Vigente hasta (vacío = vigente)</label><input class="fi" id="pim-hasta" type="date"></div>
+  </div>
+  <div class="ma"><button class="bc" onclick="closeModal('modal-parametro-imp')">Cancelar</button><button class="bk" id="pim-btn" onclick="saveParametroImpositivo()">Guardar</button></div>
+</div>
+</div>
+
 <!-- MODAL NUEVO INSTRUCTOR -->
 <div class="mov" id="modal-instructor" onclick="if(event.target===this&&_movDown===this)closeModal('modal-instructor')">
 <div class="modal">
@@ -4041,7 +4067,7 @@ async function loadAll(){
   const rb=document.getElementById("rbtn");rb.classList.add("spin");
   toast("Conectando con Supabase...","inf");
   try{
-    [tasks,users,cursos,alumnos,proveedores,instructores,plantillas,notifConfigs,rutinas]=await Promise.all([
+    [tasks,users,cursos,alumnos,proveedores,instructores,plantillas,notifConfigs,rutinas,paramImpositivos]=await Promise.all([
       sb("tareas?select=*&order=created_at.desc"),
       sb("usuarios?select=*&order=nombre"),
       sb("cursos?select=*&order=created_at.desc"),
@@ -4050,7 +4076,8 @@ async function loadAll(){
       sb("instructores?select=*&order=apellido,nombre").catch(()=>[]),
       sb("plantillas_curso?select=*&order=nombre"),
       sb("notificaciones_config?select=*").catch(()=>[]),
-      sb("rutinas?select=*&order=dia_del_mes").catch(()=>[])
+      sb("rutinas?select=*&order=dia_del_mes").catch(()=>[]),
+      sb("parametros_impositivos?select=*&order=tipo,codigo").catch(()=>[])
     ]);
     fillGlobal();
     renderTareas();
@@ -15339,6 +15366,7 @@ initLogin();
    MÓDULO IMPUESTOS
    ══════════════════════════════════════ */
 let impuestosIngresos=[],autonomosCuotas=[],gananciasAnticipos=[],impuestosDeclaraciones=[],ordenesGanancias=[];
+let paramImpositivos=[];
 let impTab="iva";
 const AUTONOMOS_NOMBRES=["Tomás","Mario","Valentina","Amparo"];
 const IIBB_TASA=0.06; // 6% Salta
@@ -15347,7 +15375,7 @@ const GANANCIAS_TASA=0.35; // SRL
 
 function setImpTab(tab,btn){
   impTab=tab;
-  ["iva","iibb","autonomos","ganancias"].forEach(t=>{
+  ["iva","iibb","autonomos","ganancias","parametros"].forEach(t=>{
     const el=document.getElementById("imp-tab-"+t);
     const b=document.getElementById("itab-"+t);
     if(el)el.style.display=t===tab?"":"none";
@@ -15357,6 +15385,105 @@ function setImpTab(tab,btn){
   if(tab==="iibb")renderImpIIBB();
   if(tab==="autonomos")renderImpAutonomos();
   if(tab==="ganancias")renderImpGanancias();
+  if(tab==="parametros")renderParametrosImpositivos();
+}
+
+function renderParametrosImpositivos(){
+  const el=document.getElementById("imp-tab-parametros");
+  if(!el)return;
+  const tipos={iva:"IVA",sicore_ganancias:"SICORE — Ganancias",iibb:"IIBB"};
+  const tipoBadge={iva:"#3B82F6",sicore_ganancias:"#7C3AED",iibb:"#10B981"};
+  const grupos={iva:[],sicore_ganancias:[],iibb:[]};
+  paramImpositivos.forEach(p=>{if(grupos[p.tipo])grupos[p.tipo].push(p)});
+
+  const secciones=Object.entries(grupos).map(([tipo,items])=>`
+    <div style="margin-bottom:24px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="font-size:12px;font-weight:700;padding:2px 10px;border-radius:20px;background:${tipoBadge[tipo]}20;color:${tipoBadge[tipo]}">${tipos[tipo]||tipo}</span>
+        <button class="btn sm sec" onclick="addParametro('${tipo}')">+ Agregar</button>
+      </div>
+      ${!items.length?`<div style="color:var(--tx3);font-size:13px;padding:8px 0">Sin parámetros cargados. Corré el SQL de inicialización.</div>`:`
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="border-bottom:2px solid var(--b);text-align:left">
+          <th style="padding:7px 10px;color:var(--tx3);font-weight:600">Código</th>
+          <th style="padding:7px 10px;color:var(--tx3);font-weight:600">Descripción</th>
+          <th style="padding:7px 10px;color:var(--tx3);font-weight:600;text-align:right">%</th>
+          <th style="padding:7px 10px;color:var(--tx3);font-weight:600;text-align:right">Piso ($)</th>
+          <th style="padding:7px 10px;color:var(--tx3);font-weight:600">Vigente desde</th>
+          <th style="padding:7px 10px;color:var(--tx3);font-weight:600;text-align:center">Estado</th>
+          <th style="padding:7px 10px"></th>
+        </tr></thead>
+        <tbody>${items.map(p=>`
+          <tr style="border-bottom:1px solid var(--b)" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+            <td style="padding:8px 10px;font-family:monospace;font-weight:700">${esc(p.codigo)}</td>
+            <td style="padding:8px 10px">${esc(p.descripcion||"")}</td>
+            <td style="padding:8px 10px;text-align:right;font-weight:600">${p.porcentaje}%</td>
+            <td style="padding:8px 10px;text-align:right;color:var(--tx2)">$${(p.monto_no_sujeto||0).toLocaleString("es-AR")}</td>
+            <td style="padding:8px 10px;color:var(--tx2);font-size:12px">${p.vigente_desde||""}</td>
+            <td style="padding:8px 10px;text-align:center"><span style="font-size:11px;padding:2px 8px;border-radius:20px;${p.vigente_hasta?"background:#EF444420;color:#EF4444":"background:#10B98120;color:#10B981"}">${p.vigente_hasta?"Vencido":"Vigente"}</span></td>
+            <td style="padding:8px 10px;text-align:right"><button class="btn sm sec" onclick="editParametro('${p.id}')">Editar</button></td>
+          </tr>`).join("")}
+        </tbody>
+      </table>`}
+    </div>`).join("");
+
+  el.innerHTML=`
+    <div style="background:rgba(139,92,246,.06);border:1px solid rgba(139,92,246,.2);border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:var(--tx2)">
+      ⚙️ <strong>Parámetros fiscales vigentes.</strong> Un cambio de alícuota se registra cerrando el parámetro actual (vigente_hasta) y creando uno nuevo — sin tocar el código.
+    </div>
+    ${secciones}`;
+}
+
+function editParametro(id){
+  const p=paramImpositivos.find(x=>x.id===id);
+  if(!p)return;
+  document.getElementById("pim-id").value=id;
+  document.getElementById("pim-tipo").value=p.tipo;
+  document.getElementById("pim-codigo").value=p.codigo;
+  document.getElementById("pim-desc").value=p.descripcion||"";
+  document.getElementById("pim-pct").value=p.porcentaje;
+  document.getElementById("pim-piso").value=p.monto_no_sujeto||0;
+  document.getElementById("pim-desde").value=p.vigente_desde||"";
+  document.getElementById("pim-hasta").value=p.vigente_hasta||"";
+  document.getElementById("modal-pim-title").textContent="Editar parámetro";
+  openModal("modal-parametro-imp");
+}
+
+function addParametro(tipo){
+  ["pim-id","pim-codigo","pim-desc","pim-pct","pim-piso","pim-hasta"].forEach(id=>{const e=document.getElementById(id);if(e)e.value=""});
+  document.getElementById("pim-tipo").value=tipo||"sicore_ganancias";
+  document.getElementById("pim-desde").value=new Date().toISOString().slice(0,10);
+  document.getElementById("modal-pim-title").textContent="Nuevo parámetro";
+  openModal("modal-parametro-imp");
+}
+
+async function saveParametroImpositivo(){
+  const id=document.getElementById("pim-id").value;
+  const data={
+    tipo:document.getElementById("pim-tipo").value,
+    codigo:document.getElementById("pim-codigo").value.trim(),
+    descripcion:document.getElementById("pim-desc").value.trim()||null,
+    porcentaje:parseFloat(document.getElementById("pim-pct").value)||0,
+    monto_no_sujeto:parseFloat(document.getElementById("pim-piso").value)||0,
+    vigente_desde:document.getElementById("pim-desde").value||new Date().toISOString().slice(0,10),
+    vigente_hasta:document.getElementById("pim-hasta").value||null,
+  };
+  if(!data.codigo){toast("El código es obligatorio","err");return}
+  const btn=document.getElementById("pim-btn");btn.disabled=true;btn.textContent="Guardando...";
+  try{
+    if(id){
+      await sb(`parametros_impositivos?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(data)});
+      const i=paramImpositivos.findIndex(x=>x.id===id);
+      if(i>=0)paramImpositivos[i]={...paramImpositivos[i],...data};
+    }else{
+      const [created]=await sb("parametros_impositivos",{method:"POST",body:JSON.stringify(data)});
+      paramImpositivos.push(created);
+    }
+    closeModal("modal-parametro-imp");
+    renderParametrosImpositivos();
+    toast("Parámetro guardado","ok");
+  }catch(e){toast("Error: "+e.message,"err")}
+  finally{btn.disabled=false;btn.textContent="Guardar"}
 }
 
 async function loadImpuestos(){
@@ -16339,6 +16466,27 @@ const SICORE_CAT={
   "093":{desc:"Servicios médicos y similares",pct:2},
 };
 
+function getSicoreCat(){
+  const activos=paramImpositivos.filter(p=>p.tipo==="sicore_ganancias"&&!p.vigente_hasta);
+  if(!activos.length)return SICORE_CAT;
+  const cat={};
+  activos.forEach(p=>{cat[p.codigo]={desc:p.descripcion,pct:p.porcentaje}});
+  return cat;
+}
+
+function getIvaTasa(codigo){
+  const cod=String(codigo||"21");
+  const p=paramImpositivos.find(x=>x.tipo==="iva"&&x.codigo===cod&&!x.vigente_hasta);
+  if(p)return p.porcentaje/100;
+  return cod==="10.5"?0.105:cod==="27"?0.27:0.21;
+}
+
+function buildSicoreOptions(){
+  const cat=getSicoreCat();
+  return `<option value="">— Sin retención —</option>`+
+    Object.entries(cat).map(([cod,v])=>`<option value="${cod}|${v.pct}">${cod} — ${v.desc} (${v.pct}%)</option>`).join("");
+}
+
 function abrirOrdenPago(compId,fromPendientes=false){
   const c=comprobantes.find(x=>x.id===compId);
   if(!c)return;
@@ -16350,6 +16498,7 @@ function abrirOrdenPago(compId,fromPendientes=false){
   document.getElementById("mop-fecha").value=today();
   document.getElementById("mop-cbu").value="";
   document.getElementById("mop-obs-op").value="";
+  document.getElementById("mop-sicore").innerHTML=buildSicoreOptions();
   document.getElementById("mop-sicore").value="";
   document.getElementById("mop-pct-ret").value="";
   const tipoVal=c.tipo?.startsWith("NC")?"NC":(c.tipo||"B");
@@ -16418,7 +16567,7 @@ async function confirmarOrdenPago(pagarTambien){
   if(!bruto){toast("Ingresá el monto bruto","err");return;}
   if(!medio){toast("Seleccioná un medio de pago","err");return;}
   const [cod]=(sicoreVal?sicoreVal.split("|"):["",""]);
-  const sicoreDesc=cod?SICORE_CAT[cod]?.desc||"":"";
+  const sicoreDesc=cod?getSicoreCat()[cod]?.desc||"":"";
   const numero=`OP-${fecha.slice(0,7).replace("-","")}-${String(Date.now()).slice(-4)}`;
   const opData={
     comprobante_id:compId,numero,proveedor:c.proveedor||"",cuit:c.cuit||"",
