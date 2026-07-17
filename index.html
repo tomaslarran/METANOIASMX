@@ -16655,7 +16655,7 @@ async function marcarEstadoComp(id,estado){
         if(iva>0)lineas.push({codigo:"1.1.03.001",debe:iva,desc:"IVA CF"});
         lineas.push({codigo:"2.1.01.001",haber:total,desc:"Proveedores"});
         const desc=`Devengado: Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||""}`;
-        generarAsiento({fecha:c.fecha||today(),sociedad:c.sociedad||"SUDES",tipo:"devengado_compra",origen:"comprobante",origen_id:id,descripcion:desc,lineas}).catch(()=>{});
+        generarAsiento({fecha:c.fecha||today(),sociedad:c.sociedad||"SUDES",tipo:"devengado_compra",origen:"comprobante",origen_id:id,descripcion:desc,lineas}).then(a=>{if(!a)toast("⚠️ Asiento devengado no generado — verificá el Plan de Cuentas","err");}).catch(e=>toast("⚠️ Error al generar asiento devengado: "+e.message.slice(0,60),"err"));
       }
     }
   }catch(e){toast("Error","err")}
@@ -16825,7 +16825,7 @@ async function confirmarOrdenPago(pagarTambien){
       ];
       if(ret>0)lineasPago.push({codigo:"2.1.03.002",haber:ret,desc:`Ret. SICORE ${cod||""}`});
       const descPagoAsiento=`Pago: ${c.proveedor||""} — ${numero}`;
-      generarAsiento({fecha,sociedad:c.sociedad||"SUDES",tipo:"pago_compra",origen:"orden_pago",origen_id:op?.id,descripcion:descPagoAsiento,lineas:lineasPago}).catch(()=>{});
+      generarAsiento({fecha,sociedad:c.sociedad||"SUDES",tipo:"pago_compra",origen:"orden_pago",origen_id:op?.id,descripcion:descPagoAsiento,lineas:lineasPago}).then(a=>{if(!a)toast("⚠️ Asiento de pago no generado — verificá el Plan de Cuentas","err");}).catch(e=>toast("⚠️ Error al generar asiento de pago: "+e.message.slice(0,60),"err"));
     }
     generarPDFOrdenPago({...opData,id:op?.id,numero_comp:c.numero});
     closeModal("modal-orden-pago");
