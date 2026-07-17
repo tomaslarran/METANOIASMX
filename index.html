@@ -2732,12 +2732,14 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="fb" id="itab-autonomos" onclick="setImpTab('autonomos',this)">Autónomos</button>
     <button class="fb" id="itab-ganancias" onclick="setImpTab('ganancias',this)">Ganancias</button>
     <button class="fb admin-only-el" id="itab-parametros" onclick="setImpTab('parametros',this)">⚙️ Parámetros</button>
+    <button class="fb admin-only-el" id="itab-plancuentas" onclick="setImpTab('plancuentas',this)">📋 Plan de Cuentas</button>
   </div>
   <div id="imp-tab-iva"></div>
   <div id="imp-tab-iibb" style="display:none"></div>
   <div id="imp-tab-autonomos" style="display:none"></div>
   <div id="imp-tab-ganancias" style="display:none"></div>
   <div id="imp-tab-parametros" style="display:none"></div>
+  <div id="imp-tab-plancuentas" style="display:none"></div>
 </div>
 
 <!-- ══ COMPROBANTES DE COMPRA ══ -->
@@ -3822,6 +3824,49 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 </div>
 
+<!-- MODAL PLAN DE CUENTAS -->
+<div class="mov" id="modal-plan-cuenta" onclick="if(event.target===this&&_movDown===this)closeModal('modal-plan-cuenta')">
+<div class="modal" style="max-width:500px">
+  <div class="mt" id="modal-pc-title">Cuenta contable</div>
+  <input type="hidden" id="pc-id">
+  <div class="form-grid-2">
+    <div class="fg"><label class="fl">Código <span style="color:#EF4444">*</span></label><input class="fi" id="pc-codigo" placeholder="ej. 1.1.01.001"></div>
+    <div class="fg"><label class="fl">Nivel</label><input class="fi" id="pc-nivel" type="number" min="1" max="4" placeholder="1-4"></div>
+    <div class="fg" style="grid-column:1/-1"><label class="fl">Nombre <span style="color:#EF4444">*</span></label><input class="fi" id="pc-nombre" placeholder="Nombre de la cuenta"></div>
+    <div class="fg"><label class="fl">Tipo <span style="color:#EF4444">*</span></label>
+      <select class="fi" id="pc-tipo">
+        <option value="activo">Activo</option>
+        <option value="pasivo">Pasivo</option>
+        <option value="patrimonio_neto">Patrimonio Neto</option>
+        <option value="ingreso">Ingreso</option>
+        <option value="egreso">Egreso</option>
+      </select>
+    </div>
+    <div class="fg"><label class="fl">Naturaleza <span style="color:#EF4444">*</span></label>
+      <select class="fi" id="pc-naturaleza">
+        <option value="deudora">Deudora (saldo normal débito)</option>
+        <option value="acreedora">Acreedora (saldo normal crédito)</option>
+      </select>
+    </div>
+    <div class="fg"><label class="fl">Cuenta padre</label>
+      <select class="fi" id="pc-padre"></select>
+    </div>
+    <div class="fg"><label class="fl">Sociedad</label>
+      <select class="fi" id="pc-sociedad">
+        <option value="">Ambas sociedades</option>
+        <option value="SUDES">SUDES</option>
+        <option value="POINTERS">POINTERS</option>
+      </select>
+    </div>
+    <div class="fg" style="grid-column:1/-1;display:flex;align-items:center;gap:10px;padding-top:4px">
+      <input type="checkbox" id="pc-imputable" style="width:16px;height:16px">
+      <label for="pc-imputable" style="font-size:13px;color:var(--tx2)">Cuenta imputable (recibe movimientos directamente)</label>
+    </div>
+  </div>
+  <div class="ma"><button class="bc" onclick="closeModal('modal-plan-cuenta')">Cancelar</button><button class="bk" id="pc-btn" onclick="savePlanCuenta()">Guardar</button></div>
+</div>
+</div>
+
 <!-- MODAL PARÁMETRO IMPOSITIVO -->
 <div class="mov" id="modal-parametro-imp" onclick="if(event.target===this&&_movDown===this)closeModal('modal-parametro-imp')">
 <div class="modal" style="max-width:480px">
@@ -4069,7 +4114,7 @@ async function loadAll(){
   const rb=document.getElementById("rbtn");rb.classList.add("spin");
   toast("Conectando con Supabase...","inf");
   try{
-    [tasks,users,cursos,alumnos,proveedores,instructores,plantillas,notifConfigs,rutinas,paramImpositivos]=await Promise.all([
+    [tasks,users,cursos,alumnos,proveedores,instructores,plantillas,notifConfigs,rutinas,paramImpositivos,planCuentas]=await Promise.all([
       sb("tareas?select=*&order=created_at.desc"),
       sb("usuarios?select=*&order=nombre"),
       sb("cursos?select=*&order=created_at.desc"),
@@ -4079,7 +4124,8 @@ async function loadAll(){
       sb("plantillas_curso?select=*&order=nombre"),
       sb("notificaciones_config?select=*").catch(()=>[]),
       sb("rutinas?select=*&order=dia_del_mes").catch(()=>[]),
-      sb("parametros_impositivos?select=*&order=tipo,codigo").catch(()=>[])
+      sb("parametros_impositivos?select=*&order=tipo,codigo").catch(()=>[]),
+      sb("plan_cuentas?select=*&order=codigo").catch(()=>[])
     ]);
     fillGlobal();
     renderTareas();
@@ -15369,6 +15415,7 @@ initLogin();
    ══════════════════════════════════════ */
 let impuestosIngresos=[],autonomosCuotas=[],gananciasAnticipos=[],impuestosDeclaraciones=[],ordenesGanancias=[];
 let paramImpositivos=[];
+let planCuentas=[];
 let impTab="iva";
 const AUTONOMOS_NOMBRES=["Tomás","Mario","Valentina","Amparo"];
 const IIBB_TASA=0.06; // 6% Salta
@@ -15388,6 +15435,7 @@ function setImpTab(tab,btn){
   if(tab==="autonomos")renderImpAutonomos();
   if(tab==="ganancias")renderImpGanancias();
   if(tab==="parametros")renderParametrosImpositivos();
+  if(tab==="plancuentas")renderPlanCuentas();
 }
 
 function renderParametrosImpositivos(){
@@ -15486,6 +15534,129 @@ async function saveParametroImpositivo(){
     toast("Parámetro guardado","ok");
   }catch(e){toast("Error: "+e.message,"err")}
   finally{btn.disabled=false;btn.textContent="Guardar"}
+}
+
+// ── PLAN DE CUENTAS ─────────────────────────────────────────────────
+function renderPlanCuentas(){
+  const el=document.getElementById("imp-tab-plancuentas");
+  if(!el)return;
+  const tipoColor={activo:"#3B82F6",pasivo:"#EF4444",patrimonio_neto:"#8B5CF6",ingreso:"#10B981",egreso:"#F59E0B"};
+  const tipoLabel={activo:"Activo",pasivo:"Pasivo",patrimonio_neto:"PN",ingreso:"Ingreso",egreso:"Egreso"};
+  const sorted=[...planCuentas].sort((a,b)=>a.codigo.localeCompare(b.codigo,undefined,{numeric:true}));
+  const rows=sorted.map(c=>{
+    const pad=(c.nivel-1)*16;
+    const tc=tipoColor[c.tipo]||"#888";
+    return `<tr style="border-bottom:1px solid var(--b);${!c.activa?"opacity:.45":""}">
+      <td style="padding:7px 10px;font-family:monospace;font-size:12px;padding-left:${10+pad}px;white-space:nowrap">
+        ${c.nivel===4?`<span style="color:${tc};font-weight:700">${esc(c.codigo)}</span>`:`<span style="color:var(--tx3)">${esc(c.codigo)}</span>`}
+      </td>
+      <td style="padding:7px 10px;padding-left:${10+pad}px;font-size:13px">${esc(c.nombre)}</td>
+      <td style="padding:7px 10px;text-align:center"><span style="font-size:11px;padding:2px 8px;border-radius:20px;background:${tc}20;color:${tc}">${tipoLabel[c.tipo]||c.tipo}</span></td>
+      <td style="padding:7px 10px;font-size:12px;color:var(--tx3)">${c.naturaleza}</td>
+      <td style="padding:7px 10px;text-align:center;font-size:12px">${c.imputable?`<span style="color:#10B981;font-weight:600">✓ Imputable</span>`:`<span style="color:var(--tx3)">Agrupadora</span>`}</td>
+      <td style="padding:7px 10px;font-size:12px;color:var(--tx3)">${c.sociedad||"Ambas"}</td>
+      <td style="padding:7px 10px;text-align:right;white-space:nowrap">
+        <button class="btn sm sec" onclick="editPlanCuenta('${c.id}')">Editar</button>
+        <button class="btn sm" style="background:${c.activa?"#EF444420":"#10B98120"};color:${c.activa?"#EF4444":"#10B981"};border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer" onclick="togglePlanCuenta('${c.id}',${c.activa})">${c.activa?"Desactivar":"Activar"}</button>
+      </td>
+    </tr>`;
+  }).join("");
+  el.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-size:13px;color:var(--tx2)">📋 <strong>${planCuentas.length}</strong> cuentas — ${planCuentas.filter(c=>c.imputable&&c.activa).length} imputables activas</div>
+      <button class="btn sm ok" onclick="addPlanCuenta()">+ Nueva cuenta</button>
+    </div>
+    <div style="background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.2);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--tx2)">
+      💡 Solo las cuentas <strong>imputables</strong> reciben movimientos en los asientos. Las agrupadoras organizan la jerarquía.
+    </div>
+    ${!planCuentas.length?`<div style="color:var(--tx3);font-size:13px;padding:16px">Sin cuentas cargadas. Corré el SQL de inicialización en Supabase.</div>`:`
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="border-bottom:2px solid var(--b);text-align:left">
+        <th style="padding:7px 10px;color:var(--tx3);font-weight:600">Código</th>
+        <th style="padding:7px 10px;color:var(--tx3);font-weight:600">Nombre</th>
+        <th style="padding:7px 10px;color:var(--tx3);font-weight:600;text-align:center">Tipo</th>
+        <th style="padding:7px 10px;color:var(--tx3);font-weight:600">Naturaleza</th>
+        <th style="padding:7px 10px;color:var(--tx3);font-weight:600;text-align:center">Uso</th>
+        <th style="padding:7px 10px;color:var(--tx3);font-weight:600">Sociedad</th>
+        <th style="padding:7px 10px"></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`}`;
+}
+
+function _buildPadreOptions(excludeId){
+  const sorted=[...planCuentas].sort((a,b)=>a.codigo.localeCompare(b.codigo,undefined,{numeric:true}));
+  return `<option value="">— Sin padre (nivel raíz) —</option>`+
+    sorted.filter(c=>!c.imputable&&c.id!==excludeId)
+      .map(c=>`<option value="${c.id}">${c.codigo} — ${esc(c.nombre)}</option>`).join("");
+}
+
+function addPlanCuenta(){
+  ["pc-id","pc-codigo","pc-nombre","pc-nivel"].forEach(id=>{const e=document.getElementById(id);if(e)e.value=""});
+  document.getElementById("pc-tipo").value="activo";
+  document.getElementById("pc-naturaleza").value="deudora";
+  document.getElementById("pc-sociedad").value="";
+  document.getElementById("pc-imputable").checked=false;
+  document.getElementById("pc-padre").innerHTML=_buildPadreOptions(null);
+  document.getElementById("modal-pc-title").textContent="Nueva cuenta";
+  openModal("modal-plan-cuenta");
+}
+
+function editPlanCuenta(id){
+  const c=planCuentas.find(x=>x.id===id);if(!c)return;
+  document.getElementById("pc-id").value=id;
+  document.getElementById("pc-codigo").value=c.codigo;
+  document.getElementById("pc-nombre").value=c.nombre;
+  document.getElementById("pc-nivel").value=c.nivel;
+  document.getElementById("pc-tipo").value=c.tipo;
+  document.getElementById("pc-naturaleza").value=c.naturaleza;
+  document.getElementById("pc-sociedad").value=c.sociedad||"";
+  document.getElementById("pc-imputable").checked=!!c.imputable;
+  document.getElementById("pc-padre").innerHTML=_buildPadreOptions(id);
+  if(c.cuenta_padre_id)document.getElementById("pc-padre").value=c.cuenta_padre_id;
+  document.getElementById("modal-pc-title").textContent="Editar cuenta";
+  openModal("modal-plan-cuenta");
+}
+
+async function savePlanCuenta(){
+  const id=document.getElementById("pc-id").value;
+  const codigo=document.getElementById("pc-codigo").value.trim();
+  const nombre=document.getElementById("pc-nombre").value.trim();
+  if(!codigo||!nombre){toast("Código y nombre son obligatorios","err");return}
+  const data={
+    codigo,nombre,
+    tipo:document.getElementById("pc-tipo").value,
+    naturaleza:document.getElementById("pc-naturaleza").value,
+    nivel:parseInt(document.getElementById("pc-nivel").value)||codigo.split(".").length,
+    imputable:document.getElementById("pc-imputable").checked,
+    sociedad:document.getElementById("pc-sociedad").value||null,
+    cuenta_padre_id:document.getElementById("pc-padre").value||null,
+  };
+  const btn=document.getElementById("pc-btn");btn.disabled=true;btn.textContent="Guardando...";
+  try{
+    if(id){
+      await sb(`plan_cuentas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(data)});
+      const i=planCuentas.findIndex(x=>x.id===id);
+      if(i>=0)planCuentas[i]={...planCuentas[i],...data};
+    }else{
+      const [created]=await sb("plan_cuentas",{method:"POST",body:JSON.stringify(data)});
+      planCuentas.push(created);
+    }
+    closeModal("modal-plan-cuenta");
+    renderPlanCuentas();
+    toast("Cuenta guardada","ok");
+  }catch(e){toast("Error: "+e.message,"err")}
+  finally{btn.disabled=false;btn.textContent="Guardar"}
+}
+
+async function togglePlanCuenta(id,activa){
+  try{
+    await sb(`plan_cuentas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({activa:!activa})});
+    const c=planCuentas.find(x=>x.id===id);if(c)c.activa=!activa;
+    renderPlanCuentas();
+    toast(activa?"Cuenta desactivada":"Cuenta activada","ok");
+  }catch(e){toast("Error: "+e.message,"err")}
 }
 
 async function loadImpuestos(){
