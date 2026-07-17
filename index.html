@@ -2851,8 +2851,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </div>
     <div class="fg" style="position:relative">
       <label class="fl">Proveedor *</label>
+      <input type="hidden" id="comp-prov-maestro-id">
       <input class="fi" id="comp-prov" type="text" placeholder="Razón social del proveedor" oninput="onCompProvInput()" autocomplete="off">
       <div id="comp-prov-dd" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surf);border:1px solid var(--b2);border-radius:var(--r);z-index:999;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div>
+      <div id="comp-prov-fiscal-badge" style="display:none;margin-top:4px;font-size:11px;padding:3px 8px;border-radius:4px;background:#10B98120;color:#10B981;width:fit-content"></div>
     </div>
     <div class="fgrid">
       <div class="fg"><label class="fl">CUIT</label><input class="fi" id="comp-cuit" type="text" placeholder="20-12345678-9"></div>
@@ -16708,7 +16710,8 @@ function openNuevoComprobante(){
     const esProveedor=loggedUser?.rol==="proveedor";
     const elTitle=document.getElementById("mcomp-title");if(elTitle)elTitle.textContent="Nueva Factura de Compra";
     const elSaveBtn=document.getElementById("comp-save-btn");if(elSaveBtn)elSaveBtn.textContent="Guardar";
-    ["comp-fecha","comp-numero","comp-prov","comp-cuit","comp-concepto","comp-neto","comp-iva-monto","comp-neto21","comp-neto105","comp-neto27","comp-neto-exento","comp-perc-iva","comp-perc-iva-15","comp-perc-iibb","comp-imp-int","comp-otros","comp-total","comp-venc","comp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+    ["comp-fecha","comp-numero","comp-prov","comp-cuit","comp-concepto","comp-neto","comp-iva-monto","comp-neto21","comp-neto105","comp-neto27","comp-neto-exento","comp-perc-iva","comp-perc-iva-15","comp-perc-iibb","comp-imp-int","comp-otros","comp-total","comp-venc","comp-notas","comp-prov-maestro-id"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+    setCompProvBadge(null);
     const elFechaImp=document.getElementById("comp-fecha-imp");if(elFechaImp)elFechaImp.value=today();
     ["comp-prod21","comp-prod105","comp-prod27"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
     const elEx=document.getElementById("comp-prod-exento");if(elEx)elEx.value="varios almacen consumidor final";
@@ -16743,6 +16746,8 @@ function editComprobante(id){
   document.getElementById("comp-sociedad").value=c.sociedad||"SUDES";
   document.getElementById("comp-prov").value=c.proveedor||"";
   document.getElementById("comp-cuit").value=c.cuit||"";
+  const pmid=document.getElementById("comp-prov-maestro-id");if(pmid)pmid.value=c.proveedor_maestro_id||"";
+  setCompProvBadge(c.proveedor_maestro_id?proveedores.find(p=>p.id===c.proveedor_maestro_id):null);
   document.getElementById("comp-concepto").value=c.concepto||"";
   document.getElementById("comp-neto").value=c.monto_neto||"";
   document.getElementById("comp-iva-monto").value=c.iva||"";
@@ -16924,29 +16929,75 @@ function recalcTotal(){
 // ── Autocomplete proveedor desde proveedores_finnegans ────────────────────────
 function onCompProvInput(){
   sugerirProductosFinn();
+  // Limpiar vínculo al maestro si el usuario editó manualmente
+  document.getElementById("comp-prov-maestro-id").value="";
+  setCompProvBadge(null);
   const q=(document.getElementById("comp-prov")?.value||"").trim();
   const dd=document.getElementById("comp-prov-dd");
   if(!dd)return;
-  if(q.length<2||!proveedoresFinn.length){dd.style.display="none";return;}
+  if(q.length<2){dd.style.display="none";return;}
   const ql=q.toLowerCase();
-  const matches=proveedoresFinn.filter(p=>p.nombre&&p.nombre.toLowerCase().includes(ql)).slice(0,10);
-  if(!matches.length){dd.style.display="none";return;}
-  dd.innerHTML=matches.map(p=>`
-    <div onclick="selectProvFinn(${JSON.stringify(p.nombre)},${JSON.stringify(p.cuit||"")})"
-      style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--b);font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px;transition:background .1s"
+  const items=[];
+  // 1) Maestro fiscal (proveedores) — prioridad
+  proveedores.filter(p=>p.nombre&&(p.nombre.toLowerCase().includes(ql)||(p.cuit&&p.cuit.includes(ql)))).slice(0,6).forEach(p=>{
+    items.push(`<div onclick="selectProvMaestro('${p.id}')"
+      style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--b);font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px"
       onmouseenter="this.style.background='var(--surf2)'" onmouseleave="this.style.background=''">
-      <span style="font-weight:500">${p.nombre}</span>
-      <span style="font-size:11px;color:var(--tx3);white-space:nowrap">${p.cuit||""}</span>
-    </div>`).join("");
+      <div><span style="font-weight:600">${esc(p.nombre)}</span>
+        <span style="font-size:10px;margin-left:6px;padding:1px 6px;border-radius:10px;background:#10B98120;color:#10B981">✅ Maestro</span>
+      </div>
+      <span style="font-size:11px;color:var(--tx3);white-space:nowrap;font-family:monospace">${p.cuit||""}</span>
+    </div>`);
+  });
+  // 2) Finnegans (si no ya cubierto por maestro)
+  if(proveedoresFinn.length){
+    const maestroNames=new Set(proveedores.map(p=>p.nombre?.toLowerCase()));
+    proveedoresFinn.filter(p=>p.nombre&&p.nombre.toLowerCase().includes(ql)&&!maestroNames.has(p.nombre.toLowerCase())).slice(0,5).forEach(p=>{
+      items.push(`<div onclick="selectProvFinn(${JSON.stringify(p.nombre)},${JSON.stringify(p.cuit||"")})"
+        style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--b);font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px"
+        onmouseenter="this.style.background='var(--surf2)'" onmouseleave="this.style.background=''">
+        <span style="font-weight:500">${esc(p.nombre)}</span>
+        <span style="font-size:11px;color:var(--tx3);white-space:nowrap">${p.cuit||""}</span>
+      </div>`);
+    });
+  }
+  if(!items.length){dd.style.display="none";return;}
+  dd.innerHTML=items.join("");
   dd.style.display="block";
 }
+
+function selectProvMaestro(id){
+  const p=proveedores.find(x=>x.id===id);
+  if(!p)return;
+  document.getElementById("comp-prov").value=p.nombre||"";
+  document.getElementById("comp-cuit").value=p.cuit||"";
+  document.getElementById("comp-prov-maestro-id").value=id;
+  // Sugerir tipo de factura según condición IVA
+  const tipoMap={responsable_inscripto:"A",monotributo:"B",exento:"C"};
+  if(tipoMap[p.condicion_iva]){document.getElementById("comp-tipo").value=tipoMap[p.condicion_iva];}
+  setCompProvBadge(p);
+  document.getElementById("comp-prov-dd").style.display="none";
+  sugerirProductosFinn();
+}
+
+function setCompProvBadge(p){
+  const badge=document.getElementById("comp-prov-fiscal-badge");
+  if(!badge)return;
+  if(!p){badge.style.display="none";badge.textContent="";return;}
+  const condLabel={responsable_inscripto:"Resp. Inscripto",monotributo:"Monotributo",exento:"Exento",no_categorizado:"Sin categoría"};
+  const ibbLabel={exento:"IIBB Exento",retencion_aplica:"IIBB Retención",convenio_multilateral:"Conv. Multilateral",contribuyente_directo:"Contrib. directo",no_inscripto:"No inscripto"};
+  const parts=[condLabel[p.condicion_iva]||"IVA sin definir"];
+  if(p.situacion_iibb)parts.push(ibbLabel[p.situacion_iibb]);
+  badge.textContent="✅ Maestro fiscal — "+parts.join(" · ");
+  badge.style.display="";
+}
+
 function selectProvFinn(nombre,cuit){
-  const elProv=document.getElementById("comp-prov");
-  const elCuit=document.getElementById("comp-cuit");
-  if(elProv)elProv.value=nombre;
-  if(elCuit&&cuit)elCuit.value=cuit;
-  const dd=document.getElementById("comp-prov-dd");
-  if(dd)dd.style.display="none";
+  document.getElementById("comp-prov").value=nombre;
+  const elCuit=document.getElementById("comp-cuit");if(elCuit&&cuit)elCuit.value=cuit;
+  document.getElementById("comp-prov-maestro-id").value="";
+  setCompProvBadge(null);
+  document.getElementById("comp-prov-dd").style.display="none";
   sugerirProductosFinn();
 }
 function closeProvDd(){
@@ -17260,6 +17311,7 @@ async function saveComprobante(){
     archivo_url:compArchivoUrl||null,
     fecha_vencimiento:document.getElementById("comp-venc").value||null,
     en_calendario:document.getElementById("comp-calendario").checked,
+    proveedor_maestro_id:document.getElementById("comp-prov-maestro-id")?.value||null,
     updated_at:new Date().toISOString()
   };
   // Al editar, preservar cargado_por y proveedor_id originales; al crear, asignar usuario actual
