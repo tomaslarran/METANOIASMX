@@ -119,27 +119,88 @@ serve(async (req) => {
       return twiml(`Encargado: *${encargado}* ✓\n\n¿Cuál es el nombre del proveedor? (escribilo libremente)`);
     }
 
-    // Paso 4: usuario responde el proveedor
+    // Paso 4: usuario responde el proveedor → preguntar medio de pago
     if (sesion?.paso === "proveedor") {
       if (!message) return twiml("Por favor escribí el nombre del proveedor.");
 
-      const datos = sesion.datos as Record<string, string>;
+      const datos = sesion.datos as Record<string, unknown>;
+      const sociedad = datos.sociedad as string;
+
+      // Buscar medios de pago activos para esta sociedad
+      const { data: medios } = await supabase
+        .from("medios_pago")
+        .select("nombre, banco")
+        .eq("activo", true)
+        .or(`sociedad.eq.${sociedad},sociedad.eq.Ambas`)
+        .order("nombre");
+
+      const lista = (medios ?? []) as Array<{ nombre: string; banco: string | null }>;
+
+      await supabase.from("wpp_sesiones").update({
+        paso: "medio_pago",
+        datos: { ...datos, proveedor: message.trim(), medios_pago_lista: lista },
+        updated_at: new Date().toISOString(),
+      }).eq("telefono", from).eq("tipo", "factura");
+
+      const opcs = lista.map((m, i) =>
+        `${i + 1}. ${m.nombre}${m.banco ? ` — ${m.banco}` : ""}`
+      ).join("\n");
+
+      return twiml(`Proveedor: *${message.trim()}* ✓\n\n¿Cómo se pagó esta factura?\n\n${opcs}\n\n0. Sin pagar / Pendiente`);
+    }
+
+    // Paso 5: usuario responde el medio de pago → guardar todo
+    if (sesion?.paso === "medio_pago") {
+      const datos = sesion.datos as Record<string, unknown>;
+      const lista = (datos.medios_pago_lista ?? []) as Array<{ nombre: string; banco: string | null }>;
+
+      const txt = message.toLowerCase().trim();
+      let medioPago: string | null = null;
+
+      if (txt === "0" || txt.includes("sin pagar") || txt.includes("pendiente")) {
+        medioPago = null;
+      } else {
+        // Match por número
+        const num = parseInt(txt);
+        if (!isNaN(num) && num >= 1 && num <= lista.length) {
+          const m = lista[num - 1];
+          medioPago = m.nombre + (m.banco ? ` — ${m.banco}` : "");
+        } else {
+          // Match por nombre parcial
+          const match = lista.find(m =>
+            m.nombre.toLowerCase().includes(txt) || txt.includes(m.nombre.toLowerCase())
+          );
+          if (match) medioPago = match.nombre + (match.banco ? ` — ${match.banco}` : "");
+        }
+
+        if (medioPago === null && txt !== "0" && !txt.includes("sin")) {
+          const opcs = lista.map((m, i) => `${i + 1}. ${m.nombre}`).join("\n");
+          return twiml(`No entendí esa opción. Respondé con el número:\n\n${opcs}\n\n0. Sin pagar / Pendiente`);
+        }
+      }
+
       const hoy = new Date().toISOString().split("T")[0];
 
-      // Guardar en comprobantes_compra (tabla existente del panel)
       await supabase.from("comprobantes_compra").insert({
-        archivo_url: datos.archivo_url,
-        sociedad: datos.sociedad,
-        cargado_por: datos.encargado,
-        proveedor: message.trim(),
+        archivo_url: datos.archivo_url as string,
+        sociedad: datos.sociedad as string,
+        cargado_por: datos.encargado as string,
+        proveedor: datos.proveedor as string,
         estado: "pendiente",
         fecha_imputacion: hoy,
+        ...(medioPago ? { notas: `💳 ${medioPago}` } : {}),
       });
 
-      // Limpiar sesión
       await supabase.from("wpp_sesiones").delete().eq("telefono", from).eq("tipo", "factura");
 
-      return twiml(`✅ Factura guardada correctamente.\n\n📋 *Resumen:*\n• Proveedor: ${message.trim()}\n• Sociedad: ${datos.sociedad}\n• Encargado: ${datos.encargado}\n• Estado: Pendiente de revisión\n\nPodés verla en el panel de Metanoia → Comprobantes de Compra.`);
+      const resumen = [
+        `• Proveedor: ${datos.proveedor}`,
+        `• Sociedad: ${datos.sociedad}`,
+        `• Encargado: ${datos.encargado}`,
+        medioPago ? `• Pagado con: ${medioPago}` : "• Sin pagar (pendiente)",
+      ].join("\n");
+
+      return twiml(`✅ Factura guardada.\n\n📋 *Resumen:*\n${resumen}\n\nPodés verla en el panel → Comprobantes de Compra.`);
     }
 
     // --- FLUJO GENERAL DEL AGENTE FINANCIERO ---
