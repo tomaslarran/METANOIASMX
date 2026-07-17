@@ -2733,6 +2733,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="fb" id="itab-ganancias" onclick="setImpTab('ganancias',this)">Ganancias</button>
     <button class="fb admin-only-el" id="itab-parametros" onclick="setImpTab('parametros',this)">⚙️ Parámetros</button>
     <button class="fb admin-only-el" id="itab-plancuentas" onclick="setImpTab('plancuentas',this)">📋 Plan de Cuentas</button>
+    <button class="fb admin-only-el" id="itab-libro" onclick="setImpTab('libro',this)">📒 Libro Diario</button>
+    <button class="fb admin-only-el" id="itab-resultados" onclick="setImpTab('resultados',this)">📊 Resultados</button>
   </div>
   <div id="imp-tab-iva"></div>
   <div id="imp-tab-iibb" style="display:none"></div>
@@ -2740,6 +2742,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div id="imp-tab-ganancias" style="display:none"></div>
   <div id="imp-tab-parametros" style="display:none"></div>
   <div id="imp-tab-plancuentas" style="display:none"></div>
+  <div id="imp-tab-libro" style="display:none"></div>
+  <div id="imp-tab-resultados" style="display:none"></div>
 </div>
 
 <!-- ══ COMPROBANTES DE COMPRA ══ -->
@@ -15551,7 +15555,7 @@ const GANANCIAS_TASA=0.35; // SRL
 
 function setImpTab(tab,btn){
   impTab=tab;
-  ["iva","iibb","autonomos","ganancias","parametros"].forEach(t=>{
+  ["iva","iibb","autonomos","ganancias","parametros","plancuentas","libro","resultados"].forEach(t=>{
     const el=document.getElementById("imp-tab-"+t);
     const b=document.getElementById("itab-"+t);
     if(el)el.style.display=t===tab?"":"none";
@@ -15563,6 +15567,8 @@ function setImpTab(tab,btn){
   if(tab==="ganancias")renderImpGanancias();
   if(tab==="parametros")renderParametrosImpositivos();
   if(tab==="plancuentas")renderPlanCuentas();
+  if(tab==="libro")renderLibroDiario();
+  if(tab==="resultados")renderEstadoResultados();
 }
 
 function renderParametrosImpositivos(){
@@ -15784,6 +15790,231 @@ async function togglePlanCuenta(id,activa){
     renderPlanCuentas();
     toast(activa?"Cuenta desactivada":"Cuenta activada","ok");
   }catch(e){toast("Error: "+e.message,"err")}
+}
+
+// ── LIBRO DIARIO ─────────────────────────────────────────────────────
+function _ldFiltros(){
+  const hoyStr=today();
+  const primerDia=hoyStr.slice(0,7)+"-01";
+  return{soc:"",desde:primerDia,hasta:hoyStr,tipo:""};
+}
+
+async function renderLibroDiario(){
+  const el=document.getElementById("imp-tab-libro");if(!el)return;
+  const f=window._ldF||_ldFiltros();window._ldF=f;
+  el.innerHTML=`
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+      <select class="fi mini-sel" id="ld-soc" style="width:110px" onchange="window._ldF.soc=this.value;_ldCargar()">
+        <option value=""${f.soc===""?" selected":""}>Ambas</option>
+        <option value="SUDES"${f.soc==="SUDES"?" selected":""}>SUDES</option>
+        <option value="POINTERS"${f.soc==="POINTERS"?" selected":""}>POINTERS</option>
+      </select>
+      <input class="fi" id="ld-desde" type="date" value="${f.desde}" style="width:130px" onchange="window._ldF.desde=this.value;_ldCargar()">
+      <span style="color:var(--tx3);font-size:12px">→</span>
+      <input class="fi" id="ld-hasta" type="date" value="${f.hasta}" style="width:130px" onchange="window._ldF.hasta=this.value;_ldCargar()">
+      <select class="fi mini-sel" id="ld-tipo" style="width:170px" onchange="window._ldF.tipo=this.value;_ldCargar()">
+        <option value=""${f.tipo===""?" selected":""}>Todos los tipos</option>
+        <option value="devengado_compra"${f.tipo==="devengado_compra"?" selected":""}>Devengado compra</option>
+        <option value="pago_compra"${f.tipo==="pago_compra"?" selected":""}>Pago compra</option>
+        <option value="ajuste_manual"${f.tipo==="ajuste_manual"?" selected":""}>Ajuste manual</option>
+      </select>
+    </div>
+    <div id="ld-body"><div style="color:var(--tx3);font-size:12px">Cargando...</div></div>`;
+  await _ldCargar();
+}
+
+async function _ldCargar(){
+  const body=document.getElementById("ld-body");if(!body)return;
+  body.innerHTML=`<div style="color:var(--tx3);font-size:12px;padding:12px 0">Cargando asientos...</div>`;
+  const f=window._ldF||_ldFiltros();
+  let q="asientos_contables?order=fecha.desc,created_at.desc&limit=200";
+  if(f.soc)q+=`&sociedad=eq.${f.soc}`;
+  if(f.desde)q+=`&fecha=gte.${f.desde}`;
+  if(f.hasta)q+=`&fecha=lte.${f.hasta}`;
+  if(f.tipo)q+=`&tipo=eq.${f.tipo}`;
+  try{
+    const asientos=await sb(q);
+    if(!asientos.length){body.innerHTML=`<div style="color:var(--tx3);font-size:12px;padding:24px 0;text-align:center">Sin asientos para el período seleccionado</div>`;return;}
+    const tipoLabel={devengado_compra:"Devengado compra",pago_compra:"Pago compra",ajuste_manual:"Ajuste manual"};
+    const tipoBadge={devengado_compra:"var(--al)",pago_compra:"var(--gr)",ajuste_manual:"var(--ac)"};
+    body.innerHTML=`<div style="margin-bottom:8px;font-size:11px;color:var(--tx3)">${asientos.length} asiento${asientos.length!==1?"s":""}</div>`+
+      asientos.map(a=>{
+        const col=tipoBadge[a.tipo]||"var(--tx3)";
+        const lbl=tipoLabel[a.tipo]||a.tipo;
+        return`<div style="border:1px solid var(--b);border-radius:10px;overflow:hidden;margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;background:var(--surf2)" onclick="_ldToggle('${a.id}',this)">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.descripcion||"Sin descripción")}</div>
+              <div style="font-size:11px;color:var(--tx3);margin-top:2px">${fmt(a.fecha)}
+                <span style="margin-left:6px;font-weight:600;color:${col};background:${col}18;border:1px solid ${col}40;padding:1px 6px;border-radius:8px;font-size:10px">${esc(lbl)}</span>
+                · ${esc(a.sociedad||"")}${a.creado_por?` · ${esc(a.creado_por)}`:""}
+              </div>
+            </div>
+            <span style="color:var(--tx3);font-size:12px;flex-shrink:0" id="ld-arr-${a.id}">▶</span>
+          </div>
+          <div id="ld-det-${a.id}" style="display:none;padding:0 14px 10px"></div>
+        </div>`;
+      }).join("");
+  }catch(e){body.innerHTML=`<div style="color:var(--re);font-size:12px">Error: ${esc(e.message)}</div>`;}
+}
+
+async function _ldToggle(id,header){
+  const det=document.getElementById("ld-det-"+id);
+  const arr=document.getElementById("ld-arr-"+id);
+  if(!det)return;
+  if(det.style.display!=="none"){det.style.display="none";if(arr)arr.textContent="▶";return;}
+  det.style.display="";if(arr)arr.textContent="▼";
+  if(det.dataset.loaded){return;}
+  det.innerHTML=`<div style="color:var(--tx3);font-size:11px;padding-top:8px">Cargando...</div>`;
+  try{
+    const movs=await sb(`asientos_movimientos?asiento_id=eq.${id}&select=*,plan_cuentas(codigo,nombre,tipo)&order=id`);
+    const totD=movs.reduce((s,m)=>s+(parseFloat(m.debe)||0),0);
+    const totH=movs.reduce((s,m)=>s+(parseFloat(m.haber)||0),0);
+    det.innerHTML=`
+      <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:8px">
+        <thead><tr style="color:var(--tx3);border-bottom:1px solid var(--b)">
+          <th style="text-align:left;padding:4px 6px;font-weight:600">Cuenta</th>
+          <th style="text-align:right;padding:4px 6px;font-weight:600">Debe</th>
+          <th style="text-align:right;padding:4px 6px;font-weight:600">Haber</th>
+        </tr></thead>
+        <tbody>${movs.map(m=>{
+          const pc=m.plan_cuentas||{};
+          return`<tr style="border-bottom:1px solid var(--b2)">
+            <td style="padding:4px 6px;color:var(--tx)"><span style="color:var(--tx3);font-family:monospace">${esc(pc.codigo||"")}</span> ${esc(pc.nombre||m.cuenta_id||"")}${m.descripcion?`<span style="color:var(--tx3)"> — ${esc(m.descripcion)}</span>`:""}
+            </td>
+            <td style="text-align:right;padding:4px 6px;font-variant-numeric:tabular-nums;color:${m.debe>0?"var(--tx)":"var(--tx3)"}">${m.debe>0?fmtNum(m.debe,true):"—"}</td>
+            <td style="text-align:right;padding:4px 6px;font-variant-numeric:tabular-nums;color:${m.haber>0?"var(--tx)":"var(--tx3)"}">${m.haber>0?fmtNum(m.haber,true):"—"}</td>
+          </tr>`;
+        }).join("")}
+        <tr style="font-weight:700;border-top:2px solid var(--b)">
+          <td style="padding:5px 6px;color:var(--tx3)">Total</td>
+          <td style="text-align:right;padding:5px 6px;font-variant-numeric:tabular-nums">${fmtNum(totD,true)}</td>
+          <td style="text-align:right;padding:5px 6px;font-variant-numeric:tabular-nums">${fmtNum(totH,true)}</td>
+        </tr></tbody>
+      </table>`;
+    det.dataset.loaded="1";
+  }catch(e){det.innerHTML=`<div style="color:var(--re);font-size:11px;padding-top:8px">Error: ${esc(e.message)}</div>`;}
+}
+
+// ── ESTADO DE RESULTADOS ─────────────────────────────────────────────
+function _erFiltros(){
+  const hoyStr=today();
+  // Ejercicio actual: 01/07 del año anterior al cierre
+  const año=parseInt(hoyStr.slice(0,4));const mes=parseInt(hoyStr.slice(5,7));
+  const inicioEjercicio=(mes>=7?año:año-1)+"-07-01";
+  return{soc:"",desde:inicioEjercicio,hasta:hoyStr};
+}
+
+async function renderEstadoResultados(){
+  const el=document.getElementById("imp-tab-resultados");if(!el)return;
+  const f=window._erF||_erFiltros();window._erF=f;
+  el.innerHTML=`
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+      <select class="fi mini-sel" id="er-soc" style="width:110px" onchange="window._erF.soc=this.value;_erCargar()">
+        <option value=""${f.soc===""?" selected":""}>Ambas sociedades</option>
+        <option value="SUDES"${f.soc==="SUDES"?" selected":""}>SUDES</option>
+        <option value="POINTERS"${f.soc==="POINTERS"?" selected":""}>POINTERS</option>
+      </select>
+      <input class="fi" id="er-desde" type="date" value="${f.desde}" style="width:130px" onchange="window._erF.desde=this.value;_erCargar()">
+      <span style="color:var(--tx3);font-size:12px">→</span>
+      <input class="fi" id="er-hasta" type="date" value="${f.hasta}" style="width:130px" onchange="window._erF.hasta=this.value;_erCargar()">
+    </div>
+    <div id="er-body"><div style="color:var(--tx3);font-size:12px">Cargando...</div></div>`;
+  await _erCargar();
+}
+
+async function _erCargar(){
+  const body=document.getElementById("er-body");if(!body)return;
+  body.innerHTML=`<div style="color:var(--tx3);font-size:12px;padding:12px 0">Calculando...</div>`;
+  const f=window._erF||_erFiltros();
+  try{
+    // Traer asientos del período con sus movimientos y cuentas
+    let q="asientos_contables?select=id,tipo,sociedad,asientos_movimientos(debe,haber,cuenta_id,plan_cuentas(codigo,nombre,tipo,naturaleza))";
+    if(f.soc)q+=`&sociedad=eq.${f.soc}`;
+    if(f.desde)q+=`&fecha=gte.${f.desde}`;
+    if(f.hasta)q+=`&fecha=lte.${f.hasta}`;
+    const asientos=await sb(q);
+
+    // Acumular por cuenta
+    const cuentaMap={};
+    for(const a of asientos){
+      for(const m of(a.asientos_movimientos||[])){
+        const pc=m.plan_cuentas;if(!pc)continue;
+        const k=m.cuenta_id;
+        if(!cuentaMap[k])cuentaMap[k]={codigo:pc.codigo,nombre:pc.nombre,tipo:pc.tipo,debe:0,haber:0};
+        cuentaMap[k].debe+=parseFloat(m.debe)||0;
+        cuentaMap[k].haber+=parseFloat(m.haber)||0;
+      }
+    }
+    const cuentas=Object.values(cuentaMap).sort((a,b)=>a.codigo.localeCompare(b.codigo));
+
+    // Agrupar por tipo contable
+    const ingresos=cuentas.filter(c=>c.tipo==="ingreso");
+    const egresos=cuentas.filter(c=>c.tipo==="egreso");
+    const activos=cuentas.filter(c=>c.tipo==="activo");
+    const pasivos=cuentas.filter(c=>c.tipo==="pasivo");
+
+    const totalIngresos=ingresos.reduce((s,c)=>s+c.haber,0);
+    const totalEgresos=egresos.reduce((s,c)=>s+c.debe,0);
+    const resultado=totalIngresos-totalEgresos;
+    const totalAsientos=asientos.length;
+
+    const renderFila=(c,signo)=>`
+      <tr style="border-bottom:1px solid var(--b2)">
+        <td style="padding:5px 10px;color:var(--tx3);font-family:monospace;font-size:11px;white-space:nowrap">${esc(c.codigo)}</td>
+        <td style="padding:5px 8px;font-size:12px;color:var(--tx)">${esc(c.nombre)}</td>
+        <td style="text-align:right;padding:5px 10px;font-size:12px;font-variant-numeric:tabular-nums;font-weight:600;color:${signo>0?"var(--gr)":"var(--re)"}">${signo>0?"+":""}${fmtNum(signo*(signo>0?c.haber:c.debe),true)}</td>
+      </tr>`;
+
+    const renderSeccion=(titulo,filas,total,col)=>{
+      if(!filas.length)return`<div style="color:var(--tx3);font-size:12px;padding:8px 0">Sin movimientos de ${titulo.toLowerCase()}</div>`;
+      return`
+        <div style="margin-bottom:20px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:${col};margin-bottom:8px">${titulo}</div>
+          <table style="width:100%;border-collapse:collapse">
+            <tbody>${filas.join("")}</tbody>
+            <tfoot><tr style="border-top:2px solid var(--b)">
+              <td colspan="2" style="padding:6px 10px;font-size:12px;font-weight:700;color:var(--tx)">Total ${titulo}</td>
+              <td style="text-align:right;padding:6px 10px;font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;color:${col}">${fmtNum(total,true)}</td>
+            </tr></tfoot>
+          </table>
+        </div>`;
+    };
+
+    const rColor=resultado>=0?"var(--gr)":"var(--re)";
+    body.innerHTML=`
+      <div style="margin-bottom:12px;font-size:11px;color:var(--tx3)">${totalAsientos} asiento${totalAsientos!==1?"s":""} en el período · ${f.soc||"Ambas sociedades"}</div>
+      ${renderSeccion("Ingresos",ingresos.map(c=>renderFila(c,1)),totalIngresos,"var(--gr)")}
+      ${renderSeccion("Egresos",egresos.map(c=>renderFila(c,-1)),totalEgresos,"var(--re)")}
+      <div style="background:var(--surf2);border:2px solid var(--b2);border-radius:12px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--tx3)">Resultado del período</div>
+          <div style="font-size:10px;color:var(--tx3);margin-top:2px">${fmt(f.desde)} → ${fmt(f.hasta)}</div>
+        </div>
+        <div style="font-size:22px;font-weight:800;color:${rColor};font-variant-numeric:tabular-nums">${resultado>=0?"+":""}${fmtNum(resultado,true)}</div>
+      </div>
+      ${activos.length||pasivos.length?`
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--tx3);margin-bottom:10px">Saldos de cuentas de balance (acumulado)</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:20px">
+        <thead><tr style="color:var(--tx3);border-bottom:1px solid var(--b);font-size:11px">
+          <th style="text-align:left;padding:4px 10px">Código</th>
+          <th style="text-align:left;padding:4px 8px">Cuenta</th>
+          <th style="text-align:right;padding:4px 10px">Debe</th>
+          <th style="text-align:right;padding:4px 10px">Haber</th>
+          <th style="text-align:right;padding:4px 10px">Saldo</th>
+        </tr></thead>
+        <tbody>${[...activos,...pasivos].map(c=>{
+          const saldo=c.naturaleza==="acreedora"?c.haber-c.debe:c.debe-c.haber;
+          return`<tr style="border-bottom:1px solid var(--b2)">
+            <td style="padding:4px 10px;font-family:monospace;color:var(--tx3);font-size:11px">${esc(c.codigo)}</td>
+            <td style="padding:4px 8px;color:var(--tx)">${esc(c.nombre)}</td>
+            <td style="text-align:right;padding:4px 10px;font-variant-numeric:tabular-nums">${fmtNum(c.debe,true)}</td>
+            <td style="text-align:right;padding:4px 10px;font-variant-numeric:tabular-nums">${fmtNum(c.haber,true)}</td>
+            <td style="text-align:right;padding:4px 10px;font-variant-numeric:tabular-nums;font-weight:700">${fmtNum(Math.abs(saldo),true)}</td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table>`:""}`;
+  }catch(e){body.innerHTML=`<div style="color:var(--re);font-size:12px">Error: ${esc(e.message)}</div>`;}
 }
 
 // ── ASIENTOS CONTABLES — helpers ────────────────────────────────────
