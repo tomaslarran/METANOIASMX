@@ -12847,7 +12847,7 @@ async function confirmarPagoCuota(){
         if(intereses>0)lineas.push({codigo:"4.2.03.001",debe:intereses,desc:"Intereses"});
         lineas.push({codigo:getBancoCodigoPorMedio(medio,soc),haber:total,desc:`Pago ${medio||"cuota"}`});
         const desc=`Cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${prest.nombre||"Préstamo"}`;
-        generarAsiento({fecha,sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:cuotaId,descripcion:desc,lineas}).then(a=>{if(!a)toast("⚠️ Asiento cuota no generado — verificá Plan de Cuentas","err");}).catch(()=>{});
+        generarAsiento({fecha,sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:_mpcCuotaId,descripcion:desc,lineas}).then(a=>{if(!a)toast("⚠️ Asiento cuota no generado — verificá Plan de Cuentas","err");}).catch(()=>{});
       }
     }
     closeM("modal-pago-cuota");
