@@ -855,6 +855,9 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="logo-sep"></div>
   <span class="logo-sub">SMX</span>
   <div class="topbar-right">
+    <button class="bell-btn" id="gs-topbar-btn" onclick="openGlobalSearch()" title="Buscar (Ctrl+K)" style="margin-right:2px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </button>
     <button class="bell-btn" id="bell-btn" onclick="toggleNotifPanel()" title="Notificaciones">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       <span class="bell-badge" id="bell-badge" style="display:none">0</span>
@@ -1164,6 +1167,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <button class="btn" style="font-size:12px;padding:6px 14px" onclick="reunChatEnviar()">Enviar</button>
     </div>
   </div>
+  <div class="sw" style="margin-bottom:12px;max-width:360px">
+    <svg class="si" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input class="search" id="reun-sq" type="text" placeholder="Buscar reunión..." oninput="reunSearch=this.value;renderReuniones()">
+    <button class="si2" onclick="reunSearch='';document.getElementById('reun-sq').value='';renderReuniones()">✕</button>
+  </div>
   <div id="reuniones-list" style="display:flex;flex-direction:column;gap:12px;margin-top:8px">
     <div class="empty"><div class="ei">🎙️</div>Cargando reuniones...</div>
   </div>
@@ -1319,14 +1327,19 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="sc" onclick="setCursoFilter('completados')" style="cursor:pointer" onmouseenter="this.style.borderColor='rgba(124,58,237,.4)'" onmouseleave="this.style.borderColor=''"><div class="sc-l">Completados</div><div class="sc-v vg" id="cC">—</div><div class="sc-s">finalizados</div></div>
   </div>
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-    <span style="font-size:11px;color:var(--tx3)">Ordenar por:</span>
+    <div class="sw" style="flex:1;min-width:180px;max-width:280px">
+      <svg class="si" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input class="search" id="curso-sq" type="text" placeholder="Buscar curso..." oninput="cursoSearch=this.value;renderCursos()">
+      <button class="si2" onclick="cursoSearch='';document.getElementById('curso-sq').value='';renderCursos()">✕</button>
+    </div>
+    <span style="font-size:11px;color:var(--tx3)">Ordenar:</span>
     <select class="sel" onchange="cursoSort=this.value;renderCursos()">
       <option value="fecha">Fecha inicio</option>
       <option value="estado">Estado</option>
       <option value="nombre">Nombre A-Z</option>
       <option value="inscriptos">Inscriptos</option>
     </select>
-    <span style="font-size:11px;color:var(--tx3);margin-left:8px">Línea:</span>
+    <span style="font-size:11px;color:var(--tx3)">Línea:</span>
     <select class="sel" id="sel-linea-negocio" onchange="cursoLinea=this.value;renderCursos()">
       <option value="">Todas</option>
       <option value="MSP / Convenio">MSP / Convenio</option>
@@ -1369,6 +1382,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="cd-tab admin-only-el" id="prov-tab-fiscal" onclick="setProvTab('fiscal',this)">🏛️ Maestro Fiscal</button>
   </div>
   <div id="prov-panel-dir">
+    <div class="sw" style="margin-bottom:12px;max-width:320px">
+      <svg class="si" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input class="search" id="prov-sq" type="text" placeholder="Buscar proveedor..." oninput="provSearch=this.value;renderProveedores()">
+      <button class="si2" onclick="provSearch='';document.getElementById('prov-sq').value='';renderProveedores()">✕</button>
+    </div>
     <div id="proveedores-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando proveedores...</div></div></div>
   </div>
   <div id="prov-panel-fiscal" style="display:none">
@@ -1758,6 +1776,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
   <!-- Filtros -->
   <div class="toolbar">
+    <div class="sw" style="margin-right:8px">
+      <svg class="si" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input class="search" id="rutina-sq" type="text" placeholder="Buscar rutina..." oninput="rutinaSearch=this.value;renderRutinas()">
+      <button class="si2" onclick="rutinaSearch='';document.getElementById('rutina-sq').value='';renderRutinas()">✕</button>
+    </div>
     <div class="fbar">
       <button class="fb on" onclick="setRutinaFilter('all',this)">Todas <span class="fc2" id="rfc-a">—</span></button>
       <button class="fb" onclick="setRutinaFilter('Mensual',this)">Mensual <span class="fc2" id="rfc-m">—</span></button>
@@ -1789,7 +1812,12 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </div>
   </div>
   <!-- Filtros estado -->
-  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+    <div class="sw" style="margin-right:4px;min-width:200px;flex:1;max-width:300px">
+      <svg class="si" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input class="search" id="oport-sq" type="text" placeholder="Buscar oportunidad..." oninput="oportSearch=this.value;renderOportunidades()">
+      <button class="si2" onclick="oportSearch='';document.getElementById('oport-sq').value='';renderOportunidades()">✕</button>
+    </div>
     <button class="fb on" onclick="setOportFilter('all',this)">Todas</button>
     <button class="fb" onclick="setOportFilter('Crudo',this)" style="--c:var(--tx3)">Crudo</button>
     <button class="fb" onclick="setOportFilter('En estructuración',this)" style="--c:var(--am)">En estructuración</button>
@@ -2822,6 +2850,21 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
   <!-- Lista -->
   <div id="comp-lista"><div class="loading"><div class="loader"></div><div class="lt">Cargando comprobantes...</div></div></div>
+</div>
+
+<!-- ══ MODAL BUSCADOR GLOBAL ══ -->
+<div id="modal-global-search" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding-top:80px" onclick="if(event.target===this)closeGlobalSearch()">
+  <div style="width:min(660px,94vw);background:var(--bg2);border:1px solid var(--b2);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.35);overflow:hidden">
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--b)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--tx3);flex-shrink:0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="gs-input" type="text" placeholder="Buscar en todo el panel..." oninput="_gsRender(this.value)" style="flex:1;background:none;border:none;font-size:15px;color:var(--tx);outline:none" autocomplete="off">
+      <kbd style="font-size:10px;color:var(--tx3);border:1px solid var(--b2);border-radius:4px;padding:2px 6px;background:var(--surf)">Esc</kbd>
+    </div>
+    <div id="gs-results" style="max-height:460px;overflow-y:auto;padding:6px"></div>
+    <div style="padding:8px 16px;border-top:1px solid var(--b);font-size:11px;color:var(--tx3);display:flex;gap:16px">
+      <span>↵ navegar · Esc cerrar · Ctrl+K abrir</span>
+    </div>
+  </div>
 </div>
 
 <!-- MODAL NUEVO COMPROBANTE -->
@@ -4116,10 +4159,10 @@ async function sb(path,opts={},retry=2){
 // ── STATE ──
 let tasks=[],users=[],cursos=[],alumnos=[],proveedores=[],instructores=[],plantillas=[],notifConfigs=[],oportunidades=[];
 let _cursoDetalleId=null;
-let oportFilter='all', oportArchivosTemp=[], oportChatHistorial=[];
+let oportFilter='all', oportSearch="", oportArchivosTemp=[], oportChatHistorial=[];
 let inventario=[],invFilter="all",invSearch="",editInvId=null;
-let instSearch="",instActivo="";
-let curUser="",curF="all",curCat="",q="",aq="",cursoFilter="all",cursoSort="fecha",cursoLinea="";
+let instSearch="",instActivo="",provSearch="";
+let curUser="",curF="all",curCat="",q="",aq="",cursoFilter="all",cursoSort="fecha",cursoLinea="",cursoSearch="";
 let charts={};
 const UC=["#7C3AED","#3B82F6","#10B981","#F59E0B","#EC4899","#14B8A6"];
 
@@ -5233,6 +5276,7 @@ function renderCursos(){
   else if(cursoFilter==="completados")list=realizados;
   else list=cursos.filter(x=>x.estado!=="Completado"); // vista "all": oculta completados
   if(cursoLinea) list=list.filter(x=>x.linea_negocio===cursoLinea);
+  if(cursoSearch){const Q=cursoSearch.toLowerCase();list=list.filter(x=>(x.nombre||"").toLowerCase().includes(Q)||(x.estado||"").toLowerCase().includes(Q)||(x.linea_negocio||"").toLowerCase().includes(Q));}
   // Ordenar
   const estadoOrd={"Convocatoria":1,"Inscripciones":2,"En curso":3,"Educación médica continua":4,"Borrador":5,"Completado":6,"Cancelado":7};
   if(cursoSort==="estado") list=[...list].sort((a,b)=>(estadoOrd[a.estado]||9)-(estadoOrd[b.estado]||9));
@@ -7397,8 +7441,11 @@ document.getElementById("c-after").addEventListener("change",function(){document
 function renderProveedores(){
   const c=document.getElementById("proveedores-container");
   if(!proveedores.length){c.innerHTML=`<div class="empty"><div class="ei">🏢</div>No hay proveedores. Agregá el primero.</div>`;return}
+  let list=proveedores;
+  if(provSearch){const Q=provSearch.toLowerCase();list=list.filter(p=>(p.nombre||"").toLowerCase().includes(Q)||(p.tipo||"").toLowerCase().includes(Q)||(p.email||"").toLowerCase().includes(Q)||(p.especialidad||"").toLowerCase().includes(Q));}
+  if(!list.length){c.innerHTML=`<div class="empty"><div class="ei">🔍</div>Sin resultados para "${esc(provSearch)}"</div>`;return}
   const colores=["#7C3AED","#3B82F6","#10B981","#F59E0B","#EC4899","#14B8A6"];
-  c.innerHTML=`<div class="entity-grid">${proveedores.map((p,i)=>`
+  c.innerHTML=`<div class="entity-grid">${list.map((p,i)=>`
     <div class="entity-card" onclick="editProveedor('${p.id}')">
       <div class="entity-avatar" style="background:${colores[i%colores.length]}22;color:${colores[i%colores.length]}">${initials(p.nombre)}</div>
       <div class="entity-name">${esc(p.nombre)}</div>
@@ -8357,7 +8404,7 @@ function stopNotifPoll(){
 }
 
 /* ── RUTINAS ── */
-let rutinas=[],rutinaFilter="all",editRutinaId=null;
+let rutinas=[],rutinaFilter="all",rutinaSearch="",editRutinaId=null;
 const MESES_CORTO2=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 const DIAS_SEM2=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 const CAT_ICON2={"Finanzas":"💰","Operaciones":"⚙️","Recursos Humanos":"👥","Comunicación":"📢","Legal":"⚖️","Otro":"📌"};
@@ -8388,10 +8435,13 @@ function renderRutinas(){
   set("badge-rutinas",rutinas.filter(r=>r.activa).length);
   const freqs=["Mensual","Semanal","Anual"];
   const cats=["Finanzas","Operaciones","Recursos Humanos","Comunicación","Legal","Otro"];
+  const _rQ=rutinaSearch.toLowerCase();
   const list=rutinas.filter(r=>{
-    if(rutinaFilter==="all")return true;
-    if(freqs.includes(rutinaFilter))return r.frecuencia===rutinaFilter;
-    if(cats.includes(rutinaFilter))return r.categoria===rutinaFilter;
+    if(rutinaFilter!=="all"){
+      if(freqs.includes(rutinaFilter)&&r.frecuencia!==rutinaFilter)return false;
+      if(cats.includes(rutinaFilter)&&r.categoria!==rutinaFilter)return false;
+    }
+    if(_rQ&&!(r.nombre||"").toLowerCase().includes(_rQ)&&!(r.descripcion||"").toLowerCase().includes(_rQ)&&!(r.categoria||"").toLowerCase().includes(_rQ))return false;
     return true;
   });
   const cont=el("rutinas-container");
@@ -13131,7 +13181,7 @@ async function apGuardar(){
 const tareasCurso_global={};
 
 /* ── REUNIONES ── */
-let reuniones=[];
+let reuniones=[],reunSearch="";
 let reunChatHistorial=[];
 
 /* ── COMUNICACIONES ── */
@@ -13152,13 +13202,16 @@ function renderReuniones(){
     cont.innerHTML=`<div class="empty"><div class="ei">🎙️</div>No hay reuniones aún. <button class="btn" onclick="openAddReunion()" style="margin-top:8px">+ Nueva reunión</button></div>`;
     return;
   }
+  let list=reuniones;
+  if(reunSearch){const Q=reunSearch.toLowerCase();list=list.filter(r=>(r.titulo||"").toLowerCase().includes(Q)||(r.sociedad||"").toLowerCase().includes(Q)||(r.participantes||[]).join(" ").toLowerCase().includes(Q));}
+  if(!list.length){cont.innerHTML=`<div class="empty"><div class="ei">🔍</div>Sin resultados para "${esc(reunSearch)}"</div>`;return;}
   const estadoInfo={
     listo:{icon:"✅",col:"var(--gr)",txt:"Analizado"},
     procesando:{icon:"⏳",col:"var(--am)",txt:"Procesando..."},
     pendiente:{icon:"🕐",col:"var(--tx3)",txt:"Pendiente"},
     error:{icon:"❌",col:"var(--re)",txt:"Error"},
   };
-  cont.innerHTML=reuniones.map(r=>{
+  cont.innerHTML=list.map(r=>{
     const ei=estadoInfo[r.estado]||estadoInfo.pendiente;
     const partic=(r.participantes||[]).join(", ");
     return `<div class="card" style="cursor:pointer" onclick="verDetalleReunion('${r.id}')">
@@ -15041,6 +15094,53 @@ async function checkTokensExpiry(){
     }
   }catch(_){}
 }
+
+/* ══ BUSCADOR GLOBAL ══ */
+function openGlobalSearch(){
+  const m=document.getElementById("modal-global-search");
+  m.style.display="flex";
+  const inp=document.getElementById("gs-input");
+  if(inp){inp.value="";inp.focus();}
+  _gsRender("");
+}
+function closeGlobalSearch(){
+  document.getElementById("modal-global-search").style.display="none";
+}
+function _gsGoPage(page){
+  closeGlobalSearch();
+  const nav=document.getElementById("nav-"+page);
+  goPage(page,nav);
+}
+function _gsRender(q){
+  const res=document.getElementById("gs-results");if(!res)return;
+  const Q=(q||"").toLowerCase().trim();
+  if(!Q){
+    res.innerHTML=`<div style="padding:28px;text-align:center;color:var(--tx3);font-size:13px">Escribí para buscar tareas, cursos, alumnos, proveedores y más</div>`;
+    return;
+  }
+  const m=(s)=>(s||"").toLowerCase().includes(Q);
+  const row=(item,page)=>`<div onclick="_gsGoPage('${page}')" style="padding:9px 14px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px" onmouseenter="this.style.background='var(--surf)'" onmouseleave="this.style.background='none'">
+    <div><div style="font-size:13px;font-weight:500;color:var(--tx)">${esc(item.t)}</div>${item.s?`<div style="font-size:11px;color:var(--tx3);margin-top:1px">${esc(item.s)}</div>`:""}</div>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--tx3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
+  </div>`;
+  const section=(label,icon,items,page)=>items.length?`<div style="margin-bottom:4px"><div style="font-size:10px;font-weight:700;color:var(--tx3);padding:6px 14px 3px;letter-spacing:.06em;text-transform:uppercase">${icon} ${label}</div>${items.map(i=>row(i,page)).join("")}</div>`:"";
+  const html=[
+    section("Tareas","✅",(tasks||[]).filter(t=>m(t.nombre)||m(t.descripcion)||m((t.assignees||[]).join(" "))).slice(0,5).map(t=>({t:t.nombre,s:`${t.status||""}${t.assignees?.length?" · "+t.assignees.join(", "):""}`.trim()})),"tareas"),
+    section("Cursos","📚",(cursos||[]).filter(c=>m(c.nombre)||m(c.estado)||m(c.linea_negocio)).slice(0,5).map(c=>({t:c.nombre,s:[c.estado,c.linea_negocio].filter(Boolean).join(" · ")})),"cursos"),
+    section("Alumnos","🎓",(alumnos||[]).filter(a=>m(a.nombre)||m(a.apellido)||m(a.email)||m(a.dni)||m(a.cuit)).slice(0,5).map(a=>({t:`${a.apellido||""} ${a.nombre||""}`.trim(),s:[a.dni,a.email].filter(Boolean).join(" · ")})),"alumnos"),
+    section("Proveedores","🏢",(proveedores||[]).filter(p=>m(p.nombre)||m(p.email)||m(p.tipo)||m(p.especialidad)).slice(0,5).map(p=>({t:p.nombre,s:[p.tipo,p.email].filter(Boolean).join(" · ")})),"proveedores"),
+    section("Instructores","👨‍🏫",(instructores||[]).filter(i=>m(i.nombre)||m(i.email)||m(i.especialidad)).slice(0,5).map(i=>({t:i.nombre,s:[i.especialidad,i.email].filter(Boolean).join(" · ")})),"instructores"),
+    section("Comprobantes","🧾",(comprobantes||[]).filter(c=>m(c.proveedor)||m(c.sociedad)).slice(0,5).map(c=>({t:c.proveedor||"(sin nombre)",s:[c.sociedad,c.fecha,c.total?`$${Number(c.total).toLocaleString("es-AR")}`:null].filter(Boolean).join(" · ")})),"comprobantes"),
+    section("Cobranzas","💰",(cfCobranzas||[]).filter(c=>m(c.nombre)||m(c.estado)).slice(0,5).map(c=>({t:c.nombre,s:[c.estado,c.monto?`$${Number(c.monto).toLocaleString("es-AR")}`:null,c.fecha_vencimiento?.slice(0,7)].filter(Boolean).join(" · ")})),"cashflow"),
+    section("Reuniones","🎙️",(reuniones||[]).filter(r=>m(r.titulo)||m(r.sociedad)).slice(0,5).map(r=>({t:r.titulo,s:[r.sociedad,r.fecha?fmt(r.fecha):null].filter(Boolean).join(" · ")})),"reuniones"),
+    section("Oportunidades","💡",(oportunidades||[]).filter(o=>m(o.idea_cruda)||m(o.definicion)||m(o.ejecutor)).slice(0,5).map(o=>({t:o.idea_cruda||"(sin título)",s:[o.estado,o.ejecutor].filter(Boolean).join(" · ")})),"oportunidades"),
+  ].filter(Boolean).join("");
+  res.innerHTML=html||`<div style="padding:28px;text-align:center;color:var(--tx3);font-size:13px">Sin resultados para <strong>"${esc(Q)}"</strong></div>`;
+}
+document.addEventListener("keydown",e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==="k"){e.preventDefault();openGlobalSearch();}
+  if(e.key==="Escape"){const m=document.getElementById("modal-global-search");if(m&&m.style.display!=="none")closeGlobalSearch();}
+});
 
 function toggleTheme(){
   const isLight=document.body.classList.toggle("light-mode");
@@ -19158,7 +19258,8 @@ function setOportFilter(f,btn){
 function renderOportunidades(){
   const lista=document.getElementById("oport-lista");
   if(!lista)return;
-  const rows=oportFilter==="all"?oportunidades:oportunidades.filter(o=>o.estado===oportFilter);
+  let rows=oportFilter==="all"?oportunidades:oportunidades.filter(o=>o.estado===oportFilter);
+  if(oportSearch){const Q=oportSearch.toLowerCase();rows=rows.filter(o=>(o.idea_cruda||"").toLowerCase().includes(Q)||(o.definicion||"").toLowerCase().includes(Q)||(o.ejecutor||"").toLowerCase().includes(Q)||(o.linea_negocio||"").toLowerCase().includes(Q));}
   if(!rows.length){
     lista.innerHTML='<div style="color:var(--tx3);padding:40px;text-align:center">No hay oportunidades en este estado</div>';
     return;
