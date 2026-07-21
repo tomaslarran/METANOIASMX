@@ -21090,12 +21090,7 @@ if('serviceWorker' in navigator){
     const thinking = addAgentMsg('Analizando datos…', true, true);
 
     try {
-      const edgeUrl = BASE_URL + AGENTES[agenteActual].fn;
-      const res = await fetch(edgeUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ANON_KEY },
-        body: JSON.stringify({ message: msg, historial }),
-      });
+      const res = await fetchEdge(AGENTES[agenteActual].fn, { message: msg, historial });
       const data = await res.json();
       const respuesta = data.respuesta || data.error || 'Error al procesar la respuesta.';
       thinking.remove();
