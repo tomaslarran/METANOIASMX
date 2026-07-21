@@ -10320,6 +10320,7 @@ function renderCFResumen(){
         const real=getReal(c,m.key);
         const bgActual=m.actual?"background:rgba(124,58,237,.06)":"";
         const faded=m.pasado&&!monto&&real===null?"opacity:.45":"";
+        const sinReal=m.actual&&monto>0&&real===null;
         let display,cellColor;
         if(real!==null){
           const delta=real-monto;
@@ -10337,21 +10338,27 @@ function renderCFResumen(){
           display=monto?"$"+Math.round(monto).toLocaleString("es-AR"):"—";
           cellColor=monto?"var(--tx)":"var(--tx3)";
         }
-        return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${cellColor};border-right:1px solid var(--b);cursor:pointer;transition:background .12s;${bgActual};${faded}"
+        const bgSinReal=sinReal?"background:rgba(245,158,11,.10);border-left:2px solid rgba(245,158,11,.5)":"";
+        const bgBase=m.actual?"rgba(124,58,237,.06)":"";
+        return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${cellColor};border-right:1px solid var(--b);cursor:pointer;transition:background .12s;${sinReal?bgSinReal:bgActual};${faded}"
           data-cid="${c.id}" data-period="${m.key}" data-tipo="${tipo}"
-          onmouseenter="if(!this.classList.contains('cf-editing'))this.style.background='var(--surf2)'" onmouseleave="if(!this.classList.contains('cf-editing'))this.style.background='${m.actual?'rgba(124,58,237,.06)':''}'"
+          onmouseenter="if(!this.classList.contains('cf-editing'))this.style.background='var(--surf2)'" onmouseleave="if(!this.classList.contains('cf-editing'))this.style.background='${sinReal?'rgba(245,158,11,.10)':bgBase}'"
           onclick="cfCeldaActivar(this)"
-          title="Click para editar · Tab=siguiente · Enter=abajo · Arrastrá ↘ para copiar">${display}</td>`;
+          title="${sinReal?'⚠ Sin real — registrá el pago':'Click para editar · Tab=siguiente · Enter=abajo · Arrastrá ↘ para copiar'}">${display}</td>`;
       }).join("");
       const cat=c.categoria?`<span style="font-size:9px;color:var(--tx4);margin-left:4px">${esc(c.categoria)}</span>`:"";
-      const _mAct=meses.find(m=>m.actual);const _mDef=_mAct?Math.round(getVal(c,_mAct.key)||0):0;
+      const _mAct=meses.find(m=>m.actual);
+      const _realActual=_mAct?getReal(c,_mAct.key):undefined;
+      const _montoActual=_mAct?getVal(c,_mAct.key):0;
+      const _faltaReal=_mAct&&_montoActual>0&&_realActual===null;
       rows+=`<tr style="border-bottom:1px solid var(--b)">
         <td style="padding:6px 12px;font-size:12px;color:var(--tx2);min-width:240px">
           <div style="display:flex;align-items:center;gap:4px">
             <span style="flex:1">${esc(c.nombre)}</span>${cat}
             <button onclick="editCFConc('${c.id}')" style="background:none;border:none;cursor:pointer;color:var(--tx4);font-size:10px;padding:2px 3px;border-radius:3px;opacity:0;transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0" title="Editar">✎</button>
             <button onclick="delCFConc('${c.id}')" style="background:none;border:none;cursor:pointer;color:var(--tx4);font-size:10px;padding:2px 3px;border-radius:3px;opacity:0;transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0" title="Eliminar">✕</button>
-            ${tipo==="Egreso"?`<button onclick="abrirPagarConcepto('${c.id}')" style="background:none;border:1px solid var(--re);color:var(--re);cursor:pointer;font-size:10px;padding:2px 7px;border-radius:10px;white-space:nowrap;opacity:0;transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0" title="Registrar pago de este concepto">💸 Pagar</button>`:""}
+            ${tipo==="Egreso"?`<button onclick="abrirPagarConcepto('${c.id}')" style="background:${_faltaReal?'rgba(245,158,11,.15)':'none'};border:1px solid ${_faltaReal?'rgba(245,158,11,.6)':'var(--re)'};color:${_faltaReal?'#D97706':'var(--re)'};cursor:pointer;font-size:10px;padding:2px 7px;border-radius:10px;white-space:nowrap;opacity:${_faltaReal?1:0};transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity='${_faltaReal?1:0}'" title="Registrar pago de este concepto">${_faltaReal?'⚠ Registrar pago':'💸 Pagar'}</button>`:""}
+            ${tipo==="Ingreso"?`<button onclick="abrirCobroCursoConcepto('${c.id}')" style="background:${_faltaReal?'rgba(245,158,11,.15)':'none'};border:1px solid ${_faltaReal?'rgba(245,158,11,.6)':'var(--gr)'};color:${_faltaReal?'#D97706':'var(--gr)'};cursor:pointer;font-size:10px;padding:2px 7px;border-radius:10px;white-space:nowrap;opacity:${_faltaReal?1:0};transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity='${_faltaReal?1:0}'" title="Registrar cobro de este concepto">${_faltaReal?'⚠ Registrar cobro':'💰 Cobrar'}</button>`:""}
           </div>
         </td>${celdas}
       </tr>`;
@@ -11547,6 +11554,27 @@ function abrirCobroCurso(cursoId){
     if(conc)conc.value=`Cobro — ${c.nombre}`;
     if(mont)mont.value=monto||"";
     document.getElementById("rcob-title").textContent=`Cobrar: ${c.nombre}`;
+  },30);
+}
+
+function abrirCobroCursoConcepto(conceptoId){
+  const c=cfConceptos.find(x=>x.id===conceptoId);if(!c)return;
+  const soc=cfSociedad==="POINTERS"?"POINTERS":"SUDES";
+  const periodoActual=today().slice(0,7);
+  const valActual=cfValores.find(v=>v.concepto_id===conceptoId&&v.periodo===periodoActual);
+  const mDef=Math.round(valActual?.monto||0);
+  abrirRegistrarCobro('','libre',0,null);
+  setTimeout(()=>{
+    document.getElementById("rcob-concepto-id").value=conceptoId;
+    document.getElementById("rcob-concepto").value=c.nombre;
+    document.getElementById("rcob-monto-libre").value=mDef||"";
+    document.getElementById("rcob-soc-libre").value=soc;
+    rcobActualizarSoc(soc);
+    document.getElementById("rcob-title").textContent=`Cobrar: ${c.nombre}`;
+    document.getElementById("rcob-save-btn").textContent="💰 Confirmar cobro";
+    document.getElementById("rcob-dest-inv-btn").style.display="none";
+    // adaptar tipo para que actualice monto_real
+    document.getElementById("rcob-tipo").value="pago_concepto";
   },30);
 }
 
@@ -15862,8 +15890,8 @@ async function backfillAsientos(){
     // Cargar asientos existentes para dedup
     const existentes=await sb("asientos_contables?select=origen,origen_id");
     const yaExiste=new Set(existentes.map(a=>`${a.origen}:${a.origen_id}`));
-    let gen=0,err=0;
-    const hacer=async(opts)=>{try{const a=await generarAsiento(opts);a?gen++:err++;}catch(e){err++;}};
+    let gen=0;const errores=[];
+    const hacer=async(opts,label)=>{try{const a=await generarAsiento(opts);if(a)gen++;else errores.push(`⚠️ ${label} — código de cuenta no encontrado en Plan de Cuentas`);}catch(e){errores.push(`❌ ${label} — ${e.message?.slice(0,60)||"error"}`);}};
 
     // 1. Comprobantes → devengado_compra
     for(const c of(comprobantes||[]).filter(c=>
@@ -15878,7 +15906,7 @@ async function backfillAsientos(){
       if(gastos>0)lineas.push({codigo:"5.2.01.001",debe:gastos,desc:"Gasto"});
       if(iva>0)lineas.push({codigo:"1.1.03.001",debe:iva,desc:"IVA CF"});
       lineas.push({codigo:"2.1.01.001",haber:total,desc:"Proveedores"});
-      await hacer({fecha:c.fecha||today(),sociedad:c.sociedad||"SUDES",tipo:"devengado_compra",origen:"comprobante",origen_id:c.id,descripcion:`Devengado: Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||""}`,lineas});
+      await hacer({fecha:c.fecha||today(),sociedad:c.sociedad||"SUDES",tipo:"devengado_compra",origen:"comprobante",origen_id:c.id,descripcion:`Devengado: Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||""}`,lineas},`Devengado ${c.proveedor||c.id} (${c.numero||"s/n"})`);
     }
 
     // 2. Comprobantes pagados con OP → pago_compra
@@ -15895,7 +15923,7 @@ async function backfillAsientos(){
         {codigo:getBancoCodigoPorMedio(medio,soc),haber:neto,desc:`Pago ${medio}`},
       ];
       if(ret>0)lineas.push({codigo:"2.1.03.002",haber:ret,desc:`Ret. SICORE ${op.codigo_sicore||""}`});
-      await hacer({fecha:op.fecha_pago||c.fecha_pago||today(),sociedad:soc,tipo:"pago_compra",origen:"orden_pago",origen_id:op.id,descripcion:`Pago: ${c.proveedor||""} — ${op.numero||""}`,lineas});
+      await hacer({fecha:op.fecha_pago||c.fecha_pago||today(),sociedad:soc,tipo:"pago_compra",origen:"orden_pago",origen_id:op.id,descripcion:`Pago: ${c.proveedor||""} — ${op.numero||""}`,lineas},`Pago OP ${op.numero||""} — ${c.proveedor||c.id}`);
     }
 
     // 3. Cuotas pagadas → pago_cuota_prestamo
@@ -15912,7 +15940,7 @@ async function backfillAsientos(){
       if(cap>0)lineas.push({codigo:"2.1.02.001",debe:cap,desc:"Capital cuota"});
       if(intereses>0)lineas.push({codigo:"4.2.03.001",debe:intereses,desc:"Intereses"});
       lineas.push({codigo:getBancoCodigoPorMedio("",soc),haber:total,desc:"Pago cuota"});
-      await hacer({fecha:c.fecha_pago||c.fecha||today(),sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:c.id,descripcion:`Cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${prest.nombre||"Préstamo"}`,lineas});
+      await hacer({fecha:c.fecha_pago||c.fecha||today(),sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:c.id,descripcion:`Cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${prest.nombre||"Préstamo"}`,lineas},`Cuota #${c.nro_cuota||"?"} — ${prest.nombre||"Préstamo"}`);
     }
 
     // 4. Sueldos pagados → pago_sueldo
@@ -15925,11 +15953,24 @@ async function backfillAsientos(){
       await hacer({fecha:pago.fecha_pago||today(),sociedad:soc,tipo:"pago_sueldo",origen:"pago_empleado",origen_id:pago.id,descripcion:`Sueldo: ${emp.nombre||""} — ${pago.periodo||""}`,lineas:[
         {codigo:"4.2.01.001",debe:monto,desc:`Sueldo ${emp.nombre||""}`},
         {codigo:bancoCod,haber:monto,desc:`Pago ${pago.medio_pago||"sueldo"}`},
-      ]});
+      ]},`Sueldo ${emp.nombre||""} — ${pago.periodo||""}`);
     }
 
-    toast(`✅ ${gen} asientos generados${err>0?` · ${err} con error (verificá Plan de Cuentas)`:""}`,gen>0?"ok":"inf");
-    renderLibroDiario();
+    // Reporte final
+    if(errores.length){
+      const body=document.getElementById("ld-body");
+      if(body)body.innerHTML=`
+        <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:14px 16px;margin-bottom:12px">
+          <div style="font-size:12px;font-weight:700;color:var(--re);margin-bottom:8px">⚠️ ${errores.length} registro${errores.length!==1?"s":""}  no pudieron generar asiento</div>
+          <div style="font-size:11px;color:var(--tx2);line-height:1.8">${errores.map(e=>`<div>${esc(e)}</div>`).join("")}</div>
+          <div style="font-size:11px;color:var(--tx3);margin-top:8px">Revisá que los códigos de cuenta existan y estén activos en <b>Plan de Cuentas</b>.</div>
+        </div>
+        <div style="font-size:12px;color:var(--tx3)">${gen} asiento${gen!==1?"s":""} generado${gen!==1?"s":""} correctamente.</div>`;
+      toast(`${gen} generados · ${errores.length} con error — ver detalle abajo`,"err");
+    }else{
+      toast(`✅ ${gen} asientos generados correctamente`,gen>0?"ok":"inf");
+      renderLibroDiario();
+    }
   }catch(e){toast("Error en backfill: "+e.message.slice(0,80),"err");}
   finally{if(btn){btn.disabled=false;btn.textContent="🔄 Generar históricos";}}
 }
