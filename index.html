@@ -3409,6 +3409,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div id="mpc-resumen" style="background:var(--surf2);border-radius:var(--r);padding:12px 14px;font-size:13px;border:1px solid var(--b)"></div>
       <div class="fg"><label class="fl">Fecha de pago</label><input type="date" id="mpc-fecha" class="fi"></div>
       <div class="fg"><label class="fl">Monto abonado</label><input type="number" id="mpc-monto" class="fi" placeholder="0" step="0.01"></div>
+      <div class="fg"><label class="fl">Medio de pago</label><select id="mpc-medio" class="fi sel"></select></div>
       <div style="display:flex;gap:8px;padding-top:4px">
         <button class="bc" onclick="closeM('modal-pago-cuota')" style="flex:1">Cancelar</button>
         <button class="bk" id="mpc-save-btn" onclick="confirmarPagoCuota()" style="flex:1">✓ Confirmar pago</button>
@@ -11443,8 +11444,18 @@ async function confirmarPagoEmpleado(){
       const[created]=await sb("cf_pagos_empleados",{method:"POST",body:JSON.stringify(data)});
       cfPagosEmpleados.push(created);
     }
-    closeM("modal-pago-empleado");
     const emp=cfEmpleados.find(e=>e.id===_mpeEmpId);
+    // Asiento pago sueldo
+    if(emp&&monto>0){
+      const soc=emp.sociedad||"SUDES";
+      const bancoCod=getBancoCodigoPorMedio(medio||"",soc);
+      const desc=`Sueldo: ${emp.nombre||""} — ${_mpePeriodo||""}`;
+      generarAsiento({fecha,sociedad:soc,tipo:"pago_sueldo",origen:"empleado",origen_id:_mpeEmpId,descripcion:desc,lineas:[
+        {codigo:"4.2.01.001",debe:monto,desc:`Sueldo ${emp.nombre||""}`},
+        {codigo:bancoCod,haber:monto,desc:`Pago ${medio||"sueldo"}`},
+      ]}).then(a=>{if(!a)toast("⚠️ Asiento sueldo no generado — verificá Plan de Cuentas","err");}).catch(()=>{});
+    }
+    closeM("modal-pago-empleado");
     toast(`✓ ${emp?.nombre||"Empleado"} — pago registrado`,"ok");
     renderSueldos();renderCFResumen();
     if(curPage==="alertas")renderAlertas();
@@ -12740,6 +12751,11 @@ function abrirModalPago(cuotaId,prestId){
   if(!c||!p)return;
   _mpcCuotaId=cuotaId;_mpcPrestId=prestId;
   document.getElementById("mpc-title").textContent=`Pagar cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${p.nombre}`;
+  const mpcSel=document.getElementById("mpc-medio");
+  const mpcLista=mediosPago.filter(m=>m.activo&&(m.sociedad===p.sociedad||m.sociedad==="Ambas"));
+  mpcSel.innerHTML=mpcLista.length
+    ?mpcLista.map(m=>`<option value="${esc(m.nombre)}">${esc(m.nombre)}${m.banco?` — ${esc(m.banco)}`:""}</option>`).join("")
+    :`<option value="Transferencia">Transferencia bancaria</option><option value="Efectivo">Efectivo</option>`;
   document.getElementById("mpc-resumen").innerHTML=`
     <div style="display:flex;justify-content:space-between;margin-bottom:5px">
       <span style="color:var(--tx3)">Total cuota</span>
@@ -12770,6 +12786,23 @@ async function confirmarPagoCuota(){
       const cuotasPend=cfPrestCuotas.filter(x=>x.prestamo_id===_mpcPrestId&&!x.pagada).length;
       await sb(`cf_prestamos?id=eq.${_mpcPrestId}`,{method:"PATCH",body:JSON.stringify({saldo_actual:nuevoSaldo,cuotas_pendientes:cuotasPend,updated_at:new Date().toISOString()})});
       prest.saldo_actual=nuevoSaldo;prest.cuotas_pendientes=cuotasPend;
+    }
+    // Asiento cuota préstamo
+    if(c&&prest){
+      const capital=Math.round((parseFloat(c.capital)||0)*100)/100;
+      const intereses=Math.round((parseFloat(c.intereses)||0)*100)/100;
+      const total=Math.round((parseFloat(document.getElementById("mpc-monto").value)||parseFloat(c.monto_total)||0)*100)/100;
+      const medio=document.getElementById("mpc-medio")?.value||"";
+      const soc=prest.sociedad||"SUDES";
+      if(total>0){
+        const lineas=[];
+        const cap=capital>0?capital:total-intereses;
+        if(cap>0)lineas.push({codigo:"2.1.02.001",debe:cap,desc:"Capital cuota"});
+        if(intereses>0)lineas.push({codigo:"4.2.03.001",debe:intereses,desc:"Intereses"});
+        lineas.push({codigo:getBancoCodigoPorMedio(medio,soc),haber:total,desc:`Pago ${medio||"cuota"}`});
+        const desc=`Cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${prest.nombre||"Préstamo"}`;
+        generarAsiento({fecha,sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:cuotaId,descripcion:desc,lineas}).then(a=>{if(!a)toast("⚠️ Asiento cuota no generado — verificá Plan de Cuentas","err");}).catch(()=>{});
+      }
     }
     closeM("modal-pago-cuota");
     toast(`✓ Cuota pagada — ${fmtNum(c?.monto_total,true)}`,"ok");
@@ -15843,6 +15876,8 @@ async function renderLibroDiario(){
         <option value=""${f.tipo===""?" selected":""}>Todos los tipos</option>
         <option value="devengado_compra"${f.tipo==="devengado_compra"?" selected":""}>Devengado compra</option>
         <option value="pago_compra"${f.tipo==="pago_compra"?" selected":""}>Pago compra</option>
+        <option value="pago_cuota_prestamo"${f.tipo==="pago_cuota_prestamo"?" selected":""}>Cuota préstamo</option>
+        <option value="pago_sueldo"${f.tipo==="pago_sueldo"?" selected":""}>Sueldo</option>
         <option value="ajuste_manual"${f.tipo==="ajuste_manual"?" selected":""}>Ajuste manual</option>
       </select>
     </div>
@@ -15862,8 +15897,8 @@ async function _ldCargar(){
   try{
     const asientos=await sb(q);
     if(!asientos.length){body.innerHTML=`<div style="color:var(--tx3);font-size:12px;padding:24px 0;text-align:center">Sin asientos para el período seleccionado</div>`;return;}
-    const tipoLabel={devengado_compra:"Devengado compra",pago_compra:"Pago compra",ajuste_manual:"Ajuste manual"};
-    const tipoBadge={devengado_compra:"var(--al)",pago_compra:"var(--gr)",ajuste_manual:"var(--ac)"};
+    const tipoLabel={devengado_compra:"Devengado compra",pago_compra:"Pago compra",pago_cuota_prestamo:"Cuota préstamo",pago_sueldo:"Sueldo",ajuste_manual:"Ajuste manual"};
+    const tipoBadge={devengado_compra:"var(--al)",pago_compra:"var(--gr)",pago_cuota_prestamo:"#818CF8",pago_sueldo:"#F472B6",ajuste_manual:"var(--ac)"};
     body.innerHTML=`<div style="margin-bottom:8px;font-size:11px;color:var(--tx3)">${asientos.length} asiento${asientos.length!==1?"s":""}</div>`+
       asientos.map(a=>{
         const col=tipoBadge[a.tipo]||"var(--tx3)";
