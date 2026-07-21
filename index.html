@@ -10321,30 +10321,50 @@ function renderCFResumen(){
         const bgActual=m.actual?"background:rgba(124,58,237,.06)":"";
         const faded=m.pasado&&!monto&&real===null?"opacity:.45":"";
         const sinReal=m.actual&&monto>0&&real===null;
-        let display,cellColor;
+        const conReal=real!==null&&real!==0;
+        const esEgreso=tipo==="Egreso";
+        let display,cellColor,bgCell;
         if(real!==null){
-          const delta=real-monto;
-          const isGood=tipo==="Ingreso"?delta>=0:delta<=0;
-          const deltaCol=delta===0?"var(--tx3)":isGood?"var(--gr)":"var(--re)";
-          const sign=delta>0?"+":"-";
-          const realLabel=real===0?`<span style="color:var(--tx3)">$0 ✓</span>`:`$${Math.round(real).toLocaleString("es-AR")}`;
-          display=`<div style="line-height:1.35">
-            <div style="font-weight:700;color:${real===0?"var(--tx3)":deltaCol==="var(--tx3)"?"var(--tx)":deltaCol}">${realLabel}</div>
-            ${monto&&real!==0?`<div style="font-size:10px;color:var(--tx4)">proy $${Math.round(monto).toLocaleString("es-AR")}</div>`:""}
-            ${delta!==0&&real!==0?`<div style="font-size:10px;color:${deltaCol}">${sign}$${Math.round(Math.abs(delta)).toLocaleString("es-AR")}</div>`:""}
-          </div>`;
-          cellColor="var(--tx)";
+          if(real===0){
+            display=`<span style="color:var(--tx3)">$0 ✓</span>`;
+            cellColor="var(--tx3)";
+            bgCell=bgActual;
+          }else if(esEgreso){
+            // Egreso con real cargado → amarillo (confirmado)
+            const delta=real-monto;
+            const sign=delta>0?"+":"-";
+            display=`<div style="line-height:1.35">
+              <div style="font-weight:700;color:#92400E">$${Math.round(real).toLocaleString("es-AR")}</div>
+              ${monto?`<div style="font-size:10px;color:#B45309">proy $${Math.round(monto).toLocaleString("es-AR")}</div>`:""}
+              ${delta!==0?`<div style="font-size:10px;color:#B45309">${sign}$${Math.round(Math.abs(delta)).toLocaleString("es-AR")}</div>`:""}
+            </div>`;
+            cellColor="#92400E";
+            bgCell="background:rgba(245,158,11,.15);border-left:2px solid rgba(245,158,11,.6)";
+          }else{
+            // Ingreso con real → verde (entró plata)
+            const delta=real-monto;
+            const sign=delta>0?"+":"-";
+            const deltaCol=delta===0?"var(--tx3)":delta>0?"var(--gr)":"var(--re)";
+            display=`<div style="line-height:1.35">
+              <div style="font-weight:700;color:var(--gr)">$${Math.round(real).toLocaleString("es-AR")}</div>
+              ${monto?`<div style="font-size:10px;color:var(--tx4)">proy $${Math.round(monto).toLocaleString("es-AR")}</div>`:""}
+              ${delta!==0?`<div style="font-size:10px;color:${deltaCol}">${sign}$${Math.round(Math.abs(delta)).toLocaleString("es-AR")}</div>`:""}
+            </div>`;
+            cellColor="var(--gr)";
+            bgCell=bgActual;
+          }
         }else{
           display=monto?"$"+Math.round(monto).toLocaleString("es-AR"):"—";
-          cellColor=monto?"var(--tx)":"var(--tx3)";
+          cellColor=monto?(esEgreso?"var(--re)":"var(--tx)"):"var(--tx3)";
+          bgCell=sinReal?"background:rgba(245,158,11,.10);border-left:2px solid rgba(245,158,11,.5)":bgActual;
         }
-        const bgSinReal=sinReal?"background:rgba(245,158,11,.10);border-left:2px solid rgba(245,158,11,.5)":"";
-        const bgBase=m.actual?"rgba(124,58,237,.06)":"";
-        return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${cellColor};border-right:1px solid var(--b);cursor:pointer;transition:background .12s;${sinReal?bgSinReal:bgActual};${faded}"
+        const bgBase=conReal&&esEgreso?"rgba(245,158,11,.15)":m.actual?"rgba(124,58,237,.06)":"";
+        const bgHover=conReal&&esEgreso?"rgba(245,158,11,.25)":"var(--surf2)";
+        return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${cellColor};border-right:1px solid var(--b);cursor:pointer;transition:background .12s;${bgCell};${faded}"
           data-cid="${c.id}" data-period="${m.key}" data-tipo="${tipo}"
-          onmouseenter="if(!this.classList.contains('cf-editing'))this.style.background='var(--surf2)'" onmouseleave="if(!this.classList.contains('cf-editing'))this.style.background='${sinReal?'rgba(245,158,11,.10)':bgBase}'"
+          onmouseenter="if(!this.classList.contains('cf-editing'))this.style.background='${bgHover}'" onmouseleave="if(!this.classList.contains('cf-editing'))this.style.background='${sinReal?'rgba(245,158,11,.10)':bgBase}'"
           onclick="cfCeldaActivar(this)"
-          title="${sinReal?'⚠ Sin real — registrá el pago':'Click para editar · Tab=siguiente · Enter=abajo · Arrastrá ↘ para copiar'}">${display}</td>`;
+          title="${sinReal?'⚠ Sin real — registrá el pago':conReal&&esEgreso?'Real confirmado — click para editar':'Click para editar · Tab=siguiente · Enter=abajo · Arrastrá ↘ para copiar'}">${display}</td>`;
       }).join("");
       const cat=c.categoria?`<span style="font-size:9px;color:var(--tx4);margin-left:4px">${esc(c.categoria)}</span>`:"";
       const _mAct=meses.find(m=>m.actual);
