@@ -11572,7 +11572,7 @@ function abrirCobroCursoConcepto(conceptoId){
     rcobActualizarSoc(soc);
     document.getElementById("rcob-title").textContent=`Cobrar: ${c.nombre}`;
     document.getElementById("rcob-save-btn").textContent="💰 Confirmar cobro";
-    document.getElementById("rcob-dest-inv-btn").style.display="none";
+    document.getElementById("rcob-dest-inv-btn").style.display="";
     // adaptar tipo para que actualice monto_real
     document.getElementById("rcob-tipo").value="pago_concepto";
   },30);
