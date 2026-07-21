@@ -49,7 +49,7 @@ serve(async (req) => {
           <p style="color: #555;margin-top:24px">Equipo Metanoia SMX</p>
         </div>
         <div style="background: #1a0a5e; padding: 16px; text-align: center;">
-          <p style="color: #9a8ccc; font-size: 12px; margin: 0;">Metanoia SMX · Salta, Argentina · www.metanoiasme.com</p>
+          <p style="color: #9a8ccc; font-size: 12px; margin: 0;">Metanoia SMX · Salta, Argentina · <a href="https://metanoiasmx.com/" style="color: #9a8ccc;">metanoiasmx.com</a></p>
         </div>
       </div>
     `;
