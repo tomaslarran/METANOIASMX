@@ -3435,6 +3435,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="fg"><label class="fl">Fecha vencimiento *</label><input class="fi" id="cfo-fecha" type="date"></div>
     </div>
     <div class="fg"><label class="fl">Notas</label><input class="fi" id="cfo-notas" type="text" placeholder="Banco destino, condiciones..."></div>
+    <div class="fg"><label class="fl">Concepto CF vinculado <span style="color:var(--tx3);font-weight:400">(opcional — actualiza el real al cobrar)</span></label><select class="fs" id="cfo-concepto-id"><option value="">— Sin vincular —</option></select></div>
     <div class="ma"><button class="bc" onclick="closeModal('modal-cf-cobranza')">Cancelar</button><button class="bk" id="cfo-save-btn" onclick="saveCFCobranza()">Guardar</button></div>
   </div>
 </div>
@@ -10378,7 +10379,12 @@ function renderCFResumen(){
             <button onclick="editCFConc('${c.id}')" style="background:none;border:none;cursor:pointer;color:var(--tx4);font-size:10px;padding:2px 3px;border-radius:3px;opacity:0;transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0" title="Editar">✎</button>
             <button onclick="delCFConc('${c.id}')" style="background:none;border:none;cursor:pointer;color:var(--tx4);font-size:10px;padding:2px 3px;border-radius:3px;opacity:0;transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0" title="Eliminar">✕</button>
             ${tipo==="Egreso"?`<button onclick="abrirPagarConcepto('${c.id}')" style="background:${_faltaReal?'rgba(245,158,11,.15)':'none'};border:1px solid ${_faltaReal?'rgba(245,158,11,.6)':'var(--re)'};color:${_faltaReal?'#D97706':'var(--re)'};cursor:pointer;font-size:10px;padding:2px 7px;border-radius:10px;white-space:nowrap;opacity:${_faltaReal?1:0};transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity='${_faltaReal?1:0}'" title="Registrar pago de este concepto">${_faltaReal?'⚠ Registrar pago':'💸 Pagar'}</button>`:""}
-            ${tipo==="Ingreso"?`<button onclick="abrirCobroCursoConcepto('${c.id}')" style="background:${_faltaReal?'rgba(245,158,11,.15)':'none'};border:1px solid ${_faltaReal?'rgba(245,158,11,.6)':'var(--gr)'};color:${_faltaReal?'#D97706':'var(--gr)'};cursor:pointer;font-size:10px;padding:2px 7px;border-radius:10px;white-space:nowrap;opacity:${_faltaReal?1:0};transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity='${_faltaReal?1:0}'" title="Registrar cobro de este concepto">${_faltaReal?'⚠ Registrar cobro':'💰 Cobrar'}</button>`:""}
+            ${tipo==="Ingreso"?(()=>{
+              const _cobVinc=cfCobranzas.filter(x=>x.concepto_id===c.id&&_mAct&&x.fecha_vencimiento?.slice(0,7)===_mAct.key);
+              const _cobOk=_cobVinc.filter(x=>x.estado==="Cobrado"||x.estado==="Descontado");
+              const _cobPill=_cobVinc.length?`<span style="font-size:9px;padding:1px 7px;border-radius:9px;background:${_cobOk.length===_cobVinc.length?'rgba(16,185,129,.15)':'rgba(245,158,11,.15)'};color:${_cobOk.length===_cobVinc.length?'var(--gr)':'#D97706'};border:1px solid ${_cobOk.length===_cobVinc.length?'rgba(16,185,129,.3)':'rgba(245,158,11,.4)'};cursor:pointer" onclick="setCFTab('cobranzas',document.getElementById('cftab-cobranzas'))" title="${_cobOk.length}/${_cobVinc.length} cobrados">📥 ${_cobOk.length}/${_cobVinc.length}</span>`:"";
+              return`${_cobPill}<button onclick="abrirCobroCursoConcepto('${c.id}')" style="background:${_faltaReal?'rgba(245,158,11,.15)':'none'};border:1px solid ${_faltaReal?'rgba(245,158,11,.6)':'var(--gr)'};color:${_faltaReal?'#D97706':'var(--gr)'};cursor:pointer;font-size:10px;padding:2px 7px;border-radius:10px;white-space:nowrap;opacity:${_faltaReal?1:0};transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity='${_faltaReal?1:0}'" title="Registrar cobro de este concepto">${_faltaReal?'⚠ Registrar cobro':'💰 Cobrar'}</button>`;
+            })():""}
           </div>
         </td>${celdas}
       </tr>`;
@@ -11567,9 +11573,27 @@ function renderCFCobranzas(){
     </tbody></table></div>`;
 }
 
+async function actualizarRealDesdeCobranzas(conceptoId,periodo){
+  const cobradas=cfCobranzas.filter(c=>c.concepto_id===conceptoId&&c.fecha_vencimiento?.slice(0,7)===periodo&&(c.estado==="Cobrado"||c.estado==="Descontado"));
+  const total=cobradas.reduce((s,c)=>s+(parseFloat(c.monto)||0),0);
+  const existing=cfValores.find(v=>v.concepto_id===conceptoId&&v.periodo===periodo);
+  try{
+    if(existing){
+      await sb(`cf_valores?id=eq.${existing.id}`,{method:"PATCH",body:JSON.stringify({monto_real:total||null})});
+      existing.monto_real=total||null;
+    }else if(total>0){
+      const[nv]=await sb("cf_valores",{method:"POST",body:JSON.stringify({concepto_id:conceptoId,periodo,monto:0,monto_real:total})});
+      if(nv)cfValores.push(nv);
+    }
+  }catch(e){}
+}
 async function marcarCobrado(id,estado){
-  try{await sb(`cf_cobranzas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado,updated_at:new Date().toISOString()})});const c=cfCobranzas.find(c=>c.id===id);if(c)c.estado=estado;renderCFCobranzas();toast(`Marcada como ${estado}`,"ok")}
-  catch(e){toast("Error","err")}
+  try{
+    await sb(`cf_cobranzas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado,updated_at:new Date().toISOString()})});
+    const c=cfCobranzas.find(c=>c.id===id);if(c)c.estado=estado;
+    if(c?.concepto_id&&c.fecha_vencimiento)await actualizarRealDesdeCobranzas(c.concepto_id,c.fecha_vencimiento.slice(0,7));
+    renderCFCobranzas();renderCFResumen();toast(`Marcada como ${estado}`,"ok");
+  }catch(e){toast("Error","err")}
 }
 
 function setRcobDest(dest){
@@ -11851,9 +11875,10 @@ async function confirmarRegistrarCobro(){
         numero_factura:factura,updated_at:new Date().toISOString()
       })});
       Object.assign(c,{estado:"Cobrado",fecha_cobro:fecha,numero_factura:factura});
+      if(c.concepto_id&&c.fecha_vencimiento)await actualizarRealDesdeCobranzas(c.concepto_id,c.fecha_vencimiento.slice(0,7));
       const msg=await generarMovimientoContable(`Cobro: ${c.nombre}${factura?` · Fac. ${factura}`:""}`, "Cobranzas", medio, [medio,obs].filter(Boolean).join(" · "));
       toast(msg,"ok");
-      renderCFCobranzas();
+      renderCFCobranzas();renderCFResumen();
 
     } else {
       const[inscId,cursoId]=rawId.split("||");
@@ -11872,17 +11897,24 @@ async function confirmarRegistrarCobro(){
   finally{btn.disabled=false;}
 }
 
-function openAddCobranza(){editCFCobId=null;document.getElementById("mco-title").textContent="Nueva Cobranza";document.getElementById("cfo-save-btn").textContent="Guardar";["cfo-nombre","cfo-remitente","cfo-monto","cfo-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("cfo-tipo").value="Cheque";document.getElementById("cfo-soc").value="SUDES";document.getElementById("cfo-estado").value="Pendiente";document.getElementById("cfo-fecha").value="";openM("modal-cf-cobranza")}
-function editCFCob(id){const c=cfCobranzas.find(c=>c.id===id);if(!c)return;editCFCobId=id;document.getElementById("mco-title").textContent="Editar Cobranza";document.getElementById("cfo-save-btn").textContent="Guardar cambios";document.getElementById("cfo-nombre").value=c.nombre||"";document.getElementById("cfo-tipo").value=c.tipo||"Cheque";document.getElementById("cfo-remitente").value=c.remitente||"";document.getElementById("cfo-soc").value=c.sociedad||"SUDES";document.getElementById("cfo-estado").value=c.estado||"Pendiente";document.getElementById("cfo-monto").value=c.monto||"";document.getElementById("cfo-fecha").value=c.fecha_vencimiento||"";document.getElementById("cfo-notas").value=c.notas||"";openM("modal-cf-cobranza")}
+function _cobPopulateConceptoSel(selectedId){
+  const sel=document.getElementById("cfo-concepto-id");if(!sel)return;
+  const ingresos=cfConceptos.filter(c=>c.tipo==="Ingreso");
+  sel.innerHTML=`<option value="">— Sin vincular —</option>`+ingresos.map(c=>`<option value="${c.id}"${c.id===selectedId?" selected":""}>${esc(c.nombre)}</option>`).join("");
+}
+function openAddCobranza(){editCFCobId=null;document.getElementById("mco-title").textContent="Nueva Cobranza";document.getElementById("cfo-save-btn").textContent="Guardar";["cfo-nombre","cfo-remitente","cfo-monto","cfo-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("cfo-tipo").value="Cheque";document.getElementById("cfo-soc").value="SUDES";document.getElementById("cfo-estado").value="Pendiente";document.getElementById("cfo-fecha").value="";_cobPopulateConceptoSel(null);openM("modal-cf-cobranza")}
+function editCFCob(id){const c=cfCobranzas.find(c=>c.id===id);if(!c)return;editCFCobId=id;document.getElementById("mco-title").textContent="Editar Cobranza";document.getElementById("cfo-save-btn").textContent="Guardar cambios";document.getElementById("cfo-nombre").value=c.nombre||"";document.getElementById("cfo-tipo").value=c.tipo||"Cheque";document.getElementById("cfo-remitente").value=c.remitente||"";document.getElementById("cfo-soc").value=c.sociedad||"SUDES";document.getElementById("cfo-estado").value=c.estado||"Pendiente";document.getElementById("cfo-monto").value=c.monto||"";document.getElementById("cfo-fecha").value=c.fecha_vencimiento||"";document.getElementById("cfo-notas").value=c.notas||"";_cobPopulateConceptoSel(c.concepto_id||null);openM("modal-cf-cobranza")}
 async function saveCFCobranza(){
   const nombre=document.getElementById("cfo-nombre").value.trim();const monto=parseFloat(document.getElementById("cfo-monto").value)||null;const fecha=document.getElementById("cfo-fecha").value;
   if(!nombre||!monto||!fecha){toast("Nombre, monto y fecha son requeridos","err");return}
-  const data={nombre,tipo:document.getElementById("cfo-tipo").value,remitente:document.getElementById("cfo-remitente").value.trim()||null,sociedad:document.getElementById("cfo-soc").value,estado:document.getElementById("cfo-estado").value,monto,fecha_vencimiento:fecha,notas:document.getElementById("cfo-notas").value.trim()||null,updated_at:new Date().toISOString()};
+  const conceptoId=document.getElementById("cfo-concepto-id").value||null;
+  const data={nombre,tipo:document.getElementById("cfo-tipo").value,remitente:document.getElementById("cfo-remitente").value.trim()||null,sociedad:document.getElementById("cfo-soc").value,estado:document.getElementById("cfo-estado").value,monto,fecha_vencimiento:fecha,notas:document.getElementById("cfo-notas").value.trim()||null,concepto_id:conceptoId,updated_at:new Date().toISOString()};
   const btn=document.getElementById("cfo-save-btn");btn.disabled=true;
   try{
     if(editCFCobId){await sb(`cf_cobranzas?id=eq.${editCFCobId}`,{method:"PATCH",body:JSON.stringify(data)});const i=cfCobranzas.findIndex(c=>c.id===editCFCobId);if(i>=0)cfCobranzas[i]={...cfCobranzas[i],...data};toast("Cobranza actualizada","ok")}
     else{const[c]=await sb("cf_cobranzas",{method:"POST",body:JSON.stringify(data)});cfCobranzas.push(c);toast("Cobranza creada","ok")}
-    closeM("modal-cf-cobranza");renderCFCobranzas();
+    if(conceptoId&&fecha)await actualizarRealDesdeCobranzas(conceptoId,fecha.slice(0,7));
+    closeM("modal-cf-cobranza");renderCFCobranzas();renderCFResumen();
   }catch(e){toast("Error","err")}finally{btn.disabled=false;editCFCobId=null}
 }
 function delCFCob(id){
