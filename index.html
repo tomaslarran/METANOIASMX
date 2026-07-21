@@ -12820,17 +12820,20 @@ function abrirModalPago(cuotaId,prestId){
 }
 
 async function confirmarPagoCuota(){
+  const cuotaId=_mpcCuotaId;
+  const prestId=_mpcPrestId;
+  if(!cuotaId){toast("Error: cuota no identificada — cerrá y volvé a abrir el modal","err");return;}
   const fecha=document.getElementById("mpc-fecha").value||today();
   const btn=document.getElementById("mpc-save-btn");btn.disabled=true;
   try{
-    await sb(`cf_prestamos_cuotas?id=eq.${_mpcCuotaId}`,{method:"PATCH",body:JSON.stringify({pagada:true,fecha_pago:fecha,updated_at:new Date().toISOString()})});
-    const c=cfPrestCuotas.find(x=>x.id===_mpcCuotaId);
+    await sb(`cf_prestamos_cuotas?id=eq.${cuotaId}`,{method:"PATCH",body:JSON.stringify({pagada:true,fecha_pago:fecha,updated_at:new Date().toISOString()})});
+    const c=cfPrestCuotas.find(x=>x.id===cuotaId);
     if(c){c.pagada=true;c.fecha_pago=fecha;}
-    const prest=cfPrestamos.find(p=>p.id===_mpcPrestId);
+    const prest=cfPrestamos.find(p=>p.id===prestId);
     if(prest&&c){
       const nuevoSaldo=Math.max(0,(prest.saldo_actual||0)-(c.capital||c.monto_total||0));
-      const cuotasPend=cfPrestCuotas.filter(x=>x.prestamo_id===_mpcPrestId&&!x.pagada).length;
-      await sb(`cf_prestamos?id=eq.${_mpcPrestId}`,{method:"PATCH",body:JSON.stringify({saldo_actual:nuevoSaldo,cuotas_pendientes:cuotasPend,updated_at:new Date().toISOString()})});
+      const cuotasPend=cfPrestCuotas.filter(x=>x.prestamo_id===prestId&&!x.pagada).length;
+      await sb(`cf_prestamos?id=eq.${prestId}`,{method:"PATCH",body:JSON.stringify({saldo_actual:nuevoSaldo,cuotas_pendientes:cuotasPend,updated_at:new Date().toISOString()})});
       prest.saldo_actual=nuevoSaldo;prest.cuotas_pendientes=cuotasPend;
     }
     // Asiento cuota préstamo
@@ -12847,7 +12850,7 @@ async function confirmarPagoCuota(){
         if(intereses>0)lineas.push({codigo:"4.2.03.001",debe:intereses,desc:"Intereses"});
         lineas.push({codigo:getBancoCodigoPorMedio(medio,soc),haber:total,desc:`Pago ${medio||"cuota"}`});
         const desc=`Cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${prest.nombre||"Préstamo"}`;
-        generarAsiento({fecha,sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:_mpcCuotaId,descripcion:desc,lineas}).then(a=>{if(!a)toast("⚠️ Asiento cuota no generado — verificá Plan de Cuentas","err");}).catch(()=>{});
+        generarAsiento({fecha,sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:cuotaId,descripcion:desc,lineas}).then(a=>{if(!a)toast("⚠️ Asiento cuota no generado — verificá Plan de Cuentas","err");}).catch(()=>{});
       }
     }
     closeM("modal-pago-cuota");
