@@ -3435,7 +3435,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="fg"><label class="fl">Fecha vencimiento *</label><input class="fi" id="cfo-fecha" type="date"></div>
     </div>
     <div class="fg"><label class="fl">Notas</label><input class="fi" id="cfo-notas" type="text" placeholder="Banco destino, condiciones..."></div>
-    <div class="fg"><label class="fl">Concepto CF vinculado <span style="color:var(--tx3);font-weight:400">(opcional — actualiza el real al cobrar)</span></label><select class="fs" id="cfo-concepto-id"><option value="">— Sin vincular —</option></select></div>
+    <div class="fg"><label class="fl">Concepto CF vinculado <span style="color:var(--tx3);font-weight:400">(opcional — proyectado al agregar, real al cobrar)</span></label><select class="fs" id="cfo-concepto-id"><option value="">— Sin vincular —</option></select></div>
     <div class="ma"><button class="bc" onclick="closeModal('modal-cf-cobranza')">Cancelar</button><button class="bk" id="cfo-save-btn" onclick="saveCFCobranza()">Guardar</button></div>
   </div>
 </div>
@@ -11574,15 +11574,17 @@ function renderCFCobranzas(){
 }
 
 async function actualizarRealDesdeCobranzas(conceptoId,periodo){
-  const cobradas=cfCobranzas.filter(c=>c.concepto_id===conceptoId&&c.fecha_vencimiento?.slice(0,7)===periodo&&(c.estado==="Cobrado"||c.estado==="Descontado"));
-  const total=cobradas.reduce((s,c)=>s+(parseFloat(c.monto)||0),0);
+  const vinc=cfCobranzas.filter(c=>c.concepto_id===conceptoId&&c.fecha_vencimiento?.slice(0,7)===periodo);
+  const totalTodos=vinc.reduce((s,c)=>s+(parseFloat(c.monto)||0),0);
+  const totalCobrado=vinc.filter(c=>c.estado==="Cobrado"||c.estado==="Descontado").reduce((s,c)=>s+(parseFloat(c.monto)||0),0);
   const existing=cfValores.find(v=>v.concepto_id===conceptoId&&v.periodo===periodo);
+  const patch={monto:totalTodos||null,monto_real:totalCobrado||null};
   try{
     if(existing){
-      await sb(`cf_valores?id=eq.${existing.id}`,{method:"PATCH",body:JSON.stringify({monto_real:total||null})});
-      existing.monto_real=total||null;
-    }else if(total>0){
-      const[nv]=await sb("cf_valores",{method:"POST",body:JSON.stringify({concepto_id:conceptoId,periodo,monto:0,monto_real:total})});
+      await sb(`cf_valores?id=eq.${existing.id}`,{method:"PATCH",body:JSON.stringify(patch)});
+      Object.assign(existing,patch);
+    }else if(totalTodos>0){
+      const[nv]=await sb("cf_valores",{method:"POST",body:JSON.stringify({concepto_id:conceptoId,periodo,...patch})});
       if(nv)cfValores.push(nv);
     }
   }catch(e){}
