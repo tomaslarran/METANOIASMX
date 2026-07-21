@@ -15106,6 +15106,14 @@ function openGlobalSearch(){
 function closeGlobalSearch(){
   document.getElementById("modal-global-search").style.display="none";
 }
+// Navega a la sección y luego abre el ítem directamente
+function _gsGoItem(page,id,fn){
+  closeGlobalSearch();
+  const nav=document.getElementById("nav-"+page);
+  goPage(page,nav);
+  // Espera a que la sección cargue y los datos estén disponibles
+  setTimeout(()=>{if(fn&&id&&window[fn])window[fn](id);},400);
+}
 function _gsGoPage(page){
   closeGlobalSearch();
   const nav=document.getElementById("nav-"+page);
@@ -15119,21 +15127,21 @@ function _gsRender(q){
     return;
   }
   const m=(s)=>(s||"").toLowerCase().includes(Q);
-  const row=(item,page)=>`<div onclick="_gsGoPage('${page}')" style="padding:9px 14px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px" onmouseenter="this.style.background='var(--surf)'" onmouseleave="this.style.background='none'">
+  const row=(item)=>`<div onclick="${item.fn}" style="padding:9px 14px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px" onmouseenter="this.style.background='var(--surf)'" onmouseleave="this.style.background='none'">
     <div><div style="font-size:13px;font-weight:500;color:var(--tx)">${esc(item.t)}</div>${item.s?`<div style="font-size:11px;color:var(--tx3);margin-top:1px">${esc(item.s)}</div>`:""}</div>
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--tx3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
   </div>`;
-  const section=(label,icon,items,page)=>items.length?`<div style="margin-bottom:4px"><div style="font-size:10px;font-weight:700;color:var(--tx3);padding:6px 14px 3px;letter-spacing:.06em;text-transform:uppercase">${icon} ${label}</div>${items.map(i=>row(i,page)).join("")}</div>`:"";
+  const section=(label,icon,items)=>items.length?`<div style="margin-bottom:4px"><div style="font-size:10px;font-weight:700;color:var(--tx3);padding:6px 14px 3px;letter-spacing:.06em;text-transform:uppercase">${icon} ${label}</div>${items.map(i=>row(i)).join("")}</div>`:"";
   const html=[
-    section("Tareas","✅",(tasks||[]).filter(t=>m(t.nombre)||m(t.descripcion)||m((t.assignees||[]).join(" "))).slice(0,5).map(t=>({t:t.nombre,s:`${t.status||""}${t.assignees?.length?" · "+t.assignees.join(", "):""}`.trim()})),"tareas"),
-    section("Cursos","📚",(cursos||[]).filter(c=>m(c.nombre)||m(c.estado)||m(c.linea_negocio)).slice(0,5).map(c=>({t:c.nombre,s:[c.estado,c.linea_negocio].filter(Boolean).join(" · ")})),"cursos"),
-    section("Alumnos","🎓",(alumnos||[]).filter(a=>m(a.nombre)||m(a.apellido)||m(a.email)||m(a.dni)||m(a.cuit)).slice(0,5).map(a=>({t:`${a.apellido||""} ${a.nombre||""}`.trim(),s:[a.dni,a.email].filter(Boolean).join(" · ")})),"alumnos"),
-    section("Proveedores","🏢",(proveedores||[]).filter(p=>m(p.nombre)||m(p.email)||m(p.tipo)||m(p.especialidad)).slice(0,5).map(p=>({t:p.nombre,s:[p.tipo,p.email].filter(Boolean).join(" · ")})),"proveedores"),
-    section("Instructores","👨‍🏫",(instructores||[]).filter(i=>m(i.nombre)||m(i.email)||m(i.especialidad)).slice(0,5).map(i=>({t:i.nombre,s:[i.especialidad,i.email].filter(Boolean).join(" · ")})),"instructores"),
-    section("Comprobantes","🧾",(comprobantes||[]).filter(c=>m(c.proveedor)||m(c.sociedad)).slice(0,5).map(c=>({t:c.proveedor||"(sin nombre)",s:[c.sociedad,c.fecha,c.total?`$${Number(c.total).toLocaleString("es-AR")}`:null].filter(Boolean).join(" · ")})),"comprobantes"),
-    section("Cobranzas","💰",(cfCobranzas||[]).filter(c=>m(c.nombre)||m(c.estado)).slice(0,5).map(c=>({t:c.nombre,s:[c.estado,c.monto?`$${Number(c.monto).toLocaleString("es-AR")}`:null,c.fecha_vencimiento?.slice(0,7)].filter(Boolean).join(" · ")})),"cashflow"),
-    section("Reuniones","🎙️",(reuniones||[]).filter(r=>m(r.titulo)||m(r.sociedad)).slice(0,5).map(r=>({t:r.titulo,s:[r.sociedad,r.fecha?fmt(r.fecha):null].filter(Boolean).join(" · ")})),"reuniones"),
-    section("Oportunidades","💡",(oportunidades||[]).filter(o=>m(o.idea_cruda)||m(o.definicion)||m(o.ejecutor)).slice(0,5).map(o=>({t:o.idea_cruda||"(sin título)",s:[o.estado,o.ejecutor].filter(Boolean).join(" · ")})),"oportunidades"),
+    section("Tareas","✅",(tasks||[]).filter(t=>m(t.nombre)||m(t.descripcion)||m((t.assignees||[]).join(" "))).slice(0,5).map(t=>({t:t.nombre,s:`${t.status||""}${t.assignees?.length?" · "+t.assignees.join(", "):""}`.trim(),fn:`_gsGoPage('tareas')`}))),
+    section("Cursos","📚",(cursos||[]).filter(c=>m(c.nombre)||m(c.estado)||m(c.linea_negocio)).slice(0,5).map(c=>({t:c.nombre,s:[c.estado,c.linea_negocio].filter(Boolean).join(" · "),fn:`_gsGoItem('cursos','${c.id}','selectCurso')`}))),
+    section("Alumnos","🎓",(alumnos||[]).filter(a=>m(a.nombre)||m(a.apellido)||m(a.email)||m(a.dni)||m(a.cuit)).slice(0,5).map(a=>({t:`${a.apellido||""} ${a.nombre||""}`.trim(),s:[a.dni,a.email].filter(Boolean).join(" · "),fn:`_gsGoItem('alumnos','${a.id}','editAlumno')`}))),
+    section("Proveedores","🏢",(proveedores||[]).filter(p=>m(p.nombre)||m(p.email)||m(p.tipo)||m(p.especialidad)).slice(0,5).map(p=>({t:p.nombre,s:[p.tipo,p.email].filter(Boolean).join(" · "),fn:`_gsGoItem('proveedores','${p.id}','editProveedor')`}))),
+    section("Instructores","👨‍🏫",(instructores||[]).filter(i=>m(i.nombre)||m(i.email)||m(i.especialidad)).slice(0,5).map(i=>({t:i.nombre,s:[i.especialidad,i.email].filter(Boolean).join(" · "),fn:`_gsGoItem('instructores','${i.id}','editInstructor')`}))),
+    section("Comprobantes","🧾",(comprobantes||[]).filter(c=>m(c.proveedor)||m(c.sociedad)).slice(0,5).map(c=>({t:c.proveedor||"(sin nombre)",s:[c.sociedad,c.fecha,c.total?`$${Number(c.total).toLocaleString("es-AR")}`:null].filter(Boolean).join(" · "),fn:`_gsGoPage('comprobantes')`}))),
+    section("Cobranzas","💰",(cfCobranzas||[]).filter(c=>m(c.nombre)||m(c.estado)).slice(0,5).map(c=>({t:c.nombre,s:[c.estado,c.monto?`$${Number(c.monto).toLocaleString("es-AR")}`:null,c.fecha_vencimiento?.slice(0,7)].filter(Boolean).join(" · "),fn:`_gsGoPage('cashflow')`}))),
+    section("Reuniones","🎙️",(reuniones||[]).filter(r=>m(r.titulo)||m(r.sociedad)).slice(0,5).map(r=>({t:r.titulo,s:[r.sociedad,r.fecha?fmt(r.fecha):null].filter(Boolean).join(" · "),fn:`_gsGoItem('reuniones','${r.id}','verDetalleReunion')`}))),
+    section("Oportunidades","💡",(oportunidades||[]).filter(o=>m(o.idea_cruda)||m(o.definicion)||m(o.ejecutor)).slice(0,5).map(o=>({t:o.idea_cruda||"(sin título)",s:[o.estado,o.ejecutor].filter(Boolean).join(" · "),fn:`_gsGoItem('oportunidades','${o.id}','openEditOportunidad')`}))),
   ].filter(Boolean).join("");
   res.innerHTML=html||`<div style="padding:28px;text-align:center;color:var(--tx3);font-size:13px">Sin resultados para <strong>"${esc(Q)}"</strong></div>`;
 }
