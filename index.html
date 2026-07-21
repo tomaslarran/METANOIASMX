@@ -2448,9 +2448,16 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div id="edit-usuario-panel" style="display:none;max-width:560px;background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:18px;margin-bottom:16px">
     <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:12px">Editar usuario</div>
     <input type="hidden" id="eu-id">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div><label class="ml">Nombre completo</label><input class="mi" id="eu-nombre" placeholder="Nombre..."></div>
       <div><label class="ml">Email</label><input class="mi" id="eu-email" type="email" placeholder="email@..."></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;align-items:end">
+      <div><label class="ml">Teléfono WhatsApp</label><input class="mi" id="eu-telefono" placeholder="+5493874xxxxxx" style="font-family:monospace"></div>
+      <div style="display:flex;align-items:center;gap:8px;padding-bottom:2px">
+        <input type="checkbox" id="eu-wpp-autorizado" style="width:15px;height:15px;cursor:pointer;accent-color:var(--gr)">
+        <label style="font-size:12px;color:var(--tx2);cursor:pointer;line-height:1.3" for="eu-wpp-autorizado">📲 Autorizado carga facturas por WA</label>
+      </div>
     </div>
     <div style="display:flex;gap:8px">
       <button class="btn" onclick="closeEditUsuario()">Cancelar</button>
@@ -15409,10 +15416,12 @@ function copiarLinkInvitacion(){
   if(!val){toast("Sin link","inf");return;}
   navigator.clipboard.writeText(val).then(()=>toast("Link copiado","ok")).catch(()=>toast("Error al copiar","err"));
 }
-function openEditUsuario(id,nombre,email){
+function openEditUsuario(id,nombre,email,telefono,wppAutorizado){
   document.getElementById("eu-id").value=id;
   document.getElementById("eu-nombre").value=nombre||"";
   document.getElementById("eu-email").value=email||"";
+  document.getElementById("eu-telefono").value=telefono||"";
+  document.getElementById("eu-wpp-autorizado").checked=!!wppAutorizado;
   document.getElementById("invitar-usuario-panel").style.display="none";
   document.getElementById("edit-usuario-panel").style.display="";
   document.getElementById("eu-nombre").focus();
@@ -15424,12 +15433,15 @@ async function saveEditUsuario(){
   const id=document.getElementById("eu-id").value;
   const nombre=document.getElementById("eu-nombre").value.trim();
   const email=document.getElementById("eu-email").value.trim().toLowerCase();
+  const telefono=document.getElementById("eu-telefono").value.trim()||null;
+  const wpp_autorizado=document.getElementById("eu-wpp-autorizado").checked;
   if(!nombre){toast("Escribí el nombre","err");return;}
   if(!email||!email.includes("@")){toast("Email inválido","err");return;}
+  if(wpp_autorizado&&!telefono){toast("Ingresá el teléfono para autorizar WA","err");return;}
   const btn=document.getElementById("eu-save-btn");
   btn.disabled=true;btn.textContent="Guardando...";
   try{
-    await sb(`usuarios?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({nombre,email})});
+    await sb(`usuarios?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({nombre,email,telefono,wpp_autorizado})});
     closeEditUsuario();
     toast("Usuario actualizado","ok");
     loadUsuariosPage();
@@ -15442,7 +15454,7 @@ async function loadUsuariosPage(){
   if(!wrap)return;
   wrap.innerHTML=`<div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>`;
   try{
-    const users=await sb("usuarios?select=id,nombre,email,rol,estado,invitado_at,permisos_extra&order=nombre");
+    const users=await sb("usuarios?select=id,nombre,email,rol,estado,invitado_at,permisos_extra,telefono,wpp_autorizado&order=nombre");
     renderUsuariosPage(users||[]);
   }catch(e){
     wrap.innerHTML=`<p style="color:var(--re);padding:20px">Error al cargar usuarios.</p>`;
@@ -15468,6 +15480,7 @@ function renderUsuariosPage(users){
         <div class="urol-nombre">${esc(u.nombre)}${isSelf?` <span style="font-size:11px;color:var(--tx3)">(vos)</span>`:""}
           ${isPending?` <span style="font-size:10px;padding:1px 7px;background:rgba(245,158,11,.12);color:#F59E0B;border-radius:8px;border:1px solid rgba(245,158,11,.3)">pendiente</span>`:""}
           ${isSuspended?` <span style="font-size:10px;padding:1px 7px;background:rgba(239,68,68,.1);color:var(--re);border-radius:8px;border:1px solid rgba(239,68,68,.2)">suspendido</span>`:""}
+          ${u.wpp_autorizado?` <span style="font-size:10px;padding:1px 7px;background:rgba(37,211,102,.12);color:#25D166;border-radius:8px;border:1px solid rgba(37,211,102,.3)" title="${esc(u.telefono||"")}">📲 WA</span>`:""}
         </div>
         <div class="urol-email">${esc(u.email||"")}</div>
         ${!isPending?`<span class="urol-badge ${rol}">${rolLabels[rol]||rol}</span>`:""}
@@ -15482,7 +15495,7 @@ function renderUsuariosPage(users){
           <option value="proveedor"${rol==="proveedor"?" selected":""}>Proveedor externo</option>
         </select>`:""}
         ${rol==="instructor"&&!isPending?(()=>{const hasCof=(u.permisos_extra||[]).includes("cofradia");return`<button class="btn" style="font-size:10px;padding:2px 8px;${hasCof?"background:rgba(124,58,237,.15);border-color:rgba(124,58,237,.4);color:var(--pu)":""}" onclick="toggleCofradiaAccess('${u.id}')" title="${hasCof?"Quitar acceso COFRADIA":"Dar acceso COFRADIA"}">🌐 COFRADIA${hasCof?" ✓":""}</button>`;})():""}
-        <button class="btn" style="font-size:11px;padding:3px 9px" onclick="openEditUsuario('${u.id}','${esc(u.nombre||"")}','${esc(u.email||"")}')">✏️ Editar</button>
+        <button class="btn" style="font-size:11px;padding:3px 9px" onclick="openEditUsuario('${u.id}','${esc(u.nombre||"")}','${esc(u.email||"")}','${esc(u.telefono||"")}',${!!u.wpp_autorizado})">✏️ Editar</button>
         ${!isSelf&&!isPending?`<button class="btn" style="font-size:11px;padding:3px 9px" onclick="toggleActivarUsuario('${u.id}',${isSuspended})">${isSuspended?"▶ Activar":"⏸ Pausar"}</button>`:""}
         ${rol==="proveedor"?`<button class="btn sec" style="font-size:11px;padding:3px 9px" onclick="openCuentaCorriente('${u.id}','${esc(u.nombre)}')">📊 Cuenta</button>`:""}
         ${!isSelf?`<button class="btn" style="font-size:11px;padding:3px 9px;background:var(--re);color:#fff;border-color:var(--re)" onclick="eliminarUsuario('${u.id}','${esc(u.nombre)}')">🗑</button>`:""}

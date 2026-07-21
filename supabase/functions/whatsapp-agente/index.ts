@@ -40,6 +40,19 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // Verificar whitelist: solo números autorizados en tabla usuarios
+    const fromNum = from.replace("whatsapp:", "");
+    const { data: usuarioWpp } = await supabase
+      .from("usuarios")
+      .select("id,nombre")
+      .eq("wpp_autorizado", true)
+      .or(`telefono.eq.${fromNum},telefono.eq.${from}`)
+      .maybeSingle();
+
+    if (!usuarioWpp) {
+      return twiml("⛔ Tu número no está autorizado para cargar facturas por WhatsApp. Contactá al administrador del panel.");
+    }
+
     // Verificar si hay una sesión de carga de factura activa para este número
     const { data: sesion } = await supabase
       .from("wpp_sesiones")
