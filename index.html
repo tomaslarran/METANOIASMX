@@ -5243,6 +5243,18 @@ async function delTask(id){
 }
 function onSearch(v){q=v.trim();document.getElementById("clr").classList.toggle("show",!!q);renderTaskList(vis())}
 function clrSearch(){q="";document.getElementById("sq").value="";document.getElementById("clr").classList.remove("show");renderTaskList(vis())}
+function _openTarea(id){
+  // Limpiar filtros para asegurar que el card esté visible
+  q="";curF="all";curCat="";
+  const sq=document.getElementById("sq");if(sq)sq.value="";
+  document.getElementById("clr")?.classList.remove("show");
+  document.querySelectorAll(".fb").forEach(b=>b.classList.toggle("on",b.onclick?.toString().includes("'all'")));
+  renderTareas();
+  setTimeout(()=>{
+    const el=document.getElementById("c-"+id);
+    if(el){el.classList.add("open");el.scrollIntoView({behavior:"smooth",block:"center"});}
+  },150);
+}
 function setF(f,btn){curF=f;document.querySelectorAll(".fb").forEach(b=>b.classList.remove("on"));if(btn)btn.classList.add("on");renderTareas()}
 function setCatFilter(v){curCat=v;renderTareas()}
 function onUser(){curUser=document.getElementById("usel").value;renderTareas();renderCursos()}
@@ -15136,7 +15148,7 @@ function _gsRender(q){
   </div>`;
   const section=(label,icon,items)=>items.length?`<div style="margin-bottom:4px"><div style="font-size:10px;font-weight:700;color:var(--tx3);padding:6px 14px 3px;letter-spacing:.06em;text-transform:uppercase">${icon} ${label}</div>${items.map(i=>row(i)).join("")}</div>`:"";
   const html=[
-    section("Tareas","✅",(tasks||[]).filter(t=>m(t.nombre)||m(t.descripcion)||m((t.assignees||[]).join(" "))).slice(0,5).map(t=>({t:t.nombre,s:`${t.status||""}${t.assignees?.length?" · "+t.assignees.join(", "):""}`.trim(),fn:`_gsGoPage('tareas')`}))),
+    section("Tareas","✅",(tasks||[]).filter(t=>m(t.nombre)||m(t.descripcion)||m((t.assignees||[]).join(" "))).slice(0,5).map(t=>({t:t.nombre,s:`${t.status||""}${t.assignees?.length?" · "+t.assignees.join(", "):""}`.trim(),fn:`_gsGoItem('tareas','${t.id}','_openTarea')`}))),
     section("Cursos","📚",(cursos||[]).filter(c=>m(c.nombre)||m(c.estado)||m(c.linea_negocio)).slice(0,5).map(c=>({t:c.nombre,s:[c.estado,c.linea_negocio].filter(Boolean).join(" · "),fn:`_gsGoItem('cursos','${c.id}','selectCurso')`}))),
     section("Alumnos","🎓",(alumnos||[]).filter(a=>m(a.nombre)||m(a.apellido)||m(a.email)||m(a.dni)||m(a.cuit)).slice(0,5).map(a=>({t:`${a.apellido||""} ${a.nombre||""}`.trim(),s:[a.dni,a.email].filter(Boolean).join(" · "),fn:`_gsGoItem('alumnos','${a.id}','editAlumno')`}))),
     section("Proveedores","🏢",(proveedores||[]).filter(p=>m(p.nombre)||m(p.email)||m(p.tipo)||m(p.especialidad)).slice(0,5).map(p=>({t:p.nombre,s:[p.tipo,p.email].filter(Boolean).join(" · "),fn:`_gsGoItem('proveedores','${p.id}','editProveedor')`}))),
