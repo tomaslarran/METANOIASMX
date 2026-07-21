@@ -194,15 +194,22 @@ serve(async (req) => {
 
       const hoy = new Date().toISOString().split("T")[0];
 
-      await supabase.from("comprobantes_compra").insert({
+      const { error: insertErr } = await supabase.from("comprobantes_compra").insert({
         archivo_url: datos.archivo_url as string,
         sociedad: datos.sociedad as string,
         cargado_por: datos.encargado as string,
         proveedor: datos.proveedor as string,
         estado: "pendiente",
+        fecha: hoy,
+        total: null,
         fecha_imputacion: hoy,
         ...(medioPago ? { notas: `💳 ${medioPago}` } : {}),
       });
+
+      if (insertErr) {
+        console.error("Error al guardar comprobante:", insertErr);
+        return twiml(`❌ Hubo un error al guardar la factura (${insertErr.message}). Por favor intentá de nuevo o cargala desde el panel.`);
+      }
 
       await supabase.from("wpp_sesiones").delete().eq("telefono", from).eq("tipo", "factura");
 
