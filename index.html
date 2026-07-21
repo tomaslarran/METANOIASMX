@@ -4109,6 +4109,21 @@ async function sbRefreshToken(){
   }catch(_){return false;}
 }
 
+// Helper para llamadas a Edge Functions con auto-refresh de token
+async function fetchEdge(fnName,body,retry=1){
+  const token=authToken||KEY;
+  const res=await fetch(`${SB}/functions/v1/${fnName}`,{
+    method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
+    body:JSON.stringify(body)
+  });
+  if(res.status===401&&retry>0){
+    const refreshed=await sbRefreshToken();
+    if(refreshed)return fetchEdge(fnName,body,0);
+  }
+  return res;
+}
+
 async function logError(path,opts,statusCode,mensaje){
   try{
     const session=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
@@ -6934,11 +6949,7 @@ async function crearCursoDesdeIA(){
   "respaldo_institucional": "institución o null",
   "descripcion": "Descripción completa del curso: objetivos de aprendizaje, público objetivo, contenido temático principal, metodología de enseñanza, nivel de simulación, requisitos previos y competencias que se desarrollan. Máximo 400 palabras. Sin markdown."
 }`;
-    const res=await fetch(`${SB}/functions/v1/agente-cursos`,{
-      method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
-      body:JSON.stringify({message:extractPrompt,historial:cursoIAHistorial.slice(-20),canal:"generacion"})
-    });
+    const res=await fetchEdge("agente-cursos",{message:extractPrompt,historial:cursoIAHistorial.slice(-20),canal:"generacion"});
     const data=await res.json();
     let texto=data.respuesta||"{}";
     texto=texto.replace(/```json?/gi,"").replace(/```/g,"").trim();
@@ -7035,11 +7046,7 @@ Secciones: ## NOMBRE DEL CURSO, ## DESCRIPCIÓN, ## OBJETIVOS GENERALES, ## OBJE
 
   try{
     // Usar solo los últimos 6 mensajes y canal "generacion" para prompt liviano
-    const res=await fetch(`${SB}/functions/v1/agente-cursos`,{
-      method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
-      body:JSON.stringify({message:prompts[tipo],historial:cursoIAHistorial.slice(-30),canal:"generacion"})
-    });
+    const res=await fetchEdge("agente-cursos",{message:prompts[tipo],historial:cursoIAHistorial.slice(-30),canal:"generacion"});
     const data=await res.json();
     if(data.error)throw new Error(data.error);
     const content=data.respuesta||"";
@@ -7396,15 +7403,11 @@ async function sendCursoIA(){
   cursoIAHistorial.push({role:"user",content:texto});
 
   try{
-    const res=await fetch(`${SB}/functions/v1/agente-cursos`,{
-      method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
-      body:JSON.stringify({
-        message:texto,
-        historial:cursoIAHistorial.slice(-10),
-        canal:"panel",
-        archivos:cursoIAArchivos.length?cursoIAArchivos:undefined
-      })
+    const res=await fetchEdge("agente-cursos",{
+      message:texto,
+      historial:cursoIAHistorial.slice(-10),
+      canal:"panel",
+      archivos:cursoIAArchivos.length?cursoIAArchivos:undefined
     });
     const data=await res.json();
     const respuesta=data.respuesta||(data.error?"Hubo un problema al procesar tu consulta. Intentá de nuevo en un momento.":"Sin respuesta");
