@@ -10505,11 +10505,28 @@ function renderCFResumen(){
         rows+=`<tr style="background:rgba(239,68,68,.05)">
           <td colspan="${meses.length+2}" style="padding:3px 12px 3px 22px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#FCA5A5">↳ Impuestos estimados</td>
         </tr>`;
+        const socsFiltro=cfSociedad==="SUDES"?["SUDES"]:cfSociedad==="POINTERS"?["POINTERS"]:["SUDES","POINTERS"];
+        const impPagado=(tipo,mkey)=>{
+          const decs=impuestosDeclaraciones.filter(d=>d.tipo===tipo&&d.periodo===mkey&&socsFiltro.includes(d.sociedad));
+          return decs.length>0&&decs.every(d=>d.pagado);
+        };
+        const impPresentado=(tipo,mkey)=>{
+          const decs=impuestosDeclaraciones.filter(d=>d.tipo===tipo&&d.periodo===mkey&&socsFiltro.includes(d.sociedad));
+          return decs.length>0&&decs.some(d=>d.presentado||d.pagado)&&!decs.every(d=>d.pagado);
+        };
+        const impCell=(v,pagado,presentado,bgActual,title)=>{
+          let display,color;
+          if(pagado&&v){display=`<div style="line-height:1.25"><div style="font-size:10px;font-weight:700">✓</div><div>$${Math.round(v).toLocaleString("es-AR")}</div></div>`;color="var(--gr)";}
+          else if(presentado&&v){display=`<div style="line-height:1.25"><div style="font-size:9px;color:#F97316">pres.</div><div>$${Math.round(v).toLocaleString("es-AR")}</div></div>`;color="var(--re)";}
+          else if(v){display="$"+Math.round(v).toLocaleString("es-AR");color="var(--re)";}
+          else{display="—";color="var(--tx3)";}
+          return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${color};border-right:1px solid var(--b);${bgActual}" title="${title}">${display}</td>`;
+        };
         // IVA
         const ivaRow=meses.map(m=>{
           const v=getImpTax(m.key).iva;
           const bgActual=m.actual?"background:rgba(124,58,237,.06)":"";
-          return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${v?"var(--re)":"var(--tx3)"};border-right:1px solid var(--b);${bgActual}" title="IVA: débito − crédito fiscal">${v?"$"+v.toLocaleString("es-AR"):"—"}</td>`;
+          return impCell(v,impPagado("IVA",m.key),impPresentado("IVA",m.key),bgActual,"IVA: débito − crédito fiscal");
         }).join("");
         rows+=`<tr style="border-bottom:1px solid var(--b)">
           <td style="padding:6px 12px 6px 32px;font-size:12px;color:var(--tx2);min-width:240px">
@@ -10520,7 +10537,7 @@ function renderCFResumen(){
         const iibbRow=meses.map(m=>{
           const v=getImpTax(m.key).iibb;
           const bgActual=m.actual?"background:rgba(124,58,237,.06)":"";
-          return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:${v?"var(--re)":"var(--tx3)"};border-right:1px solid var(--b);${bgActual}">${v?"$"+Math.round(v).toLocaleString("es-AR"):"—"}</td>`;
+          return impCell(v,impPagado("IIBB",m.key),impPresentado("IIBB",m.key),bgActual,"IIBB Salta 6%");
         }).join("");
         rows+=`<tr style="border-bottom:1px solid var(--b)">
           <td style="padding:6px 12px 6px 32px;font-size:12px;color:var(--tx2);min-width:240px">
