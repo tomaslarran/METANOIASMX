@@ -13046,9 +13046,9 @@ function apMostrarResultado(data){
         <th style="padding:6px 10px;text-align:right;color:var(--tx3)">Saldo</th>
         <th style="padding:6px 10px;text-align:center;color:var(--tx3)">Estado</th>
       </tr></thead>
-      <tbody>${apCuotasExtraidas.map(c=>`<tr style="border-top:1px solid var(--surf2)${c.pagada?" opacity:.5":""}">
+      <tbody>${apCuotasExtraidas.map((c,i)=>`<tr style="border-top:1px solid var(--surf2)${c.pagada?" opacity:.5":""}">
         <td style="padding:5px 10px;color:var(--tx3)">${c.nro||"—"}</td>
-        <td style="padding:5px 10px;color:var(--tx2)">${fmt(c.fecha)}</td>
+        <td style="padding:4px 10px"><input type="date" value="${c.fecha||""}" onchange="apCuotasExtraidas[${i}].fecha=this.value" style="border:1px solid var(--surf2);background:var(--surf);color:var(--tx);font-size:12px;padding:2px 6px;border-radius:4px;width:130px"></td>
         <td style="padding:5px 10px;text-align:right;font-weight:600">${fmtNum(c.monto_total,true)}</td>
         ${tieneDet?`<td style="padding:5px 10px;text-align:right;color:var(--gr)">${fmtNum(c.capital)}</td><td style="padding:5px 10px;text-align:right;color:#FCA5A5">${fmtNum(c.intereses)}</td>`:""}
         <td style="padding:5px 10px;text-align:right;color:var(--tx3)">${fmtNum(c.saldo_restante)}</td>
