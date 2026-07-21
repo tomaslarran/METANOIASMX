@@ -20962,6 +20962,7 @@ if('serviceWorker' in navigator){
         <option value="financiero">💰 Finanzas</option>
         <option value="tareas">✅ Tareas</option>
         <option value="cursos">🎓 Cursos</option>
+        <option value="plataforma">📖 Guía del Panel</option>
       </select>
     </div>
     <button class="ai-close" onclick="limpiarChat()" title="Limpiar conversación" style="margin-right:2px">
@@ -20987,9 +20988,10 @@ if('serviceWorker' in navigator){
   const BASE_URL = 'https://jppxmdvddvbsvymogvcp.supabase.co/functions/v1/';
   const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwcHhtZHZkZHZic3Z5bW9ndmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMjcyODAsImV4cCI6MjA5MDgwMzI4MH0.KPAqCKfUteE3XK9QFqb_44Hm8jYQxfjVLkrlyGvaMhE';
   const AGENTES = {
-    financiero: { fn: 'agente-financiero', titulo: 'Agente Financiero', placeholder: 'Preguntá sobre finanzas…' },
-    tareas:     { fn: 'agente-tareas',     titulo: 'Agente de Tareas',   placeholder: 'Preguntá sobre tareas…' },
-    cursos:     { fn: 'agente-cursos',     titulo: 'Agente de Cursos',   placeholder: 'Preguntá sobre cursos…' },
+    financiero:  { fn: 'agente-financiero',  titulo: 'Agente Financiero',   placeholder: 'Preguntá sobre finanzas…' },
+    tareas:      { fn: 'agente-tareas',      titulo: 'Agente de Tareas',    placeholder: 'Preguntá sobre tareas…' },
+    cursos:      { fn: 'agente-cursos',      titulo: 'Agente de Cursos',    placeholder: 'Preguntá sobre cursos…' },
+    plataforma:  { fn: 'agente-plataforma',  titulo: 'Guía del Panel',      placeholder: '¿Cómo uso el panel?…' },
   };
   let agenteActual = 'financiero';
   const LS_KEY = 'ai_chat_v2';
@@ -21002,7 +21004,7 @@ if('serviceWorker' in navigator){
     if (!sel) return;
     // Definir agentes permitidos por rol
     const permitidos = {
-      admin:          ['financiero','tareas','cursos'],
+      admin:          ['financiero','tareas','cursos','plataforma'],
       instructor:     ['tareas','cursos'],
       comunicaciones: ['tareas','cursos'],
       logistica:      ['tareas'],
