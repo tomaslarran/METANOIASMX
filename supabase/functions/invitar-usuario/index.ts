@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
               </div>
               <p style="margin:20px 0 0;color:#999;font-size:12px;text-align:center">
                 Si no esperabas este mensaje, podés ignorarlo.<br>
-                El link expira en 24 horas.
+                El link es de un solo uso. Si no funciona, pedile a un admin que te reenvíe la invitación.
               </p>
             </div>
           </div>`;
