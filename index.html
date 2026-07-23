@@ -2200,9 +2200,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
             <div>
               <label class="fl">Tipo</label>
-              <select class="fi" id="caja-form-tipo">
+              <select class="fi" id="caja-form-tipo" onchange="cajaToggleTipo(this.value)">
                 <option value="ingreso">💚 Ingreso</option>
                 <option value="egreso">🔴 Egreso</option>
+                <option value="transferencia">↔️ Transferencia</option>
               </select>
             </div>
             <div>
@@ -2214,29 +2215,49 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
             <label class="fl">Concepto</label>
             <input class="fi" type="text" id="caja-form-concepto" placeholder="Ej: Pago inscripción curso...">
           </div>
-          <div style="margin-bottom:8px">
-            <label class="fl">Medio de pago</label>
-            <select class="fi" id="caja-form-medio">
-              <option value="">— Sin especificar —</option>
-            </select>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-            <div>
-              <label class="fl">Categoría</label>
-              <select class="fi" id="caja-form-cat">
-                <option value="">Sin categoría</option>
-                <option value="Inscripciones">Inscripciones</option>
-                <option value="Honorarios">Honorarios</option>
-                <option value="Proveedores">Proveedores</option>
-                <option value="Impuestos">Impuestos</option>
-                <option value="Servicios">Servicios</option>
-                <option value="Sueldos">Sueldos</option>
-                <option value="Otros">Otros</option>
+          <!-- Campos normales (ingreso/egreso) -->
+          <div id="caja-fields-normal">
+            <div style="margin-bottom:8px">
+              <label class="fl">Medio de pago</label>
+              <select class="fi" id="caja-form-medio">
+                <option value="">— Sin especificar —</option>
               </select>
             </div>
-            <div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+              <div>
+                <label class="fl">Categoría</label>
+                <select class="fi" id="caja-form-cat">
+                  <option value="">Sin categoría</option>
+                  <option value="Inscripciones">Inscripciones</option>
+                  <option value="Honorarios">Honorarios</option>
+                  <option value="Proveedores">Proveedores</option>
+                  <option value="Impuestos">Impuestos</option>
+                  <option value="Servicios">Servicios</option>
+                  <option value="Sueldos">Sueldos</option>
+                  <option value="Otros">Otros</option>
+                </select>
+              </div>
+              <div>
+                <label class="fl">Fecha</label>
+                <input class="fi" type="date" id="caja-form-fecha">
+              </div>
+            </div>
+          </div>
+          <!-- Campos transferencia -->
+          <div id="caja-fields-transfer" style="display:none">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+              <div>
+                <label class="fl">Desde</label>
+                <select class="fi" id="caja-tr-desde"></select>
+              </div>
+              <div>
+                <label class="fl">Hacia</label>
+                <select class="fi" id="caja-tr-hacia"></select>
+              </div>
+            </div>
+            <div style="margin-bottom:12px">
               <label class="fl">Fecha</label>
-              <input class="fi" type="date" id="caja-form-fecha">
+              <input class="fi" type="date" id="caja-form-fecha-tr">
             </div>
           </div>
           <div style="margin-bottom:12px">
@@ -9805,6 +9826,7 @@ async function renderCaja(){
   // Inicializar fecha del formulario
   const formFecha=document.getElementById("caja-form-fecha");
   if(formFecha&&!formFecha.value)formFecha.value=hoy;
+  cajaPopularTransferOpts();
 
   // Calcular KPIs
   const fmtM=v=>"$"+(Math.round(Math.abs(v))).toLocaleString("es-AR");
@@ -9926,24 +9948,134 @@ function renderCajaProyeccion(){
   }).join("")+`<div style="margin-top:8px;font-size:11px;color:var(--tx3);text-align:right">Acumulado proyectado: <strong style="color:${acum>=0?"var(--gr)":"var(--re)"}">${acum>=0?"+":""}${fmtM(acum)}</strong></div>`;
 }
 
+function cajaToggleTipo(tipo){
+  const isTransfer=tipo==="transferencia";
+  document.getElementById("caja-fields-normal").style.display=isTransfer?"none":"";
+  document.getElementById("caja-fields-transfer").style.display=isTransfer?"":"none";
+  const conc=document.getElementById("caja-form-concepto");
+  if(conc)conc.placeholder=isTransfer?"Ej: Retiro banco para gastos operativos...":"Ej: Pago inscripción curso...";
+}
+
+function cajaPopularTransferOpts(){
+  const hoy=new Date().toISOString().split("T")[0];
+  const trFecha=document.getElementById("caja-form-fecha-tr");
+  if(trFecha&&!trFecha.value)trFecha.value=hoy;
+
+  const opts=[
+    {v:"caja:SUDES",   l:"💵 Caja SUDES"},
+    {v:"caja:POINTERS",l:"💵 Caja POINTERS"},
+    {v:"banco:SUDES",  l:"🏦 Banco Macro SUDES"},
+    {v:"banco:POINTERS",l:"🏦 Banco Macro POINTERS"},
+    ...(cfInversiones||[]).filter(i=>i.estado==="Activa").map(i=>({
+      v:`inv:${i.id}:${i.sociedad}`,
+      l:`📈 ${i.nombre} (${i.sociedad})`
+    }))
+  ];
+  const html=opts.map(o=>`<option value="${o.v}">${esc(o.l)}</option>`).join("");
+  const desde=document.getElementById("caja-tr-desde");
+  const hacia=document.getElementById("caja-tr-hacia");
+  if(desde)desde.innerHTML=html;
+  if(hacia){
+    hacia.innerHTML=html;
+    // Default hacia: banco si desde es caja, y viceversa
+    if(hacia.options.length>2)hacia.selectedIndex=2;
+  }
+}
+
 async function saveCajaMovimiento(){
   const tipo=document.getElementById("caja-form-tipo")?.value;
   const monto=parseFloat(document.getElementById("caja-form-monto")?.value)||0;
   const concepto=document.getElementById("caja-form-concepto")?.value?.trim();
-  const cat=document.getElementById("caja-form-cat")?.value;
-  const fecha=document.getElementById("caja-form-fecha")?.value||new Date().toISOString().split("T")[0];
-  const obs=document.getElementById("caja-form-obs")?.value?.trim();
-  const medio=document.getElementById("caja-form-medio")?.value||null;
+  const obs=document.getElementById("caja-form-obs")?.value?.trim()||null;
 
   if(!concepto){toast("Ingresá un concepto","err");return;}
   if(!monto||monto<=0){toast("Ingresá un monto válido","err");return;}
 
+  // ── TRANSFERENCIA ──────────────────────────────────────────────────────────
+  if(tipo==="transferencia"){
+    const desde=document.getElementById("caja-tr-desde")?.value;
+    const hacia=document.getElementById("caja-tr-hacia")?.value;
+    const fecha=document.getElementById("caja-form-fecha-tr")?.value||new Date().toISOString().split("T")[0];
+    if(!desde||!hacia){toast("Seleccioná origen y destino","err");return;}
+    if(desde===hacia){toast("Origen y destino no pueden ser iguales","err");return;}
+
+    const parseAcct=(v)=>{
+      const [tipo,...rest]=v.split(":");
+      if(tipo==="inv")return{tipo:"inv",id:rest[0],sociedad:rest[1]};
+      return{tipo,sociedad:rest[0]};
+    };
+    const D=parseAcct(desde), H=parseAcct(hacia);
+    const ref=`Transferencia: ${document.getElementById("caja-tr-desde").selectedOptions[0].text} → ${document.getElementById("caja-tr-hacia").selectedOptions[0].text}`;
+
+    try{
+      // EGRESO desde origen
+      if(D.tipo==="caja"){
+        await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
+          sociedad:D.sociedad,fecha,tipo:"egreso",concepto,categoria:"Transferencia",
+          monto,observaciones:obs,creado_por:loggedUser?.nombre||null
+        })});
+      } else if(D.tipo==="banco"){
+        await sb("banco_movimientos",{method:"POST",body:JSON.stringify({
+          sociedad:D.sociedad,fecha,concepto,importe:-monto,saldo:null,
+          conciliado:false,referencia:ref
+        })});
+      } else if(D.tipo==="inv"){
+        // Rescate de inversión
+        await sb("cf_inversiones_movimientos",{method:"POST",body:JSON.stringify({
+          inversion_id:D.id,tipo:"Rescate Parcial",fecha,monto,notas:obs,medio_pago:H.tipo==="banco"?"Transferencia":"Efectivo"
+        })});
+        const inv=cfInversiones.find(i=>i.id===D.id);
+        if(inv){
+          const nuevoValor=Math.max(0,(parseFloat(inv.valor_actual)||0)-monto);
+          await sb(`cf_inversiones?id=eq.${D.id}`,{method:"PATCH",body:JSON.stringify({valor_actual:nuevoValor,updated_at:new Date().toISOString()})});
+          inv.valor_actual=nuevoValor;
+        }
+      }
+
+      // INGRESO hacia destino
+      if(H.tipo==="caja"){
+        await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
+          sociedad:H.sociedad,fecha,tipo:"ingreso",concepto,categoria:"Transferencia",
+          monto,observaciones:obs,creado_por:loggedUser?.nombre||null
+        })});
+      } else if(H.tipo==="banco"){
+        await sb("banco_movimientos",{method:"POST",body:JSON.stringify({
+          sociedad:H.sociedad,fecha,concepto,importe:monto,saldo:null,
+          conciliado:false,referencia:ref
+        })});
+      } else if(H.tipo==="inv"){
+        // Aporte a inversión
+        await sb("cf_inversiones_movimientos",{method:"POST",body:JSON.stringify({
+          inversion_id:H.id,tipo:"Aporte de capital",fecha,monto,notas:obs,medio_pago:D.tipo==="banco"?"Transferencia":"Efectivo"
+        })});
+        const inv=cfInversiones.find(i=>i.id===H.id);
+        if(inv){
+          const nuevoCapital=(parseFloat(inv.capital)||0)+monto;
+          const nuevoValor=(parseFloat(inv.valor_actual)||0)+monto;
+          await sb(`cf_inversiones?id=eq.${H.id}`,{method:"PATCH",body:JSON.stringify({capital:nuevoCapital,valor_actual:nuevoValor,updated_at:new Date().toISOString()})});
+          inv.capital=nuevoCapital; inv.valor_actual=nuevoValor;
+        }
+      }
+
+      document.getElementById("caja-form-monto").value="";
+      document.getElementById("caja-form-concepto").value="";
+      document.getElementById("caja-form-obs").value="";
+      toast("Transferencia registrada","ok");
+      renderCaja();
+    }catch(e){toast("Error: "+e.message,"err");}
+    return;
+  }
+
+  // ── INGRESO / EGRESO normal ────────────────────────────────────────────────
+  const cat=document.getElementById("caja-form-cat")?.value;
+  const fecha=document.getElementById("caja-form-fecha")?.value||new Date().toISOString().split("T")[0];
+  const medio=document.getElementById("caja-form-medio")?.value||null;
+
   try{
     await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
       sociedad:cajaSociedad,fecha,tipo,concepto,categoria:cat||null,
-      monto,medio_pago:medio||null,observaciones:obs||null,creado_por:loggedUser?.nombre||null
+      monto,medio_pago:medio||null,observaciones:obs,creado_por:loggedUser?.nombre||null
     })});
-    // Limpiar formulario
     document.getElementById("caja-form-monto").value="";
     document.getElementById("caja-form-concepto").value="";
     document.getElementById("caja-form-obs").value="";
