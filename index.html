@@ -2218,6 +2218,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
                 <option value="ingreso">💚 Ingreso</option>
                 <option value="egreso">🔴 Egreso</option>
                 <option value="transferencia">↔️ Transferencia</option>
+                <option value="cambiomoneda">💱 Cambio de moneda</option>
               </select>
             </div>
             <div>
@@ -2272,6 +2273,39 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
             <div style="margin-bottom:12px">
               <label class="fl">Fecha</label>
               <input class="fi" type="date" id="caja-form-fecha-tr">
+            </div>
+          </div>
+          <!-- Campos cambio de moneda -->
+          <div id="caja-fields-cambiomoneda" style="display:none">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+              <div>
+                <label class="fl">Desde (ARS)</label>
+                <select class="fi" id="caja-cm-desde"></select>
+              </div>
+              <div>
+                <label class="fl">Hacia (USD)</label>
+                <select class="fi" id="caja-cm-hacia"></select>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+              <div>
+                <label class="fl">Monto $ ARS</label>
+                <input class="fi" type="number" id="caja-cm-ars" placeholder="0" min="0" step="0.01" oninput="cajaCMCalc()">
+              </div>
+              <div>
+                <label class="fl">Cotización (ARS/USD)</label>
+                <input class="fi" type="number" id="caja-cm-cotiz" placeholder="Ej: 1500" min="1" step="0.01" oninput="cajaCMCalc()">
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+              <div>
+                <label class="fl">Monto U$D (calculado)</label>
+                <input class="fi" type="number" id="caja-cm-usd" placeholder="0" min="0" step="0.01">
+              </div>
+              <div>
+                <label class="fl">Fecha</label>
+                <input class="fi" type="date" id="caja-form-fecha-cm">
+              </div>
             </div>
           </div>
           <div style="margin-bottom:12px">
@@ -10067,10 +10101,15 @@ function renderCajaProyeccion(){
 
 function cajaToggleTipo(tipo){
   const isTransfer=tipo==="transferencia";
-  document.getElementById("caja-fields-normal").style.display=isTransfer?"none":"";
+  const isCM=tipo==="cambiomoneda";
+  document.getElementById("caja-fields-normal").style.display=(isTransfer||isCM)?"none":"";
   document.getElementById("caja-fields-transfer").style.display=isTransfer?"":"none";
+  document.getElementById("caja-fields-cambiomoneda").style.display=isCM?"":"none";
+  // El monto principal se usa solo para transferencia normal e ingreso/egreso
+  document.getElementById("caja-form-monto").closest("div").style.display=isCM?"none":"";
   const conc=document.getElementById("caja-form-concepto");
-  if(conc)conc.placeholder=isTransfer?"Ej: Retiro banco para gastos operativos...":"Ej: Pago inscripción curso...";
+  if(conc)conc.placeholder=isTransfer?"Ej: Retiro banco para gastos operativos...":isCM?"Ej: Compra de dólares...":"Ej: Pago inscripción curso...";
+  if(isCM)cajaPopularCMOpts();
 }
 
 function cajaPopularTransferOpts(){
@@ -10101,6 +10140,39 @@ function cajaPopularTransferOpts(){
   }
 }
 
+function cajaPopularCMOpts(){
+  const hoy=new Date().toISOString().split("T")[0];
+  const cmFecha=document.getElementById("caja-form-fecha-cm");
+  if(cmFecha&&!cmFecha.value)cmFecha.value=hoy;
+
+  const optsARS=[
+    {v:"caja:SUDES:ARS",   l:"💵 Caja $ SUDES"},
+    {v:"caja:POINTERS:ARS",l:"💵 Caja $ POINTERS"},
+    {v:"banco:SUDES",      l:"🏦 Banco Macro SUDES"},
+    {v:"banco:POINTERS",   l:"🏦 Banco Macro POINTERS"},
+  ];
+  const optsUSD=[
+    {v:"caja:SUDES:USD",   l:"💵 Caja U$D SUDES"},
+    {v:"caja:POINTERS:USD",l:"💵 Caja U$D POINTERS"},
+  ];
+  const desde=document.getElementById("caja-cm-desde");
+  const hacia=document.getElementById("caja-cm-hacia");
+  if(desde)desde.innerHTML=optsARS.map(o=>`<option value="${o.v}">${esc(o.l)}</option>`).join("");
+  if(hacia)hacia.innerHTML=optsUSD.map(o=>`<option value="${o.v}">${esc(o.l)}</option>`).join("");
+  // Preseleccionar sociedad activa
+  const soc=cajaSociedad;
+  if(desde){const match=[...desde.options].findIndex(o=>o.value.includes(soc));if(match>=0)desde.selectedIndex=match;}
+  if(hacia){const match=[...hacia.options].findIndex(o=>o.value.includes(soc));if(match>=0)hacia.selectedIndex=match;}
+}
+
+function cajaCMCalc(){
+  const ars=parseFloat(document.getElementById("caja-cm-ars")?.value)||0;
+  const cotiz=parseFloat(document.getElementById("caja-cm-cotiz")?.value)||0;
+  const usdInput=document.getElementById("caja-cm-usd");
+  if(usdInput&&ars>0&&cotiz>0)usdInput.value=(ars/cotiz).toFixed(2);
+  else if(usdInput&&(!ars||!cotiz))usdInput.value="";
+}
+
 async function saveCajaMovimiento(){
   const tipo=document.getElementById("caja-form-tipo")?.value;
   const monto=parseFloat(document.getElementById("caja-form-monto")?.value)||0;
@@ -10108,7 +10180,7 @@ async function saveCajaMovimiento(){
   const obs=document.getElementById("caja-form-obs")?.value?.trim()||null;
 
   if(!concepto){toast("Ingresá un concepto","err");return;}
-  if(!monto||monto<=0){toast("Ingresá un monto válido","err");return;}
+  if(tipo!=="cambiomoneda"&&(!monto||monto<=0)){toast("Ingresá un monto válido","err");return;}
 
   // ── TRANSFERENCIA ──────────────────────────────────────────────────────────
   if(tipo==="transferencia"){
@@ -10180,6 +10252,56 @@ async function saveCajaMovimiento(){
       document.getElementById("caja-form-concepto").value="";
       document.getElementById("caja-form-obs").value="";
       toast("Transferencia registrada","ok");
+      renderCaja();
+    }catch(e){toast("Error: "+e.message,"err");}
+    return;
+  }
+
+  // ── CAMBIO DE MONEDA ──────────────────────────────────────────────────────
+  if(tipo==="cambiomoneda"){
+    const desde=document.getElementById("caja-cm-desde")?.value;
+    const hacia=document.getElementById("caja-cm-hacia")?.value;
+    const montoARS=parseFloat(document.getElementById("caja-cm-ars")?.value)||0;
+    const cotiz=parseFloat(document.getElementById("caja-cm-cotiz")?.value)||0;
+    const montoUSD=parseFloat(document.getElementById("caja-cm-usd")?.value)||(cotiz>0?montoARS/cotiz:0);
+    const fecha=document.getElementById("caja-form-fecha-cm")?.value||new Date().toISOString().split("T")[0];
+
+    if(!desde||!hacia){toast("Seleccioná origen y destino","err");return;}
+    if(montoARS<=0){toast("Ingresá el monto en ARS","err");return;}
+    if(cotiz<=0){toast("Ingresá la cotización","err");return;}
+    if(montoUSD<=0){toast("El monto USD debe ser mayor a 0","err");return;}
+
+    const parseAcct=(v)=>{
+      const parts=v.split(":");
+      return{tipo:parts[0],sociedad:parts[1],moneda:parts[2]||"ARS"};
+    };
+    const D=parseAcct(desde), H=parseAcct(hacia);
+    const ref=`Cambio moneda: ${document.getElementById("caja-cm-desde").selectedOptions[0].text} → ${document.getElementById("caja-cm-hacia").selectedOptions[0].text} @ $${cotiz.toLocaleString("es-AR")}/USD`;
+
+    try{
+      // EGRESO en ARS
+      if(D.tipo==="caja"){
+        await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
+          sociedad:D.sociedad,fecha,tipo:"egreso",concepto,categoria:"Cambio de moneda",
+          monto:montoARS,moneda:"ARS",observaciones:obs?`${ref} | ${obs}`:ref,creado_por:loggedUser?.nombre||null
+        })});
+      } else if(D.tipo==="banco"){
+        await sb("banco_movimientos",{method:"POST",body:JSON.stringify({
+          sociedad:D.sociedad,fecha,concepto,importe:-montoARS,saldo:null,conciliado:false,referencia:ref
+        })});
+      }
+      // INGRESO en USD
+      await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
+        sociedad:H.sociedad,fecha,tipo:"ingreso",concepto,categoria:"Cambio de moneda",
+        monto:montoUSD,moneda:"USD",observaciones:obs?`${ref} | ${obs}`:ref,creado_por:loggedUser?.nombre||null
+      })});
+
+      document.getElementById("caja-cm-ars").value="";
+      document.getElementById("caja-cm-cotiz").value="";
+      document.getElementById("caja-cm-usd").value="";
+      document.getElementById("caja-form-concepto").value="";
+      document.getElementById("caja-form-obs").value="";
+      toast("Cambio de moneda registrado","ok");
       renderCaja();
     }catch(e){toast("Error: "+e.message,"err");}
     return;
