@@ -17695,9 +17695,12 @@ function buildSicoreOptions(){
     Object.entries(cat).map(([cod,v])=>`<option value="${cod}|${v.pct}">${cod} — ${v.desc} (${v.pct}%)</option>`).join("");
 }
 
-function abrirOrdenPago(compId,fromPendientes=false){
+async function abrirOrdenPago(compId,fromPendientes=false){
   const c=comprobantes.find(x=>x.id===compId);
   if(!c)return;
+  if(!mediosPago.length){
+    try{mediosPago=await sb("medios_pago?select=*&order=orden.asc,nombre.asc")||[];}catch(_){}
+  }
   document.getElementById("mop-comp-id").value=compId;
   document.getElementById("mop-proveedor").textContent=c.proveedor||"Sin proveedor";
   document.getElementById("mop-cuit").textContent=c.cuit||"—";
