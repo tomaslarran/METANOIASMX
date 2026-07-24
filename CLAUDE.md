@@ -441,6 +441,22 @@ ALTER TABLE cursos ADD CONSTRAINT cursos_estado_check CHECK (estado IN ('Borrado
 - ✅ `agente-mensajes` lee los planes dinámicamente en cada request — precios actualizables sin redeploy
 - ✅ Módulo `pg-planes` en el panel (nav Cursos → Planes plataforma): CRUD de planes con modal, toggle sin costo
 
+## Implementado (24 Jul 2026) — Caja: cambio de moneda, historial, transferencias inter-sociedad
+
+- ✅ Transferencias entre cuentas (caja, banco, inversiones) con trazabilidad — referencia "Desde → Hacia" en `observaciones`, campo `moneda` en `caja_movimientos`
+- ✅ 4 cajas independientes: ARS/USD × SUDES/POINTERS — selector de sociedad y moneda en toggle buttons; cada combinación tiene su propia vista y KPIs
+- ✅ Tipo **"💱 Cambio de moneda"** en formulario de caja — selecciona cuenta origen ARS (caja o banco) y cuenta destino USD, ingresa monto ARS + cotización (ARS/USD), calcula monto USD automáticamente. Crea egreso ARS + ingreso USD en una sola operación. Observaciones registran la tasa usada.
+- ✅ **Historial de caja** — botón "📋 Historial" en la barra de controles. Modal con filtros: sociedad, moneda, fecha desde/hasta (default: mes actual). Resumen de ingresos/egresos/balance neto por sociedad+moneda. Tabla completa paginable. Botón "📥 Exportar Excel" genera `.xlsx` con todos los campos.
+- ✅ Auto-crear cuenta contable al agregar medio de pago — `autoCrearCuentaContable()` busca el padre correcto en `plan_cuentas` por tipo (activo/pasivo) y genera el siguiente código. PATCH al medio con `cuenta_contable_id`.
+- ✅ Cambiar contraseña desde topbar — dropdown usuario → 🔑 Cambiar contraseña → modal con validación, llama a `PUT /auth/v1/user` con el JWT del usuario.
+- ✅ Fix OP modal — `abrirOrdenPago` es async y lazy-carga `medios_pago` si no fueron cargados (cuando se abre CF sin visitar la tab Cuentas primero).
+
+**SQL pendiente (ya documentado en sesión anterior):**
+```sql
+ALTER TABLE caja_movimientos ADD COLUMN IF NOT EXISTS moneda text DEFAULT 'ARS';
+ALTER TABLE medios_pago ADD COLUMN IF NOT EXISTS cuenta_contable_id uuid REFERENCES plan_cuentas(id);
+```
+
 ## Implementado (16 Jul 2026) — Finanzas: KPIs, cierre balance, historial integrado, reporte contable
 
 - ✅ Historial de pagos integrado como sub-tab dentro de "Pendientes de pago" — eliminado tab separado. Muestra facturas pagadas con retenciones Ganancias/IIBB desglosadas, cuotas con capital+intereses, sueldos. `ordenes_pago` se carga en `loadCF`.
