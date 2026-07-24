@@ -2216,9 +2216,18 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
                 <option value="transferencia">↔️ Transferencia</option>
               </select>
             </div>
-            <div>
-              <label class="fl">Monto ($)</label>
-              <input class="fi" type="number" id="caja-form-monto" placeholder="0">
+            <div style="display:flex;gap:6px;align-items:flex-end">
+              <div style="flex:0 0 72px">
+                <label class="fl">Moneda</label>
+                <select class="fi" id="caja-form-moneda" style="padding-left:6px">
+                  <option value="ARS">$ ARS</option>
+                  <option value="USD">U$D</option>
+                </select>
+              </div>
+              <div style="flex:1">
+                <label class="fl">Monto</label>
+                <input class="fi" type="number" id="caja-form-monto" placeholder="0" min="0" step="0.01">
+              </div>
             </div>
           </div>
           <div style="margin-bottom:8px">
@@ -9903,7 +9912,7 @@ async function renderCaja(){
     tabla.innerHTML=`<div style="text-align:center;padding:24px;color:var(--tx3);font-size:13px">Sin movimientos registrados para hoy.<br>Usá el formulario para agregar.</div>`;
     return;
   }
-  let ingresos=0,egresos=0;
+  const balances={};
   tabla.innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead><tr style="background:var(--surf2);color:var(--tx3);font-size:10px;text-transform:uppercase;letter-spacing:.5px">
       <th style="padding:8px 10px;text-align:left">Tipo</th>
@@ -9915,8 +9924,12 @@ async function renderCaja(){
     <tbody>
     ${cajaMovimientos.map(m=>{
       const ing=m.tipo==="ingreso";
-      if(ing)ingresos+=parseFloat(m.monto)||0;
-      else egresos+=parseFloat(m.monto)||0;
+      const mon=m.moneda||"ARS";
+      const v=parseFloat(m.monto)||0;
+      if(!balances[mon])balances[mon]={ing:0,eg:0};
+      if(ing)balances[mon].ing+=v; else balances[mon].eg+=v;
+      const sym=mon==="USD"?"U$D":"$";
+      const fmtCur=n=>`${sym}${Math.round(Math.abs(n)).toLocaleString("es-AR")}`;
       return`<tr style="border-bottom:1px solid var(--b)">
         <td style="padding:8px 10px"><span style="background:${ing?"color-mix(in srgb,var(--gr) 15%,var(--surf))":"color-mix(in srgb,var(--re) 15%,var(--surf));"};color:${ing?"var(--gr)":"var(--re)"};padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600">${ing?"↑ Ingreso":"↓ Egreso"}</span></td>
         <td style="padding:8px 10px;color:var(--tx)">
@@ -9924,15 +9937,23 @@ async function renderCaja(){
           ${m.observaciones?`<div style="font-size:10px;color:var(--tx3);margin-top:2px">${esc(m.observaciones)}</div>`:""}
         </td>
         <td style="padding:8px 10px;color:var(--tx3)">${esc(m.categoria||"—")}</td>
-        <td style="padding:8px 10px;text-align:right;font-weight:600;color:${ing?"var(--gr)":"var(--re)"}">${ing?"+":"-"}${fmtM(m.monto)}</td>
+        <td style="padding:8px 10px;text-align:right;font-weight:600;color:${ing?"var(--gr)":"var(--re)"}">
+          ${ing?"+":"-"}${fmtCur(v)}
+          ${mon!=="ARS"?`<span style="margin-left:4px;font-size:9px;font-weight:700;background:color-mix(in srgb,#f59e0b 15%,var(--surf));color:#d97706;padding:1px 5px;border-radius:6px">${mon}</span>`:""}
+        </td>
         <td style="padding:8px 10px;text-align:center"><button onclick="deleteCajaMovimiento('${m.id}')" style="background:none;border:none;color:var(--re);cursor:pointer;font-size:13px" title="Eliminar">🗑</button></td>
       </tr>`;
     }).join("")}
-    <tr style="background:var(--surf2);font-weight:700;font-size:12px">
-      <td colspan="3" style="padding:8px 10px;color:var(--tx3)">Balance del día</td>
-      <td style="padding:8px 10px;text-align:right;color:${ingresos-egresos>=0?"var(--gr)":"var(--re)"}">${ingresos-egresos>=0?"+":""}${fmtM(ingresos-egresos)}</td>
-      <td></td>
-    </tr>
+    ${Object.entries(balances).map(([mon,b])=>{
+      const net=b.ing-b.eg;
+      const sym=mon==="USD"?"U$D":"$";
+      const fmtCur=n=>`${sym}${Math.round(Math.abs(n)).toLocaleString("es-AR")}`;
+      return`<tr style="background:var(--surf2);font-weight:700;font-size:12px">
+        <td colspan="3" style="padding:8px 10px;color:var(--tx3)">Balance del día ${mon!=="ARS"?`<span style="font-size:9px;background:color-mix(in srgb,#f59e0b 15%,var(--surf2));color:#d97706;padding:1px 5px;border-radius:6px">${mon}</span>`:""}</td>
+        <td style="padding:8px 10px;text-align:right;color:${net>=0?"var(--gr)":"var(--re)"}">${net>=0?"+":""}${fmtCur(net)}</td>
+        <td></td>
+      </tr>`;
+    }).join("")}
     </tbody></table>`;
 }
 
@@ -10104,11 +10125,12 @@ async function saveCajaMovimiento(){
   const cat=document.getElementById("caja-form-cat")?.value;
   const fecha=document.getElementById("caja-form-fecha")?.value||new Date().toISOString().split("T")[0];
   const medio=document.getElementById("caja-form-medio")?.value||null;
+  const moneda=document.getElementById("caja-form-moneda")?.value||"ARS";
 
   try{
     await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
       sociedad:cajaSociedad,fecha,tipo,concepto,categoria:cat||null,
-      monto,medio_pago:medio||null,observaciones:obs,creado_por:loggedUser?.nombre||null
+      monto,moneda,medio_pago:medio||null,observaciones:obs,creado_por:loggedUser?.nombre||null
     })});
     document.getElementById("caja-form-monto").value="";
     document.getElementById("caja-form-concepto").value="";
