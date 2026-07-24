@@ -9671,7 +9671,7 @@ function renderMediosPago(){
         <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf);border:1px solid var(--b);border-radius:var(--r);margin-bottom:6px;opacity:${m.activo?1:.5}">
           <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:13px">${esc(m.nombre)}</div>
-            <div style="font-size:11px;color:var(--tx3)">${m.banco?esc(m.banco)+" · ":""}${esc(m.sociedad||"Ambas")}${m.detalle?" · "+esc(m.detalle):""}</div>
+            <div style="font-size:11px;color:var(--tx3)">${m.banco?esc(m.banco)+" · ":""}${esc(m.sociedad||"Ambas")}${m.detalle?" · "+esc(m.detalle):""}${(()=>{const c=m.cuenta_contable_id&&planCuentas.find(x=>x.id===m.cuenta_contable_id);return c?` · <span style="font-family:monospace;background:var(--surf2);padding:1px 5px;border-radius:4px">${esc(c.codigo)}</span>`:' · <span style="color:var(--re);font-size:10px">sin cuenta contable</span>';})()}</div>
           </div>
           <span class="badge" style="font-size:10px;background:${m.activo?"var(--gr)":"var(--tx3)"};color:#fff">${m.activo?"Activo":"Inactivo"}</span>
           <button class="btn sm" onclick="openModalMedioPago('${m.id}')">✏️</button>
@@ -9721,12 +9721,69 @@ async function saveMedioPago(){
       if(idx>=0)mediosPago[idx]={...mediosPago[idx],...payload};
     } else {
       const [created]=await sb("medios_pago",{method:"POST",body:JSON.stringify(payload)});
-      if(created)mediosPago.push(created);
+      if(created){
+        mediosPago.push(created);
+        await autoCrearCuentaContable(created);
+      }
     }
     closeModal("modal-medio-pago");
     renderMediosPago();
     toast(id?"Actualizado":"Creado","ok");
   }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function autoCrearCuentaContable(medio){
+  try{
+    const CFG={
+      efectivo:       {tipo:"activo", naturaleza:"deudora"},
+      cuenta_bancaria:{tipo:"activo", naturaleza:"deudora"},
+      cheque:         {tipo:"activo", naturaleza:"deudora"},
+      tarjeta:        {tipo:"pasivo", naturaleza:"acreedora"},
+    };
+    const cfg=CFG[medio.tipo]||{tipo:"activo",naturaleza:"deudora"};
+
+    // Buscar cuenta padre: no imputable del mismo tipo con nivel más alto
+    const padres=planCuentas
+      .filter(c=>c.tipo===cfg.tipo&&c.activa&&!c.imputable)
+      .sort((a,b)=>b.nivel-a.nivel);
+    const padre=padres[0]||null;
+
+    // Código siguiente bajo el padre (o raíz si no hay padre)
+    let codigo;
+    if(padre){
+      const hijos=planCuentas.filter(c=>c.cuenta_padre_id===padre.id);
+      const nums=hijos.map(c=>parseInt(c.codigo.split(".").pop())||0);
+      const next=nums.length?Math.max(...nums)+1:1;
+      codigo=`${padre.codigo}.${next}`;
+    }else{
+      const raices=planCuentas.filter(c=>c.tipo===cfg.tipo&&!c.cuenta_padre_id);
+      const nums=raices.map(c=>parseInt(c.codigo.split(".")[0])||0);
+      const next=nums.length?Math.max(...nums)+1:(cfg.tipo==="activo"?1:2);
+      codigo=`${next}`;
+    }
+
+    const nombre=[medio.banco,medio.nombre].filter(Boolean).join(" — ");
+    const sociedad=medio.sociedad!=="Ambas"?medio.sociedad:null;
+    const data={
+      codigo,nombre,
+      tipo:cfg.tipo,naturaleza:cfg.naturaleza,
+      nivel:padre?padre.nivel+1:1,
+      imputable:true,activa:true,
+      sociedad,cuenta_padre_id:padre?.id||null,
+    };
+
+    const [cuenta]=await sb("plan_cuentas",{method:"POST",body:JSON.stringify(data)});
+    if(cuenta){
+      planCuentas.push(cuenta);
+      await sb(`medios_pago?id=eq.${medio.id}`,{method:"PATCH",body:JSON.stringify({cuenta_contable_id:cuenta.id})});
+      const m=mediosPago.find(x=>x.id===medio.id);
+      if(m)m.cuenta_contable_id=cuenta.id;
+      toast(`Cuenta contable ${codigo} creada y vinculada`,"inf");
+    }
+  }catch(e){
+    console.warn("autoCrearCuentaContable:",e.message);
+    toast("Medio creado, pero no se pudo crear la cuenta contable automáticamente","inf");
+  }
 }
 
 async function toggleMedioPago(id,activo){
