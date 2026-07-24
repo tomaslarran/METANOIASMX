@@ -9888,7 +9888,10 @@ async function renderCaja(){
       else egresos+=parseFloat(m.monto)||0;
       return`<tr style="border-bottom:1px solid var(--b)">
         <td style="padding:8px 10px"><span style="background:${ing?"color-mix(in srgb,var(--gr) 15%,var(--surf))":"color-mix(in srgb,var(--re) 15%,var(--surf));"};color:${ing?"var(--gr)":"var(--re)"};padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600">${ing?"↑ Ingreso":"↓ Egreso"}</span></td>
-        <td style="padding:8px 10px;color:var(--tx)">${esc(m.concepto)}${m.medio_pago?`<span style="margin-left:6px;font-size:10px;color:var(--tx3);background:var(--surf2);padding:1px 6px;border-radius:8px">${esc(m.medio_pago)}</span>`:""}</td>
+        <td style="padding:8px 10px;color:var(--tx)">
+          ${esc(m.concepto)}${m.medio_pago?`<span style="margin-left:6px;font-size:10px;color:var(--tx3);background:var(--surf2);padding:1px 6px;border-radius:8px">${esc(m.medio_pago)}</span>`:""}
+          ${m.observaciones?`<div style="font-size:10px;color:var(--tx3);margin-top:2px">${esc(m.observaciones)}</div>`:""}
+        </td>
         <td style="padding:8px 10px;color:var(--tx3)">${esc(m.categoria||"—")}</td>
         <td style="padding:8px 10px;text-align:right;font-weight:600;color:${ing?"var(--gr)":"var(--re)"}">${ing?"+":"-"}${fmtM(m.monto)}</td>
         <td style="padding:8px 10px;text-align:center"><button onclick="deleteCajaMovimiento('${m.id}')" style="background:none;border:none;color:var(--re);cursor:pointer;font-size:13px" title="Eliminar">🗑</button></td>
@@ -10012,7 +10015,7 @@ async function saveCajaMovimiento(){
       if(D.tipo==="caja"){
         await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
           sociedad:D.sociedad,fecha,tipo:"egreso",concepto,categoria:"Transferencia",
-          monto,observaciones:obs,creado_por:loggedUser?.nombre||null
+          monto,observaciones:obs?`${ref} | ${obs}`:ref,creado_por:loggedUser?.nombre||null
         })});
       } else if(D.tipo==="banco"){
         await sb("banco_movimientos",{method:"POST",body:JSON.stringify({
@@ -10036,7 +10039,7 @@ async function saveCajaMovimiento(){
       if(H.tipo==="caja"){
         await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
           sociedad:H.sociedad,fecha,tipo:"ingreso",concepto,categoria:"Transferencia",
-          monto,observaciones:obs,creado_por:loggedUser?.nombre||null
+          monto,observaciones:obs?`${ref} | ${obs}`:ref,creado_por:loggedUser?.nombre||null
         })});
       } else if(H.tipo==="banco"){
         await sb("banco_movimientos",{method:"POST",body:JSON.stringify({
