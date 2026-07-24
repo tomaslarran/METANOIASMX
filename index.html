@@ -2173,11 +2173,15 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </div>
     <!-- Panel: Caja (contenido movido desde cfpg-caja) -->
     <div id="cuentas-panel-caja" style="display:none">
-      <!-- Selector sociedad -->
+      <!-- Selector sociedad + moneda -->
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
         <div class="fbar">
           <button class="fb on" id="caja-soc-sudes" onclick="cajaSetSociedad('SUDES',this)">SUDES</button>
           <button class="fb" id="caja-soc-ptr" onclick="cajaSetSociedad('POINTERS',this)">POINTERS</button>
+        </div>
+        <div class="fbar">
+          <button class="fb on" id="caja-mon-ars" onclick="cajaSetMoneda('ARS',this)">$ ARS</button>
+          <button class="fb" id="caja-mon-usd" onclick="cajaSetMoneda('USD',this)">U$D</button>
         </div>
         <input type="date" id="caja-fecha-filtro" style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:5px 10px;font-size:12px;color:var(--tx);outline:none" onchange="renderCaja()">
         <button class="btn sm" onclick="document.getElementById('caja-fecha-filtro').value='';renderCaja()">Hoy</button>
@@ -2216,18 +2220,9 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
                 <option value="transferencia">↔️ Transferencia</option>
               </select>
             </div>
-            <div style="display:flex;gap:6px;align-items:flex-end">
-              <div style="flex:0 0 72px">
-                <label class="fl">Moneda</label>
-                <select class="fi" id="caja-form-moneda" style="padding-left:6px">
-                  <option value="ARS">$ ARS</option>
-                  <option value="USD">U$D</option>
-                </select>
-              </div>
-              <div style="flex:1">
-                <label class="fl">Monto</label>
-                <input class="fi" type="number" id="caja-form-monto" placeholder="0" min="0" step="0.01">
-              </div>
+            <div>
+              <label class="fl">Monto</label>
+              <input class="fi" type="number" id="caja-form-monto" placeholder="0" min="0" step="0.01">
             </div>
           </div>
           <div style="margin-bottom:8px">
@@ -9756,12 +9751,19 @@ async function deleteMedioPago(id){
 // ── MÓDULO CAJA ──────────────────────────────────────────────────────────────
 let cajaMovimientos=[];
 let cajaSociedad="SUDES";
+let cajaMoneda="ARS";
 let cajaChartSoc="SUDES";
 let _chartCajaEvol=null;
 
 function cajaSetSociedad(s,btn){
   cajaSociedad=s;
   document.querySelectorAll("#cfpg-caja .fbar:first-child .fb").forEach(b=>b.classList.remove("on"));
+  if(btn)btn.classList.add("on");
+  renderCaja();
+}
+function cajaSetMoneda(m,btn){
+  cajaMoneda=m;
+  document.querySelectorAll("#cfpg-caja .fbar:nth-child(2) .fb").forEach(b=>b.classList.remove("on"));
   if(btn)btn.classList.add("on");
   renderCaja();
 }
@@ -9860,7 +9862,7 @@ async function renderCaja(){
 
   // Cargar movimientos de caja
   try{
-    cajaMovimientos=await sb(`caja_movimientos?sociedad=eq.${cajaSociedad}&fecha=eq.${hoy}&order=created_at.desc`)||[];
+    cajaMovimientos=await sb(`caja_movimientos?sociedad=eq.${cajaSociedad}&moneda=eq.${cajaMoneda}&fecha=eq.${hoy}&order=created_at.desc`)||[];
   }catch(_){cajaMovimientos=[];}
 
   // Inicializar fecha del formulario
@@ -9869,14 +9871,9 @@ async function renderCaja(){
   cajaPopularTransferOpts();
 
   // Calcular KPIs
-  const fmtM=v=>"$"+(Math.round(Math.abs(v))).toLocaleString("es-AR");
-
-  // Saldo banco: último movimiento de banco_movimientos
-  let saldoBanco=0;
-  try{
-    const bm=await sb(`banco_movimientos?sociedad=eq.${cajaSociedad}&order=fecha.desc&limit=1`)||[];
-    if(bm.length)saldoBanco=parseFloat(bm[0].saldo)||0;
-  }catch(_){}
+  const isUSD=cajaMoneda==="USD";
+  const sym=isUSD?"U$D":"$";
+  const fmtM=v=>`${sym}${Math.round(Math.abs(v)).toLocaleString("es-AR")}`;
 
   // Efectivo: suma de movimientos de caja del día
   const efectivoHoy=cajaMovimientos.reduce((s,m)=>{
@@ -9884,19 +9881,27 @@ async function renderCaja(){
     return m.tipo==="ingreso"?s+v:s-v;
   },0);
 
-  // Inversiones: suma de valor_actual
-  const invTotal=cfInversiones.filter(i=>i.estado==="Activa").reduce((s,i)=>s+(parseFloat(i.valor_actual)||0),0);
+  // Saldo banco y inversiones: solo aplican para ARS
+  let saldoBanco=0;
+  let invTotal=0;
+  if(!isUSD){
+    try{
+      const bm=await sb(`banco_movimientos?sociedad=eq.${cajaSociedad}&order=fecha.desc&limit=1`)||[];
+      if(bm.length)saldoBanco=parseFloat(bm[0].saldo)||0;
+    }catch(_){}
+    invTotal=cfInversiones.filter(i=>i.estado==="Activa").reduce((s,i)=>s+(parseFloat(i.valor_actual)||0),0);
+  }
 
-  const total=saldoBanco+efectivoHoy+invTotal;
+  const total=isUSD?efectivoHoy:saldoBanco+efectivoHoy+invTotal;
   const totalColor=total>=0?"var(--gr)":"var(--re)";
 
   const el=id=>document.getElementById(id);
-  if(el("caja-k-banco"))el("caja-k-banco").textContent=fmtM(saldoBanco);
+  if(el("caja-k-banco"))el("caja-k-banco").textContent=isUSD?"—":fmtM(saldoBanco);
   if(el("caja-k-efectivo")){
     el("caja-k-efectivo").textContent=(efectivoHoy>=0?"+":"")+fmtM(efectivoHoy);
     el("caja-k-efectivo").style.color=efectivoHoy>=0?"var(--gr)":"var(--re)";
   }
-  if(el("caja-k-inversiones"))el("caja-k-inversiones").textContent=fmtM(invTotal);
+  if(el("caja-k-inversiones"))el("caja-k-inversiones").textContent=isUSD?"—":fmtM(invTotal);
   if(el("caja-k-total")){el("caja-k-total").textContent=(total>=0?"+":"")+fmtM(total);el("caja-k-total").style.color=totalColor;}
 
   // Proyección 30 días
@@ -10017,10 +10022,12 @@ function cajaPopularTransferOpts(){
   if(trFecha&&!trFecha.value)trFecha.value=hoy;
 
   const opts=[
-    {v:"caja:SUDES",   l:"💵 Caja SUDES"},
-    {v:"caja:POINTERS",l:"💵 Caja POINTERS"},
-    {v:"banco:SUDES",  l:"🏦 Banco Macro SUDES"},
-    {v:"banco:POINTERS",l:"🏦 Banco Macro POINTERS"},
+    {v:"caja:SUDES:ARS",   l:"💵 Caja $ SUDES"},
+    {v:"caja:SUDES:USD",   l:"💵 Caja U$D SUDES"},
+    {v:"caja:POINTERS:ARS",l:"💵 Caja $ POINTERS"},
+    {v:"caja:POINTERS:USD",l:"💵 Caja U$D POINTERS"},
+    {v:"banco:SUDES",      l:"🏦 Banco Macro SUDES"},
+    {v:"banco:POINTERS",   l:"🏦 Banco Macro POINTERS"},
     ...(cfInversiones||[]).filter(i=>i.estado==="Activa").map(i=>({
       v:`inv:${i.id}:${i.sociedad}`,
       l:`📈 ${i.nombre} (${i.sociedad})`
@@ -10055,9 +10062,9 @@ async function saveCajaMovimiento(){
     if(desde===hacia){toast("Origen y destino no pueden ser iguales","err");return;}
 
     const parseAcct=(v)=>{
-      const [tipo,...rest]=v.split(":");
-      if(tipo==="inv")return{tipo:"inv",id:rest[0],sociedad:rest[1]};
-      return{tipo,sociedad:rest[0]};
+      const parts=v.split(":");
+      if(parts[0]==="inv")return{tipo:"inv",id:parts[1],sociedad:parts[2]};
+      return{tipo:parts[0],sociedad:parts[1],moneda:parts[2]||"ARS"};
     };
     const D=parseAcct(desde), H=parseAcct(hacia);
     const ref=`Transferencia: ${document.getElementById("caja-tr-desde").selectedOptions[0].text} → ${document.getElementById("caja-tr-hacia").selectedOptions[0].text}`;
@@ -10067,7 +10074,7 @@ async function saveCajaMovimiento(){
       if(D.tipo==="caja"){
         await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
           sociedad:D.sociedad,fecha,tipo:"egreso",concepto,categoria:"Transferencia",
-          monto,observaciones:obs?`${ref} | ${obs}`:ref,creado_por:loggedUser?.nombre||null
+          monto,moneda:D.moneda||"ARS",observaciones:obs?`${ref} | ${obs}`:ref,creado_por:loggedUser?.nombre||null
         })});
       } else if(D.tipo==="banco"){
         await sb("banco_movimientos",{method:"POST",body:JSON.stringify({
@@ -10091,7 +10098,7 @@ async function saveCajaMovimiento(){
       if(H.tipo==="caja"){
         await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
           sociedad:H.sociedad,fecha,tipo:"ingreso",concepto,categoria:"Transferencia",
-          monto,observaciones:obs?`${ref} | ${obs}`:ref,creado_por:loggedUser?.nombre||null
+          monto,moneda:H.moneda||"ARS",observaciones:obs?`${ref} | ${obs}`:ref,creado_por:loggedUser?.nombre||null
         })});
       } else if(H.tipo==="banco"){
         await sb("banco_movimientos",{method:"POST",body:JSON.stringify({
@@ -10125,7 +10132,7 @@ async function saveCajaMovimiento(){
   const cat=document.getElementById("caja-form-cat")?.value;
   const fecha=document.getElementById("caja-form-fecha")?.value||new Date().toISOString().split("T")[0];
   const medio=document.getElementById("caja-form-medio")?.value||null;
-  const moneda=document.getElementById("caja-form-moneda")?.value||"ARS";
+  const moneda=cajaMoneda;
 
   try{
     await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
