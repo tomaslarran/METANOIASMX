@@ -873,7 +873,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
           <div style="font-size:12px;font-weight:600;color:var(--tx)" id="umenu-nombre">—</div>
           <div style="font-size:11px;color:var(--tx3)" id="umenu-email">—</div>
         </div>
-        <button onclick="openModal('modal-cambiar-clave');toggleUserMenu()" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;color:var(--tx);font-size:13px;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">🔑 Cambiar contraseña</button>
+        <button onclick="openCambiarClave();toggleUserMenu()" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;color:var(--tx);font-size:13px;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">🔑 Cambiar contraseña</button>
         <button onclick="logout()" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;color:var(--re);font-size:13px;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">🚪 Cerrar sesión</button>
       </div>
     </div>
@@ -3549,6 +3549,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="fg">
         <label class="fl">Confirmá la contraseña</label>
         <input type="password" id="cp-pass2" class="fi" placeholder="Repetí la contraseña" autocomplete="new-password" onkeydown="if(event.key==='Enter')doChangePassword()">
+      </div>
+      <div id="cp-totp-row" style="display:none" class="fg">
+        <label class="fl">Código 2FA (Authenticator)</label>
+        <input type="text" id="cp-totp-code" class="fi" maxlength="6" placeholder="000000" autocomplete="one-time-code" style="letter-spacing:4px;font-family:monospace;font-size:16px;text-align:center" oninput="this.value=this.value.replace(/\D/g,'')" onkeydown="if(event.key==='Enter')doChangePassword()">
+        <div style="font-size:11px;color:var(--tx3);margin-top:4px">Tu cuenta tiene 2FA activado. Ingresá el código de tu app de autenticación.</div>
       </div>
       <div id="cp-error" style="display:none;color:var(--re);font-size:12px;text-align:center"></div>
       <div style="display:flex;gap:8px;padding-top:4px">
@@ -15758,27 +15763,83 @@ document.addEventListener("click",function(e){
   if(dd&&dd.style.display!=="none"&&!dd.parentElement.contains(e.target))dd.style.display="none";
 });
 
+function openCambiarClave(){
+  // Pre-mostrar campo TOTP si ya sabemos que el usuario tiene 2FA
+  const totpRow=document.getElementById("cp-totp-row");
+  if(totpRow)totpRow.style.display=mfaFactorId?"":"none";
+  document.getElementById("cp-error").style.display="none";
+  openModal("modal-cambiar-clave");
+}
+
 async function doChangePassword(){
   const p1=document.getElementById("cp-pass1")?.value;
   const p2=document.getElementById("cp-pass2")?.value;
+  const totpCode=document.getElementById("cp-totp-code")?.value?.trim();
   const errEl=document.getElementById("cp-error");
   const btn=document.getElementById("cp-btn");
   const showErr=msg=>{errEl.textContent=msg;errEl.style.display="block";};
+  const showTotp=msg=>{
+    document.getElementById("cp-totp-row").style.display="";
+    document.getElementById("cp-totp-code")?.focus();
+    showErr(msg);
+  };
   errEl.style.display="none";
   if(!p1||p1.length<8){showErr("La contraseña debe tener al menos 8 caracteres.");return;}
   if(p1!==p2){showErr("Las contraseñas no coinciden.");return;}
   btn.disabled=true;btn.textContent="Guardando…";
   try{
+    let token=authToken;
+
+    // Si tiene 2FA activo, elevar sesión a AAL2 primero
+    if(mfaFactorId){
+      if(!totpCode||totpCode.length!==6){showTotp("Ingresá tu código de 6 dígitos del Authenticator.");return;}
+      const chRes=await fetch(`${SB}/auth/v1/factors/${mfaFactorId}/challenge`,{
+        method:"POST",headers:{"Authorization":`Bearer ${authToken}`,"apikey":KEY}
+      });
+      const ch=await chRes.json();
+      if(ch.error||ch.msg)throw new Error(ch.msg||ch.error||"Error al iniciar 2FA");
+      const vRes=await fetch(`${SB}/auth/v1/factors/${mfaFactorId}/verify`,{
+        method:"POST",
+        headers:{"Authorization":`Bearer ${authToken}`,"apikey":KEY,"Content-Type":"application/json"},
+        body:JSON.stringify({challenge_id:ch.id,code:totpCode})
+      });
+      const v=await vRes.json();
+      if(v.error||v.msg)throw new Error("Código 2FA incorrecto o expirado");
+      // Actualizar token a AAL2
+      token=v.access_token||authToken;
+      authToken=token;
+      try{
+        const sess=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
+        sess.access_token=token;
+        if(v.refresh_token)sess.refresh_token=v.refresh_token;
+        sessionStorage.setItem("smx_session",JSON.stringify(sess));
+      }catch(_){}
+    }
+
     const res=await fetch(`${SB}/auth/v1/user`,{
       method:"PUT",
-      headers:{"Content-Type":"application/json","apikey":KEY,"Authorization":`Bearer ${authToken}`},
+      headers:{"Content-Type":"application/json","apikey":KEY,"Authorization":`Bearer ${token}`},
       body:JSON.stringify({password:p1})
     });
     const data=await res.json();
-    if(!res.ok)throw new Error(data.msg||data.error_description||"Error al cambiar la contraseña");
+    if(!res.ok){
+      // Detectar error AAL2 aunque no supiéramos que tenía 2FA
+      const msg=(data.msg||data.error_description||"").toLowerCase();
+      if(msg.includes("aal2")||msg.includes("mfa")){
+        // Buscar el factor TOTP del usuario
+        const uRes=await fetch(`${SB}/auth/v1/user`,{headers:{"Authorization":`Bearer ${authToken}`,"apikey":KEY}});
+        const u=await uRes.json();
+        const totp=(u.factors||[]).find(f=>f.factor_type==="totp"&&f.status==="verified");
+        if(totp){mfaFactorId=totp.id;}
+        showTotp("Tu cuenta tiene 2FA activado. Ingresá el código de tu app de autenticación.");
+        return;
+      }
+      throw new Error(data.msg||data.error_description||"Error al cambiar la contraseña");
+    }
     closeModal("modal-cambiar-clave");
     document.getElementById("cp-pass1").value="";
     document.getElementById("cp-pass2").value="";
+    if(document.getElementById("cp-totp-code"))document.getElementById("cp-totp-code").value="";
     toast("Contraseña actualizada correctamente","ok");
   }catch(e){showErr(e.message);}
   finally{btn.disabled=false;btn.textContent="Guardar";}
