@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
   if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
 
   try {
-    const { url } = await req.json();
+    const { url, tipo } = await req.json();
     if (!url) throw new Error("url requerida");
 
     const apiKey = Deno.env.get("anthropic_api_key") || Deno.env.get("ANTHROPIC_API_KEY");
@@ -37,7 +37,24 @@ Deno.serve(async (req) => {
     const base64 = toBase64(await fileRes.arrayBuffer());
     const isPdf = ct.includes("pdf") || url.toLowerCase().endsWith(".pdf");
 
-    const promptText = "Sos un experto en facturacion argentina. Analiza esta factura y devuelve UNICAMENTE un JSON (sin markdown, sin texto extra):\n" +
+    const promptText = tipo === "vep"
+      ? "Sos un experto en impuestos argentinos (ARCA/AFIP). Analiza este VEP (Volante Electrónico de Pago) y devuelve UNICAMENTE un JSON (sin markdown, sin texto extra):\n" +
+        "{\n" +
+        "  \"tipo_impuesto\": \"IVA|IIBB|Ganancias|Autonomos|Otro\",\n" +
+        "  \"periodo\": \"YYYY-MM o null\",\n" +
+        "  \"fecha_vencimiento\": \"YYYY-MM-DD\",\n" +
+        "  \"monto\": numero,\n" +
+        "  \"numero_vep\": \"numero del VEP si aparece, o null\",\n" +
+        "  \"sociedad\": \"SUDES o POINTERS o null\"\n" +
+        "}\n\n" +
+        "REGLAS:\n" +
+        "1. tipo_impuesto: buscá 'IVA', 'Ingresos Brutos' (→ IIBB), 'Ganancias', 'Autónomos' (→ Autonomos), 'Bienes Personales', etc.\n" +
+        "2. periodo: año y mes al que corresponde el pago (ej: 2026-07).\n" +
+        "3. fecha_vencimiento: fecha límite de pago del VEP (campo 'Válido hasta', 'Vencimiento', 'Fecha de vencimiento').\n" +
+        "4. monto: importe total a pagar, número puro sin puntos de miles (1234.56 no 1.234,56).\n" +
+        "5. sociedad: si el CUIT del contribuyente es 30-71699117-9 → SUDES; si es 30-71696585-2 → POINTERS; si no identificás → null.\n" +
+        "6. null si no encontrás el campo."
+      : "Sos un experto en facturacion argentina. Analiza esta factura y devuelve UNICAMENTE un JSON (sin markdown, sin texto extra):\n" +
       "{\n" +
       "  \"tipo\": \"A|B|C|M|X\",\n" +
       "  \"numero\": \"XXXX-XXXXXXXX\",\n" +

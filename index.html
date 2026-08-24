@@ -2871,6 +2871,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="fb" id="itab-iibb" onclick="setImpTab('iibb',this)">IIBB</button>
     <button class="fb" id="itab-autonomos" onclick="setImpTab('autonomos',this)">Autónomos</button>
     <button class="fb" id="itab-ganancias" onclick="setImpTab('ganancias',this)">Ganancias</button>
+    <button class="fb" id="itab-vep" onclick="setImpTab('vep',this)">📄 VEPs</button>
     <button class="fb admin-only-el" id="itab-parametros" onclick="setImpTab('parametros',this)">⚙️ Parámetros</button>
     <button class="fb admin-only-el" id="itab-plancuentas" onclick="setImpTab('plancuentas',this)">📋 Plan de Cuentas</button>
     <button class="fb admin-only-el" id="itab-libro" onclick="setImpTab('libro',this)">📒 Libro Diario</button>
@@ -2880,6 +2881,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div id="imp-tab-iibb" style="display:none"></div>
   <div id="imp-tab-autonomos" style="display:none"></div>
   <div id="imp-tab-ganancias" style="display:none"></div>
+  <div id="imp-tab-vep" style="display:none"></div>
   <div id="imp-tab-parametros" style="display:none"></div>
   <div id="imp-tab-plancuentas" style="display:none"></div>
   <div id="imp-tab-libro" style="display:none"></div>
@@ -2894,10 +2896,16 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="pgs">Facturas recibidas · registro y envío a Finnegans</div>
     </div>
     <div class="pgh-right">
-      <button class="btn sec" onclick="exportarFinnegans()" title="Exporta los comprobantes Revisados en formato Finnegans">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Exportar XLS
-      </button>
+      <div style="position:relative;display:inline-block">
+        <button class="btn sec" onclick="toggleExportFinnDD()" title="Exporta en formato Finnegans">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Exportar XLS <span style="font-size:10px;margin-left:1px;opacity:.7">▾</span>
+        </button>
+        <div id="export-finn-dd" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--surf);border:1px solid var(--b);border-radius:var(--r);box-shadow:0 4px 16px rgba(0,0,0,.18);z-index:200;min-width:190px">
+          <button onclick="exportarFinnegans('facturas');toggleExportFinnDD()" style="display:block;width:100%;text-align:left;padding:10px 14px;background:none;border:none;color:var(--tx);cursor:pointer;font-size:13px" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">🧾 Facturas</button>
+          <button onclick="exportarFinnegans('nc');toggleExportFinnDD()" style="display:block;width:100%;text-align:left;padding:10px 14px;background:none;border:none;color:var(--tx);cursor:pointer;font-size:13px" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">📝 Notas de crédito</button>
+        </div>
+      </div>
       <button class="btn pri" id="btn-enviar-finn" onclick="enviarEmailFinnegans()" title="Genera el Excel y lo envía por email a Finnegans">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
         Enviar Email
@@ -2943,6 +2951,86 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
   <!-- Lista -->
   <div id="comp-lista"><div class="loading"><div class="loader"></div><div class="lt">Cargando comprobantes...</div></div></div>
+</div>
+
+<!-- ══ MODAL CARGAR VEP ══ -->
+<div id="modal-cargar-vep" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;align-items:center;justify-content:center" onclick="if(event.target===this)closeModal('modal-cargar-vep')">
+  <div style="width:min(520px,96vw);background:var(--bg2);border:1px solid var(--b2);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--b)">
+      <div style="font-size:16px;font-weight:700">📄 Cargar VEP</div>
+      <button onclick="closeModal('modal-cargar-vep')" style="background:none;border:none;color:var(--tx3);cursor:pointer;font-size:18px;line-height:1">✕</button>
+    </div>
+    <div style="padding:20px">
+      <form id="vep-form" onsubmit="event.preventDefault()">
+        <!-- Upload PDF -->
+        <div style="margin-bottom:16px">
+          <label class="fl" style="display:block;margin-bottom:6px">📎 PDF del VEP (opcional — para extracción automática)</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <label style="cursor:pointer;background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:6px 12px;font-size:13px;color:var(--tx)">
+              📁 Seleccionar archivo
+              <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="vepSeleccionarArchivo(this)">
+            </label>
+            <span id="vep-archivo-label" style="font-size:12px;color:var(--tx3);flex:1">Ningún archivo seleccionado</span>
+          </div>
+          <button id="vep-ia-btn" class="btn sec" onclick="analizarVEPconIA()" style="display:none;margin-top:8px;font-size:12px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+            ✨ Extraer datos con IA
+          </button>
+          <div id="vep-ia-status" style="margin-top:6px"></div>
+        </div>
+        <!-- Campos -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <label class="fl">Tipo de impuesto *</label>
+            <select id="vep-tipo" class="fi" style="width:100%;margin-top:4px">
+              <option value="">Seleccionar...</option>
+              <option value="IVA">IVA</option>
+              <option value="IIBB">IIBB</option>
+              <option value="Ganancias">Ganancias</option>
+              <option value="Autonomos">Autónomos</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
+          <div>
+            <label class="fl">Sociedad</label>
+            <select id="vep-sociedad" class="fi" style="width:100%;margin-top:4px">
+              <option value="">—</option>
+              <option value="SUDES">SUDES</option>
+              <option value="POINTERS">POINTERS</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <label class="fl">Período (YYYY-MM)</label>
+            <input id="vep-periodo" class="fi" type="month" style="width:100%;margin-top:4px">
+          </div>
+          <div>
+            <label class="fl">Fecha de vencimiento *</label>
+            <input id="vep-vencimiento" class="fi" type="date" style="width:100%;margin-top:4px" required>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <label class="fl">Monto *</label>
+            <input id="vep-monto" class="fi" type="number" step="0.01" min="0" placeholder="0.00" style="width:100%;margin-top:4px" required>
+          </div>
+          <div>
+            <label class="fl">N° VEP</label>
+            <input id="vep-numero" class="fi" type="text" placeholder="Opcional" style="width:100%;margin-top:4px">
+          </div>
+        </div>
+        <div style="margin-bottom:16px">
+          <label class="fl">Observaciones</label>
+          <input id="vep-obs" class="fi" type="text" placeholder="Notas adicionales" style="width:100%;margin-top:4px">
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn sec" onclick="closeModal('modal-cargar-vep')">Cancelar</button>
+          <button id="vep-save-btn" class="btn pri" onclick="saveVEP()">Guardar VEP</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 
 <!-- ══ MODAL BUSCADOR GLOBAL ══ -->
@@ -4738,6 +4826,16 @@ async function renderAlertas(){
     });
   }
 
+  // ── Alertas de VEPs pendientes ──
+  (vepData||[]).filter(v=>v.estado!=="pagado"&&v.fecha_vencimiento).forEach(v=>{
+    const dv=days(v.fecha_vencimiento);
+    if(dv===null||dv>30)return;
+    alertas.push({tipo:"impuesto",icon:"📄",urgencia:dv<0?"critica":dv===0?"hoy":dv<=7?"semana":"mes",d:dv,
+      titulo:`VEP ${v.tipo_impuesto}${v.periodo?" "+v.periodo.replace(/(\d{4})-(\d{2})/,"$2/$1"):""}${v.sociedad?" — "+v.sociedad:""}`,
+      sub:`$${Math.round(v.monto||0).toLocaleString("es-AR")}`,fecha:v.fecha_vencimiento,
+      onclick:`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('vep')`});
+  });
+
   // ── Alertas de tokens API ──
   try{
     const tokens=await sb("tokens_api?select=*");
@@ -5114,7 +5212,7 @@ function goPage(name,el){
       const bc=document.getElementById("cal-btn-cursos");
       if(bc){bc.classList.add("on");bc.style.display="";}
     }
-    Promise.all([loadCursoTareasCalendario(),loadCF()]).then(()=>renderCalendario());
+    Promise.all([loadCursoTareasCalendario(),loadCF(),loadVEPs()]).then(()=>renderCalendario());
   }
   if(name==="rutinas"){
     // Recargar rutinas frescas al navegar
@@ -15030,6 +15128,16 @@ function buildEventos(){
     cfInversiones.filter(i=>i.estado==="Activa"&&i.fecha_vencimiento).forEach(i=>{
       addEvento(i.fecha_vencimiento,{tipo:"ev-inv",dot:"#F59E0B",nombre:i.nombre,sub:`Vencimiento inversión — $${Math.round(i.capital||0).toLocaleString("es-AR")}`});
     });
+    // VEPs pendientes
+    (vepData||[]).filter(v=>v.estado!=="pagado"&&v.fecha_vencimiento).forEach(v=>{
+      const dv=days(v.fecha_vencimiento);
+      const urgente=dv!==null&&dv<=3&&dv>=-1;
+      addEvento(v.fecha_vencimiento,{tipo:"ev-vep",dot:urgente?"#DC2626":"#F97316",
+        nombre:`⚠️ VEP ${v.tipo_impuesto}${v.periodo?" "+v.periodo.replace(/(\d{4})-(\d{2})/,"$2/$1"):""}`,
+        sub:`$${Math.round(v.monto||0).toLocaleString("es-AR")} — ${v.sociedad||""}`,
+        onclick:`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('vep')`
+      });
+    });
   }
 
   return eventos;
@@ -16531,7 +16639,7 @@ const GANANCIAS_TASA=0.35; // SRL
 
 function setImpTab(tab,btn){
   impTab=tab;
-  ["iva","iibb","autonomos","ganancias","parametros","plancuentas","libro","resultados"].forEach(t=>{
+  ["iva","iibb","autonomos","ganancias","vep","parametros","plancuentas","libro","resultados"].forEach(t=>{
     const el=document.getElementById("imp-tab-"+t);
     const b=document.getElementById("itab-"+t);
     if(el)el.style.display=t===tab?"":"none";
@@ -16541,10 +16649,212 @@ function setImpTab(tab,btn){
   if(tab==="iibb")renderImpIIBB();
   if(tab==="autonomos")renderImpAutonomos();
   if(tab==="ganancias")renderImpGanancias();
+  if(tab==="vep")renderVEPs();
   if(tab==="parametros")renderParametrosImpositivos();
   if(tab==="plancuentas")renderPlanCuentas();
   if(tab==="libro")renderLibroDiario();
   if(tab==="resultados")renderEstadoResultados();
+}
+
+/* ══ VEPs ══ */
+let vepData=[], vepArchivoUrl=null, vepArchivoPath=null;
+
+async function loadVEPs(){
+  try{ vepData=await sb("impuestos_vep?select=*&order=fecha_vencimiento.asc"); }catch(e){ vepData=[]; }
+}
+
+function renderVEPs(){
+  const el=document.getElementById("imp-tab-vep");
+  if(!el)return;
+  const fmtM=v=>"$"+(Math.round(Math.abs(parseFloat(v)||0))).toLocaleString("es-AR");
+  const fmtF=f=>f?f.slice(0,10).split("-").reverse().join("/"):"—";
+  const now=today();
+  const pendientes=vepData.filter(v=>v.estado!=="pagado");
+  const pagados=vepData.filter(v=>v.estado==="pagado");
+  el.innerHTML=`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div>
+      <div style="font-size:14px;font-weight:700;color:var(--tx)">VEPs pendientes: ${pendientes.length}</div>
+      <div style="font-size:12px;color:var(--tx3);margin-top:2px">Volantes Electrónicos de Pago — ARCA/AFIP</div>
+    </div>
+    <button class="btn pri" onclick="openCargarVEP()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Cargar VEP
+    </button>
+  </div>
+  ${pendientes.length||pagados.length?`
+  <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="background:var(--surf2);color:var(--tx3);font-size:11px;text-transform:uppercase;letter-spacing:.5px">
+      <th style="padding:8px 12px;text-align:left">Tipo</th>
+      <th style="padding:8px 12px;text-align:left">Período</th>
+      <th style="padding:8px 12px;text-align:left">Sociedad</th>
+      <th style="padding:8px 12px;text-align:center">Vencimiento</th>
+      <th style="padding:8px 12px;text-align:right">Monto</th>
+      <th style="padding:8px 12px;text-align:center">Estado</th>
+      <th style="padding:8px 12px;text-align:center">Acciones</th>
+    </tr></thead>
+    <tbody>
+    ${[...pendientes,...pagados].map(v=>{
+      const venc=v.fecha_vencimiento;
+      const dv=days(venc);
+      const vencida=dv!==null&&dv<0&&v.estado!=="pagado";
+      const urgente=dv!==null&&dv>=0&&dv<=7&&v.estado!=="pagado";
+      return`<tr style="border-bottom:1px solid var(--b)${vencida?" background:rgba(239,68,68,.04)":""}">
+        <td style="padding:8px 12px;font-weight:600">${esc(v.tipo_impuesto||"—")}</td>
+        <td style="padding:8px 12px;color:var(--tx3)">${v.periodo?v.periodo.replace(/(\d{4})-(\d{2})/,"$2/$1"):"—"}</td>
+        <td style="padding:8px 12px;color:var(--tx3)">${esc(v.sociedad||"—")}</td>
+        <td style="padding:8px 12px;text-align:center;color:${vencida?"var(--re)":urgente?"var(--am)":"var(--tx3)"};font-weight:${vencida||urgente?700:400}">
+          ${fmtF(venc)}${vencida?" ⚠️":""}
+        </td>
+        <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--re)">${fmtM(v.monto)}</td>
+        <td style="padding:8px 12px;text-align:center">
+          ${v.estado==="pagado"
+            ?`<span style="background:rgba(16,185,129,.12);color:var(--gr);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">✓ Pagado</span>`
+            :`<span style="background:rgba(245,158,11,.12);color:var(--am);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">⏳ Pendiente</span>`}
+        </td>
+        <td style="padding:8px 8px;text-align:center">
+          <div style="display:flex;gap:6px;justify-content:center">
+            ${v.estado!=="pagado"?`<button onclick="generarOPdesdeVEP('${v.id}')" style="font-size:11px;padding:3px 8px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.3);color:#3B82F6;border-radius:6px;cursor:pointer;white-space:nowrap">💳 OP</button>`:""}
+            ${v.estado!=="pagado"?`<button onclick="marcarVEPPagado('${v.id}')" style="font-size:11px;padding:3px 8px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:var(--gr);border-radius:6px;cursor:pointer;white-space:nowrap">✓ Pagado</button>`:""}
+            ${v.storage_path?`<a href="${v.storage_path}" target="_blank" style="font-size:11px;padding:3px 8px;background:var(--surf2);border:1px solid var(--b);color:var(--tx3);border-radius:6px;cursor:pointer;text-decoration:none;white-space:nowrap">📄 PDF</a>`:""}
+            <button onclick="deleteVEP('${v.id}')" style="font-size:11px;padding:3px 8px;background:none;border:none;color:var(--re);cursor:pointer">🗑</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join("")}
+    </tbody>
+  </table>
+  </div>`:`<div style="text-align:center;padding:40px;color:var(--tx3)"><div style="font-size:32px;margin-bottom:12px">📄</div><div style="font-size:14px">No hay VEPs cargados</div><div style="font-size:12px;margin-top:6px">Subí un PDF de VEP de ARCA para extraer los datos automáticamente</div></div>`}
+  `;
+}
+
+function openCargarVEP(){
+  vepArchivoUrl=null; vepArchivoPath=null;
+  openModal("modal-cargar-vep");
+  document.getElementById("vep-form").reset();
+  document.getElementById("vep-archivo-label").textContent="Ningún archivo seleccionado";
+  document.getElementById("vep-ia-btn").style.display="none";
+  document.getElementById("vep-ia-status").textContent="";
+}
+
+async function vepSeleccionarArchivo(input){
+  const file=input.files[0]; if(!file)return;
+  const label=document.getElementById("vep-archivo-label");
+  label.textContent="Subiendo...";
+  try{
+    const ext=file.name.split(".").pop().toLowerCase();
+    const fname=`vep_${Date.now()}.${ext}`;
+    const {createClient}=window.supabase||{};
+    // Upload directo a storage via REST
+    const uploadRes=await fetch(`${SB}/storage/v1/object/impuestos-vep/${fname}`,{
+      method:"POST",
+      headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":file.type,"x-upsert":"true"},
+      body:file
+    });
+    if(!uploadRes.ok)throw new Error(await uploadRes.text());
+    vepArchivoPath=fname;
+    vepArchivoUrl=`${SB}/storage/v1/object/public/impuestos-vep/${fname}`;
+    label.textContent=file.name;
+    const iaBtn=document.getElementById("vep-ia-btn");
+    iaBtn.style.display="";
+    toast("Archivo subido","ok");
+  }catch(e){ label.textContent="Error al subir"; toast("Error: "+e.message.slice(0,80),"err"); }
+}
+
+async function analizarVEPconIA(){
+  if(!vepArchivoUrl){toast("Primero subí un archivo","err");return;}
+  const btn=document.getElementById("vep-ia-btn");
+  btn.disabled=true; btn.textContent="✨ Analizando...";
+  const status=document.getElementById("vep-ia-status");
+  status.textContent="";
+  try{
+    const res=await fetch(`${SB}/functions/v1/leer-factura`,{
+      method:"POST",
+      headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":"application/json"},
+      body:JSON.stringify({url:vepArchivoUrl,tipo:"vep"})
+    });
+    if(!res.ok)throw new Error(await res.text());
+    const d=await res.json();
+    if(d.tipo_impuesto)document.getElementById("vep-tipo").value=d.tipo_impuesto;
+    if(d.periodo)document.getElementById("vep-periodo").value=d.periodo;
+    if(d.fecha_vencimiento)document.getElementById("vep-vencimiento").value=d.fecha_vencimiento;
+    if(d.monto)document.getElementById("vep-monto").value=d.monto;
+    if(d.sociedad)document.getElementById("vep-sociedad").value=d.sociedad;
+    if(d.numero_vep)document.getElementById("vep-numero").value=d.numero_vep;
+    status.innerHTML=`<span style="color:var(--gr);font-size:12px">✓ Datos extraídos — revisá y confirmá</span>`;
+    toast("Datos extraídos","ok");
+  }catch(e){
+    status.innerHTML=`<span style="color:var(--re);font-size:12px">Error: ${e.message.slice(0,80)}</span>`;
+  }finally{ btn.disabled=false; btn.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg> ✨ Re-analizar'; }
+}
+
+async function saveVEP(){
+  const tipo=document.getElementById("vep-tipo").value;
+  const venc=document.getElementById("vep-vencimiento").value;
+  const monto=parseFloat(document.getElementById("vep-monto").value||"0");
+  if(!tipo){toast("Seleccioná el tipo de impuesto","err");return;}
+  if(!venc){toast("Ingresá la fecha de vencimiento","err");return;}
+  if(!monto){toast("Ingresá el monto","err");return;}
+  const btn=document.getElementById("vep-save-btn"); btn.disabled=true;
+  try{
+    const obj={
+      tipo_impuesto:tipo,
+      periodo:document.getElementById("vep-periodo").value||null,
+      fecha_vencimiento:venc,
+      monto,
+      sociedad:document.getElementById("vep-sociedad").value||null,
+      observaciones:document.getElementById("vep-obs").value||null,
+      storage_path:vepArchivoUrl||null,
+      estado:"pendiente",
+      cargado_por:loggedUser?.email||null
+    };
+    const num=document.getElementById("vep-numero").value.trim();
+    if(num)obj.numero_vep=num;
+    await sb("impuestos_vep",{method:"POST",body:JSON.stringify(obj)});
+    await loadVEPs();
+    renderVEPs();
+    closeModal("modal-cargar-vep");
+    toast("VEP guardado","ok");
+    if(typeof renderCalendario==="function")renderCalendario();
+  }catch(e){ toast("Error: "+e.message.slice(0,80),"err"); }
+  finally{ btn.disabled=false; }
+}
+
+async function marcarVEPPagado(id){
+  if(!confirm("¿Marcar este VEP como pagado?"))return;
+  await sb(`impuestos_vep?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado:"pagado",fecha_pago:today()})});
+  const i=vepData.findIndex(v=>v.id===id); if(i>=0){vepData[i].estado="pagado";vepData[i].fecha_pago=today();}
+  renderVEPs();
+  if(typeof renderCalendario==="function")renderCalendario();
+  toast("Marcado como pagado","ok");
+}
+
+async function deleteVEP(id){
+  if(!confirm("¿Eliminar este VEP?"))return;
+  await sb(`impuestos_vep?id=eq.${id}`,{method:"DELETE"});
+  vepData=vepData.filter(v=>v.id!==id);
+  renderVEPs();
+  if(typeof renderCalendario==="function")renderCalendario();
+  toast("VEP eliminado","ok");
+}
+
+function generarOPdesdeVEP(id){
+  const v=vepData.find(x=>x.id===id); if(!v)return;
+  // Navegar a Cash Flow y abrir el modal de OP con los datos del VEP pre-cargados
+  goPage("cashflow",document.getElementById("nav-cashflow"));
+  setTimeout(()=>{
+    abrirOrdenPago().then(()=>{
+      const desc=document.getElementById("op-descripcion");
+      const monto=document.getElementById("op-monto");
+      const fecha=document.getElementById("op-fecha");
+      const soc=document.getElementById("op-sociedad");
+      if(desc)desc.value=`VEP ${v.tipo_impuesto}${v.periodo?" "+v.periodo.replace(/(\d{4})-(\d{2})/,"$2/$1"):""}`;
+      if(monto)monto.value=v.monto;
+      if(fecha)fecha.value=v.fecha_vencimiento;
+      if(soc&&v.sociedad)soc.value=v.sociedad;
+    });
+  },600);
 }
 
 function renderParametrosImpositivos(){
@@ -17127,6 +17437,7 @@ async function loadImpuestos(){
       sb("ordenes_pago?select=*&order=fecha_pago.desc").catch(()=>[])
     ]);
     if(!comprobantes.length) comprobantes=await sb("comprobantes_compra?select=*&order=fecha.desc").catch(()=>[]);
+    await loadVEPs();
   }catch(e){impuestosIngresos=[];autonomosCuotas=[];gananciasAnticipos=[];}
   setImpTab(impTab);
 }
@@ -18885,6 +19196,24 @@ function _listosFinnegans(){
     &&!c.tipo?.startsWith("NC")
   );
 }
+function _listosNCFinnegans(){
+  // Solo Notas de Crédito revisadas/pagadas, sin importar a Finnegans todavía
+  return comprobantes.filter(c=>
+    (c.estado==="revisado"||c.estado==="pagado")
+    &&!c.importado_finnegans&&c.estado!=="enviado_finnegans"&&c.estado!=="cerrado"
+    &&c.tipo?.startsWith("NC")
+  );
+}
+function toggleExportFinnDD(){
+  const dd=document.getElementById("export-finn-dd");
+  if(!dd)return;
+  const open=dd.style.display!=="none";
+  dd.style.display=open?"none":"block";
+  if(!open){
+    const close=e=>{if(!dd.contains(e.target)&&!e.target.closest("[onclick='toggleExportFinnDD()']")){dd.style.display="none";document.removeEventListener("click",close);}};
+    setTimeout(()=>document.addEventListener("click",close),10);
+  }
+}
 
 function _marcarFinnegans(listos){
   Promise.all(listos.map(c=>
@@ -18893,20 +19222,22 @@ function _marcarFinnegans(listos){
   )).then(()=>{renderComprobantes();updateCompStats();updateSideBadges();toast("Marcados como En Finnegans","ok");});
 }
 
-function exportarFinnegans(){
-  let listos=_listosFinnegans();
+function exportarFinnegans(tipo="facturas"){
+  let listos=tipo==="nc"?_listosNCFinnegans():_listosFinnegans();
   if(compMesFilter!=="all")listos=listos.filter(c=>{const fi=c.fecha_imputacion||c.fecha;return fi&&fi.startsWith(compMesFilter);});
   if(compFilter==="SUDES"||compFilter==="POINTERS")listos=listos.filter(c=>c.sociedad===compFilter);
-  if(!listos.length){toast("No hay comprobantes listos para exportar (revisados o pagados sin marcar en Finnegans)","err");return;}
+  const tipoLabel=tipo==="nc"?"notas de crédito":"comprobantes";
+  if(!listos.length){toast(`No hay ${tipoLabel} listas para exportar (revisadas/pagadas sin marcar en Finnegans)`,"err");return;}
   if(!_finnValidar(listos,"exportar"))return;
   const{wb,fecha,sinCuit}=_finnWB(listos);
   if(sinCuit.length){
     const unicos=[...new Set(sinCuit.map(c=>`• ${c.proveedor||"(sin nombre)"}`))]
-    if(!confirm(`⚠️ Los siguientes comprobantes no tienen CUIT cargado y no podrán identificar al proveedor en Finnegans:\n\n${unicos.join("\n")}\n\nCargá el CUIT en el comprobante antes de exportar.\n\n¿Exportar igual?`))return;
+    if(!confirm(`⚠️ Los siguientes ${tipoLabel} no tienen CUIT cargado y no podrán identificar al proveedor en Finnegans:\n\n${unicos.join("\n")}\n\nCargá el CUIT en el comprobante antes de exportar.\n\n¿Exportar igual?`))return;
   }
-  XLSX.writeFile(wb,`comprobantes_finnegans_${fecha}.xls`);
-  toast(`${listos.length} comprobantes exportados`,"ok");
-  setTimeout(()=>{if(confirm(`¿Marcar los ${listos.length} comprobantes exportados como "En Finnegans"?`))_marcarFinnegans(listos);},500);
+  const prefix=tipo==="nc"?"notas_credito_finnegans":"comprobantes_finnegans";
+  XLSX.writeFile(wb,`${prefix}_${fecha}.xls`);
+  toast(`${listos.length} ${tipoLabel} exportadas`,"ok");
+  setTimeout(()=>{if(confirm(`¿Marcar las ${listos.length} ${tipoLabel} exportadas como "En Finnegans"?`))_marcarFinnegans(listos);},500);
 }
 
 async function enviarEmailFinnegans(){
