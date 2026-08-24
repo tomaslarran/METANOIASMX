@@ -441,6 +441,59 @@ ALTER TABLE cursos ADD CONSTRAINT cursos_estado_check CHECK (estado IN ('Borrado
 - ✅ `agente-mensajes` lee los planes dinámicamente en cada request — precios actualizables sin redeploy
 - ✅ Módulo `pg-planes` en el panel (nav Cursos → Planes plataforma): CRUD de planes con modal, toggle sin costo
 
+## Implementado (5 Ago 2026) — Programa MSP: integración en agentes IA
+
+- ✅ `agente-cursos`: constante `PROGRAMA_MSP` con contenido operativo completo del convenio MSP Salta — estaciones E1–E7 con instrumentos (OSATS/GOALS/FLS/checklists), fases A–D con fechas y supervisión UNT/SASIM, instructores (Juárez Muas + Parraga como vanguardia, 32 certificándose), distribución por institución, segmentación Ola 1/Ola 2/Incorporados, mapeo de familias de entrenamiento, pendientes priorizados, reglas de evaluación formativa. Modo "PROGRAMA MSP" añadido como modo 2 de operación.
+- ✅ `agente-mensajes` (WA/IG/FB): sección "Programa MSP Salta" con descripción del programa, 7 estaciones, cronograma de fases y regla de escalación para residentes que consulten por horarios o avance.
+- Fuente: `files_mario/manual de operaciones/Metanoia_SMX_Documento_Unico_Consolidado.docx` (5/8/2026)
+
+**Pendientes operativos del programa MSP (no técnicos):**
+- Ajustar columna "Horas objetivo" de la planilla `Metanoia_Planilla_Registro_Seguimientos_PSR.xlsx` de 48 h → 24 h (período vigente; 48 h es horizonte de renovación)
+- Incorporar Codimg (checklists digitales) durante agosto para trazabilidad desde el arranque
+- Formar instructores en métricas quirúrgicas GOALS/FLS/OSATS (habilitador crítico de E2)
+- Confirmar sensores vía aérea (E3) y transductor lineal ecógrafo (E4)
+
+## Implementado (24 Ago 2026) — VEPs + Exportación NC Finnegans + Mobile fixes
+
+- ✅ **Tab VEPs** en módulo Impuestos — lista de VEPs pendientes/pagados, upload PDF, extracción IA automática con Claude visión
+- ✅ `leer-factura` edge function: soporte `tipo=vep` — prompt ARCA especializado para extraer tipo_impuesto, periodo, fecha_vencimiento, monto, sociedad
+- ✅ Calendario: VEPs pendientes aparecen bajo filtro Finanzas con dot naranja/rojo según urgencia
+- ✅ Dashboard alertas: VEPs vencidos o próximos (≤30 días) se suman a alertas de impuestos
+- ✅ Botón **"💳 OP"** desde VEP — pre-carga modal de Orden de Pago en CF con datos del VEP
+- ✅ Marcar VEP como pagado / eliminar
+- ✅ Exportación NC Finnegans — botón "Exportar XLS" en Comprobantes convertido a dropdown: **Facturas** (comportamiento anterior) / **Notas de crédito** (nuevo); archivo `notas_credito_finnegans_FECHA.xls`
+- ✅ Mobile fixes — scroll horizontal en todas las tablas JS-generadas (caja, historial, historial pagos, cuotas préstamos, sueldos pendientes, ap-tabla-cuotas)
+
+**SQL pendiente — correr en Supabase SQL editor:**
+```sql
+-- Tabla VEPs
+CREATE TABLE IF NOT EXISTS impuestos_vep (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  sociedad text,
+  tipo_impuesto text NOT NULL,
+  periodo text,
+  fecha_vencimiento date NOT NULL,
+  monto numeric NOT NULL,
+  numero_vep text,
+  estado text DEFAULT 'pendiente',
+  fecha_pago date,
+  observaciones text,
+  storage_path text,
+  cargado_por text,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE impuestos_vep ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Solo autenticados" ON impuestos_vep FOR ALL TO authenticated USING (true) WITH CHECK (true);
+```
+
+**Storage pendiente — crear en Supabase Dashboard:**
+- Bucket: `impuestos-vep` → Public (para que leer-factura pueda descargar el PDF via URL pública)
+
+**Deploy pendiente — Supabase Dashboard → Edge Functions:**
+- `leer-factura` — actualizado con soporte tipo=vep
+- `agente-cursos` — programa MSP Salta (sesión anterior)
+- `agente-mensajes` — programa MSP Salta (sesión anterior)
+
 ## Implementado (24 Jul 2026) — Caja: cambio de moneda, historial, transferencias inter-sociedad
 
 - ✅ Transferencias entre cuentas (caja, banco, inversiones) con trazabilidad — referencia "Desde → Hacia" en `observaciones`, campo `moneda` en `caja_movimientos`
