@@ -18418,8 +18418,8 @@ function updateCompStats(){
   }else{
     mesLabel="Total general";
   }
-  const totalMes=base.reduce((s,c)=>s+(Number(c.total)||0),0);
-  const ivaMes=base.reduce((s,c)=>s+(Number(c.iva)||0),0);
+  const totalMes=base.reduce((s,c)=>{const sign=c.tipo?.startsWith("NC")?-1:1;return s+sign*(Number(c.total)||0);},0);
+  const ivaMes=base.reduce((s,c)=>{const sign=c.tipo?.startsWith("NC")?-1:1;return s+sign*(Number(c.iva)||0);},0);
   const pend=base.filter(c=>c.estado==="pendiente").length;
   const finn=base.filter(c=>c.importado_finnegans||c.estado==="enviado_finnegans").length;
   const venc=comprobantes.filter(c=>c.fecha_vencimiento&&c.estado!=="enviado_finnegans"&&days(c.fecha_vencimiento)<0).length;
