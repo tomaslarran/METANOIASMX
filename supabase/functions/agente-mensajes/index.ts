@@ -334,8 +334,28 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
     }),
   });
 
+  if (!aiRes.ok) {
+    const errBody = await aiRes.text();
+    console.error(`Claude API error ${aiRes.status}:`, errBody.slice(0, 300));
+    await sendReply("En este momento tengo inconvenientes técnicos. El equipo se va a comunicar con vos pronto. 😊");
+    await sendEscalacion(`⚠️ Error bot ${plataforma} — Claude ${aiRes.status} para ${fromName}: ${errBody.slice(0, 100)}`);
+    if (idsPendientes.length > 0) {
+      await supabase.from("mensajes_publico").update({ respuesta: `[Error IA ${aiRes.status}]`, estado: "pendiente" }).in("id", idsPendientes);
+    }
+    return;
+  }
+
   const aiData = await aiRes.json();
   const rawResp: string = aiData.content?.[0]?.text ?? "";
+
+  if (!rawResp) {
+    console.error("Claude devolvió respuesta vacía:", JSON.stringify(aiData).slice(0, 300));
+    await sendReply("En este momento no puedo responder. Por favor escribime de nuevo en unos minutos. 😊");
+    if (idsPendientes.length > 0) {
+      await supabase.from("mensajes_publico").update({ respuesta: "[Error IA — vacío]", estado: "pendiente" }).in("id", idsPendientes);
+    }
+    return;
+  }
 
   let escalado = false;
   let motivoEscalado: string | null = null;
@@ -376,19 +396,27 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
 // ── Helpers de envío ──────────────────────────────────────────────────────────
 async function sendWA(to: string, text: string): Promise<void> {
   const token = Deno.env.get("META_WA_TOKEN");
-  await fetch(WA_API, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to,
-      type: "text",
-      text: { body: text },
-    }),
-  }).catch(() => {});
+  try {
+    const res = await fetch(WA_API, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to,
+        type: "text",
+        text: { body: text },
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      console.error(`sendWA error [→${to}] ${res.status}:`, err.slice(0, 200));
+    }
+  } catch (e) {
+    console.error("sendWA fetch error:", (e as Error).message);
+  }
 }
 
 async function sendMessenger(recipientId: string, text: string, pageId: string, token: string): Promise<void> {
@@ -505,6 +533,31 @@ ${cursosTexto}
 1. Primero ofrecé el link de la plataforma: "Podés inscribirte directo desde nuestra plataforma: https://plataforma.metanoiasmx.com/login 🎓 ¿Querés que te conecte con alguien del equipo para atención personalizada?"
 2. Si prefieren atención personalizada o tienen dudas: pedí su email, confirmá el curso y escalá con esos datos.
 NO intentes manejar la inscripción vos solo más allá de dar el link.
+
+### Programa MSP Salta — Residentes del sistema público
+Metanoia SMX ejecuta el Programa Provincial de Capacitación en Simulación Médica para las residencias del sistema público de salud de Salta (MSP Salta), vigente desde el 1/8/2026 (6 meses, renovable).
+
+Alcance: 365 residentes de 52 residencias + hasta 35 fellows/concurrentes. 24 horas netas de simulación práctica por residente en el período, acumulables.
+
+Las 7 estaciones de entrenamiento:
+- E1 Sutura y nudos quirúrgicos
+- E2 Laparoscopía por competencia (con métricas objetivas GOALS/FLS)
+- E3 Manejo de vía aérea e intubación
+- E4 Accesos vasculares guiados por ecografía
+- E5 Venopunción / flebotomía
+- E6 Cuidados del paciente adulto
+- E7 Emergencias pediátricas y neonatales
+Y además: módulo RCP/BLS (desde octubre) y escenarios de parto/neonato (media fidelidad, oct–nov).
+
+Fases del programa:
+- Fase A (agosto): E1, E5, E6 — baja fidelidad, fundamentos
+- Fase B (sep–oct): E3, E4, E1 completa, RCP/BLS
+- Fase C (oct–nov): E7, escenarios media fidelidad, ECOE
+- Fase D (nov–dic): E2 laparoscopía, cierre y certificación de instructores
+
+Plataforma e historial académico individual: https://plataforma.metanoiasmx.com
+
+SI un residente o instructor del programa MSP consulta por su horario, qué estación le toca, cuándo empieza su residencia o su avance en el programa: NO confirmes nada. Decí que el equipo lo está coordinando y escalá con los datos del contacto. Motivo de escalación: "Consulta MSP — [nombre], [residencia si la mencionó]".
 
 ### Publicaciones recientes en redes
 ${pubTexto}
