@@ -12943,6 +12943,7 @@ function renderCFInversiones(){
                   <span class="badge ${esAporte?"bac":m.tipo==="Rescate Parcial"?"btd":"bpr"}" style="font-size:10px">${m.tipo}</span>
                   <span style="color:${esAporte?"var(--gr)":"var(--am)"};font-weight:600">${esAporte?"+":""}$${Math.round(m.monto||0).toLocaleString("es-AR")}</span>
                   ${m.notas?`<span style="color:var(--tx3);font-style:italic">${esc(m.notas)}</span>`:""}
+                  <button onclick="delCFInvMov('${m.id}','${inv.id}')" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--tx3);font-size:13px;padding:2px 4px" title="Eliminar movimiento">🗑</button>
                 </div>`}).join("")}
                 ${(()=>{
                   const aportesMovs=movs.filter(m=>m.tipo==="Aporte de capital").reduce((s,m)=>s+(m.monto||0),0);
@@ -13267,6 +13268,17 @@ async function saveCFInversion(){
   }catch(e){toast("Error: "+e.message,"err")}
   finally{btn.disabled=false;editCFInvId=null}
 }
+function delCFInvMov(movId, invId){
+  confirmDel("¿Eliminar este movimiento?", async()=>{
+    try{
+      await sb(`cf_inversiones_movimientos?id=eq.${movId}`,{method:"DELETE"});
+      cfInvMovs=cfInvMovs.filter(m=>m.id!==movId);
+      renderCFInversiones();
+      toast("Movimiento eliminado","ok");
+    }catch(e){toast("Error al eliminar: "+e.message,"err")}
+  });
+}
+
 function delCFInv(id){
   confirmDel("¿Eliminar esta inversión? Se eliminarán también sus movimientos y rendimientos diarios.",async()=>{
     try{
