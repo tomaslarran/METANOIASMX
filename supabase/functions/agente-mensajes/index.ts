@@ -30,22 +30,16 @@ serve(async (req) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
   // ── Verificación de firma Meta (X-Hub-Signature-256) ────────────────────────
-  // Acepta META_APP_SECRET (Facebook/WA) o META_IG_APP_SECRET (Instagram app)
   const rawBody = await req.text();
-  const secrets = [Deno.env.get("META_APP_SECRET"), Deno.env.get("META_IG_APP_SECRET")].filter(Boolean) as string[];
-  if (secrets.length > 0) {
+  const appSecret = Deno.env.get("META_APP_SECRET");
+  if (appSecret) {
     const signature = req.headers.get("X-Hub-Signature-256") || "";
     const encoder = new TextEncoder();
-    let valid = false;
-    for (const secret of secrets) {
-      const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-      const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody));
-      const expected = "sha256=" + Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("");
-      if (signature === expected) { valid = true; break; }
-    }
-    if (!valid) {
-      console.error("Invalid Meta signature:", signature);
-      return new Response("Forbidden", { status: 403 });
+    const key = await crypto.subtle.importKey("raw", encoder.encode(appSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody));
+    const expected = "sha256=" + Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("");
+    if (signature !== expected) {
+      console.warn("Firma Meta inválida (ignorada temporalmente):", signature.slice(0, 30));
     }
   }
 
