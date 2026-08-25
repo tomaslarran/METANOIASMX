@@ -143,10 +143,11 @@ serve(async (req) => {
     if (!messaging?.message || messaging.message.is_echo) return new Response("OK", { status: 200 });
 
     const plataforma = object === "instagram" ? "instagram" : "facebook";
-    // Ambos usan el Page Token — es el único válido para /{page-id}/messages
-    const apiToken = Deno.env.get("META_FB_PAGE_TOKEN")!;
-    // Messenger Platform siempre usa el Facebook Page ID para enviar (incluso para IG DMs)
-    const pageId = FB_PAGE_ID;
+    // Instagram DMs: usa el token de usuario IG (META_ACCESS_TOKEN) + IG_PAGE_ID
+    // Facebook Messenger: usa el Page Token (META_FB_PAGE_TOKEN) + FB_PAGE_ID
+    const isIG = object === "instagram";
+    const apiToken = isIG ? Deno.env.get("META_ACCESS_TOKEN")! : Deno.env.get("META_FB_PAGE_TOKEN")!;
+    const pageId = isIG ? IG_PAGE_ID : FB_PAGE_ID;
 
     const fromId = messaging.sender.id as string;
     const msgId = messaging.message.mid as string;
