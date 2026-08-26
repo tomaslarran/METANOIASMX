@@ -7744,7 +7744,8 @@ async function guardarChatCurso(){
     if(cursoIAChatId){
       await sb(`agente_cursos_chats?id=eq.${cursoIAChatId}`,{method:"PATCH",body:JSON.stringify({nombre,historial:cursoIAHistorial,archivos_meta:cursoIAArchivos.map(a=>({nombre:a.nombre,tipo:a.tipo})),updated_at:new Date().toISOString()})});
     }else{
-      const [row]=await sb("agente_cursos_chats",{method:"POST",body:JSON.stringify({nombre,historial:cursoIAHistorial,archivos_meta:cursoIAArchivos.map(a=>({nombre:a.nombre,tipo:a.tipo})),usuario:sesion?.email||""})});
+      const _sess=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
+      const [row]=await sb("agente_cursos_chats",{method:"POST",body:JSON.stringify({nombre,historial:cursoIAHistorial,archivos_meta:cursoIAArchivos.map(a=>({nombre:a.nombre,tipo:a.tipo})),usuario:_sess.email||""})});
       cursoIAChatId=row?.id;
     }
     _updateChatLabel();
