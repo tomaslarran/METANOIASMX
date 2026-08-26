@@ -3803,7 +3803,12 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg"><label class="fl">Medio de cobro *</label><select class="fi" id="rcob-medio"></select></div>
   </div>
   <div id="rcob-inv-wrap" style="display:none">
-    <div class="fg"><label class="fl">Acreditar en inversión *</label><select class="fi" id="rcob-inv-sel"></select></div>
+    <label class="fl">Acreditar en inversión</label>
+    <div id="rcob-inv-rows" style="margin-top:4px"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+      <button class="btn sm" onclick="rcobAgregarInvRow()" id="rcob-inv-add-btn" style="font-size:11px;padding:3px 10px">＋ Agregar inversión</button>
+      <span id="rcob-inv-resto" style="font-size:12px;color:var(--tx3)"></span>
+    </div>
   </div>
   <div class="fg"><label class="fl">Observaciones (opcional)</label><input class="fi" id="rcob-obs" type="text" placeholder="CBU, referencia, etc."></div>
   <div class="ma"><button class="bc" onclick="closeModal('modal-registrar-cobro')">Cancelar</button><button class="bk" id="rcob-save-btn" onclick="confirmarRegistrarCobro()">💰 Confirmar cobro</button></div>
@@ -12385,6 +12390,41 @@ function setRcobDest(dest){
   document.getElementById("rcob-inv-wrap").style.display=dest==="inversion"?"":"none";
   document.getElementById("rcob-dest-caja-btn").classList.toggle("on",dest==="caja");
   document.getElementById("rcob-dest-inv-btn").classList.toggle("on",dest==="inversion");
+  if(dest==="inversion"){document.getElementById("rcob-inv-rows").innerHTML="";rcobAgregarInvRow();}
+}
+function _rcobInvOpts(soc){
+  const activas=cfInversiones.filter(i=>i.estado==="Activa"&&(i.sociedad===soc||i.sociedad==="Ambas"||["AMPARO","MARIO","Personal"].includes(i.sociedad)));
+  return activas.length?activas.map(i=>`<option value="${i.id}">${esc(i.nombre)}${i.entidad?" ("+esc(i.entidad)+")":""} — $${Math.round(i.valor_actual||i.capital||0).toLocaleString("es-AR")}</option>`).join(""):` <option value="">— Sin inversiones activas —</option>`;
+}
+function rcobAgregarInvRow(){
+  const rows=document.getElementById("rcob-inv-rows");
+  if(rows.children.length>=3)return;
+  const soc=document.getElementById("rcob-sociedad")?.value||"SUDES";
+  const montoTotal=parseFloat(document.getElementById("rcob-monto")?.value||document.getElementById("rcob-monto-libre")?.value||0)||0;
+  const idx=rows.children.length;
+  const row=document.createElement("div");
+  row.className="rcob-inv-row";
+  row.style.cssText="display:flex;gap:6px;align-items:center;margin-bottom:6px";
+  row.innerHTML=`<select class="fi rcob-inv-sel-r" style="flex:2;font-size:13px" onchange="rcobActualizarResto()">${_rcobInvOpts(soc)}</select><input class="fi rcob-inv-monto-r" type="number" style="flex:1;font-size:13px" placeholder="Monto" oninput="rcobActualizarResto()" value="${idx===0?montoTotal:""}"><button onclick="rcobQuitarInvRow(this)" style="background:none;border:none;cursor:pointer;color:var(--tx3);font-size:16px;padding:0 4px" title="Quitar">✕</button>`;
+  rows.appendChild(row);
+  document.getElementById("rcob-inv-add-btn").style.display=rows.children.length>=3?"none":"";
+  rcobActualizarResto();
+}
+function rcobQuitarInvRow(btn){
+  const rows=document.getElementById("rcob-inv-rows");
+  if(rows.children.length<=1)return;
+  btn.closest(".rcob-inv-row").remove();
+  document.getElementById("rcob-inv-add-btn").style.display="";
+  rcobActualizarResto();
+}
+function rcobActualizarResto(){
+  const montoTotal=parseFloat(document.getElementById("rcob-monto")?.value||document.getElementById("rcob-monto-libre")?.value||0)||0;
+  if(!montoTotal){document.getElementById("rcob-inv-resto").textContent="";return;}
+  const asignado=[...document.querySelectorAll(".rcob-inv-monto-r")].reduce((s,el)=>s+(parseFloat(el.value)||0),0);
+  const resto=montoTotal-asignado;
+  const el=document.getElementById("rcob-inv-resto");
+  el.textContent=resto===0?"✓ Total asignado":`Resto: $${Math.round(Math.abs(resto)).toLocaleString("es-AR")} ${resto<0?"(excede)":""}`;
+  el.style.color=resto===0?"var(--gr)":resto<0?"var(--re)":"var(--tx3)";
 }
 
 function abrirCobroCurso(cursoId){
@@ -12448,11 +12488,7 @@ function rcobActualizarSoc(soc){
   sel.innerHTML=(activos.length?activos:mediosPago.filter(m=>m.activo))
     .map(m=>`<option value="${esc(m.nombre)}">${esc(m.nombre)}${m.banco?` — ${esc(m.banco)}`:""}</option>`).join("")
     ||`<option value="Transferencia">Transferencia bancaria</option><option value="Efectivo">Efectivo</option><option value="Cheque">Cheque</option>`;
-  const invSel=document.getElementById("rcob-inv-sel");
-  const invsActivas=cfInversiones.filter(i=>i.estado==="Activa"&&(i.sociedad===soc||i.sociedad==="Ambas"||["AMPARO","MARIO","Personal"].includes(i.sociedad)));
-  invSel.innerHTML=invsActivas.length
-    ? invsActivas.map(i=>`<option value="${i.id}">${esc(i.nombre)} — ${i.tipo||""}${i.entidad?" ("+esc(i.entidad)+")":""}  $${Math.round(i.valor_actual||i.capital||0).toLocaleString("es-AR")}</option>`).join("")
-    : `<option value="">— Sin inversiones activas —</option>`;
+  document.querySelectorAll(".rcob-inv-sel-r").forEach(sel=>{sel.innerHTML=_rcobInvOpts(soc);});
 }
 
 function abrirRegistrarCobro(id,tipo,montoOverride,cursoId){
@@ -12513,7 +12549,7 @@ async function confirmarRegistrarCobro(){
   const rawId=document.getElementById("rcob-id").value;
   const medio=document.getElementById("rcob-medio").value;
   const dest=document.getElementById("rcob-dest").value;
-  const invId=document.getElementById("rcob-inv-sel").value;
+  const invId=document.querySelector(".rcob-inv-sel-r")?.value||"";
   const fecha=document.getElementById("rcob-fecha").value||today();
   const factura=document.getElementById("rcob-factura").value.trim()||null;
   const obs=document.getElementById("rcob-obs").value.trim()||null;
@@ -12524,19 +12560,29 @@ async function confirmarRegistrarCobro(){
   // Helper: generar movimiento contable según destino
   async function generarMovimientoContable(concepto,categoria,medioVal,obsStr){
     if(dest==="inversion"){
-      if(!invId){toast("Seleccioná una inversión","err");throw new Error("Sin inversión");}
-      const inv=cfInversiones.find(i=>i.id===invId);if(!inv)throw new Error("Inversión no encontrada");
-      const notasInv=[`Cobro: ${concepto}`,factura?`Fac. ${factura}`:"",obsStr].filter(Boolean).join(" · ");
-      const[mov]=await sb("cf_inversiones_movimientos",{method:"POST",body:JSON.stringify({
-        inversion_id:invId,tipo:"Aporte de capital",fecha,monto,notas:notasInv
-      })});
-      cfInvMovs.unshift(mov);
-      const nuevoCapital=(parseFloat(inv.capital)||0)+monto;
-      const nuevoValor=(parseFloat(inv.valor_actual)||parseFloat(inv.capital)||0)+monto;
-      const patch={capital:nuevoCapital,valor_actual:nuevoValor,updated_at:new Date().toISOString()};
-      await sb(`cf_inversiones?id=eq.${invId}`,{method:"PATCH",body:JSON.stringify(patch)});
-      Object.assign(inv,patch);
-      return `📈 Cobrado · acreditado en ${inv.nombre}`;
+      const filas=[...document.querySelectorAll(".rcob-inv-row")].map(row=>({
+        iid:row.querySelector(".rcob-inv-sel-r")?.value,
+        mon:parseFloat(row.querySelector(".rcob-inv-monto-r")?.value)||0
+      })).filter(f=>f.iid&&f.mon>0);
+      if(!filas.length){toast("Agregá al menos una inversión con monto","err");throw new Error("Sin filas");}
+      const totalFilas=filas.reduce((s,f)=>s+f.mon,0);
+      if(Math.abs(totalFilas-monto)>1){toast(`Los montos asignados ($${Math.round(totalFilas).toLocaleString("es-AR")}) no coinciden con el total ($${Math.round(monto).toLocaleString("es-AR")})`, "err");throw new Error("Montos no coinciden");}
+      const notasBase=[`Cobro: ${concepto}`,factura?`Fac. ${factura}`:"",obsStr].filter(Boolean).join(" · ");
+      const nombres=[];
+      for(const f of filas){
+        const inv=cfInversiones.find(i=>i.id===f.iid);if(!inv)continue;
+        const[mov]=await sb("cf_inversiones_movimientos",{method:"POST",body:JSON.stringify({
+          inversion_id:f.iid,tipo:"Aporte de capital",fecha,monto:f.mon,notas:notasBase
+        })});
+        cfInvMovs.unshift(mov);
+        const nuevoCapital=(parseFloat(inv.capital)||0)+f.mon;
+        const nuevoValor=(parseFloat(inv.valor_actual)||parseFloat(inv.capital)||0)+f.mon;
+        const patch={capital:nuevoCapital,valor_actual:nuevoValor,updated_at:new Date().toISOString()};
+        await sb(`cf_inversiones?id=eq.${f.iid}`,{method:"PATCH",body:JSON.stringify(patch)});
+        Object.assign(inv,patch);
+        nombres.push(inv.nombre);
+      }
+      return `📈 Cobrado · acreditado en ${nombres.join(", ")}`;
     }
     const medioObj=mediosPago.find(m=>m.nombre===medioVal);
     const esBanco=medioObj?.tipo==="cuenta_bancaria";
