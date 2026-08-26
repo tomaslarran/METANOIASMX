@@ -12756,7 +12756,7 @@ function renderCFInversiones(){
   renderBenchmark();
   const activas=cfInversiones.filter(i=>i.estado==="Activa");
   // Helpers de capital histórico y rescates por inversión
-  const getCapHist=(inv)=>(inv.capital||0)+cfInvMovs.filter(m=>m.inversion_id===inv.id&&m.tipo==="Aporte de capital").reduce((s,m)=>s+(m.monto||0),0);
+  const getCapHist=(inv)=>(inv.capital||0);
   const getRescatado=(inv)=>cfInvMovs.filter(m=>m.inversion_id===inv.id&&m.tipo!=="Aporte de capital").reduce((s,m)=>s+(m.monto||0),0);
   const getCapActivo=(inv)=>inv.valor_actual!=null?inv.valor_actual:(inv.capital||0);
   // Rendimiento realizado vs flotante (método costo promedio)
