@@ -7714,6 +7714,7 @@ function resetCursoIA(){
   cursoIAArchivos=[];
   cursoIAChatId=null;
   cursoIAChatNombre=null;
+  _cursoEscenarios=[];
   _updateChatLabel();
   const msgs=document.getElementById("curso-ia-msgs");
   if(msgs)msgs.innerHTML=`<div style="background:var(--surf2);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--tx2);max-width:90%">
@@ -7801,6 +7802,7 @@ async function cargarChatCurso(id,nombre){
     cursoIAChatId=row.id;
     cursoIAChatNombre=row.nombre;
     cursoIAArchivos=[];
+    _cursoEscenarios=[];
     const msgs=document.getElementById("curso-ia-msgs");
     if(msgs){
       msgs.innerHTML="";
@@ -7809,7 +7811,14 @@ async function cargarChatCurso(id,nombre){
           msgs.innerHTML+=`<div style="background:var(--pl);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--tx);align-self:flex-end;max-width:85%;margin-left:auto">${esc(m.content)}</div>`;
         }else{
           const html=(m.content||"").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\n/g,"<br>");
-          msgs.innerHTML+=`<div style="background:var(--surf2);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--tx);max-width:85%">${html}</div>`;
+          let bubble=`<div style="background:var(--surf2);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--tx);max-width:85%">${html}`;
+          if(m.escenario){
+            const escIdx=_cursoEscenarios.length;
+            _cursoEscenarios.push(m.escenario);
+            bubble+=_buildEscenarioCard(m.escenario,escIdx);
+          }
+          bubble+=`</div>`;
+          msgs.innerHTML+=bubble;
         }
       });
       setTimeout(()=>{msgs.scrollTop=msgs.scrollHeight;},100);
@@ -8075,7 +8084,7 @@ async function sendCursoIA(){
   try{
     const res=await fetchEdge("agente-cursos",{
       message:texto,
-      historial:cursoIAHistorial.slice(-10),
+      historial:cursoIAHistorial.slice(-10).map(m=>({role:m.role,content:m.content})),
       canal:"panel",
       archivos:cursoIAArchivos.length?cursoIAArchivos:undefined
     });
@@ -8094,7 +8103,7 @@ async function sendCursoIA(){
         try{escJson=JSON.parse(escMatch[1].trim());}catch(e){}
         textoDisplay=respuesta.replace(/<ESCENARIO_JSON>[\s\S]*?<\/ESCENARIO_JSON>/,'').trim();
       }
-      cursoIAHistorial.push({role:"assistant",content:textoDisplay});
+      cursoIAHistorial.push({role:"assistant",content:textoDisplay,...(escJson?{escenario:escJson}:{})});
       _autoguardarChatCurso();
       if(cursoIAHistorial.length>=2){
         const actions=document.getElementById("curso-ia-actions");
