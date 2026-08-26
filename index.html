@@ -7857,28 +7857,31 @@ async function sendCursoIA(){
       archivos:cursoIAArchivos.length?cursoIAArchivos:undefined
     });
     const data=await res.json();
-    const respuesta=data.respuesta||(data.error?"Hubo un problema al procesar tu consulta. Intentá de nuevo en un momento.":"Sin respuesta");
-    cursoIAHistorial.push({role:"assistant",content:respuesta});
-    _autoguardarChatCurso();
-    // Mostrar botones de generación después del primer intercambio
-    if(cursoIAHistorial.length>=2){
-      const actions=document.getElementById("curso-ia-actions");
-      if(actions)actions.style.display="flex";
-    }
-
-    // Reemplazar loading con respuesta
-    const loadEl=document.getElementById(loadId);
-    if(loadEl){
-      // Convertir markdown básico
-      const html=respuesta
-        .replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")
-        .replace(/\n/g,"<br>");
-      loadEl.style.color="var(--tx)";
-      loadEl.innerHTML=html;
+    if(data.error){
+      // Revertir el mensaje del usuario del historial — no tiene respuesta válida
+      cursoIAHistorial.pop();
+      const loadEl=document.getElementById(loadId);
+      if(loadEl){loadEl.style.color="var(--tx3)";loadEl.textContent=`Error del agente: ${data.error}`;}
+    }else{
+      const respuesta=data.respuesta||"Sin respuesta";
+      cursoIAHistorial.push({role:"assistant",content:respuesta});
+      _autoguardarChatCurso();
+      // Mostrar botones de generación después del primer intercambio
+      if(cursoIAHistorial.length>=2){
+        const actions=document.getElementById("curso-ia-actions");
+        if(actions)actions.style.display="flex";
+      }
+      const loadEl=document.getElementById(loadId);
+      if(loadEl){
+        const html=respuesta.replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\n/g,"<br>");
+        loadEl.style.color="var(--tx)";
+        loadEl.innerHTML=html;
+      }
     }
   }catch(e){
+    cursoIAHistorial.pop();
     const loadEl=document.getElementById(loadId);
-    if(loadEl){loadEl.style.color="var(--tx3)";loadEl.textContent="No pude conectarme al agente. Intentá de nuevo.";}
+    if(loadEl){loadEl.style.color="var(--tx3)";loadEl.textContent=`No pude conectarme al agente: ${e.message}`;}
   }finally{
     if(btn)btn.disabled=false;
     msgs.scrollTop=msgs.scrollHeight;
