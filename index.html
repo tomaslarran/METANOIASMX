@@ -7832,7 +7832,23 @@ async function eliminarChatCurso(id){
 // ── ESCENARIOS CLÍNICOS PROYECTABLES ─────────────────────────────────────────
 let _cursoEscenarios=[];
 let _audioCtx=null;
+let _masterGain=null;
 let _audioStopFns=[];
+
+function _initAudio(){
+  if(!_audioCtx){
+    _audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    _masterGain=_audioCtx.createGain();
+    _masterGain.gain.value=0.75;
+    _masterGain.connect(_audioCtx.destination);
+  }
+  return _audioCtx;
+}
+
+function _setVolumen(v){
+  if(_masterGain)_masterGain.gain.value=parseFloat(v);
+  document.querySelectorAll('.esc-vol-slider').forEach(s=>{s.value=v;});
+}
 
 function _stopSonidoEsc(){
   _audioStopFns.forEach(f=>{try{f();}catch(e){}});
@@ -7841,8 +7857,8 @@ function _stopSonidoEsc(){
 }
 
 function _playHeartbeatEsc(tipo,bpm){
-  if(!_audioCtx)_audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-  const ctx=_audioCtx;
+  const ctx=_initAudio();
+  const dest=_masterGain;
   const intervalSec=60/(bpm||72);
   let stopped=false;
   let nextTime=ctx.currentTime+0.05;
@@ -7853,31 +7869,31 @@ function _playHeartbeatEsc(tipo,bpm){
       // S1
       const g1=ctx.createGain(),o1=ctx.createOscillator();
       o1.type='sine';o1.frequency.value=58;
-      g1.gain.setValueAtTime(0,t);g1.gain.linearRampToValueAtTime(0.7,t+0.015);g1.gain.exponentialRampToValueAtTime(0.001,t+0.08);
-      o1.connect(g1);g1.connect(ctx.destination);o1.start(t);o1.stop(t+0.09);
+      g1.gain.setValueAtTime(0,t);g1.gain.linearRampToValueAtTime(1.4,t+0.015);g1.gain.exponentialRampToValueAtTime(0.001,t+0.08);
+      o1.connect(g1);g1.connect(dest);o1.start(t);o1.stop(t+0.09);
       // S2
       const t2=t+0.28;
       const g2=ctx.createGain(),o2=ctx.createOscillator();
       o2.type='sine';o2.frequency.value=78;
-      g2.gain.setValueAtTime(0,t2);g2.gain.linearRampToValueAtTime(0.45,t2+0.012);g2.gain.exponentialRampToValueAtTime(0.001,t2+0.065);
-      o2.connect(g2);g2.connect(ctx.destination);o2.start(t2);o2.stop(t2+0.08);
+      g2.gain.setValueAtTime(0,t2);g2.gain.linearRampToValueAtTime(0.9,t2+0.012);g2.gain.exponentialRampToValueAtTime(0.001,t2+0.065);
+      o2.connect(g2);g2.connect(dest);o2.start(t2);o2.stop(t2+0.08);
       // S3 galope
       if(tipo==='s3_galope'){
         const t3=t2+0.14;
         const g3=ctx.createGain(),o3=ctx.createOscillator();
         o3.type='sine';o3.frequency.value=38;
-        g3.gain.setValueAtTime(0,t3);g3.gain.linearRampToValueAtTime(0.28,t3+0.012);g3.gain.exponentialRampToValueAtTime(0.001,t3+0.07);
-        o3.connect(g3);g3.connect(ctx.destination);o3.start(t3);o3.stop(t3+0.08);
+        g3.gain.setValueAtTime(0,t3);g3.gain.linearRampToValueAtTime(0.55,t3+0.012);g3.gain.exponentialRampToValueAtTime(0.001,t3+0.07);
+        o3.connect(g3);g3.connect(dest);o3.start(t3);o3.stop(t3+0.08);
       }
       // Soplo sistólico (ruido S1→S2)
       if(tipo==='soplo_sistolico'){
         const buf=ctx.createBuffer(1,Math.floor(ctx.sampleRate*0.2),ctx.sampleRate);
-        const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*0.12;
+        const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*0.2;
         const src=ctx.createBufferSource();src.buffer=buf;
         const bf=ctx.createBiquadFilter();bf.type='bandpass';bf.frequency.value=220;bf.Q.value=1.8;
         const gm=ctx.createGain();
-        gm.gain.setValueAtTime(0,t+0.09);gm.gain.linearRampToValueAtTime(0.55,t+0.12);gm.gain.linearRampToValueAtTime(0,t+0.27);
-        src.connect(bf);bf.connect(gm);gm.connect(ctx.destination);src.start(t+0.09);
+        gm.gain.setValueAtTime(0,t+0.09);gm.gain.linearRampToValueAtTime(1.1,t+0.12);gm.gain.linearRampToValueAtTime(0,t+0.27);
+        src.connect(bf);bf.connect(gm);gm.connect(dest);src.start(t+0.09);
       }
       nextTime+=intervalSec;
     }
@@ -7888,8 +7904,8 @@ function _playHeartbeatEsc(tipo,bpm){
 }
 
 function _playLungSoundEsc(tipo){
-  if(!_audioCtx)_audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-  const ctx=_audioCtx;
+  const ctx=_initAudio();
+  const dest=_masterGain;
   let stopped=false;
   if(tipo==='sibilancias'){
     let nextT=ctx.currentTime+0.05;
@@ -7899,8 +7915,8 @@ function _playLungSoundEsc(tipo){
         const osc=ctx.createOscillator(),gain=ctx.createGain();
         osc.type='sawtooth';
         osc.frequency.setValueAtTime(600,nextT);osc.frequency.linearRampToValueAtTime(820,nextT+1.2);osc.frequency.linearRampToValueAtTime(600,nextT+1.8);
-        gain.gain.setValueAtTime(0,nextT);gain.gain.linearRampToValueAtTime(0.09,nextT+0.3);gain.gain.setValueAtTime(0.09,nextT+1.4);gain.gain.linearRampToValueAtTime(0,nextT+1.9);
-        osc.connect(gain);gain.connect(ctx.destination);osc.start(nextT);osc.stop(nextT+2);
+        gain.gain.setValueAtTime(0,nextT);gain.gain.linearRampToValueAtTime(0.28,nextT+0.3);gain.gain.setValueAtTime(0.28,nextT+1.4);gain.gain.linearRampToValueAtTime(0,nextT+1.9);
+        osc.connect(gain);gain.connect(dest);osc.start(nextT);osc.stop(nextT+2);
         nextT+=3.5;
       }
       requestAnimationFrame(schedSib);
@@ -7912,10 +7928,10 @@ function _playLungSoundEsc(tipo){
       if(stopped)return;
       while(nextT<ctx.currentTime+4){
         const buf=ctx.createBuffer(1,Math.floor(ctx.sampleRate*0.035),ctx.sampleRate);
-        const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length)*0.8;
+        const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length)*0.9;
         const src=ctx.createBufferSource();src.buffer=buf;
-        const g=ctx.createGain();g.gain.value=0.35;
-        src.connect(g);g.connect(ctx.destination);src.start(nextT);
+        const g=ctx.createGain();g.gain.value=0.8;
+        src.connect(g);g.connect(dest);src.start(nextT);
         nextT+=0.09+Math.random()*0.22;
       }
       requestAnimationFrame(schedCrack);
@@ -7954,9 +7970,10 @@ function _buildEscenarioCard(j,idx){
       <span>FR: <strong>${esc(j.svs?.fr||'?')}</strong></span>
       <span>SatO₂: <strong>${esc(j.svs?.sat||'?')}%</strong></span>
     </div>
-    <div style="display:flex;gap:6px;margin-top:10px">
+    <div style="display:flex;gap:6px;margin-top:10px;align-items:center;flex-wrap:wrap">
       <button class="btn sm pri" onclick="_abrirProyector(${idx})" style="font-size:11px">🖥 Proyectar</button>
       ${sonBtn}
+      ${hasSon?`<input type="range" class="esc-vol-slider" min="0" max="1" step="0.05" value="0.75" oninput="_setVolumen(this.value)" style="width:70px;cursor:pointer;accent-color:var(--pu)" title="Volumen">`:''}
     </div>
   </div>`;
 }
@@ -7984,6 +8001,7 @@ function _abrirProyector(idx){
       </div>
       <div style="display:flex;gap:10px;align-items:center">
         ${hasSon?`<button class="btn-esc-sonido" onclick="_toggleSonidoEsc('${j.sonido}',this)" style="background:rgba(255,255,255,0.1);border:1px solid #444;color:#e0e0e0;border-radius:8px;padding:10px 18px;cursor:pointer;font-size:14px">🔊 Sonido</button>`:''}
+        ${hasSon?`<div style="display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:#888">🔈</span><input type="range" class="esc-vol-slider" min="0" max="1" step="0.05" value="0.75" oninput="_setVolumen(this.value)" style="width:90px;cursor:pointer;accent-color:#a78bfa" title="Volumen"><span style="font-size:12px;color:#888">🔊</span></div>`:''}
         <button onclick="document.getElementById('modal-proyector-esc').remove();_stopSonidoEsc()" style="background:rgba(255,255,255,0.08);border:1px solid #444;color:#aaa;border-radius:8px;padding:10px 18px;cursor:pointer;font-size:14px">✕ Cerrar</button>
       </div>
     </div>
