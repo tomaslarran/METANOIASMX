@@ -3919,20 +3919,23 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="mt" style="display:flex;justify-content:space-between;align-items:center">
       <span>✨ Crear curso con IA</span>
       <div style="display:flex;align-items:center;gap:8px">
+        <button onclick="guardarChatCurso()" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:3px 8px;cursor:pointer" title="Guardar chat">💾 Guardar</button>
+        <button onclick="listarChatsCurso()" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:3px 8px;cursor:pointer" title="Retomar chat guardado">📂 Retomar</button>
         <button onclick="resetCursoIA()" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:3px 8px;cursor:pointer" title="Nueva conversación">🗑 Nueva</button>
         <button onclick="closeModal('modal-curso-ia')" style="background:none;border:none;color:var(--tx3);font-size:18px;cursor:pointer">✕</button>
       </div>
     </div>
-    <div style="font-size:12px;color:var(--tx3);margin-bottom:12px;padding:0 2px">
+    <div style="font-size:12px;color:var(--tx3);margin-bottom:4px;padding:0 2px">
       Describí tu idea de curso. El agente te guiará por la Plantilla Intake y la metodología PEV.
     </div>
+    <div id="curso-ia-chat-label" style="font-size:11px;color:var(--pu);margin-bottom:8px;padding:0 2px;min-height:14px"></div>
     <div id="curso-ia-msgs" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:4px 2px;min-height:0"></div>
     <!-- Archivos adjuntos -->
     <div id="curso-ia-adjuntos" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;min-height:0"></div>
     <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
       <label class="btn sm sec" style="cursor:pointer;padding:7px 10px" title="Adjuntar PDF, Word o imagen">
         📎
-        <input type="file" multiple accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg" style="display:none" onchange="adjuntarArchivoCursoIA(this)">
+        <input type="file" multiple accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.xlsx,.xls" style="display:none" onchange="adjuntarArchivoCursoIA(this)">
       </label>
       <input id="curso-ia-input" class="fi" type="text" placeholder="Describí tu idea o preguntá sobre los archivos adjuntos..." style="flex:1"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendCursoIA()}">
@@ -7620,12 +7623,23 @@ async function _loadMammoth(){
   });
 }
 
+async function _loadXLSX(){
+  if(window.XLSX)return;
+  await new Promise((res,rej)=>{
+    const s=document.createElement("script");
+    s.src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+    s.onload=res;s.onerror=rej;
+    document.head.appendChild(s);
+  });
+}
+
 async function adjuntarArchivoCursoIA(input){
   const adjDiv=document.getElementById("curso-ia-adjuntos");
   if(!adjDiv)return;
   for(const file of input.files){
     toast(`Cargando ${file.name}...`,"inf");
     const isDocx=file.name.toLowerCase().endsWith(".docx")||file.type==="application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    const isXlsx=file.name.toLowerCase().endsWith(".xlsx")||file.name.toLowerCase().endsWith(".xls")||file.type==="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"||file.type==="application/vnd.ms-excel";
     let tipo,base64;
     if(isDocx){
       try{
@@ -7633,7 +7647,25 @@ async function adjuntarArchivoCursoIA(input){
         const buf=await file.arrayBuffer();
         const result=await mammoth.extractRawText({arrayBuffer:buf});
         const text=result.value||"(sin contenido)";
-        // Codificar texto como base64 UTF-8
+        const bytes=new TextEncoder().encode(text);
+        const binStr=Array.from(bytes,b=>String.fromCharCode(b)).join("");
+        base64=btoa(binStr);
+        tipo="text/plain";
+      }catch(e){
+        toast(`No se pudo leer ${file.name}: ${e.message}`,"err");
+        continue;
+      }
+    }else if(isXlsx){
+      try{
+        await _loadXLSX();
+        const buf=await file.arrayBuffer();
+        const wb=XLSX.read(buf,{type:"array"});
+        const lines=[];
+        wb.SheetNames.forEach(name=>{
+          lines.push(`=== Hoja: ${name} ===`);
+          lines.push(XLSX.utils.sheet_to_csv(wb.Sheets[name]));
+        });
+        const text=lines.join("\n")||"(sin contenido)";
         const bytes=new TextEncoder().encode(text);
         const binStr=Array.from(bytes,b=>String.fromCharCode(b)).join("");
         base64=btoa(binStr);
@@ -7680,6 +7712,9 @@ function resetCursoIA(){
   if(!confirm("¿Empezar una nueva conversación? Se borrará el historial actual."))return;
   cursoIAHistorial=[];
   cursoIAArchivos=[];
+  cursoIAChatId=null;
+  cursoIAChatNombre=null;
+  _updateChatLabel();
   const msgs=document.getElementById("curso-ia-msgs");
   if(msgs)msgs.innerHTML=`<div style="background:var(--surf2);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--tx2);max-width:90%">
     Hola! Soy el agente de cursos de Metanoia. Contame tu idea — ¿que curso queres crear?<br><br>
@@ -7690,6 +7725,107 @@ function resetCursoIA(){
   const actions=document.getElementById("curso-ia-actions");
   if(actions)actions.style.display="none";
   document.getElementById("curso-ia-input")?.focus();
+}
+
+let cursoIAChatId=null;
+let cursoIAChatNombre=null;
+
+function _updateChatLabel(){
+  const lbl=document.getElementById("curso-ia-chat-label");
+  if(lbl)lbl.textContent=cursoIAChatNombre?"📝 "+cursoIAChatNombre:"";
+}
+
+async function guardarChatCurso(){
+  if(!cursoIAHistorial.length){toast("No hay conversación para guardar","inf");return;}
+  const nombre=prompt("Nombre del chat:",cursoIAChatNombre||"Chat "+new Date().toLocaleDateString("es-AR"));
+  if(!nombre)return;
+  cursoIAChatNombre=nombre;
+  try{
+    if(cursoIAChatId){
+      await sb(`agente_cursos_chats?id=eq.${cursoIAChatId}`,{method:"PATCH",body:JSON.stringify({nombre,historial:cursoIAHistorial,archivos_meta:cursoIAArchivos.map(a=>({nombre:a.nombre,tipo:a.tipo})),updated_at:new Date().toISOString()})});
+    }else{
+      const [row]=await sb("agente_cursos_chats",{method:"POST",body:JSON.stringify({nombre,historial:cursoIAHistorial,archivos_meta:cursoIAArchivos.map(a=>({nombre:a.nombre,tipo:a.tipo})),usuario:sesion?.email||""})});
+      cursoIAChatId=row?.id;
+    }
+    _updateChatLabel();
+    toast("💾 Chat guardado","ok");
+  }catch(e){toast("Error al guardar: "+e.message,"err");}
+}
+
+async function _autoguardarChatCurso(){
+  if(!cursoIAChatId||!cursoIAHistorial.length)return;
+  try{
+    await sb(`agente_cursos_chats?id=eq.${cursoIAChatId}`,{method:"PATCH",body:JSON.stringify({historial:cursoIAHistorial,updated_at:new Date().toISOString()})});
+  }catch{}
+}
+
+async function listarChatsCurso(){
+  try{
+    const rows=await sb("agente_cursos_chats?select=id,nombre,updated_at&order=updated_at.desc&limit=20");
+    if(!rows.length){toast("No hay chats guardados","inf");return;}
+    document.getElementById("modal-chats-cursos-list")?.remove();
+    let html=`<div style="font-weight:600;margin-bottom:12px;font-size:14px">📂 Chats guardados</div>
+      <div style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto">`;
+    rows.forEach(r=>{
+      const fecha=new Date(r.updated_at).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"});
+      html+=`<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--b);border-radius:8px;cursor:pointer"
+        onclick="cargarChatCurso('${r.id}','${esc(r.nombre).replace(/'/g,"&#39;")}');document.getElementById('modal-chats-cursos-list').remove()">
+        <div style="flex:1">
+          <div style="font-size:13px">${esc(r.nombre)}</div>
+          <div style="font-size:11px;color:var(--tx3)">${fecha}</div>
+        </div>
+        <button onclick="event.stopPropagation();eliminarChatCurso('${r.id}')" style="background:none;border:none;color:var(--tx3);cursor:pointer;font-size:15px;padding:0 4px">🗑</button>
+      </div>`;
+    });
+    html+=`</div>`;
+    const el=document.createElement("div");
+    el.id="modal-chats-cursos-list";
+    el.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10001;display:flex;align-items:center;justify-content:center";
+    el.onclick=e=>{if(e.target===el)el.remove();};
+    el.innerHTML=`<div style="background:var(--surf);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.28);padding:20px;min-width:320px;max-width:460px">
+      ${html}
+      <div style="margin-top:14px;display:flex;justify-content:flex-end">
+        <button class="btn sm" onclick="this.closest('#modal-chats-cursos-list').remove()">Cerrar</button>
+      </div>
+    </div>`;
+    document.body.appendChild(el);
+  }catch(e){toast("Error cargando chats: "+e.message,"err");}
+}
+
+async function cargarChatCurso(id,nombre){
+  try{
+    const [row]=await sb(`agente_cursos_chats?id=eq.${id}&select=*`);
+    if(!row){toast("No se encontró el chat","err");return;}
+    cursoIAHistorial=row.historial||[];
+    cursoIAChatId=row.id;
+    cursoIAChatNombre=row.nombre;
+    cursoIAArchivos=[];
+    const msgs=document.getElementById("curso-ia-msgs");
+    if(msgs){
+      msgs.innerHTML="";
+      cursoIAHistorial.forEach(m=>{
+        if(m.role==="user"){
+          msgs.innerHTML+=`<div style="background:var(--pl);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--tx);align-self:flex-end;max-width:85%;margin-left:auto">${esc(m.content)}</div>`;
+        }else{
+          const html=(m.content||"").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\n/g,"<br>");
+          msgs.innerHTML+=`<div style="background:var(--surf2);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--tx);max-width:85%">${html}</div>`;
+        }
+      });
+      setTimeout(()=>{msgs.scrollTop=msgs.scrollHeight;},100);
+    }
+    if(cursoIAHistorial.length>=2){const a=document.getElementById("curso-ia-actions");if(a)a.style.display="flex";}
+    _updateChatLabel();
+    toast(`📂 Chat cargado`,"ok");
+  }catch(e){toast("Error al cargar: "+e.message,"err");}
+}
+
+async function eliminarChatCurso(id){
+  if(!confirm("¿Eliminar este chat guardado?"))return;
+  await sb(`agente_cursos_chats?id=eq.${id}`,{method:"DELETE"});
+  if(cursoIAChatId===id){cursoIAChatId=null;cursoIAChatNombre=null;_updateChatLabel();}
+  toast("Chat eliminado","ok");
+  document.getElementById("modal-chats-cursos-list")?.remove();
+  setTimeout(listarChatsCurso,300);
 }
 
 async function sendCursoIA(){
@@ -7723,6 +7859,7 @@ async function sendCursoIA(){
     const data=await res.json();
     const respuesta=data.respuesta||(data.error?"Hubo un problema al procesar tu consulta. Intentá de nuevo en un momento.":"Sin respuesta");
     cursoIAHistorial.push({role:"assistant",content:respuesta});
+    _autoguardarChatCurso();
     // Mostrar botones de generación después del primer intercambio
     if(cursoIAHistorial.length>=2){
       const actions=document.getElementById("curso-ia-actions");
