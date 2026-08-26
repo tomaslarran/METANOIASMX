@@ -7829,6 +7829,210 @@ async function eliminarChatCurso(id){
   setTimeout(listarChatsCurso,300);
 }
 
+// ── ESCENARIOS CLÍNICOS PROYECTABLES ─────────────────────────────────────────
+let _cursoEscenarios=[];
+let _audioCtx=null;
+let _audioStopFns=[];
+
+function _stopSonidoEsc(){
+  _audioStopFns.forEach(f=>{try{f();}catch(e){}});
+  _audioStopFns=[];
+  document.querySelectorAll('.btn-esc-sonido').forEach(b=>{b.textContent='🔊 Sonido';delete b.dataset.playing;});
+}
+
+function _playHeartbeatEsc(tipo,bpm){
+  if(!_audioCtx)_audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  const ctx=_audioCtx;
+  const intervalSec=60/(bpm||72);
+  let stopped=false;
+  let nextTime=ctx.currentTime+0.05;
+  function sched(){
+    if(stopped)return;
+    while(nextTime<ctx.currentTime+3){
+      const t=nextTime;
+      // S1
+      const g1=ctx.createGain(),o1=ctx.createOscillator();
+      o1.type='sine';o1.frequency.value=58;
+      g1.gain.setValueAtTime(0,t);g1.gain.linearRampToValueAtTime(0.7,t+0.015);g1.gain.exponentialRampToValueAtTime(0.001,t+0.08);
+      o1.connect(g1);g1.connect(ctx.destination);o1.start(t);o1.stop(t+0.09);
+      // S2
+      const t2=t+0.28;
+      const g2=ctx.createGain(),o2=ctx.createOscillator();
+      o2.type='sine';o2.frequency.value=78;
+      g2.gain.setValueAtTime(0,t2);g2.gain.linearRampToValueAtTime(0.45,t2+0.012);g2.gain.exponentialRampToValueAtTime(0.001,t2+0.065);
+      o2.connect(g2);g2.connect(ctx.destination);o2.start(t2);o2.stop(t2+0.08);
+      // S3 galope
+      if(tipo==='s3_galope'){
+        const t3=t2+0.14;
+        const g3=ctx.createGain(),o3=ctx.createOscillator();
+        o3.type='sine';o3.frequency.value=38;
+        g3.gain.setValueAtTime(0,t3);g3.gain.linearRampToValueAtTime(0.28,t3+0.012);g3.gain.exponentialRampToValueAtTime(0.001,t3+0.07);
+        o3.connect(g3);g3.connect(ctx.destination);o3.start(t3);o3.stop(t3+0.08);
+      }
+      // Soplo sistólico (ruido S1→S2)
+      if(tipo==='soplo_sistolico'){
+        const buf=ctx.createBuffer(1,Math.floor(ctx.sampleRate*0.2),ctx.sampleRate);
+        const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*0.12;
+        const src=ctx.createBufferSource();src.buffer=buf;
+        const bf=ctx.createBiquadFilter();bf.type='bandpass';bf.frequency.value=220;bf.Q.value=1.8;
+        const gm=ctx.createGain();
+        gm.gain.setValueAtTime(0,t+0.09);gm.gain.linearRampToValueAtTime(0.55,t+0.12);gm.gain.linearRampToValueAtTime(0,t+0.27);
+        src.connect(bf);bf.connect(gm);gm.connect(ctx.destination);src.start(t+0.09);
+      }
+      nextTime+=intervalSec;
+    }
+    requestAnimationFrame(sched);
+  }
+  sched();
+  _audioStopFns.push(()=>{stopped=true;});
+}
+
+function _playLungSoundEsc(tipo){
+  if(!_audioCtx)_audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  const ctx=_audioCtx;
+  let stopped=false;
+  if(tipo==='sibilancias'){
+    let nextT=ctx.currentTime+0.05;
+    function schedSib(){
+      if(stopped)return;
+      while(nextT<ctx.currentTime+4){
+        const osc=ctx.createOscillator(),gain=ctx.createGain();
+        osc.type='sawtooth';
+        osc.frequency.setValueAtTime(600,nextT);osc.frequency.linearRampToValueAtTime(820,nextT+1.2);osc.frequency.linearRampToValueAtTime(600,nextT+1.8);
+        gain.gain.setValueAtTime(0,nextT);gain.gain.linearRampToValueAtTime(0.09,nextT+0.3);gain.gain.setValueAtTime(0.09,nextT+1.4);gain.gain.linearRampToValueAtTime(0,nextT+1.9);
+        osc.connect(gain);gain.connect(ctx.destination);osc.start(nextT);osc.stop(nextT+2);
+        nextT+=3.5;
+      }
+      requestAnimationFrame(schedSib);
+    }
+    schedSib();
+  } else if(tipo==='crepitantes'){
+    let nextT=ctx.currentTime+0.05;
+    function schedCrack(){
+      if(stopped)return;
+      while(nextT<ctx.currentTime+4){
+        const buf=ctx.createBuffer(1,Math.floor(ctx.sampleRate*0.035),ctx.sampleRate);
+        const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length)*0.8;
+        const src=ctx.createBufferSource();src.buffer=buf;
+        const g=ctx.createGain();g.gain.value=0.35;
+        src.connect(g);g.connect(ctx.destination);src.start(nextT);
+        nextT+=0.09+Math.random()*0.22;
+      }
+      requestAnimationFrame(schedCrack);
+    }
+    schedCrack();
+  }
+  _audioStopFns.push(()=>{stopped=true;});
+}
+
+function _toggleSonidoEsc(tipo,btn){
+  if(btn.dataset.playing){_stopSonidoEsc();return;}
+  _stopSonidoEsc();
+  btn.dataset.playing='1';btn.textContent='⏹ Parar';
+  if(['normal','s3_galope','soplo_sistolico'].includes(tipo))_playHeartbeatEsc(tipo,72);
+  else if(tipo==='taquicardia')_playHeartbeatEsc('normal',115);
+  else if(tipo==='bradicardia')_playHeartbeatEsc('normal',45);
+  else if(tipo==='sibilancias')_playLungSoundEsc('sibilancias');
+  else if(tipo==='crepitantes'||tipo==='rales')_playLungSoundEsc('crepitantes');
+}
+
+function _buildEscenarioCard(j,idx){
+  const c=j.urgencia==='roja'?'#ef4444':j.urgencia==='amarilla'?'#f59e0b':'#10b981';
+  const hasSon=j.sonido&&j.sonido!=='silencio'&&j.sonido!=='null';
+  const sonBtn=hasSon?`<button class="btn sm btn-esc-sonido" onclick="_toggleSonidoEsc('${j.sonido}',this)" style="font-size:11px">🔊 Sonido</button>`:'';
+  return `<div style="background:${c}18;border:2px solid ${c};border-radius:12px;padding:14px;margin-top:12px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+      <div>
+        <div style="font-weight:700;color:${c};font-size:13px">🩺 ${esc(j.titulo||'Escenario clínico')}</div>
+        <div style="font-size:11px;color:var(--tx3);margin-top:2px">${esc(j.paciente?.nombre||'')} · ${j.paciente?.edad||'?'} años · ${esc(j.paciente?.sexo||'')}</div>
+      </div>
+      <span style="background:${c};color:#fff;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700;white-space:nowrap">${(j.urgencia||'').toUpperCase()}</span>
+    </div>
+    <div style="display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--tx2)">
+      <span>FC: <strong>${esc(j.svs?.fc||'?')}</strong></span>
+      <span>TA: <strong>${esc(j.svs?.ta||'?')}</strong></span>
+      <span>FR: <strong>${esc(j.svs?.fr||'?')}</strong></span>
+      <span>SatO₂: <strong>${esc(j.svs?.sat||'?')}%</strong></span>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:10px">
+      <button class="btn sm pri" onclick="_abrirProyector(${idx})" style="font-size:11px">🖥 Proyectar</button>
+      ${sonBtn}
+    </div>
+  </div>`;
+}
+
+function _abrirProyector(idx){
+  const j=_cursoEscenarios[idx];if(!j)return;
+  _stopSonidoEsc();
+  const c=j.urgencia==='roja'?'#ef4444':j.urgencia==='amarilla'?'#f59e0b':'#10b981';
+  const hasSon=j.sonido&&j.sonido!=='silencio'&&j.sonido!=='null';
+  const svBox=(label,val,unit)=>`<div style="text-align:center;padding:12px 8px">
+    <div style="font-size:11px;color:#888;letter-spacing:1.5px;text-transform:uppercase">${label}</div>
+    <div style="font-size:38px;font-weight:800;color:${c};font-family:ui-monospace,monospace;line-height:1.1">${esc(String(val||'?'))}</div>
+    ${unit?`<div style="font-size:11px;color:#666">${unit}</div>`:''}
+  </div>`;
+  const hallazgos=(j.hallazgos||[]).map(h=>`<li style="margin:5px 0;font-size:15px">${esc(h)}</li>`).join('');
+  const preguntas=(j.preguntas||[]).map((p,i)=>`<div style="background:rgba(255,255,255,0.06);border-left:3px solid ${c};padding:12px 16px;border-radius:0 8px 8px 0;font-size:17px;margin-bottom:8px">${i+1}. ${esc(p)}</div>`).join('');
+  const el=document.createElement('div');
+  el.id='modal-proyector-esc';
+  el.style.cssText='position:fixed;inset:0;background:#0d1117;z-index:20000;overflow-y:auto;color:#e0e0e0;font-family:system-ui,sans-serif';
+  el.innerHTML=`<div style="max-width:1100px;margin:0 auto;padding:32px 24px 48px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="color:${c};font-size:30px;font-weight:800;line-height:1.1">🩺 ${esc(j.titulo||'Escenario clínico')}</div>
+        <div style="color:#888;font-size:14px;margin-top:6px">Nivel ${esc(j.nivel||'—')} · Metanoia SMX</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        ${hasSon?`<button class="btn-esc-sonido" onclick="_toggleSonidoEsc('${j.sonido}',this)" style="background:rgba(255,255,255,0.1);border:1px solid #444;color:#e0e0e0;border-radius:8px;padding:10px 18px;cursor:pointer;font-size:14px">🔊 Sonido</button>`:''}
+        <button onclick="document.getElementById('modal-proyector-esc').remove();_stopSonidoEsc()" style="background:rgba(255,255,255,0.08);border:1px solid #444;color:#aaa;border-radius:8px;padding:10px 18px;cursor:pointer;font-size:14px">✕ Cerrar</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:16px;margin-bottom:20px;align-items:start">
+      <div style="background:rgba(255,255,255,0.05);border:1px solid #2a2a2a;border-radius:14px;padding:20px">
+        <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px">Paciente</div>
+        <div style="font-size:26px;font-weight:700">${esc(j.paciente?.nombre||'Paciente')}</div>
+        <div style="font-size:16px;color:#aaa;margin-top:4px">${j.paciente?.edad||'?'} años · ${esc(j.paciente?.sexo||'')}</div>
+        <div style="margin-top:12px;font-size:17px;font-style:italic;color:#ccc;border-top:1px solid #2a2a2a;padding-top:12px">"${esc(j.paciente?.motivo||'')}"</div>
+      </div>
+      <div style="background:${c}20;border:2px solid ${c};border-radius:14px;padding:18px 26px;text-align:center;min-width:130px">
+        <div style="font-size:11px;color:#888;letter-spacing:2px;text-transform:uppercase">URGENCIA</div>
+        <div style="font-size:34px;font-weight:900;color:${c};margin-top:4px">${(j.urgencia||'').toUpperCase()}</div>
+      </div>
+    </div>
+    <div style="background:rgba(255,255,255,0.04);border:1px solid #2a2a2a;border-radius:14px;padding:16px 20px;margin-bottom:20px">
+      <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px">Signos vitales</div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;border-top:1px solid #2a2a2a;padding-top:12px">
+        ${svBox('FC',j.svs?.fc,'bpm')}
+        ${svBox('TA',j.svs?.ta,'mmHg')}
+        ${svBox('FR',j.svs?.fr,'rpm')}
+        ${svBox('SatO₂',(j.svs?.sat||'?')+'%','')}
+        ${svBox('Temp',(j.svs?.temp||'?')+'°C','')}
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:20px">
+      <div style="background:rgba(255,255,255,0.04);border:1px solid #2a2a2a;border-radius:14px;padding:20px">
+        <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px">Presentación clínica</div>
+        <div style="font-size:16px;line-height:1.7">${esc(j.presentacion||'')}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        ${j.antecedentes?`<div style="background:rgba(255,255,255,0.04);border:1px solid #2a2a2a;border-radius:14px;padding:16px">
+          <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px">Antecedentes</div>
+          <div style="font-size:14px;line-height:1.6">${esc(j.antecedentes)}</div>
+        </div>`:''}
+        ${(j.hallazgos||[]).length?`<div style="background:rgba(255,255,255,0.04);border:1px solid #2a2a2a;border-radius:14px;padding:16px">
+          <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px">Hallazgos al examen</div>
+          <ul style="margin:0;padding-left:18px;line-height:1.7">${hallazgos}</ul>
+        </div>`:''}
+      </div>
+    </div>
+    ${preguntas?`<div>
+      <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px">Preguntas para el grupo</div>
+      ${preguntas}
+    </div>`:''}
+  </div>`;
+  document.body.appendChild(el);
+}
+
 async function sendCursoIA(){
   const input=document.getElementById("curso-ia-input");
   const msgs=document.getElementById("curso-ia-msgs");
@@ -7859,24 +8063,35 @@ async function sendCursoIA(){
     });
     const data=await res.json();
     if(data.error){
-      // Revertir el mensaje del usuario del historial — no tiene respuesta válida
       cursoIAHistorial.pop();
       const loadEl=document.getElementById(loadId);
       if(loadEl){loadEl.style.color="var(--tx3)";loadEl.textContent=`Error del agente: ${data.error}`;}
     }else{
       const respuesta=data.respuesta||"Sin respuesta";
-      cursoIAHistorial.push({role:"assistant",content:respuesta});
+      // Parsear escenario clínico proyectable
+      const escMatch=respuesta.match(/<ESCENARIO_JSON>([\s\S]*?)<\/ESCENARIO_JSON>/);
+      let escJson=null;
+      let textoDisplay=respuesta;
+      if(escMatch){
+        try{escJson=JSON.parse(escMatch[1].trim());}catch(e){}
+        textoDisplay=respuesta.replace(/<ESCENARIO_JSON>[\s\S]*?<\/ESCENARIO_JSON>/,'').trim();
+      }
+      cursoIAHistorial.push({role:"assistant",content:textoDisplay});
       _autoguardarChatCurso();
-      // Mostrar botones de generación después del primer intercambio
       if(cursoIAHistorial.length>=2){
         const actions=document.getElementById("curso-ia-actions");
         if(actions)actions.style.display="flex";
       }
       const loadEl=document.getElementById(loadId);
       if(loadEl){
-        const html=respuesta.replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\n/g,"<br>");
+        const html=textoDisplay.replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\n/g,"<br>");
         loadEl.style.color="var(--tx)";
         loadEl.innerHTML=html;
+        if(escJson){
+          const escIdx=_cursoEscenarios.length;
+          _cursoEscenarios.push(escJson);
+          loadEl.innerHTML+=_buildEscenarioCard(escJson,escIdx);
+        }
       }
     }
   }catch(e){

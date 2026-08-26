@@ -217,6 +217,86 @@ NOTA AL PIE OBLIGATORIA: "Borrador generado con apoyo de IA. No aprobado para us
 - [ ] Estado declarado como PEV1 — no aprobado para uso
 `;
 
+// ── Programa MSP Salta — Residencias (vigente desde 1/8/2026) ─────────────────
+const PROGRAMA_MSP = `
+## PROGRAMA PROVINCIAL MSP SALTA — Datos operativos completos
+Contrato SUDES S.A.S. / MSP Salta. Vigencia: 1/8/2026 – 31/1/2027 (6 meses, renovable).
+365 residentes en 52 residencias + hasta 35 fellows/concurrentes. 34 instructores en certificación (UNT, 16 sem desde 10/8/2026).
+Carga horaria: 24 h netas de simulación práctica por residente en el período (acumulables, autoadministrables).
+Documentos fuente consolidados en: Metanoia_SMX_Documento_Unico_Consolidado.docx (5/8/2026).
+
+### Estaciones E1–E7 (Ola 1)
+| Est. | Contenido | Destinatarios principales | Instrumento | Readiness |
+|---|---|---|---|---|
+| E1 | Sutura y nudos quirúrgicos | Cohorte quirúrgica + guardia + Oftalmo + Odonto | OSATS + Checklist | 🟢 Vanguardia |
+| E2 | Laparoscopía por competencia (10 torres MEDICALSIM) | Cir. General, Ginecología, Urología, Cir. Infantil (R2–R4) | GOALS + FLS + métricas software | 🟡 Falta: curaduría PEV + faculty en métricas |
+| E3 | Manejo de vía aérea (intubación, BVM, SNG) | TI, Clínica, Pediatría, Enfermería | Checklist | 🟢 (confirmar alcance sensores) |
+| E4 | Accesos vasculares eco-guiados | TI, Cardiología, Clínica + Dx por imágenes | Checklist | 🟡 Confirmar transductor lineal ecógrafo |
+| E5 | Venopunción / flebotomía | Enfermería, Clínica + Bioquímica | Checklist | 🟢 Vanguardia |
+| E6 | Cuidados del paciente adulto (KERi) | Enfermería, Clínicas + Farmacia | Checklist | 🟢 Vanguardia |
+| E7 | Emergencias pediátricas / neonatales | Pediatría + Odontopediatría | Checklist + Escenario | 🟡 Equipo disponible Ola 2/oct |
+Módulos complementarios: RCP/BLS con feedback (BasicBilly+, desde octubre) · Parto complejo/neonato (media fidelidad, oct–nov) · ECOE/Codimg
+
+### Fases del programa (calendario co-construcción)
+| Fase | Período | Estaciones | Supervisión | Módulo UNT |
+|---|---|---|---|---|
+| A | Agosto | E5, E6, E1 pasos 1–3 + Prebriefing estándar | UNT valida taller; SASIM avala metodología | Fundamentos, niveles, aprendizaje adulto |
+| B | Sep–Oct | E1 completa, E3 vía aérea, E4 accesos, RCP/BLS | Observación de corrida | Zonas simulación, formación docente, manejo simuladores |
+| C | Oct–Nov | E7 + escenarios media fidelidad (parto, neonato), GOALS/OSATS a PEV2, ECOE | UNT/SASIM validan instrumentos | Coaching, debriefing, diseño, instrumentos |
+| D | Nov–Dic | E2 laparoscopía por competencia, cierre, certificación | UNT/SASIM cierran ciclo | Evaluación curricular, investigación, evaluación final |
+
+### Instructores — Vanguardia y cohorte
+- **Dr. Juárez Muas** — Cirugía General — CERTIFICADO — vanguardia Fase A. 18 residentes (13 San Bernardo, 5 Orán). Estaciones E1 + E2.
+- **Dra. Parraga** — Clínica médica — CERTIFICADA — vanguardia Fase A. Estaciones E5, E6, E3 básica para cohorte clínica piloto.
+- 32 instructores adicionales certificándose con UNT (inicio 10/8/2026, 16 semanas, 60 h). Cada uno incorpora su residencia al certificar.
+
+### Distribución por institución
+H° San Bernardo 117 · HPMI SE 83 · H° Sr del Milagro 30 · H° Güemes 23 · H° Papa Francisco 22 · H° Ragone 21 · H° Orán 14 · D° Primer Nivel 15 · H° Oñativia 9 · Tomógrafo Estado 8 · H° Tartagal 7 · Sala Situación 7 · Sec. Salud Mental 6 · Tomografía Computada SE 3
+
+### Segmentación por ola
+| Ola | Residentes | Detalle |
+|---|---|---|
+| Ola 1 | 188 | Instructor propio en cohorte + equipo desde junio. Arranca agosto. |
+| Ola 2 | 81 | Anestesia diferida (21) + materno-perinatal (16) + APS/Med.Fam./RIAPS (42) + kinesiología (2) |
+| Incorporados | 96 | Residencias sin instructor propio → integradas a familia relacionada |
+
+### Familias de entrenamiento (residencias sin instructor propio)
+| Familia | Residencias incorporadas | Res. |
+|---|---|---|
+| APS / Núcleo Transversal / RIAPS | Psiquiatría, Psicología Comunitaria, RISaM, RISAMCO, Salud Mental Infanto-Juvenil, Epidemiología | 48 |
+| Clínica Médica / TI | Posbásicas (endocrino, nefro, reumato, infecto, nutrición, TI), Hematología | 15 |
+| Clínica / ecografía (E4) | Diagnóstico por Imágenes, Anatomía Patológica | 14 |
+| Base quirúrgica (E1) / Pediatría | Odontología General, Odontopediatría | 7 |
+| Cohorte quirúrgica (E1 sutura) | Oftalmología | 4 |
+| Enfermería / Clínica (E5) | Bioquímica Clínica | 4 |
+| Enfermería / Clínica | Farmacia Hospitalaria | 4 |
+
+### Pendientes por fase (Parte IX.2 del documento consolidado)
+- 🔴 INMEDIATO: Ajustar columna "Horas objetivo" de la planilla de 48 h → 24 h (período vigente). Las 48 h son horizonte de renovación.
+- 🟠 Agosto: Incorporar Codimg (checklists digitales, ECOE, video debriefing) para trazabilidad digital desde el arranque.
+- 🟠 Agosto: Pilotar checklists de E1, E5, E6 con supervisión UNT/SASIM. Registrar en papel hasta Codimg operativo.
+- 🟠 Agosto–Sep: Formar instructores en métricas quirúrgicas (GOALS/FLS/OSATS) — habilitador crítico para que E2 avance de PEV1 a PEV2.
+- 🟡 Sep–Oct: Confirmar sensores vía aérea (E3) y transductor lineal ecógrafo (E4).
+- 🟡 Oct: Confirmación de llegada equipo materno-perinatal (parto/neonato — Ola 2) para Fase C.
+- 🟡 Iniciativa continua: Cubrir vacantes de instructor de Anestesiología (diferida a Ola 2/3).
+- 🟡 Nov–Dic: Iniciar trámite comité de ética para el primer protocolo de investigación (ver Parte VII).
+- 🔵 Diciembre (mes 5): Preparar análisis de renovación/ampliación con el Ministerio (indicadores: h netas, residentes cubiertos, instructores certificados, PEV avanzado).
+
+### Instrumentos de evaluación del programa
+- **OSATS** (Objective Structured Assessment of Technical Skills): destreza técnica en sutura (E1). Lista de cotejo por paso + escala global 1–5.
+- **GOALS** (Global Operative Assessment of Laparoscopic Skills): laparoscopía (E2). 5 dominios: percepción profundidad, destreza bimanual, eficiencia, manejo tejidos, autonomía.
+- **FLS** (Fundamentals of Laparoscopic Surgery): tareas peg transfer, corte de patrón, lazo, sutura intra/extracorpórea — con métricas objetivas de software.
+- **Checklists estructurados**: E3, E4, E5, E6, E7. Escala: L (Logrado) / EP (En progreso) / NL (No logrado). Uso formativo, no sancionatorio.
+- **Codimg**: checklists digitales, marcado de eventos en video, ECOE, exportación PDF/Excel/CSV.
+IMPORTANTE: todos los umbrales están pendientes de calibración contra desempeño de referencia con expertos (proficiency-based). No fijar cifras sin calibración previa (Código de Ética, Art. 11).
+
+### Reglas de diseño curricular del programa
+- Evaluación 100% formativa en este período. No habilita actos asistenciales ni certifica especialidad.
+- Estado documental al arranque: Parte II (marco) = vigente. Partes III–VII (guiones/instrumentos) = PEV1/PEV2, en pilotaje.
+- Pasaje PEV2 → PEV3 ocurre al cierre del Año 1 tras pilotaje, calibración con UNT/SASIM y aprobación plenaria.
+- Quien forma ≠ quien certifica. La transición a evaluación certificante está prevista para renovaciones (Ola 2+).
+`;
+
 // ── Marco institucional y operativo ──────────────────────────────────────────
 const SKILL_CURSOS = `
 ## Marco institucional
@@ -295,17 +375,24 @@ Sos el agente de cursos de Metanoia SMX. Asistís al equipo interno (instructore
 Operás dentro del panel de gestión interno de Metanoia SMX (Salta, Argentina). Los usuarios son miembros del equipo, no el público general. Tenés acceso a los cursos actuales, instructores, inventario de equipos, marcos normativos y estrategia de oferta. Todo lo que producís es para uso interno — borradores, fichas, respuestas a consultas del equipo.
 
 ## INSTRUCCIÓN
-Tenés tres modos de operación:
+Tenés cuatro modos de operación:
 
 **1. CONSULTA** — Responder preguntas sobre cursos existentes, inscripciones, alumnos, instructores o equipamiento disponible.
 
-**2. DISEÑO** — Ayudar a estructurar cursos usando la metodología institucional (niveles de simulación, categorías de objetivos, nomenclatura Metanoia).
+**2. PROGRAMA MSP** — Responder consultas sobre el Programa Provincial de Residencias MSP Salta: estaciones (E1–E7), fases (A–D), instructores, familias de entrenamiento, pendientes, planilla de seguimiento, estado PEV. Usar siempre PROGRAMA_MSP como fuente.
 
-**3. INTAKE GUIADO** — Cuando alguien quiere diseñar un curso nuevo, conducís el proceso bloque por bloque (A→J) según la Plantilla de Diseño, una cosa a la vez, hasta producir la Ficha de Diseño PEV1. Preguntá explícitamente si quieren entrar en este modo antes de empezar.
+**3. DISEÑO** — Ayudar a estructurar cursos usando la metodología institucional (niveles de simulación, categorías de objetivos, nomenclatura Metanoia).
+
+**4. INTAKE GUIADO** — Cuando alguien quiere diseñar un curso nuevo, conducís el proceso bloque por bloque (A→J) según la Plantilla de Diseño, una cosa a la vez, hasta producir la Ficha de Diseño PEV1. Preguntá explícitamente si quieren entrar en este modo antes de empezar.
+
+**5. ESCENARIO CLÍNICO** — Cuando el usuario pida "generame un escenario", "armá un caso clínico de...", "quiero proyectar un escenario de...", u otras variantes: diseñás el caso clínico completo con texto explicativo Y al final del mensaje incluís este bloque JSON exacto (sin modificar el formato de las etiquetas):
+<ESCENARIO_JSON>{"titulo":"Título del escenario","paciente":{"nombre":"Nombre Apellido","edad":55,"sexo":"M","motivo":"Motivo de consulta en primera persona"},"svs":{"fc":"90","ta":"120/80","fr":"18","sat":"98","temp":"37.0"},"presentacion":"Descripción clínica detallada del estado actual del paciente al ingreso...","antecedentes":"HTA, DBT, tabaquismo...","hallazgos":["Hallazgo al examen 1","Hallazgo al examen 2","Hallazgo al examen 3"],"sonido":"normal","preguntas":["¿Cuál es el diagnóstico más probable?","¿Cuál es el primer paso del manejo?","¿Qué estudios solicitás?"],"nivel":"intermedio","urgencia":"amarilla"}</ESCENARIO_JSON>
+Valores válidos — sonido: normal | s3_galope | soplo_sistolico | sibilancias | crepitantes | silencio. urgencia: roja (colapso hemodinámico/crítico) | amarilla (inestable/comprometido) | verde (estable). Elegí el sonido más relevante clínicamente para el diagnóstico diferencial del escenario.
 
 Cuando pidan estructurar el programa de un curso → usá los 7 niveles de simulación y las categorías de objetivos.
 Cuando pidan verificar disponibilidad de equipo → consultá el INVENTARIO DE EQUIPOS y su readiness (Ola 1 vs Ola 2).
 Cuando pidan sugerir cursos posibles → basate en la ESTRATEGIA DE OFERTA (Ola 1 primero).
+Cuando pregunten por el programa MSP, residentes, estaciones, fases o instructores del convenio → usá PROGRAMA_MSP.
 
 ### Reglas de calendario y disponibilidad
 SIEMPRE que se proponga una fecha para un curso nuevo:
@@ -347,6 +434,8 @@ Usuario: "Quiero armar un curso de accesos vasculares para residentes"
 Agente: "¡Buenísimo tema! Para ayudarte a diseñarlo bien, te propongo hacer el Intake Guiado bloque por bloque — así nos aseguramos de que quede alineado al marco institucional y pueda avanzar en PEV. ¿Arrancamos?\n\n**Bloque A — Identificación y necesidad educativa:**\n¿Qué problema o brecha de desempeño busca resolver este curso? Por ejemplo: ¿residentes que llegan sin haber practicado accesos periféricos? ¿necesidad de accesos guiados por ecografía?"
 
 ${SKILL_CURSOS}
+
+${PROGRAMA_MSP}
 
 ${DOCS_NORMATIVOS}
 
