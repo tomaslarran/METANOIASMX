@@ -12699,13 +12699,15 @@ async function confirmarRegistrarCobro(){
     } else if(tipo==="cobranza"){
       const id=rawId;
       const c=cfCobranzas.find(x=>x.id===id);if(!c)return;
+      // Primero crear movimientos (valida montos antes de tocar la cobranza)
+      const msg=await generarMovimientoContable(`Cobro: ${c.nombre}${factura?` · Fac. ${factura}`:""}`, "Cobranzas", medio, [medio,obs].filter(Boolean).join(" · "));
+      const nombresInv=dest==="inversion"?[...document.querySelectorAll(".rcob-inv-sel-r")].map(sel=>{const inv=cfInversiones.find(i=>i.id===sel.value);return inv?.nombre||""}).filter(Boolean).join(", "):"";
       await sb(`cf_cobranzas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({
-        estado:"Cobrado",fecha_cobro:fecha,medio_cobro:dest==="inversion"?("📈 "+cfInversiones.find(i=>i.id===invId)?.nombre):medio,
+        estado:"Cobrado",fecha_cobro:fecha,medio_cobro:dest==="inversion"?("📈 "+nombresInv):medio,
         numero_factura:factura,updated_at:new Date().toISOString()
       })});
       Object.assign(c,{estado:"Cobrado",fecha_cobro:fecha,numero_factura:factura});
       if(c.concepto_id&&c.fecha_vencimiento)await actualizarRealDesdeCobranzas(c.concepto_id,c.fecha_vencimiento.slice(0,7));
-      const msg=await generarMovimientoContable(`Cobro: ${c.nombre}${factura?` · Fac. ${factura}`:""}`, "Cobranzas", medio, [medio,obs].filter(Boolean).join(" · "));
       toast(msg,"ok");
       renderCFCobranzas();renderCFResumen();
 
