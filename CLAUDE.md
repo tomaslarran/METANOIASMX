@@ -453,6 +453,31 @@ ALTER TABLE cursos ADD CONSTRAINT cursos_estado_check CHECK (estado IN ('Borrado
 - Formar instructores en métricas quirúrgicas GOALS/FLS/OSATS (habilitador crítico de E2)
 - Confirmar sensores vía aérea (E3) y transductor lineal ecógrafo (E4)
 
+## Implementado (27 Ago 2026) — Competency Tracker + Debriefing PEARLS + NPS post-curso
+
+### Competency Tracker
+- ✅ Tab **"📊 Evaluar"** en detalle de curso — selector de instrumento, pill-buttons 1–N por ítem, total dinámico con color según aprobación, textarea de observaciones, botón "Guardar evaluación"
+- ✅ Sección **evaluaciones en modal Alumno** — sparkline SVG de evolución de porcentaje + historial cronológico con score y %
+- ✅ **Panel gestión de instrumentos** en Usuarios (admin-only): activar/desactivar, eliminar personalizados, crear nuevos con ítems dinámicos y escala configurable
+- ✅ 4 instrumentos estándar precargados: **OSATS, GOALS, Mini-CEX, DOPS** (ítems y escala completos en BD)
+- ✅ Tablas `instrumentos_evaluacion` + `evaluaciones_alumno` en Supabase con RLS
+
+### Debriefing PEARLS
+- ✅ Tab **"📝 Debriefing"** en detalle de curso — lista de debriefings con dots de color indicando secciones completadas
+- ✅ Formulario con **6 secciones acordeón**: Partnership / Empathy / Acknowledgment / Reflection / Learning / Supporting
+- ✅ Cada sección: guías de preguntas para el instructor + textarea libre de notas
+- ✅ Vista de detalle inline + **export Word** (.doc) con estructura por secciones
+- ✅ Tabla `debriefings` en Supabase con RLS
+
+### NPS post-curso
+- ✅ Tab **"⭐ NPS"** en detalle de curso — NPS score grande con color (verde ≥50, amarillo 0-49, rojo <0)
+- ✅ Barra horizontal proporcional Promotores (9-10) / Pasivos (7-8) / Detractores (≤6)
+- ✅ Registro manual por alumno inscripto + entrada anónima adicional
+- ✅ Tabla `nps_respuestas` en Supabase con RLS
+- ✅ Compatible con futura integración WhatsApp (cuando se apruebe el template Meta `nps_post_curso`)
+
+**SQL corrido (Supabase):** `instrumentos_evaluacion`, `evaluaciones_alumno`, `debriefings`, `nps_respuestas` + 4 INSERT instrumentos estándar
+
 ## Implementado (27 Ago 2026) — Agente cursos: Excel, guardar/retomar chats, escenarios clínicos proyectables
 
 - ✅ **Leer Excel en chat IA** — soporte `.xlsx`/`.xls` en `adjuntarArchivoCursoIA`: carga xlsx.js dinámicamente, convierte cada hoja a CSV y lo envía como texto plano al agente
