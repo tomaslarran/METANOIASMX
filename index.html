@@ -14372,22 +14372,26 @@ function apMostrarResultado(data){
     tabla.innerHTML=`<div style="padding:20px;text-align:center;color:var(--tx3);font-size:13px">No se encontraron cuotas — podés agregarlas manualmente desde el préstamo</div>`;
   } else {
     const tieneDet=apCuotasExtraidas.some(c=>c.capital!=null||c.intereses!=null);
-    tabla.innerHTML=`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;border-collapse:collapse;font-size:12px">
+    tabla.innerHTML=`<div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+      <button class="btn sm" onclick="apRenumerar()" title="Asignar números correlativos 1,2,3...">🔢 Renumerar</button>
+      <button class="btn sm ok" onclick="apAgregarFila()" title="Agregar fila vacía">+ Fila</button>
+    </div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="background:var(--surf2)">
-        <th style="padding:6px 10px;text-align:left;color:var(--tx3)">#</th>
-        <th style="padding:6px 10px;text-align:left;color:var(--tx3)">Fecha</th>
-        <th style="padding:6px 10px;text-align:right;color:var(--tx3)">Total</th>
-        ${tieneDet?`<th style="padding:6px 10px;text-align:right;color:var(--gr)">Capital</th><th style="padding:6px 10px;text-align:right;color:#FCA5A5">Intereses</th>`:""}
-        <th style="padding:6px 10px;text-align:right;color:var(--tx3)">Saldo</th>
-        <th style="padding:6px 10px;text-align:center;color:var(--tx3)">Estado</th>
+        <th style="padding:6px 8px;text-align:left;color:var(--tx3)">#</th>
+        <th style="padding:6px 8px;text-align:left;color:var(--tx3)">Fecha</th>
+        <th style="padding:6px 8px;text-align:right;color:var(--tx3)">Total</th>
+        ${tieneDet?`<th style="padding:6px 8px;text-align:right;color:var(--gr)">Capital</th><th style="padding:6px 8px;text-align:right;color:#FCA5A5">Intereses</th>`:""}
+        <th style="padding:6px 8px;text-align:center;color:var(--tx3)">Estado</th>
+        <th style="padding:6px 4px"></th>
       </tr></thead>
-      <tbody>${apCuotasExtraidas.map((c,i)=>`<tr style="border-top:1px solid var(--surf2)${c.pagada?" opacity:.5":""}">
-        <td style="padding:5px 10px;color:var(--tx3)">${c.nro||"—"}</td>
-        <td style="padding:4px 10px"><input type="date" value="${c.fecha||""}" onchange="apCuotasExtraidas[${i}].fecha=this.value" style="border:1px solid var(--surf2);background:var(--surf);color:var(--tx);font-size:12px;padding:2px 6px;border-radius:4px;width:130px"></td>
-        <td style="padding:5px 10px;text-align:right;font-weight:600">${fmtNum(c.monto_total,true)}</td>
-        ${tieneDet?`<td style="padding:5px 10px;text-align:right;color:var(--gr)">${fmtNum(c.capital)}</td><td style="padding:5px 10px;text-align:right;color:#FCA5A5">${fmtNum(c.intereses)}</td>`:""}
-        <td style="padding:5px 10px;text-align:right;color:var(--tx3)">${fmtNum(c.saldo_restante)}</td>
-        <td style="padding:5px 10px;text-align:center">${c.pagada?'<span class="badge bdo" style="font-size:10px">Pagada</span>':'<span style="font-size:10px;color:var(--tx3)">Pendiente</span>'}</td>
+      <tbody>${apCuotasExtraidas.map((c,i)=>`<tr style="border-top:1px solid var(--surf2)${c.pagada?";opacity:.55":""}">
+        <td style="padding:4px 8px"><input type="text" value="${c.nro||""}" onchange="apCuotasExtraidas[${i}].nro=this.value" style="border:1px solid var(--surf2);background:var(--surf);color:var(--tx);font-size:12px;padding:2px 4px;border-radius:4px;width:40px;text-align:center"></td>
+        <td style="padding:4px 8px"><input type="date" value="${c.fecha||""}" onchange="apCuotasExtraidas[${i}].fecha=this.value" style="border:1px solid var(--surf2);background:var(--surf);color:var(--tx);font-size:12px;padding:2px 6px;border-radius:4px;width:130px"></td>
+        <td style="padding:4px 8px;text-align:right"><input type="number" value="${c.monto_total||""}" onchange="apCuotasExtraidas[${i}].monto_total=parseFloat(this.value)||0" style="border:1px solid var(--surf2);background:var(--surf);color:var(--tx);font-size:12px;padding:2px 6px;border-radius:4px;width:110px;text-align:right;font-weight:600"></td>
+        ${tieneDet?`<td style="padding:4px 8px;text-align:right;color:var(--gr)">${fmtNum(c.capital)}</td><td style="padding:4px 8px;text-align:right;color:#FCA5A5">${fmtNum(c.intereses)}</td>`:""}
+        <td style="padding:4px 8px;text-align:center">${c.pagada?'<span class="badge bdo" style="font-size:10px">Pagada</span>':'<span style="font-size:10px;color:var(--tx3)">Pendiente</span>'}</td>
+        <td style="padding:4px 4px;text-align:center"><button onclick="apEliminarFila(${i})" style="background:none;border:none;color:var(--tx3);cursor:pointer;font-size:13px;padding:2px 4px" title="Eliminar fila">✕</button></td>
       </tr>`).join("")}</tbody>
     </table></div>`;
   }
@@ -14402,6 +14406,36 @@ function apMostrarResultado(data){
     (totalCap?` · Capital: <strong style="color:var(--gr)">${fmtNum(totalCap,true)}</strong>`:"")+
     (totalInt?` · Intereses: <strong style="color:#FCA5A5">${fmtNum(totalInt,true)}</strong>`:"")+
     (tasaEst?` · <span style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);border-radius:4px;padding:1px 8px;color:var(--am)">📊 TNA estimada: <strong>${tasaEst.tna.toFixed(2)}%</strong> · TEA: <strong>${tasaEst.tea.toFixed(2)}%</strong> · mensual: <strong>${tasaEst.tasaMensual.toFixed(3)}%</strong></span>`:"");
+}
+
+function apRenderTabla(){
+  const tieneDet=apCuotasExtraidas.some(c=>c.capital!=null||c.intereses!=null);
+  const tabla=document.getElementById("ap-tabla-cuotas");
+  const tbody=tabla.querySelector("tbody");
+  if(!tbody)return;
+  tbody.innerHTML=apCuotasExtraidas.map((c,i)=>`<tr style="border-top:1px solid var(--surf2)${c.pagada?";opacity:.55":""}">
+    <td style="padding:4px 8px"><input type="text" value="${c.nro||""}" onchange="apCuotasExtraidas[${i}].nro=this.value" style="border:1px solid var(--surf2);background:var(--surf);color:var(--tx);font-size:12px;padding:2px 4px;border-radius:4px;width:40px;text-align:center"></td>
+    <td style="padding:4px 8px"><input type="date" value="${c.fecha||""}" onchange="apCuotasExtraidas[${i}].fecha=this.value" style="border:1px solid var(--surf2);background:var(--surf);color:var(--tx);font-size:12px;padding:2px 6px;border-radius:4px;width:130px"></td>
+    <td style="padding:4px 8px;text-align:right"><input type="number" value="${c.monto_total||""}" onchange="apCuotasExtraidas[${i}].monto_total=parseFloat(this.value)||0" style="border:1px solid var(--surf2);background:var(--surf);color:var(--tx);font-size:12px;padding:2px 6px;border-radius:4px;width:110px;text-align:right;font-weight:600"></td>
+    ${tieneDet?`<td style="padding:4px 8px;text-align:right;color:var(--gr)">${fmtNum(c.capital)}</td><td style="padding:4px 8px;text-align:right;color:#FCA5A5">${fmtNum(c.intereses)}</td>`:""}
+    <td style="padding:4px 8px;text-align:center">${c.pagada?'<span class="badge bdo" style="font-size:10px">Pagada</span>':'<span style="font-size:10px;color:var(--tx3)">Pendiente</span>'}</td>
+    <td style="padding:4px 4px;text-align:center"><button onclick="apEliminarFila(${i})" style="background:none;border:none;color:var(--tx3);cursor:pointer;font-size:13px;padding:2px 4px" title="Eliminar fila">✕</button></td>
+  </tr>`).join("");
+  const totalCuotas=apCuotasExtraidas.reduce((s,c)=>s+(c.monto_total||0),0);
+  const pend=apCuotasExtraidas.filter(c=>!c.pagada).length;
+  document.getElementById("ap-cuotas-resumen").innerHTML=`${apCuotasExtraidas.length} cuotas · ${pend} pendientes · Total: <strong>${fmtNum(totalCuotas,true)}</strong>`;
+}
+function apRenumerar(){
+  apCuotasExtraidas.forEach((c,i)=>{c.nro=i+1;});
+  apRenderTabla();
+}
+function apEliminarFila(i){
+  apCuotasExtraidas.splice(i,1);
+  apRenderTabla();
+}
+function apAgregarFila(){
+  apCuotasExtraidas.push({nro:apCuotasExtraidas.length+1,fecha:"",monto_total:0,pagada:false});
+  apRenderTabla();
 }
 
 async function apGuardar(){
