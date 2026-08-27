@@ -4676,7 +4676,7 @@ async function checkAlertasPagos(){
     if(data.alertas===0){toast("Sin alertas pendientes 🎉","ok");}
     else{
       toast(`${data.alertas} alerta${data.alertas>1?"s":""} generada${data.alertas>1?"s":""} — revisá las notificaciones 🔔`,"inf");
-      loadBellNotifs();
+      loadNotificaciones();
     }
   }catch(e){toast("Error al revisar: "+e.message,"err");}
   finally{if(btn){btn.disabled=false;btn.textContent="🔔 Revisar pagos";}}
