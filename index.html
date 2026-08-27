@@ -5735,6 +5735,7 @@ async function selectCurso(id){
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-instmat-${id}');loadInstMat('${id}')">👥 Instructores y materiales</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-inscriptos-${id}');loadInscriptos('${id}')">📋 Inscriptos</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-eval-${id}');loadEvaluaciones('${id}')">📊 Evaluar</div>
+      <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-debrief-${id}');loadDebriefings('${id}')">📝 Debriefing</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-cotiz-${id}');loadCursoCotizaciones('${id}')">💼 Cotizaciones</div>
       <div class="cd-tab cd-tab-archivos" onclick="showCdTab(this,'cd-archivos-${id}');loadCursoArchivos('${id}')">📁 Archivos</div>
       ${curso.tiene_clases?`<div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-clases-${id}');loadCursoClases('${id}')">📚 Clases</div>`:""}
@@ -5819,6 +5820,9 @@ async function selectCurso(id){
       </div>
       <div id="cd-eval-${id}" style="display:none">
         <div id="eval-content-${id}" style="padding:4px 0"></div>
+      </div>
+      <div id="cd-debrief-${id}" style="display:none">
+        <div id="debrief-content-${id}" style="padding:4px 0"></div>
       </div>
       <div id="cd-cotiz-${id}" style="display:none">
         <div id="cotiz-curso-content-${id}" style="padding:4px 0"><div style="color:var(--tx3);padding:24px;text-align:center">Cargando...</div></div>
@@ -6137,6 +6141,192 @@ async function removeInscripcion(id,cursoId){
     toast("Inscripción eliminada","ok");
     loadInscriptos(cursoId);
   }catch(e){toast("Error","err")}
+}
+
+// ══ DEBRIEFING PEARLS ══
+const PEARLS_DEF=[
+  {key:'p',letter:'P',name:'Partnership',col:'#4F46E5',
+   desc:'Establecer la alianza de aprendizaje y la seguridad psicológica del grupo.',
+   tips:['¿Cómo se sintieron durante el escenario?','¿Qué observaron desde su rol?','Recordar el acuerdo de confidencialidad del grupo.']},
+  {key:'e',letter:'E',name:'Empathy',col:'#0891B2',
+   desc:'Explorar y validar las respuestas emocionales antes de la reflexión clínica.',
+   tips:['¿Cómo te sentiste cuando…?','¿Qué fue lo más difícil del momento?','Dar espacio sin apresurar el análisis.']},
+  {key:'a',letter:'A',name:'Acknowledgment',col:'#059669',
+   desc:'Reconocer explícitamente lo que el equipo hizo bien.',
+   tips:['¿Qué salió bien en la gestión del caso?','¿Qué decisiones fueron acertadas?','Nombrar conductas específicas, no genéricas.']},
+  {key:'r',letter:'R',name:'Reflection',col:'#D97706',
+   desc:'Reflexión guiada sobre razonamiento clínico y toma de decisiones.',
+   tips:['¿Por qué decidiste…?','¿Qué información tuviste en cuenta?','¿Cuál era tu hipótesis principal?']},
+  {key:'l',letter:'L',name:'Learning',col:'#7C3AED',
+   desc:'Identificar y consolidar los puntos clave de aprendizaje del escenario.',
+   tips:['¿Qué aprendieron hoy?','¿Qué harían diferente la próxima vez?','¿Qué mensaje se llevan para su práctica?']},
+  {key:'s',letter:'S',name:'Supporting',col:'#BE123C',
+   desc:'Apoyar la transferencia del aprendizaje al entorno clínico real.',
+   tips:['¿Cómo aplicarían esto en su práctica real?','¿Qué recursos o apoyo necesitan?','Próximos pasos concretos.']},
+];
+
+let _debriefFormVisible={};
+
+async function loadDebriefings(cursoId){
+  const el=document.getElementById(`debrief-content-${cursoId}`);
+  if(!el)return;
+  el.innerHTML=`<div style="padding:16px;text-align:center;color:var(--tx3);font-size:13px">Cargando...</div>`;
+  try{
+    const items=await sb(`debriefings?curso_id=eq.${cursoId}&order=fecha.desc`);
+    _renderDebriefList(el,cursoId,items);
+  }catch(e){el.innerHTML=`<p style="color:var(--re);padding:16px;font-size:13px">Error: ${esc(e.message)}</p>`;}
+}
+
+function _renderDebriefList(el,cursoId,items){
+  const listHtml=items.length?items.map(d=>`
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--surf2);border:1px solid var(--b);border-radius:8px;margin-bottom:6px;cursor:pointer" onclick="verDebrief('${d.id}','${cursoId}')">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--tx)">${esc(d.titulo||'Debriefing sin título')}</div>
+        <div style="font-size:11px;color:var(--tx3);margin-top:2px">${fmt(d.fecha)} · ${esc(d.instructor||'—')}${d.duracion_min?` · ${d.duracion_min} min`:''}</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        ${PEARLS_DEF.map(p=>`<div title="${p.name}" style="width:16px;height:16px;border-radius:50%;background:${d['pearls_'+p.key]?p.col:'var(--b)'};opacity:${d['pearls_'+p.key]?'1':'.4'}"></div>`).join('')}
+        <button class="btn sec" style="font-size:11px;padding:4px 8px;margin-left:4px" onclick="event.stopPropagation();exportarDebrief('${d.id}')">📄 Word</button>
+        <button class="btn sec" style="font-size:11px;padding:4px 8px;color:var(--re);border-color:var(--re)" onclick="event.stopPropagation();eliminarDebrief('${d.id}','${cursoId}')">Eliminar</button>
+      </div>
+    </div>`).join(''):`<p style="color:var(--tx3);font-size:13px;padding:8px 0">Sin debriefings registrados. Creá el primero.</p>`;
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div style="font-size:14px;font-weight:700;color:var(--tx)">Debriefings del curso</div>
+    <button class="btn pri" style="font-size:12px;padding:6px 14px" onclick="toggleNuevoDebrief('${cursoId}')">+ Nuevo debriefing</button>
+  </div>
+  <div id="nuevo-debrief-form-${cursoId}" style="display:none;margin-bottom:20px">${_buildDebriefForm(cursoId)}</div>
+  <div id="debrief-list-inner-${cursoId}">${listHtml}</div>`;
+}
+
+function _buildDebriefForm(cursoId){
+  const sesion=JSON.parse(sessionStorage.getItem('smx_session')||'{}');
+  const today=new Date().toISOString().slice(0,10);
+  const pearls=PEARLS_DEF.map(p=>`
+    <div style="border:1px solid var(--b);border-radius:10px;overflow:hidden;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surf2);cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none';this.querySelector('.debrief-arrow').style.transform=this.nextElementSibling.style.display==='none'?'':'rotate(180deg)'">
+        <div style="width:28px;height:28px;border-radius:50%;background:${p.col};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#fff;flex-shrink:0">${p.letter}</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700;color:var(--tx)">${p.name}</div>
+          <div style="font-size:11px;color:var(--tx3);margin-top:1px">${esc(p.desc)}</div>
+        </div>
+        <svg class="debrief-arrow" width="14" height="14" viewBox="0 0 14 14" style="transition:transform .2s;flex-shrink:0;color:var(--tx3)"><path d="M2 4l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+      </div>
+      <div style="padding:12px 14px">
+        <div style="font-size:11px;color:var(--tx3);margin-bottom:6px;font-style:italic">Guías: ${p.tips.map(t=>esc(t)).join(' · ')}</div>
+        <textarea id="debrief-${p.key}-${cursoId}" placeholder="Notas del instructor sobre ${p.name}..." style="width:100%;padding:8px;font-size:12px;background:var(--surf);border:1px solid var(--b);border-radius:6px;color:var(--tx);resize:vertical;min-height:70px;font-family:inherit"></textarea>
+      </div>
+    </div>`).join('');
+  return`<div style="border:2px solid var(--b);border-radius:12px;padding:16px;background:var(--surf)">
+    <div style="font-size:14px;font-weight:700;color:var(--tx);margin-bottom:14px">Nuevo debriefing</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+      <div><label class="fi-lbl">Título (opcional)</label><input id="debrief-titulo-${cursoId}" class="fi" placeholder="Ej: Escenario IAM" style="font-size:12px"></div>
+      <div><label class="fi-lbl">Fecha</label><input id="debrief-fecha-${cursoId}" type="date" class="fi" value="${today}" style="font-size:12px"></div>
+      <div><label class="fi-lbl">Instructor</label><input id="debrief-instructor-${cursoId}" class="fi" value="${esc(sesion.nombre||sesion.email||'')}" style="font-size:12px"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-bottom:14px">
+      <div><label class="fi-lbl">Duración (min)</label><input id="debrief-duracion-${cursoId}" type="number" class="fi" placeholder="30" style="font-size:12px"></div>
+      <div><label class="fi-lbl">Descripción del escenario</label><input id="debrief-escenario-${cursoId}" class="fi" placeholder="Ej: Paciente 45 años con dolor torácico..." style="font-size:12px"></div>
+    </div>
+    <div style="margin-bottom:14px">${pearls}</div>
+    <div style="margin-bottom:14px"><label class="fi-lbl">Observaciones generales</label>
+      <textarea id="debrief-obs-${cursoId}" placeholder="Notas adicionales, próximas acciones, recomendaciones..." style="width:100%;padding:8px;font-size:12px;background:var(--surf);border:1px solid var(--b);border-radius:6px;color:var(--tx);resize:vertical;min-height:60px;font-family:inherit"></textarea>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn sec" style="font-size:12px" onclick="toggleNuevoDebrief('${cursoId}')">Cancelar</button>
+      <button class="btn pri" style="font-size:12px" onclick="guardarDebrief('${cursoId}')">Guardar debriefing</button>
+    </div>
+  </div>`;
+}
+
+function toggleNuevoDebrief(cursoId){
+  const f=document.getElementById(`nuevo-debrief-form-${cursoId}`);
+  if(!f)return;
+  const show=f.style.display==='none';
+  f.style.display=show?'':'none';
+  if(show)f.innerHTML=_buildDebriefForm(cursoId);
+}
+
+async function guardarDebrief(cursoId){
+  const g=id=>document.getElementById(`${id}-${cursoId}`);
+  const obj={
+    curso_id:cursoId,
+    titulo:g('debrief-titulo').value.trim()||null,
+    fecha:g('debrief-fecha').value||new Date().toISOString().slice(0,10),
+    instructor:g('debrief-instructor').value.trim()||null,
+    duracion_min:parseInt(g('debrief-duracion').value)||null,
+    escenario_desc:g('debrief-escenario').value.trim()||null,
+    observaciones_generales:g('debrief-obs').value.trim()||null,
+  };
+  PEARLS_DEF.forEach(p=>{obj[`pearls_${p.key}`]=g(`debrief-${p.key}`)?.value.trim()||null;});
+  const filled=PEARLS_DEF.filter(p=>obj[`pearls_${p.key}`]).length;
+  if(!filled){toast('Completá al menos una sección PEARLS','err');return;}
+  try{
+    await sb('debriefings',{method:'POST',body:JSON.stringify(obj)});
+    toast('Debriefing guardado','ok');
+    loadDebriefings(cursoId);
+  }catch(e){toast('Error: '+e.message,'err');}
+}
+
+async function eliminarDebrief(id,cursoId){
+  if(!confirm('¿Eliminar este debriefing?'))return;
+  try{
+    await sb(`debriefings?id=eq.${id}`,{method:'DELETE'});
+    toast('Eliminado','ok');loadDebriefings(cursoId);
+  }catch(e){toast('Error','err');}
+}
+
+async function verDebrief(id,cursoId){
+  const el=document.getElementById(`debrief-content-${cursoId}`);if(!el)return;
+  try{
+    const [d]=await sb(`debriefings?id=eq.${id}`);
+    if(!d)return;
+    const pearls=PEARLS_DEF.map(p=>{
+      const txt=d[`pearls_${p.key}`];
+      return`<div style="margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <div style="width:24px;height:24px;border-radius:50%;background:${p.col};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:#fff">${p.letter}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--tx)">${p.name}</div>
+          ${!txt?'<span style="font-size:11px;color:var(--tx3);font-style:italic">No registrado</span>':''}
+        </div>
+        ${txt?`<div style="padding:10px 12px;background:var(--surf2);border-radius:8px;border:1px solid var(--b);font-size:12px;color:var(--tx2);white-space:pre-wrap">${esc(txt)}</div>`:''}
+      </div>`;
+    }).join('');
+    el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <button class="btn sec" style="font-size:12px" onclick="loadDebriefings('${cursoId}')">← Volver</button>
+      <button class="btn sec" style="font-size:12px" onclick="exportarDebrief('${id}')">📄 Exportar Word</button>
+    </div>
+    <div style="font-size:18px;font-weight:800;color:var(--tx);margin-bottom:4px">${esc(d.titulo||'Debriefing')}</div>
+    <div style="font-size:12px;color:var(--tx3);margin-bottom:16px">${fmt(d.fecha)}${d.instructor?' · '+esc(d.instructor):''}${d.duracion_min?' · '+d.duracion_min+' min':''}</div>
+    ${d.escenario_desc?`<div style="padding:10px 12px;background:var(--surf2);border-radius:8px;border-left:3px solid #0B7A6E;font-size:12px;color:var(--tx2);margin-bottom:16px;white-space:pre-wrap">${esc(d.escenario_desc)}</div>`:''}
+    ${pearls}
+    ${d.observaciones_generales?`<div style="margin-top:8px;padding:10px 12px;background:var(--surf2);border-radius:8px;border:1px solid var(--b)"><div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Observaciones generales</div><div style="font-size:12px;color:var(--tx2);white-space:pre-wrap">${esc(d.observaciones_generales)}</div></div>`:''}`;
+  }catch(e){toast('Error al cargar','err');}
+}
+
+async function exportarDebrief(id){
+  try{
+    const [d]=await sb(`debriefings?id=eq.${id}`);
+    if(!d)return;
+    const pearls=PEARLS_DEF.map(p=>{
+      const txt=d[`pearls_${p.key}`];
+      return`<h3 style="color:#4F46E5;margin:18px 0 6px">${p.letter} — ${p.name}</h3>
+        <p style="font-size:11px;color:#666;font-style:italic;margin:0 0 6px">${p.desc}</p>
+        ${txt?`<p style="white-space:pre-wrap;margin:0">${txt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`:'<p style="color:#999;font-style:italic">Sin registro.</p>'}`;
+    }).join('');
+    const titulo=d.titulo||'Debriefing';
+    const html=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8">
+    <style>body{font-family:Calibri,sans-serif;font-size:12pt;margin:2cm;color:#111}h1{font-size:18pt;color:#111;margin:0 0 4px}h2{font-size:13pt;color:#333;margin:0 0 12px}.meta{font-size:10pt;color:#666;margin:0 0 18px;border-bottom:1px solid #ddd;padding-bottom:10px}h3{font-size:12pt}p{line-height:1.6}@page{size:A4;margin:2cm}</style></head>
+    <body><h1>${titulo}</h1>
+    <p class="meta">${d.fecha}${d.instructor?' · '+d.instructor:''}${d.duracion_min?' · '+d.duracion_min+' min':''}${d.escenario_desc?' · '+d.escenario_desc:''}</p>
+    ${pearls}
+    ${d.observaciones_generales?`<h3>Observaciones generales</h3><p>${d.observaciones_generales.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`:''}
+    <p style="margin-top:30px;color:#999;font-size:9pt;border-top:1px solid #ddd;padding-top:8px">Debriefing generado con Metanoia SMX Panel · ${new Date().toLocaleDateString('es-AR')}</p>
+    </body></html>`;
+    const blob=new Blob([html],{type:'application/msword'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=`Debrief_${titulo.replace(/\s+/g,'_')}_${d.fecha}.doc`;a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+  }catch(e){toast('Error al exportar','err');}
 }
 
 // ══ EVALUACIONES DE COMPETENCIAS ══
