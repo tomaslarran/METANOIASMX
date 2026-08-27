@@ -453,6 +453,38 @@ ALTER TABLE cursos ADD CONSTRAINT cursos_estado_check CHECK (estado IN ('Borrado
 - Formar instructores en métricas quirúrgicas GOALS/FLS/OSATS (habilitador crítico de E2)
 - Confirmar sensores vía aérea (E3) y transductor lineal ecógrafo (E4)
 
+## Implementado (27 Ago 2026) — Agente cursos: Excel, guardar/retomar chats, escenarios clínicos proyectables
+
+- ✅ **Leer Excel en chat IA** — soporte `.xlsx`/`.xls` en `adjuntarArchivoCursoIA`: carga xlsx.js dinámicamente, convierte cada hoja a CSV y lo envía como texto plano al agente
+- ✅ **Guardar/retomar chats** — botones 💾 Guardar y 📂 Retomar en modal IA cursos; tabla `agente_cursos_chats` en Supabase; auto-save silencioso en cada respuesta; eliminar desde lista
+- ✅ **Escenarios clínicos proyectables** — modo 5 en `agente-cursos` edge function: genera `<ESCENARIO_JSON>` estructurado; frontend parsea y muestra card compacto (urgencia, signos vitales, botón 🖥 Proyectar)
+- ✅ **Proyector fullscreen** — modal oscuro con signos vitales grandes (monitor style), presentación clínica, hallazgos, antecedentes, preguntas para el grupo; codificado por urgencia (roja/amarilla/verde)
+- ✅ **Audio sintético Web Audio API** — heartbeat normal/S3 galope/soplo sistólico, sibilancias, crepitantes; master gain + slider de volumen en card y proyector; toggle play/stop
+- ✅ **Escenarios persistidos en historial** — campo `escenario` en entrada assistant del historial; `cargarChatCurso` reconstruye las cards al retomar; `_cursoEscenarios` se limpia en reset/carga
+
+**SQL corrido:**
+```sql
+CREATE TABLE IF NOT EXISTS agente_cursos_chats (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  nombre text NOT NULL,
+  historial jsonb DEFAULT '[]',
+  archivos_meta jsonb DEFAULT '[]',
+  usuario text,
+  updated_at timestamptz DEFAULT now(),
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE agente_cursos_chats ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Solo autenticados" ON agente_cursos_chats FOR ALL TO authenticated USING (true) WITH CHECK (true);
+```
+
+**Deploy realizado:** `agente-cursos` (modo 5 escenarios + programa MSP)
+
+**Pendiente — Sonidos reales (Opción A, a implementar cuando haya archivos):**
+- Bucket Supabase Storage `auscultacion` (público)
+- Subir 5-6 archivos `.mp3`: corazón normal, S3 galope, soplo sistólico, sibilancias, crepitantes
+- Reemplazar síntesis Web Audio por `fetch + decodeAudioData + loop` en `_toggleSonidoEsc`
+- Fuente sugerida: PhysioNet.org (licencia abierta) o grabaciones propias con estetoscopio digital
+
 ## Implementado (24 Ago 2026) — VEPs + Exportación NC Finnegans + Mobile fixes
 
 - ✅ **Tab VEPs** en módulo Impuestos — lista de VEPs pendientes/pagados, upload PDF, extracción IA automática con Claude visión
@@ -491,7 +523,6 @@ CREATE POLICY "Solo autenticados" ON impuestos_vep FOR ALL TO authenticated USIN
 
 **Deploy pendiente — Supabase Dashboard → Edge Functions:**
 - `leer-factura` — actualizado con soporte tipo=vep
-- `agente-cursos` — programa MSP Salta (sesión anterior)
 - `agente-mensajes` — programa MSP Salta (sesión anterior)
 
 ## Implementado (24 Jul 2026) — Caja: cambio de moneda, historial, transferencias inter-sociedad
