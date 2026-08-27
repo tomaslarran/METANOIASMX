@@ -3943,8 +3943,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </div>
     <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap" id="curso-ia-actions" style="display:none">
       <button class="btn sm" onclick="generarCursoArchivo('ppt')" title="Generar presentación PPT">📊 Generar PPT</button>
-      <button class="btn sm" onclick="generarCursoArchivo('examen')" title="Generar examen PDF">📋 Examen PDF</button>
-      <button class="btn sm" onclick="generarCursoArchivo('programa')" title="Generar programa del curso">📝 Programa PDF</button>
+      <button class="btn sm" onclick="generarCursoArchivo('examen')" title="Generar examen Word editable">📋 Examen Word</button>
+      <button class="btn sm" onclick="generarCursoArchivo('programa')" title="Generar programa Word editable">📝 Programa Word</button>
       <button class="btn sm pri" onclick="crearCursoDesdeIA()" id="btn-crear-desde-ia" title="Crear el curso en el panel con los datos de la conversación">💾 Crear curso</button>
     </div>
   </div>
@@ -7344,15 +7344,14 @@ async function generarCursoArchivo(tipo){
 Incluí al menos 8 slides: portada, objetivos, metodología, programa por módulos (1 slide por módulo), evaluación, cierre.`,
     examen:`Basándote en el curso de nuestra conversación, generá 10 preguntas de opción múltiple para evaluarlo. Devolvé SOLO JSON válido:
 {"titulo":"Evaluación — [nombre del curso]","preguntas":[{"n":1,"pregunta":"texto de la pregunta","opciones":["A) opción","B) opción","C) opción","D) opción"],"correcta":"A"}]}`,
-    programa:`Generá el programa académico completo del curso de nuestra conversación en texto estructurado. REGLAS IMPORTANTES para que el PDF renderice correctamente:
-- Usá ## para secciones principales (## DESCRIPCIÓN, ## OBJETIVOS GENERALES, etc.)
-- Usá ### para subsecciones (### Enfoque pedagógico central)
-- Usá guiones para listas: - ítem
-- NO uses tablas markdown (sin |col|col|)
-- NO uses flechas → ni emojis (escribí "a" o "al" en lugar de →, ej: "R1 al R4")
-- NO uses **negrita** ni *cursiva* (el PDF los ignora)
-- Los objetivos específicos ponelos como lista numerada simple, con categoría y nivel Miller en paréntesis al final
-Secciones: ## NOMBRE DEL CURSO, ## DESCRIPCIÓN, ## OBJETIVOS GENERALES, ## OBJETIVOS ESPECÍFICOS, ## NIVEL DE SIMULACIÓN, ## METODOLOGÍA, ## CONTENIDO (módulos detallados), ## SISTEMA DE EVALUACIÓN, ## DURACIÓN Y LOGÍSTICA, ## DIRIGIDO A, ## INSTRUCTOR SUGERIDO.`
+    programa:`Generá el programa académico completo del curso de nuestra conversación en texto estructurado markdown. El archivo se exportará como Word editable, podés usar:
+- ## para secciones principales
+- ### para subsecciones
+- Listas con guiones: - ítem
+- Listas numeradas: 1. ítem
+- Tablas markdown para cronogramas o módulos: | Col | Col |
+- Texto normal para párrafos explicativos
+Secciones obligatorias: ## NOMBRE DEL CURSO, ## DESCRIPCIÓN, ## OBJETIVOS GENERALES, ## OBJETIVOS ESPECÍFICOS, ## NIVEL DE SIMULACIÓN, ## METODOLOGÍA, ## CONTENIDO (módulos detallados, usar tabla si hay cronograma), ## SISTEMA DE EVALUACIÓN, ## DURACIÓN Y LOGÍSTICA, ## DIRIGIDO A, ## INSTRUCTOR SUGERIDO.`
   };
 
   const labels={ppt:"📊 Generando PPT...",examen:"📋 Generando examen...",programa:"📝 Generando programa..."};
@@ -7376,7 +7375,7 @@ Secciones: ## NOMBRE DEL CURSO, ## DESCRIPCIÓN, ## OBJETIVOS GENERALES, ## OBJE
     }
 
     if(tipo==="ppt") await _generarPPTCurso(content,_cursoDetalleId);
-    else _generarPDFCurso(content,tipo,_cursoDetalleId);
+    else _generarWordCurso(content,tipo,_cursoDetalleId);
   }catch(e){toast("Error al generar: "+String(e?.message||e),"err");}
 }
 
@@ -7452,6 +7451,87 @@ async function _generarPPTCurso(jsonStr,cursoId=null){
     toast("Error al generar PPT: "+msg,"err");
     console.error("PPT error:",e);
   }
+}
+
+function _mdToHtmlWord(md){
+  const e2=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const applyInline=s=>e2(s).replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>');
+  const lines=md.split('\n');
+  let html='',inUl=false,inOl=false,inTbl=false;
+  const closeList=()=>{if(inUl){html+='</ul>';inUl=false;}if(inOl){html+='</ol>';inOl=false;}};
+  const closeTbl=()=>{if(inTbl){html+='</tbody></table>';inTbl=false;}};
+  lines.forEach(raw=>{
+    const line=raw.trimEnd();
+    if(!line.trim()){closeList();closeTbl();html+='<br>';return;}
+    if(/^---+$/.test(line.trim())){closeList();closeTbl();html+='<hr>';return;}
+    if(/^# (?!#)/.test(line)){closeList();closeTbl();html+=`<h1>${applyInline(line.slice(2).trim())}</h1>`;return;}
+    if(/^## (?!#)/.test(line)){closeList();closeTbl();html+=`<h2>${applyInline(line.slice(3).trim())}</h2>`;return;}
+    if(/^### /.test(line)){closeList();closeTbl();html+=`<h3>${applyInline(line.slice(4).trim())}</h3>`;return;}
+    if(/^- /.test(line)){closeTbl();if(!inUl){closeList();html+='<ul>';inUl=true;}html+=`<li>${applyInline(line.slice(2).trim())}</li>`;return;}
+    if(/^\d+\. /.test(line)){closeTbl();if(!inOl){closeList();html+='<ol>';inOl=true;}html+=`<li>${applyInline(line.replace(/^\d+\.\s+/,'').trim())}</li>`;return;}
+    // Tabla markdown
+    if(/^\|.*\|$/.test(line.trim())){
+      closeList();
+      if(/^\|\s*[-:]+/.test(line.trim())||/\|[-\s:|]+\|/.test(line))return; // separador
+      const cells=line.trim().split('|').slice(1,-1).map(c=>c.trim());
+      if(!inTbl){html+='<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:10pt"><tbody>';inTbl=true;}
+      html+=`<tr>${cells.map(c=>`<td>${applyInline(c)}</td>`).join('')}</tr>`;return;
+    }
+    closeList();closeTbl();
+    html+=`<p>${applyInline(line.trim())}</p>`;
+  });
+  closeList();closeTbl();
+  return html;
+}
+
+function _generarWordCurso(content,tipo,cursoId=null){
+  const e2=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let bodyHtml='',filename='Documento_Metanoia';
+  if(tipo==='examen'){
+    try{
+      const match=content.match(/\{[\s\S]*\}/);
+      const data=JSON.parse(match?.[0]||content);
+      const titulo=data.titulo||'Evaluación';
+      filename='Examen_'+titulo.replace(/[^a-zA-Z0-9 ]/g,'_').slice(0,40).trim();
+      bodyHtml+=`<h1>${e2(titulo)}</h1>`;
+      (data.preguntas||[]).forEach((p,i)=>{
+        bodyHtml+=`<p><strong>${p.n||i+1}. ${e2(p.pregunta)}</strong></p><ol type="A">`;
+        (p.opciones||[]).forEach(op=>{bodyHtml+=`<li>${e2(op.replace(/^[A-D]\)\s*/,''))}</li>`;});
+        bodyHtml+='</ol><br>';
+      });
+      bodyHtml+=`<hr><h3>Clave de respuestas</h3><p>`;
+      (data.preguntas||[]).forEach((p,i)=>{bodyHtml+=`${p.n||i+1}. ${e2(p.correcta)}&nbsp;&nbsp;&nbsp;`;});
+      bodyHtml+=`</p>`;
+    }catch(e){bodyHtml=`<p>${e2(content)}</p>`;}
+  }else{
+    const title=(content.match(/^## ([^\n]+)/m)||[])[1]||'Programa del Curso';
+    filename='Programa_'+title.replace(/[^a-zA-Z0-9 ]/g,'_').slice(0,40).trim();
+    bodyHtml=_mdToHtmlWord(content);
+  }
+  const html=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8">
+<style>
+@page{size:A4;margin:2.5cm}
+body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1a1a2e;line-height:1.5}
+h1{font-size:18pt;color:#7C3AED;margin-bottom:6pt}
+h2{font-size:14pt;color:#1A0A3E;border-bottom:1pt solid #7C3AED;padding-bottom:3pt;margin-top:14pt}
+h3{font-size:12pt;color:#374151;margin-top:10pt}
+p{margin:4pt 0}ul,ol{margin:4pt 0 8pt 20pt}li{margin:2pt 0}
+hr{border:none;border-top:1pt solid #C4B5FD;margin:12pt 0}
+table{border-collapse:collapse;width:100%;font-size:10pt}
+td,th{border:1pt solid #D1D5DB;padding:5pt 8pt}
+th{background:#7C3AED;color:#fff;font-weight:bold}
+.footer{font-size:8pt;color:#9CA3AF;margin-top:24pt;border-top:1pt solid #E5E7EB;padding-top:6pt}
+</style></head>
+<body>${bodyHtml}
+<div class="footer">Borrador generado con apoyo de IA — Metanoia SMX. No aprobado para uso. Requiere curaduría (Dirección Médica) y aprobación PEV plenaria.</div>
+</body></html>`;
+  const blob=new Blob(['﻿'+html],{type:'application/msword'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=filename+'.doc';a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),3000);
+  toast('Word generado y descargado','ok');
+  if(cursoId)_guardarArchivoEnCurso(cursoId,blob,filename+'.doc',tipo==='examen'?'examen':'programa',true);
 }
 
 function _generarPDFCurso(content,tipo,cursoId=null){
