@@ -14237,7 +14237,7 @@ async function confirmarPagoCuota(){
         if(intereses>0)lineas.push({codigo:"4.2.03.001",debe:intereses,desc:"Intereses"});
         lineas.push({codigo:getBancoCodigoPorMedio(medio,soc),haber:total,desc:`Pago ${medio||"cuota"}`});
         const desc=`Cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${prest.nombre||"Préstamo"}`;
-        generarAsiento({fecha,sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:cuotaId,descripcion:desc,lineas}).then(a=>{if(!a)toast("⚠️ Asiento cuota no generado — verificá Plan de Cuentas","err");}).catch(()=>{});
+        generarAsiento({fecha,sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:cuotaId,descripcion:desc,lineas}).then(a=>{if(!a)toast("⚠️ Asiento no generado — Plan de Cuentas vacío","err");else if(a?._faltantes)toast(`⚠️ Asiento no generado — faltan cuentas: ${a._faltantes.join(", ")}","err");}).catch(()=>{});
       }
     }
     closeM("modal-pago-cuota");
@@ -18109,11 +18109,13 @@ function getBancoCodigoPorMedio(medio,sociedad){
   return"1.1.01.001";
 }
 async function generarAsiento({fecha,sociedad,tipo,origen,origen_id,descripcion,lineas}){
-  if(!planCuentas.length)return null;
+  if(!planCuentas.length){console.warn("generarAsiento: planCuentas vacío");return null;}
   const totalD=Math.round(lineas.reduce((s,l)=>s+(l.debe||0),0)*100)/100;
   const totalH=Math.round(lineas.reduce((s,l)=>s+(l.haber||0),0)*100)/100;
   if(Math.abs(totalD-totalH)>0.02){console.warn("Asiento desbalanceado",totalD,totalH);return null;}
-  const movs=lineas.map(l=>({cuenta_id:getCuentaId(l.codigo),debe:l.debe||0,haber:l.haber||0,descripcion:l.desc||null})).filter(m=>m.cuenta_id);
+  const faltantes=lineas.filter(l=>!getCuentaId(l.codigo)).map(l=>l.codigo);
+  if(faltantes.length){console.warn("generarAsiento: cuentas no encontradas",faltantes);return{_faltantes:faltantes};}
+  const movs=lineas.map(l=>({cuenta_id:getCuentaId(l.codigo),debe:l.debe||0,haber:l.haber||0,descripcion:l.desc||null}));
   if(movs.length<2)return null;
   const[asiento]=await sb("asientos_contables",{method:"POST",body:JSON.stringify({
     fecha,sociedad,tipo,origen,origen_id,descripcion,creado_por:loggedUser?.nombre||null
