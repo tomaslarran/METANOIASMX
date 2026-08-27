@@ -2554,6 +2554,45 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div id="usuarios-list" style="max-width:560px">
     <div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>
   </div>
+
+  <!-- Instrumentos de evaluación -->
+  <div style="max-width:560px;margin-top:32px;border-top:1px solid var(--b);padding-top:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:14px;font-weight:700;color:var(--tx)">🔬 Instrumentos de evaluación</div>
+        <div style="font-size:12px;color:var(--tx3);margin-top:2px">Estándares internacionales y personalizados para evaluación de competencias</div>
+      </div>
+      <button class="btn sec" style="font-size:12px" onclick="loadInstrumentosPanel()">Actualizar</button>
+    </div>
+    <div id="instrumentos-panel-list"><div style="color:var(--tx3);font-size:12px">Cargando...</div></div>
+    <div id="nuevo-instr-panel" style="display:none;border:1px solid var(--b);border-radius:10px;padding:16px;margin-top:12px;background:var(--surf2)">
+      <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:14px">Nuevo instrumento personalizado</div>
+      <div class="form-grid">
+        <div class="fg form-full"><label class="fl">Nombre *</label><input class="fi" id="ni-nombre" placeholder="Ej: Checklist MSP — Vía aérea"></div>
+        <div class="fg form-full"><label class="fl">Descripción</label><input class="fi" id="ni-desc" placeholder="Descripción breve del instrumento"></div>
+        <div class="fg"><label class="fl">Tipo</label>
+          <select class="fi" id="ni-tipo">
+            <option value="tecnico">Técnico</option>
+            <option value="clinico">Clínico</option>
+            <option value="comunicacion">Comunicación</option>
+          </select>
+        </div>
+        <div class="fg"><label class="fl">Escala mín.</label><input class="fi" id="ni-escmin" type="number" value="1" min="1"></div>
+        <div class="fg"><label class="fl">Escala máx.</label><input class="fi" id="ni-escmax" type="number" value="5" min="2"></div>
+        <div class="fg"><label class="fl">Puntaje aprobación</label><input class="fi" id="ni-aprob" type="number" placeholder="Ej: 21"></div>
+      </div>
+      <div style="margin-top:14px">
+        <div style="font-size:12px;font-weight:700;color:var(--tx2);margin-bottom:8px">Ítems del instrumento</div>
+        <div id="nuevo-instr-items"></div>
+        <button class="btn sec" style="font-size:12px;padding:5px 12px;margin-top:6px" onclick="addNuevoInstrItem()">+ Agregar ítem</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn" onclick="toggleNuevoInstrumento()">Cancelar</button>
+        <button class="btn pri" onclick="guardarNuevoInstrumento()">Guardar instrumento</button>
+      </div>
+    </div>
+    <button class="btn" style="font-size:12px;margin-top:10px" onclick="toggleNuevoInstrumento()">+ Nuevo instrumento personalizado</button>
+  </div>
 </div>
 
 <!-- ══ CUENTAS CORRIENTES ══ -->
@@ -4306,6 +4345,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div style="color:var(--tx3);font-size:12px">Cargando...</div>
     </div>
   </div>
+  <!-- Sección evaluaciones (solo en edición) -->
+  <div id="alum-eval-section" style="display:none;margin-top:16px;border-top:1px solid var(--b);padding-top:14px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--tx3);margin-bottom:10px">📊 Evaluaciones de competencias</div>
+    <div id="alum-eval-content" style="color:var(--tx3);font-size:12px">Cargando...</div>
+  </div>
   <!-- Sección cuenta corriente (solo en edición, solo admin) -->
   <div id="alum-cc-section" class="admin-only-el" style="display:none;margin-top:16px;border-top:1px solid var(--b);padding-top:14px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -5690,6 +5734,7 @@ async function selectCurso(id){
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-costos-${id}')">💰 Costos (${costosCurso.filter(c=>c.aplica).length})</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-instmat-${id}');loadInstMat('${id}')">👥 Instructores y materiales</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-inscriptos-${id}');loadInscriptos('${id}')">📋 Inscriptos</div>
+      <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-eval-${id}');loadEvaluaciones('${id}')">📊 Evaluar</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-cotiz-${id}');loadCursoCotizaciones('${id}')">💼 Cotizaciones</div>
       <div class="cd-tab cd-tab-archivos" onclick="showCdTab(this,'cd-archivos-${id}');loadCursoArchivos('${id}')">📁 Archivos</div>
       ${curso.tiene_clases?`<div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-clases-${id}');loadCursoClases('${id}')">📚 Clases</div>`:""}
@@ -5771,6 +5816,9 @@ async function selectCurso(id){
       </div>
       <div id="cd-inscriptos-${id}" style="display:none">
         <div id="inscriptos-content-${id}" style="padding:4px 0"></div>
+      </div>
+      <div id="cd-eval-${id}" style="display:none">
+        <div id="eval-content-${id}" style="padding:4px 0"></div>
       </div>
       <div id="cd-cotiz-${id}" style="display:none">
         <div id="cotiz-curso-content-${id}" style="padding:4px 0"><div style="color:var(--tx3);padding:24px;text-align:center">Cargando...</div></div>
@@ -6089,6 +6137,256 @@ async function removeInscripcion(id,cursoId){
     toast("Inscripción eliminada","ok");
     loadInscriptos(cursoId);
   }catch(e){toast("Error","err")}
+}
+
+// ══ EVALUACIONES DE COMPETENCIAS ══
+let _instrCache=[],_evalInsc=[],_instrActivo=null,_evalScores={},_evalObs={};
+
+async function loadEvaluaciones(cursoId){
+  const el=document.getElementById(`eval-content-${cursoId}`);
+  if(!el)return;
+  el.innerHTML=`<div style="padding:16px;text-align:center;color:var(--tx3);font-size:13px">Cargando...</div>`;
+  try{
+    const [insc,instrumentos]=await Promise.all([
+      sb(`inscripciones?curso_id=eq.${cursoId}&estado=neq.Baja&select=*,alumnos(id,nombre,apellido)&order=created_at`),
+      sb(`instrumentos_evaluacion?activo=eq.true&order=personalizado,nombre`)
+    ]);
+    if(!instrumentos.length){el.innerHTML=`<p style="color:var(--tx3);padding:20px;text-align:center;font-size:13px">No hay instrumentos activos. Activá uno en Usuarios → Instrumentos.</p>`;return;}
+    _instrCache=instrumentos;
+    _evalInsc=insc;
+    _instrActivo=instrumentos[0];
+    _evalScores={};_evalObs={};
+    const esc2=_instrActivo.escala||{};
+    let h=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+      <div style="font-size:13px;font-weight:600;color:var(--tx2)">Instrumento:</div>
+      <select class="fi" style="max-width:300px;font-size:13px" onchange="cambiarInstrumento(this.value,'${cursoId}')">
+        ${instrumentos.map(i=>`<option value="${i.id}"${i.id===_instrActivo.id?' selected':''}>${esc(i.nombre)}</option>`).join('')}
+      </select>
+      <div style="font-size:11px;color:var(--tx3)">Escala ${esc2.min||1}–${esc2.max||5} · Máx <strong>${_instrActivo.score_maximo||'—'}</strong> pts · Aprobación <strong>${_instrActivo.score_aprobacion||'—'}</strong> pts</div>
+    </div>
+    <div id="eval-alumnos-list-${cursoId}">${_renderEvalAlumnos(cursoId,insc,_instrActivo)}</div>`;
+    el.innerHTML=h;
+  }catch(e){el.innerHTML=`<p style="color:var(--re);padding:16px;font-size:13px">Error: ${esc(e.message)}</p>`;}
+}
+
+function cambiarInstrumento(instrId,cursoId){
+  _instrActivo=_instrCache.find(i=>i.id===instrId)||null;
+  _evalScores={};_evalObs={};
+  const el=document.getElementById(`eval-alumnos-list-${cursoId}`);
+  if(el&&_instrActivo)el.innerHTML=_renderEvalAlumnos(cursoId,_evalInsc,_instrActivo);
+}
+
+function _renderEvalAlumnos(cursoId,insc,instr){
+  if(!insc.length)return`<p style="color:var(--tx3);font-size:13px;padding:12px 0">No hay inscriptos activos en este curso.</p>`;
+  const items=instr.items||[];
+  const esc2=instr.escala||{};
+  const minV=esc2.min||1,maxV=esc2.max||5;
+  const etiq=esc2.etiquetas||{};
+  return insc.map(i=>{
+    const a=i.alumnos||{};
+    if(!a.id)return'';
+    const nombre=`${esc(a.apellido||'')}, ${esc(a.nombre||'')}`.replace(/^,\s*/,'');
+    const itemsHtml=items.map(item=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--b)">
+      <span style="flex:1;font-size:12px;color:var(--tx2);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(item.descripcion||'')}">${esc(item.nombre)}</span>
+      <div style="display:flex;gap:3px;flex-shrink:0">
+        ${Array.from({length:maxV-minV+1},(_,k)=>{const v=minV+k;return`<button data-aitem="${a.id}-${item.id}" title="${esc(etiq[String(v)]||String(v))}" onclick="setEvalScore('${a.id}','${item.id}',${v},'${cursoId}',this)" style="width:28px;height:26px;border:1px solid var(--b);border-radius:5px;background:var(--surf2);color:var(--tx2);font-size:11px;font-weight:700;cursor:pointer">${v}</button>`;}).join('')}
+      </div>
+    </div>`).join('');
+    return`<div style="border:1px solid var(--b);border-radius:10px;padding:14px;margin-bottom:12px;background:var(--surf)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:14px;font-weight:700;color:var(--tx)">${nombre}</div>
+        <div id="eval-total-${a.id}-${cursoId}" style="font-size:12px;color:var(--tx3)">0/${items.length} ítems</div>
+      </div>
+      ${itemsHtml}
+      <textarea id="eval-obs-${a.id}-${cursoId}" placeholder="Observaciones opcionales..." oninput="_evalObs['${a.id}']=this.value" style="width:100%;margin-top:10px;padding:8px;font-size:12px;background:var(--surf2);border:1px solid var(--b);border-radius:6px;color:var(--tx);resize:vertical;min-height:38px;font-family:inherit"></textarea>
+      <div style="display:flex;justify-content:flex-end;margin-top:8px">
+        <button class="btn pri" style="font-size:12px;padding:6px 14px" onclick="guardarEvaluacion('${a.id}','${cursoId}')">Guardar evaluación</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function setEvalScore(alumnoId,itemId,val,cursoId,btn){
+  if(!_evalScores[alumnoId])_evalScores[alumnoId]={};
+  _evalScores[alumnoId][itemId]=val;
+  document.querySelectorAll(`[data-aitem="${alumnoId}-${itemId}"]`).forEach(b=>{
+    const sel=parseInt(b.textContent)===val;
+    b.style.background=sel?'#0B7A6E':'';
+    b.style.borderColor=sel?'transparent':'';
+    b.style.color=sel?'#fff':'';
+  });
+  const items=(_instrActivo?.items)||[];
+  const scores=_evalScores[alumnoId]||{};
+  const scored=items.filter(it=>scores[it.id]!==undefined).length;
+  const total=Object.values(scores).reduce((a,b)=>a+b,0);
+  const max=_instrActivo?.score_maximo||(items.length*(_instrActivo?.escala?.max||5));
+  const pct=max>0?Math.round(total/max*100):0;
+  const aprob=_instrActivo?.score_aprobacion;
+  const aprueba=aprob!=null&&total>=aprob;
+  const totalEl=document.getElementById(`eval-total-${alumnoId}-${cursoId}`);
+  if(totalEl){
+    if(scored===items.length){
+      const col=aprob?(aprueba?'var(--gr)':'var(--re)'):'#0B7A6E';
+      totalEl.innerHTML=`<span style="font-weight:700;color:${col}">${total}/${max} (${pct}%)</span>${aprob?` <span style="font-size:11px;color:${col}">${aprueba?'✓ Aprueba':'✗ No aprueba'}</span>`:''}`;
+    }else{
+      totalEl.textContent=`${scored}/${items.length} ítems`;
+    }
+  }
+}
+
+async function guardarEvaluacion(alumnoId,cursoId){
+  if(!_instrActivo)return;
+  const items=_instrActivo.items||[];
+  const scores=_evalScores[alumnoId]||{};
+  const missing=items.filter(it=>scores[it.id]===undefined);
+  if(missing.length){toast(`Faltan ${missing.length} ítem${missing.length!==1?'s':''} por puntuar`,'err');return;}
+  const total=Object.values(scores).reduce((a,b)=>a+b,0);
+  const max=_instrActivo.score_maximo||(items.length*(_instrActivo.escala?.max||5));
+  const pct=max>0?Math.round(total/max*1000)/10:0;
+  const sesion=JSON.parse(sessionStorage.getItem('smx_session')||'{}');
+  try{
+    await sb('evaluaciones_alumno',{method:'POST',body:JSON.stringify({
+      alumno_id:alumnoId,curso_id:cursoId,instrumento_id:_instrActivo.id,
+      instructor:sesion.nombre||sesion.email||null,
+      fecha:new Date().toISOString().slice(0,10),
+      scores,score_total:total,score_porcentaje:pct,
+      observaciones:(_evalObs[alumnoId]||'').trim()||null
+    })});
+    toast('Evaluación guardada','ok');
+    delete _evalScores[alumnoId];delete _evalObs[alumnoId];
+    document.querySelectorAll(`[data-aitem^="${alumnoId}-"]`).forEach(b=>{b.style.background='';b.style.borderColor='';b.style.color='';});
+    const obsEl=document.getElementById(`eval-obs-${alumnoId}-${cursoId}`);if(obsEl)obsEl.value='';
+    const totalEl=document.getElementById(`eval-total-${alumnoId}-${cursoId}`);
+    if(totalEl)totalEl.innerHTML=`<span style="color:var(--gr);font-size:12px">✓ Guardado</span>`;
+  }catch(e){toast('Error al guardar: '+e.message,'err');}
+}
+
+async function loadAlumnoEvaluaciones(alumnoId){
+  const el=document.getElementById('alum-eval-content');if(!el)return;
+  try{
+    const evals=await sb(`evaluaciones_alumno?alumno_id=eq.${alumnoId}&select=*,instrumentos_evaluacion(nombre),cursos(nombre)&order=fecha.desc&limit=20`);
+    if(!evals.length){el.innerHTML=`<div style="color:var(--tx3);font-size:12px;padding:4px 0">Sin evaluaciones registradas</div>`;return;}
+    const evalsConPct=evals.filter(e=>e.score_porcentaje!=null);
+    let h='';
+    if(evalsConPct.length>=2){
+      const sorted=[...evalsConPct].reverse();
+      const W=260,H=46;
+      const pts=sorted.map((e,i)=>({
+        x:8+(i/(sorted.length-1))*(W-16),
+        y:8+(1-e.score_porcentaje/100)*(H-16)
+      }));
+      const pathD=pts.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+      h+=`<div style="margin-bottom:10px;padding:8px 10px;background:var(--surf2);border:1px solid var(--b);border-radius:8px">
+        <div style="font-size:9px;color:var(--tx3);margin-bottom:4px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">Evolución (%)</div>
+        <svg width="100%" viewBox="0 0 ${W} ${H}" style="display:block;overflow:visible">
+          <path d="${pathD}" stroke="#0B7A6E" stroke-width="2" fill="none" stroke-linejoin="round"/>
+          ${pts.map((p,i)=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="#0B7A6E"><title>${sorted[i].fecha}: ${sorted[i].score_porcentaje?.toFixed(0)}%</title></circle>`).join('')}
+        </svg>
+      </div>`;
+    }
+    evals.forEach(e=>{
+      const instr=e.instrumentos_evaluacion||{};
+      const curso=e.cursos||{};
+      const pct=e.score_porcentaje!=null?Math.round(e.score_porcentaje):null;
+      const col=pct===null?'var(--tx3)':pct>=60?'var(--gr)':pct>=40?'var(--al)':'var(--re)';
+      h+=`<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--surf2);border-radius:8px;border:1px solid var(--b);margin-bottom:5px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(instr.nombre||'Evaluación')}</div>
+          <div style="font-size:11px;color:var(--tx3)">${fmt(e.fecha)} · ${esc(curso.nombre||'—')}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          ${pct!==null?`<div style="font-size:13px;font-weight:700;color:${col}">${pct}%</div>`:''}
+          <div style="font-size:11px;color:var(--tx3)">${e.score_total||'—'} pts</div>
+        </div>
+      </div>`;
+    });
+    el.innerHTML=h;
+  }catch(err){el.innerHTML=`<div style="color:var(--re);font-size:12px">Error al cargar</div>`;}
+}
+
+// ══ GESTIÓN DE INSTRUMENTOS ══
+async function loadInstrumentosPanel(){
+  const el=document.getElementById('instrumentos-panel-list');if(!el)return;
+  el.innerHTML=`<div style="color:var(--tx3);font-size:12px">Cargando...</div>`;
+  try{
+    const instrs=await sb('instrumentos_evaluacion?order=personalizado,nombre');
+    if(!instrs.length){el.innerHTML=`<div style="color:var(--tx3);font-size:12px;padding:8px 0">Sin instrumentos cargados. Ejecutá el SQL de instrumentos estándar.</div>`;return;}
+    el.innerHTML=`<div style="display:flex;flex-direction:column;gap:6px">
+      ${instrs.map(i=>`<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--surf2);border-radius:8px;border:1px solid var(--b)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--tx)">${esc(i.nombre)}</div>
+          <div style="font-size:11px;color:var(--tx3);margin-top:2px">${(i.items||[]).length} ítems · Escala ${i.escala?.min||1}–${i.escala?.max||5} · Máx ${i.score_maximo||'—'} pts · Aprobación ${i.score_aprobacion||'—'} pts${i.personalizado?' · <span style="color:var(--al)">Personalizado</span>':''}</div>
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--tx2);white-space:nowrap">
+          <input type="checkbox" ${i.activo?'checked':''} onchange="toggleInstrActivo('${i.id}',this.checked)" style="cursor:pointer"> Activo
+        </label>
+        ${i.personalizado?`<button class="btn sec" style="font-size:11px;padding:4px 8px;color:var(--re);border-color:var(--re)" onclick="eliminarInstrumento('${i.id}')">Eliminar</button>`:''}
+      </div>`).join('')}
+    </div>`;
+  }catch(e){el.innerHTML=`<div style="color:var(--re);font-size:12px">Error: ${esc(e.message)}</div>`;}
+}
+
+async function toggleInstrActivo(id,val){
+  try{
+    await sb(`instrumentos_evaluacion?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({activo:val})});
+    toast(val?'Instrumento activado':'Instrumento desactivado','ok');
+  }catch(e){toast('Error','err');}
+}
+
+async function eliminarInstrumento(id){
+  if(!confirm('¿Eliminar este instrumento personalizado? No afecta las evaluaciones ya registradas.'))return;
+  try{
+    await sb(`instrumentos_evaluacion?id=eq.${id}`,{method:'DELETE'});
+    toast('Instrumento eliminado','ok');loadInstrumentosPanel();
+  }catch(e){toast('Error','err');}
+}
+
+let _newInstrItems=[];
+function toggleNuevoInstrumento(){
+  const p=document.getElementById('nuevo-instr-panel');if(!p)return;
+  const visible=p.style.display!=='none';
+  p.style.display=visible?'none':'';
+  if(!visible){_newInstrItems=[{id:'1',nombre:'',descripcion:''}];renderNuevoInstrItems();}
+}
+function renderNuevoInstrItems(){
+  const el=document.getElementById('nuevo-instr-items');if(!el)return;
+  el.innerHTML=_newInstrItems.map((item,i)=>`<div style="display:flex;gap:8px;align-items:start;margin-bottom:8px">
+    <div style="flex:1">
+      <input class="fi" placeholder="Nombre del ítem *" style="font-size:12px;margin-bottom:4px" value="${esc(item.nombre)}" oninput="_newInstrItems[${i}].nombre=this.value">
+      <input class="fi" placeholder="Descripción (opcional)" style="font-size:12px" value="${esc(item.descripcion)}" oninput="_newInstrItems[${i}].descripcion=this.value">
+    </div>
+    ${_newInstrItems.length>1?`<button onclick="_newInstrItems.splice(${i},1);renderNuevoInstrItems()" style="background:none;border:none;color:var(--re);cursor:pointer;padding:6px;font-size:18px;line-height:1">×</button>`:''}
+  </div>`).join('');
+}
+function addNuevoInstrItem(){
+  _newInstrItems.push({id:String(_newInstrItems.length+1),nombre:'',descripcion:''});
+  renderNuevoInstrItems();
+}
+async function guardarNuevoInstrumento(){
+  const nombre=document.getElementById('ni-nombre').value.trim();
+  if(!nombre){toast('El nombre es obligatorio','err');return;}
+  const items=_newInstrItems.filter(i=>i.nombre.trim());
+  if(!items.length){toast('Agregá al menos un ítem','err');return;}
+  const escalMin=parseInt(document.getElementById('ni-escmin').value)||1;
+  const escalMax=parseInt(document.getElementById('ni-escmax').value)||5;
+  const scoreAprobacion=parseFloat(document.getElementById('ni-aprob').value)||null;
+  const sesion=JSON.parse(sessionStorage.getItem('smx_session')||'{}');
+  try{
+    await sb('instrumentos_evaluacion',{method:'POST',body:JSON.stringify({
+      nombre,
+      descripcion:document.getElementById('ni-desc').value.trim()||null,
+      tipo:document.getElementById('ni-tipo').value,
+      items:items.map((it,i)=>({id:String(i+1),nombre:it.nombre.trim(),descripcion:it.descripcion.trim()})),
+      escala:{min:escalMin,max:escalMax,etiquetas:{}},
+      score_maximo:items.length*escalMax,
+      score_aprobacion:scoreAprobacion,
+      personalizado:true,
+      creado_por:sesion.email||null
+    })});
+    toast('Instrumento creado','ok');
+    document.getElementById('nuevo-instr-panel').style.display='none';
+    loadInstrumentosPanel();
+  }catch(e){toast('Error: '+e.message,'err');}
 }
 
 async function generarCertificado(inscId,cursoId){
@@ -8460,7 +8758,10 @@ async function editAlumno(id){
     ccSec.style.display="";
     ccList.innerHTML=`<div style="color:var(--tx3);font-size:12px">Cargando...</div>`;
   }
+  const evalSec=document.getElementById("alum-eval-section");
+  if(evalSec){evalSec.style.display="";document.getElementById("alum-eval-content").innerHTML=`<div style="color:var(--tx3);font-size:12px">Cargando...</div>`;}
   openModal("modal-alumno");
+  loadAlumnoEvaluaciones(id);
   try{
     const [insc,cc]=await Promise.all([
       sb(`inscripciones?alumno_id=eq.${id}&select=*,cursos(*)&order=created_at.desc`),
@@ -16978,6 +17279,7 @@ async function loadUsuariosPage(){
   try{
     const users=await sb("usuarios?select=id,nombre,email,rol,estado,invitado_at,permisos_extra,telefono,wpp_autorizado&order=nombre");
     renderUsuariosPage(users||[]);
+    loadInstrumentosPanel();
   }catch(e){
     wrap.innerHTML=`<p style="color:var(--re);padding:20px">Error al cargar usuarios.</p>`;
   }
