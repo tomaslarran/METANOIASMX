@@ -14366,6 +14366,10 @@ function apMostrarResultado(data){
   document.getElementById("ap-tasa").value=[data.tasa_nominal_anual,data.tasa_efectiva_anual].filter(Boolean).join(" / ")||"";
   document.getElementById("ap-monto-orig").value=data.monto_original||"";
   apCuotasExtraidas=data.cuotas||[];
+  // Si hay nros duplicados, renumerar correlativamente
+  const nros=apCuotasExtraidas.map(c=>c.nro);
+  const hayDuplicados=nros.length!==new Set(nros).size;
+  if(hayDuplicados)apCuotasExtraidas.forEach((c,i)=>{c.nro=i+1;});
   // Render tabla de cuotas
   const tabla=document.getElementById("ap-tabla-cuotas");
   if(!apCuotasExtraidas.length){
