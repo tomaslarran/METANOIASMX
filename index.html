@@ -12267,7 +12267,15 @@ function renderCFPrestamos(){
   const cont=document.getElementById("cf-prestamos-list");
   if(!list.length){cont.innerHTML=`<div class="empty"><div class="ei">🏦</div>No hay préstamos.</div>`;return}
 
-  cont.innerHTML=`<div style="display:flex;flex-direction:column;gap:8px">${list.map(p=>{
+  const esFinalizado=p=>{
+    if(!p.activo)return true;
+    const cuotas=cfPrestCuotas.filter(c=>c.prestamo_id===p.id);
+    return cuotas.length>0&&cuotas.every(c=>c.pagada);
+  };
+  const listActivos=list.filter(p=>!esFinalizado(p));
+  const listFinalizados=list.filter(p=>esFinalizado(p));
+
+  const renderCard=p=>{
     const d=p.fecha_vencimiento?days(p.fecha_vencimiento):null;
     const vencCls=d!==null&&d<0?"color:#FCA5A5":d!==null&&d<=7?"color:#FCD34D":"color:var(--tx3)";
     const cuotas=cfPrestCuotas.filter(c=>c.prestamo_id===p.id).sort((a,b)=>a.fecha>b.fecha?1:-1);
@@ -12352,7 +12360,28 @@ function renderCFPrestamos(){
         </div>
       </div>
     </div>`;
-  }).join("")}</div>`;
+  };
+
+  const finalizadosHtml=listFinalizados.length?`
+    <div style="margin-top:16px">
+      <button id="btn-toggle-finalizados" onclick="togglePrestFinalizados()" style="background:none;border:none;color:var(--tx3);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;padding:0;margin-bottom:6px">
+        <span id="ico-finalizados">▶</span> Finalizados (${listFinalizados.length})
+      </button>
+      <div id="prest-finalizados-list" style="display:none;flex-direction:column;gap:8px;opacity:.65">${listFinalizados.map(renderCard).join("")}</div>
+    </div>`:"";
+
+  cont.innerHTML=`<div style="display:flex;flex-direction:column;gap:8px">${
+    listActivos.length?listActivos.map(renderCard).join(""):`<div class="empty" style="padding:20px 0"><div class="ei">🏦</div>No hay préstamos activos.</div>`
+  }${finalizadosHtml}</div>`;
+}
+
+function togglePrestFinalizados(){
+  const list=document.getElementById("prest-finalizados-list");
+  const ico=document.getElementById("ico-finalizados");
+  if(!list)return;
+  const open=list.style.display!=="none";
+  list.style.display=open?"none":"flex";
+  if(ico)ico.textContent=open?"▶":"▼";
 }
 
 function openAddPrestamo(){
