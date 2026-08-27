@@ -5736,6 +5736,7 @@ async function selectCurso(id){
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-inscriptos-${id}');loadInscriptos('${id}')">📋 Inscriptos</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-eval-${id}');loadEvaluaciones('${id}')">📊 Evaluar</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-debrief-${id}');loadDebriefings('${id}')">📝 Debriefing</div>
+      <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-nps-${id}');loadNPS('${id}')">⭐ NPS</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-cotiz-${id}');loadCursoCotizaciones('${id}')">💼 Cotizaciones</div>
       <div class="cd-tab cd-tab-archivos" onclick="showCdTab(this,'cd-archivos-${id}');loadCursoArchivos('${id}')">📁 Archivos</div>
       ${curso.tiene_clases?`<div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-clases-${id}');loadCursoClases('${id}')">📚 Clases</div>`:""}
@@ -5823,6 +5824,9 @@ async function selectCurso(id){
       </div>
       <div id="cd-debrief-${id}" style="display:none">
         <div id="debrief-content-${id}" style="padding:4px 0"></div>
+      </div>
+      <div id="cd-nps-${id}" style="display:none">
+        <div id="nps-content-${id}" style="padding:4px 0"></div>
       </div>
       <div id="cd-cotiz-${id}" style="display:none">
         <div id="cotiz-curso-content-${id}" style="padding:4px 0"><div style="color:var(--tx3);padding:24px;text-align:center">Cargando...</div></div>
@@ -6141,6 +6145,110 @@ async function removeInscripcion(id,cursoId){
     toast("Inscripción eliminada","ok");
     loadInscriptos(cursoId);
   }catch(e){toast("Error","err")}
+}
+
+// ══ NPS POST-CURSO ══
+function _calcNPS(respuestas){
+  if(!respuestas.length)return{nps:null,promotores:0,pasivos:0,detractores:0,total:0};
+  const prom=respuestas.filter(r=>r.score>=9).length;
+  const pas=respuestas.filter(r=>r.score>=7&&r.score<=8).length;
+  const det=respuestas.filter(r=>r.score<=6).length;
+  const total=respuestas.length;
+  return{nps:Math.round((prom/total-det/total)*100),promotores:prom,pasivos:pas,detractores:det,total};
+}
+
+async function loadNPS(cursoId){
+  const el=document.getElementById(`nps-content-${cursoId}`);if(!el)return;
+  el.innerHTML=`<div style="padding:16px;text-align:center;color:var(--tx3);font-size:13px">Cargando...</div>`;
+  try{
+    const [resp,insc]=await Promise.all([
+      sb(`nps_respuestas?curso_id=eq.${cursoId}&order=created_at.desc`),
+      sb(`inscripciones?curso_id=eq.${cursoId}&estado=neq.Baja&select=*,alumnos(id,nombre,apellido)&order=created_at`)
+    ]);
+    _renderNPSPanel(el,cursoId,resp,insc);
+  }catch(e){el.innerHTML=`<p style="color:var(--re);padding:16px;font-size:13px">Error: ${esc(e.message)}</p>`;}
+}
+
+function _renderNPSPanel(el,cursoId,respuestas,insc){
+  const{nps,promotores,pasivos,detractores,total}=_calcNPS(respuestas);
+  const npsCol=nps===null?'var(--tx3)':nps>=50?'var(--gr)':nps>=0?'var(--al)':'var(--re)';
+  const npsLabel=nps===null?'Sin datos':nps>0?`+${nps}`:String(nps);
+
+  let summary=`<div style="display:flex;gap:24px;align-items:center;margin-bottom:22px;flex-wrap:wrap">
+    <div style="text-align:center;min-width:72px">
+      <div style="font-size:44px;font-weight:900;color:${npsCol};line-height:1">${npsLabel}</div>
+      <div style="font-size:10px;color:var(--tx3);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-top:2px">NPS</div>
+    </div>
+    ${total?`<div style="flex:1;min-width:180px">
+      <div style="display:flex;height:10px;border-radius:5px;overflow:hidden;margin-bottom:8px;gap:1px">
+        ${promotores?`<div style="flex:${promotores};background:var(--gr)"></div>`:''}
+        ${pasivos?`<div style="flex:${pasivos};background:var(--al)"></div>`:''}
+        ${detractores?`<div style="flex:${detractores};background:var(--re)"></div>`:''}
+      </div>
+      <div style="display:flex;gap:14px;font-size:11px;flex-wrap:wrap">
+        <span style="color:var(--gr)">● Promotores 9-10: <strong>${promotores}</strong></span>
+        <span style="color:var(--al)">● Pasivos 7-8: <strong>${pasivos}</strong></span>
+        <span style="color:var(--re)">● Detractores ≤6: <strong>${detractores}</strong></span>
+        <span style="color:var(--tx3)">Total: <strong>${total}</strong></span>
+      </div>
+    </div>`:`<div style="color:var(--tx3);font-size:13px;flex:1">Sin respuestas todavía. Registrá las respuestas verbales del salón.</div>`}
+  </div>`;
+
+  const respMap={};respuestas.forEach(r=>{if(r.alumno_id)respMap[r.alumno_id]=r;});
+
+  const filas=insc.map(i=>{
+    const a=i.alumnos||{};if(!a.id)return'';
+    const nombre=`${esc(a.apellido||'')}, ${esc(a.nombre||'')}`.replace(/^,\s*/,'');
+    const r=respMap[a.id];
+    const col=!r?'var(--tx3)':r.score>=9?'var(--gr)':r.score>=7?'var(--al)':'var(--re)';
+    return`<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surf2);border:1px solid var(--b);border-radius:8px;margin-bottom:5px">
+      <div style="flex:1;font-size:13px;color:var(--tx)">${nombre}</div>
+      ${r?`<div style="font-size:22px;font-weight:900;color:${col};min-width:28px;text-align:center">${r.score}</div>
+        <div style="font-size:10px;color:${col};font-weight:700">${r.score>=9?'Promotor':r.score>=7?'Pasivo':'Detractor'}</div>
+        <button onclick="eliminarNPSRespuesta('${r.id}','${cursoId}')" style="background:none;border:none;color:var(--re);cursor:pointer;font-size:16px;padding:2px 4px;line-height:1">×</button>`
+      :`<input type="number" min="0" max="10" placeholder="0–10" id="nps-inp-${a.id}-${cursoId}" style="width:56px;padding:4px 6px;font-size:14px;font-weight:700;text-align:center;background:var(--surf);border:1px solid var(--b);border-radius:6px;color:var(--tx)" oninput="if(this.value>10)this.value=10;if(this.value<0)this.value=0">
+        <button class="btn pri" style="font-size:11px;padding:4px 10px" onclick="registrarNPS('${cursoId}','${a.id}','${nombre}',null)">Guardar</button>`}
+    </div>`;
+  }).join('');
+
+  const anon=`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surf2);border:1px solid var(--b);border-radius:8px;margin-top:4px;flex-wrap:wrap">
+    <input placeholder="Nombre (opcional)" id="nps-anon-nom-${cursoId}" style="flex:1;min-width:120px;padding:4px 8px;font-size:12px;background:var(--surf);border:1px solid var(--b);border-radius:6px;color:var(--tx)">
+    <input type="number" min="0" max="10" placeholder="0–10" id="nps-anon-score-${cursoId}" style="width:56px;padding:4px 6px;font-size:14px;font-weight:700;text-align:center;background:var(--surf);border:1px solid var(--b);border-radius:6px;color:var(--tx)" oninput="if(this.value>10)this.value=10;if(this.value<0)this.value=0">
+    <button class="btn pri" style="font-size:11px;padding:4px 10px" onclick="registrarNPS('${cursoId}',null,null,null)">+ Agregar</button>
+  </div>`;
+
+  el.innerHTML=`${summary}
+    <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Respuestas por alumno inscripto</div>
+    ${filas||`<p style="color:var(--tx3);font-size:13px;margin:0 0 8px">No hay inscriptos.</p>`}
+    <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px">Respuesta adicional / anónima</div>
+    ${anon}`;
+}
+
+async function registrarNPS(cursoId,alumnoId,alumnoNombre,_unused){
+  let score,nombre=alumnoNombre||null;
+  if(alumnoId){
+    const inp=document.getElementById(`nps-inp-${alumnoId}-${cursoId}`);
+    if(!inp)return;
+    score=parseInt(inp.value);
+  }else{
+    const si=document.getElementById(`nps-anon-score-${cursoId}`);
+    const ni=document.getElementById(`nps-anon-nom-${cursoId}`);
+    if(!si)return;
+    score=parseInt(si.value);
+    nombre=ni?.value.trim()||null;
+  }
+  if(isNaN(score)||score<0||score>10){toast('Score entre 0 y 10','err');return;}
+  try{
+    await sb('nps_respuestas',{method:'POST',body:JSON.stringify({
+      curso_id:cursoId,alumno_id:alumnoId||null,alumno_nombre:nombre||null,score,canal:'manual'
+    })});
+    toast('Registrado','ok');loadNPS(cursoId);
+  }catch(e){toast('Error: '+e.message,'err');}
+}
+
+async function eliminarNPSRespuesta(id,cursoId){
+  try{await sb(`nps_respuestas?id=eq.${id}`,{method:'DELETE'});toast('Eliminado','ok');loadNPS(cursoId);}
+  catch(e){toast('Error','err');}
 }
 
 // ══ DEBRIEFING PEARLS ══
