@@ -6161,15 +6161,16 @@ async function loadNPS(cursoId){
   const el=document.getElementById(`nps-content-${cursoId}`);if(!el)return;
   el.innerHTML=`<div style="padding:16px;text-align:center;color:var(--tx3);font-size:13px">Cargando...</div>`;
   try{
-    const [resp,insc]=await Promise.all([
+    const [resp,insc,envios]=await Promise.all([
       sb(`nps_respuestas?curso_id=eq.${cursoId}&order=created_at.desc`),
-      sb(`inscripciones?curso_id=eq.${cursoId}&estado=neq.Baja&select=*,alumnos(id,nombre,apellido)&order=created_at`)
+      sb(`inscripciones?curso_id=eq.${cursoId}&estado=neq.Baja&select=*,alumnos(id,nombre,apellido,telefono)&order=created_at`),
+      sb(`nps_envios?curso_id=eq.${cursoId}&order=created_at.desc`)
     ]);
-    _renderNPSPanel(el,cursoId,resp,insc);
+    _renderNPSPanel(el,cursoId,resp,insc,envios);
   }catch(e){el.innerHTML=`<p style="color:var(--re);padding:16px;font-size:13px">Error: ${esc(e.message)}</p>`;}
 }
 
-function _renderNPSPanel(el,cursoId,respuestas,insc){
+function _renderNPSPanel(el,cursoId,respuestas,insc,envios=[]){
   const{nps,promotores,pasivos,detractores,total}=_calcNPS(respuestas);
   const npsCol=nps===null?'var(--tx3)':nps>=50?'var(--gr)':nps>=0?'var(--al)':'var(--re)';
   const npsLabel=nps===null?'Sin datos':nps>0?`+${nps}`:String(nps);
@@ -6217,7 +6218,31 @@ function _renderNPSPanel(el,cursoId,respuestas,insc){
     <button class="btn pri" style="font-size:11px;padding:4px 10px" onclick="registrarNPS('${cursoId}',null,null,null)">+ Agregar</button>
   </div>`;
 
-  el.innerHTML=`${summary}
+  // Panel WA
+  const conTelefono=insc.filter(i=>i.alumnos?.telefono).length;
+  const sinTelefono=insc.length-conTelefono;
+  const ultimoEnvio=envios[0];
+  const enviadosCount=envios.length;
+  const respondidosCount=envios.filter(e=>e.estado==='respondido').length;
+  const waPanel=`<div style="border:1px solid var(--b);border-radius:10px;padding:14px;margin-bottom:20px;background:var(--surf2)">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:3px">📱 Encuesta por WhatsApp</div>
+        <div style="font-size:11px;color:var(--tx3)">
+          ${conTelefono} alumno${conTelefono!==1?'s':''} con teléfono · ${sinTelefono} sin teléfono
+          ${enviadosCount?` · <span style="color:var(--al)">${enviadosCount} enviado${enviadosCount!==1?'s':''}</span> · <span style="color:var(--gr)">${respondidosCount} respondido${respondidosCount!==1?'s':''}</span>`:''}
+          ${ultimoEnvio?` · Último envío ${fmt(ultimoEnvio.created_at?.slice(0,10))}`:''}
+        </div>
+      </div>
+      <button class="btn pri" style="font-size:12px;padding:6px 14px" onclick="enviarNPSWhatsApp('${cursoId}')">
+        📤 Enviar encuesta WA
+      </button>
+    </div>
+    ${sinTelefono>0?`<div style="font-size:11px;color:var(--al);margin-top:8px">⚠ ${sinTelefono} alumno${sinTelefono!==1?'s':''} sin teléfono registrado no recibirán la encuesta.</div>`:''}
+    <div style="font-size:10px;color:var(--tx3);margin-top:6px;font-style:italic">Requiere template Meta <code>nps_post_curso</code> aprobado. El alumno responde con un número y el bot lo registra automáticamente.</div>
+  </div>`;
+
+  el.innerHTML=`${waPanel}${summary}
     <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Respuestas por alumno inscripto</div>
     ${filas||`<p style="color:var(--tx3);font-size:13px;margin:0 0 8px">No hay inscriptos.</p>`}
     <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px">Respuesta adicional / anónima</div>
@@ -6249,6 +6274,24 @@ async function registrarNPS(cursoId,alumnoId,alumnoNombre,_unused){
 async function eliminarNPSRespuesta(id,cursoId){
   try{await sb(`nps_respuestas?id=eq.${id}`,{method:'DELETE'});toast('Eliminado','ok');loadNPS(cursoId);}
   catch(e){toast('Error','err');}
+}
+
+async function enviarNPSWhatsApp(cursoId){
+  const btn=event.target;btn.disabled=true;btn.textContent='Enviando...';
+  try{
+    const res=await fetch(`${SB}/functions/v1/enviar-nps-wpp`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${authToken||KEY}`},
+      body:JSON.stringify({curso_id:cursoId})
+    });
+    const data=await res.json();
+    if(!res.ok)throw new Error(data.error||'Error');
+    const msg=`Enviados: ${data.sent} · Fallidos: ${data.failed} · Sin teléfono: ${data.sin_telefono}`;
+    toast(msg,'ok');
+    if(data.errors?.length)console.warn('NPS WA errors:',data.errors);
+    loadNPS(cursoId);
+  }catch(e){toast('Error: '+e.message,'err');}
+  finally{btn.disabled=false;btn.textContent='📤 Enviar encuesta WA';}
 }
 
 // ══ DEBRIEFING PEARLS ══

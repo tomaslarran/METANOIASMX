@@ -122,6 +122,39 @@ serve(async (req) => {
       return new Response("OK", { status: 200 });
     }
 
+    // ── Detectar respuesta NPS (número 0-10) ──────────────────────────────────
+    if (msg.type === "text" && texto) {
+      const npsScore = parseInt(texto);
+      if (!isNaN(npsScore) && npsScore >= 0 && npsScore <= 10 && texto === String(npsScore)) {
+        const { data: pendingNPS } = await supabase
+          .from("nps_envios")
+          .select("*")
+          .eq("telefono", fromId)
+          .eq("estado", "enviado")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (pendingNPS) {
+          await supabase.from("nps_respuestas").insert({
+            curso_id: pendingNPS.curso_id,
+            alumno_id: pendingNPS.alumno_id,
+            alumno_nombre: pendingNPS.alumno_nombre,
+            score: npsScore,
+            canal: "whatsapp",
+          });
+          await supabase.from("nps_envios").update({ estado: "respondido" }).eq("id", pendingNPS.id);
+          await supabase.from("mensajes_publico").insert({
+            plataforma: "whatsapp", from_id: fromId, from_name: fromName,
+            mensaje: texto, estado: "respondido",
+            respuesta: `[NPS ${npsScore}/10 registrado]`, wa_message_id: msgId,
+          });
+          await sendWA(fromId, `¡Gracias por tu respuesta! Tu calificación (${npsScore}/10) fue registrada. ¡Hasta la próxima! 🙌`);
+          return new Response("OK", { status: 200 });
+        }
+      }
+    }
+
     await procesarMensaje({
       supabase, fromId, fromName, texto, plataforma: "whatsapp", msgId,
       imageBase64, imageMediaType,
@@ -208,7 +241,7 @@ serve(async (req) => {
     await procesarMensaje({
       supabase, fromId, fromName, texto, plataforma, msgId,
       imageBase64, imageMediaType,
-      sendReply: (t) => sendMessenger(fromId, t, pageId, apiToken),
+      sendReply: (t) => sendMessenger(fromId, t, pageId, apiToken, isIG),
       sendEscalacion: (t) => Promise.all(EQUIPO.map(p => sendWA(p.wa, t))).then(() => {}),
     });
 
@@ -316,6 +349,8 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
     messages.push({ role: "user", content: textoCombinado });
   }
 
+  const siteContent = await fetchWebContent("https://metanoiasmx.com/");
+
   const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -326,7 +361,7 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
     body: JSON.stringify({
       model: imageBase64 ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001",
       max_tokens: 600,
-      system: buildSistema(cursos ?? [], publicaciones ?? [], fromName, plataforma, mejoras ?? [], planes ?? []),
+      system: buildSistema(cursos ?? [], publicaciones ?? [], fromName, plataforma, mejoras ?? [], planes ?? [], siteContent),
       messages,
     }),
   });
@@ -416,8 +451,9 @@ async function sendWA(to: string, text: string): Promise<void> {
   }
 }
 
-async function sendMessenger(recipientId: string, text: string, pageId: string, token: string): Promise<void> {
-  const res = await fetch(`https://graph.facebook.com/v21.0/${pageId}/messages`, {
+async function sendMessenger(recipientId: string, text: string, pageId: string, token: string, isInstagram = false): Promise<void> {
+  const base = isInstagram ? "https://graph.instagram.com" : "https://graph.facebook.com";
+  const res = await fetch(`${base}/v21.0/${pageId}/messages`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${token}`,
@@ -447,8 +483,31 @@ async function downloadMedia(mediaId: string, token: string): Promise<{ buffer: 
   return { buffer, mimeType: metaData.mime_type || "application/octet-stream" };
 }
 
+// ── Fetch contenido web público ───────────────────────────────────────────────
+async function fetchWebContent(url: string): Promise<string> {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "MetanoiaBot/1.0" },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) return "";
+    const html = await res.text();
+    return html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 2500);
+  } catch {
+    return "";
+  }
+}
+
 // ── System prompt ─────────────────────────────────────────────────────────────
-function buildSistema(cursos: any[], publicaciones: any[], fromName: string, plataforma: string, mejoras: any[] = [], planes: any[] = []): string {
+function buildSistema(cursos: any[], publicaciones: any[], fromName: string, plataforma: string, mejoras: any[] = [], planes: any[] = [], siteContent = ""): string {
   const hoy = new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Salta" });
 
   const cursosTexto = cursos.length > 0
@@ -518,7 +577,7 @@ ${planes.length > 0
             p.precio_mensual ? `$${Number(p.precio_mensual).toLocaleString("es-AR")}/mes` : null,
             p.precio_anual ? `$${Number(p.precio_anual).toLocaleString("es-AR")}/año` : null,
           ].filter(Boolean).join(" · ");
-      return `**${p.nombre}** — ${precio}\n${p.descripcion ?? ""}${p.requisito ? `\nRequiere: ${p.requisito}` : ""}`;
+      return `${p.nombre} — ${precio}\n${p.descripcion ?? ""}${p.requisito ? `\nRequiere: ${p.requisito}` : ""}`;
     }).join("\n\n")
   : "Consultá con el equipo los planes disponibles."
 }
@@ -526,8 +585,11 @@ ${planes.length > 0
 ### Cursos presenciales disponibles
 ${cursosTexto}
 
+### Contenido actual del sitio web (https://metanoiasmx.com/)
+${siteContent ? siteContent : "No disponible en este momento."}
+
 ### Cómo inscribirse a un curso
-1. Primero ofrecé el link de la plataforma: "Podés inscribirte directo desde nuestra plataforma: https://plataforma.metanoiasmx.com/login 🎓 ¿Querés que te conecte con alguien del equipo para atención personalizada?"
+1. Primero ofrecé el link del sitio: "Podés ver toda la info y anotarte desde nuestro sitio: https://metanoiasmx.com/ 🎓 ¿Querés que te conecte con alguien del equipo para atención personalizada?"
 2. Si prefieren atención personalizada o tienen dudas: pedí su email, confirmá el curso y escalá con esos datos.
 NO intentes manejar la inscripción vos solo más allá de dar el link.
 
@@ -580,6 +642,7 @@ Ejemplo: "¡Gracias por compartir! 🙌 Nos alegra mucho el apoyo." / "¡Qué bu
 - NUNCA digas que el equipo va a contactar al usuario por el número +54 9 387 210-8071 — ese es nuestro propio número.
 - NUNCA uses frases agresivas, jerga interna o vocabulario que suene poco profesional para un desconocido.
 - Para respuestas normales: texto plano. NUNCA uses JSON salvo para ignorar o escalar.
+- NUNCA uses markdown en las respuestas: sin asteriscos (**), sin guiones como bullets, sin #. Los links van siempre solos, sin ningún carácter extra alrededor.
 
 ### Mensajes a ignorar — respondé ÚNICAMENTE con {"ignorar":true}
 - Autorespuestas de otras empresas o bots
@@ -605,7 +668,7 @@ Usuario: "¿Qué es Metanoia?"
 Asistente: "¡Hola! 👋 Metanoia SMX es un centro de simulación médica en Salta, Argentina. Entrenamos a médicos, residentes, enfermeros y otros profesionales de la salud con simuladores de alta fidelidad en un entorno seguro y sin estrés, con instructores certificados en simulación médica. ¿Te cuento sobre nuestros cursos o la plataforma online?"
 
 Usuario: "¿Tienen cursos de laparoscopía?"
-Asistente: "¡Sí! Tenemos entrenamiento en cirugía laparoscópica con simuladores especializados y métricas objetivas (GOALS/OSATS). Es uno de nuestros fuertes 💪 Te paso el link para ver la oferta actual y anotarte: https://plataforma.metanoiasmx.com/login — ¿Sos médico o residente? Así te oriento mejor con el plan que más te conviene."
+Asistente: "¡Sí! Tenemos entrenamiento en cirugía laparoscópica con simuladores especializados y métricas objetivas (GOALS/OSATS). Es uno de nuestros fuertes 💪 Te paso el link para ver la oferta actual y anotarte: https://metanoiasmx.com/ — ¿Sos médico o residente? Así te oriento mejor con el plan que más te conviene."
 
 Usuario: "Cuánto sale la suscripción a la plataforma?"
 Asistente: "¡Buena pregunta! Depende de tu perfil — tenemos planes para médicos matriculados en Colmedsa, médicos externos, residentes del Ministerio de Salta (sin costo), personal de salud no médico y más. ¿Cuál es tu situación? Así te digo exactamente el precio y cómo accedés 😊"
