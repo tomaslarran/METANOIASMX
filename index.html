@@ -4059,9 +4059,6 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <button class="btn pri" onclick="sendCursoIA()" id="btn-curso-ia-send" style="padding:8px 16px">Enviar</button>
     </div>
     <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap" id="curso-ia-actions" style="display:none">
-      <button class="btn sm" onclick="generarCursoArchivo('ppt')" title="Generar presentación PPT">📊 Generar PPT</button>
-      <button class="btn sm" onclick="generarCursoArchivo('examen')" title="Generar examen Word editable">📋 Examen Word</button>
-      <button class="btn sm" onclick="generarCursoArchivo('programa')" title="Generar programa Word editable">📝 Programa Word</button>
       <button class="btn sm pri" onclick="crearCursoDesdeIA()" id="btn-crear-desde-ia" title="Crear el curso en el panel con los datos de la conversación">💾 Crear curso</button>
     </div>
   </div>
@@ -8513,6 +8510,7 @@ function resetCursoIA(){
   cursoIAChatId=null;
   cursoIAChatNombre=null;
   _cursoEscenarios=[];
+  _cursoDocumentos=[];
   _updateChatLabel();
   const msgs=document.getElementById("curso-ia-msgs");
   if(msgs)msgs.innerHTML=`<div style="background:var(--surf2);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--tx2);max-width:90%">
@@ -8601,6 +8599,7 @@ async function cargarChatCurso(id,nombre){
     cursoIAChatNombre=row.nombre;
     cursoIAArchivos=[];
     _cursoEscenarios=[];
+    _cursoDocumentos=[];
     const msgs=document.getElementById("curso-ia-msgs");
     if(msgs){
       msgs.innerHTML="";
@@ -8614,6 +8613,11 @@ async function cargarChatCurso(id,nombre){
             const escIdx=_cursoEscenarios.length;
             _cursoEscenarios.push(m.escenario);
             bubble+=_buildEscenarioCard(m.escenario,escIdx);
+          }
+          if(m.doc){
+            const docIdx=_cursoDocumentos.length;
+            _cursoDocumentos.push(m.doc);
+            bubble+=_buildDocumentoCard(m.doc,docIdx);
           }
           bubble+=`</div>`;
           msgs.innerHTML+=bubble;
@@ -8634,6 +8638,252 @@ async function eliminarChatCurso(id){
   toast("Chat eliminado","ok");
   document.getElementById("modal-chats-cursos-list")?.remove();
   setTimeout(listarChatsCurso,300);
+}
+
+// ── DOCUMENTOS IA ────────────────────────────────────────────────────────────
+let _cursoDocumentos=[];
+
+function _buildDocumentoCard(doc,idx){
+  const ICNS={ficha_diseno:'📋',programa:'📝',examen:'📄',manual_facilitador:'📖',cronograma:'📅',presentacion:'📊',planilla_prebrief:'🎯',planilla_debrief:'💬',instrumento_eval:'📏',consentimiento:'✍️'};
+  const NOMS={ficha_diseno:'Ficha de diseño PEV1',programa:'Programa académico',examen:'Evaluación teórica',manual_facilitador:'Manual del facilitador',cronograma:'Cronograma de rotaciones',presentacion:'Presentación PPT',planilla_prebrief:'Planilla prebriefing',planilla_debrief:'Planilla debriefing PEARLS',instrumento_eval:'Instrumento de evaluación',consentimiento:'Consentimiento de grabación'};
+  const icon=ICNS[doc.tipo]||'📄';
+  const nom=NOMS[doc.tipo]||doc.tipo;
+  return `<div style="display:inline-flex;align-items:center;gap:10px;background:var(--surf);border:1px solid var(--b);border-left:3px solid var(--pu);border-radius:10px;padding:10px 14px;margin-top:10px;cursor:pointer;max-width:100%;box-sizing:border-box" onclick="_descargarDocumentoIA(${idx})" title="Click para descargar">
+    <span style="font-size:20px">${icon}</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(doc.titulo||nom)}</div>
+      <div style="font-size:11px;color:var(--tx3)">${nom} · Click para descargar</div>
+    </div>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--pu)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+  </div>`;
+}
+
+async function _descargarDocumentoIA(idx){
+  const doc=_cursoDocumentos[idx];
+  if(!doc)return;
+  const {tipo,datos,titulo}=doc;
+  const cId=_cursoDetalleId;
+  if(tipo==='presentacion'){
+    await _generarPPTCurso(JSON.stringify({titulo:datos.titulo||titulo,subtitulo:datos.subtitulo||'',slides:datos.slides||[]}),cId);
+  }else if(tipo==='examen'){
+    _generarWordCurso(JSON.stringify(datos),'examen',cId);
+  }else if(tipo==='cronograma'){
+    await _generarCronogramaXLS(datos,titulo,cId);
+  }else{
+    _generarDocumentoWord(tipo,datos,titulo,cId);
+  }
+}
+
+function _wrapWordDoc(bodyHtml,titulo){
+  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8"><title>${titulo}</title>
+<style>
+@page{size:A4;margin:2.5cm}
+body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1a1a2e;line-height:1.6}
+h1{font-size:18pt;color:#7C3AED;margin-bottom:6pt;border-bottom:2pt solid #7C3AED;padding-bottom:4pt}
+h2{font-size:13pt;color:#1A0A3E;border-bottom:1pt solid #C4B5FD;padding-bottom:2pt;margin-top:14pt;margin-bottom:4pt}
+h3{font-size:11pt;color:#374151;font-weight:bold;margin-top:8pt;margin-bottom:2pt}
+p{margin:4pt 0}ul,ol{margin:4pt 0 8pt 20pt}li{margin:2pt 0}
+table{border-collapse:collapse;width:100%;font-size:10pt;margin:8pt 0}
+td,th{border:1pt solid #D1D5DB;padding:5pt 8pt;vertical-align:top}
+th{background:#7C3AED;color:#fff;font-weight:bold;text-align:left}
+.meta{font-size:9pt;color:#6B7280;margin-bottom:12pt}
+.badge{background:#EDE9FE;color:#7C3AED;padding:1pt 6pt;border-radius:3pt;font-size:9pt;font-weight:bold}
+.espacio{display:block;height:36pt;border-bottom:1pt solid #D1D5DB;margin:4pt 0 10pt}
+.footer{font-size:8pt;color:#9CA3AF;margin-top:24pt;border-top:1pt solid #E5E7EB;padding-top:6pt;font-style:italic}
+</style></head>
+<body>${bodyHtml}</body></html>`;
+}
+
+function _generarDocumentoWord(tipo,datos,titulo,cursoId){
+  const e=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const ul=arr=>(arr&&arr.length)?`<ul>${arr.map(i=>`<li>${e(String(i))}</li>`).join('')}</ul>`:'<p>—</p>';
+  const nota=`<div class="footer">${e(datos.nota_pie||'Borrador generado con apoyo de IA — Metanoia SMX. No aprobado para uso. Requiere curaduría (Dirección Médica) y aprobación PEV plenaria.')}</div>`;
+  const filename=(titulo||tipo).replace(/[^a-zA-Z0-9 _-]/g,'_').slice(0,60);
+  let body='';
+
+  if(tipo==='ficha_diseno'){
+    const d=datos;
+    const ests=(d.estaciones||[]).map(es=>`<tr><td>${e(es.nombre||'')}</td><td>${es.duracion_min||'—'} min</td><td>${e(es.objetivo||'')}</td><td>${ul(es.equipo)}</td></tr>`).join('');
+    body=`<h1>${e(titulo||'Ficha de Diseño del Curso')}</h1>
+<p class="meta">Estado: <span class="badge">PEV1 — Borrador</span>&nbsp; Línea: ${e(d.linea_negocio||'—')}</p>
+<h2>1. Identificación</h2>
+<table><tr><th>Campo</th><th>Valor</th></tr>
+<tr><td>Nombre del curso</td><td>${e(d.nombre_curso||'')}</td></tr>
+<tr><td>Público objetivo</td><td>${e(d.publico_objetivo||'')}</td></tr>
+<tr><td>Nivel de simulación</td><td>${e(d.nivel_simulacion||'')}</td></tr>
+<tr><td>Nivel de Miller</td><td>${e(d.nivel_miller||'')}</td></tr>
+<tr><td>Duración total</td><td>${d.duracion_total_min?d.duracion_total_min+' min':'—'}</td></tr>
+<tr><td>Cupos máximos</td><td>${d.cupos_max||'—'}</td></tr>
+<tr><td>Instructor requerido</td><td>${e(d.instructor_requerido||'')}</td></tr>
+<tr><td>Readiness</td><td>${e(d.readiness||'—')}</td></tr></table>
+<h2>2. Objetivo general</h2><p>${e(d.objetivo_general||'')}</p>
+<h2>3. Objetivos específicos</h2>${ul(d.objetivos_especificos)}
+<h2>4. Estaciones</h2>
+<table><tr><th>Estación</th><th>Duración</th><th>Objetivo</th><th>Equipo</th></tr>${ests||'<tr><td colspan="4">—</td></tr>'}</table>
+<h2>5. Prebriefing</h2><p>Duración: ${(d.prebriefing?.duracion_min||'—')+' min'}</p>${ul(d.prebriefing?.temas)}
+<h2>6. Debriefing</h2><p>Método: ${e(d.debriefing?.metodo||'PEARLS')} — ${(d.debriefing?.duracion_min||'—')+' min'}</p>
+<h2>7. Evaluación</h2><p>${e(d.evaluacion||'')}</p>
+<h2>8. Equipo requerido</h2>${ul(d.equipo_requerido)}
+<h2>9. Materiales para el participante</h2>${ul(d.materiales)}
+<h2>10. Gates PEV1 — Verificación</h2>
+${(d.gates_pev1||['Necesidad educativa = brecha de desempeño real','Objetivos medibles con categoría y nivel de Miller','Alineación constructiva objetivos ↔ escenario ↔ evaluación','Nivel de simulación y fidelidad justificados','Prebriefing y debriefing desde el diseño','Seguridad psicológica / contrato de ficción explícitos','Consentimiento si hay grabación','Readiness evaluado (equipo + instructor + PEV)'])
+.map(g=>`<p>☐ ${e(g)}</p>`).join('')}
+<h2>11. Faltantes / Notas</h2>${ul(d.faltantes)}
+<h2>12. Bibliografía</h2>${ul(d.bibliografia)}
+${nota}`;
+  }
+
+  else if(tipo==='manual_facilitador'){
+    const d=datos;
+    const pasos=(d.guion||[]).map((p,i)=>`<tr><td>${p.paso||i+1}</td><td>${p.duracion_min||'—'} min</td><td>${e(p.descripcion||'')}</td></tr>`).join('');
+    body=`<h1>${e(titulo||'Manual del Facilitador de Estación')}</h1>
+<p class="meta">Estado: <span class="badge">PEV1 — Borrador</span>&nbsp; Curso: ${e(d.curso||'')}</p>
+<h2>Información de la estación</h2>
+<table><tr><th>Campo</th><th>Valor</th></tr>
+<tr><td>Estación</td><td>${e(d.estacion||'')}</td></tr>
+<tr><td>Objetivo</td><td>${e(d.objetivo||'')}</td></tr>
+<tr><td>Duración</td><td>${(d.duracion_min||'—')+' min'}</td></tr>
+<tr><td>Cupo por rotación</td><td>${d.cupo_por_rotacion||'—'} participantes</td></tr>
+<tr><td>Instrumento de evaluación</td><td>${e(d.instrumento_eval||'Checklist estructurado')}</td></tr></table>
+<h2>Equipo necesario</h2>${ul(d.equipo)}
+<h2>Setup previo a la rotación</h2>${ul(d.setup)}
+<h2>Prebriefing de estación</h2>${ul(d.prebriefing_local)}
+<h2>Guión de la estación</h2>
+<table><tr><th>Paso</th><th>Tiempo</th><th>Descripción</th></tr>${pasos||'<tr><td colspan="3">—</td></tr>'}</table>
+<h2>Preguntas para el debriefing</h2>${ul(d.preguntas_debrief)}
+<h2>Errores comunes — qué atender</h2>${ul(d.errores_comunes)}
+<h2>Puntos clave a transmitir</h2>${ul(d.puntos_clave)}
+<h2>Seguridad psicológica</h2>${ul(d.seguridad_psicologica||['El error es parte del entrenamiento — nunca humillar ni sancionar','Todos son inteligentes y quieren mejorar','Garantizar confidencialidad de lo que ocurre en la sala'])}
+${nota}`;
+  }
+
+  else if(tipo==='planilla_prebrief'){
+    const d=datos;
+    const defs=[{titulo:'Bienvenida y presentación del equipo',contenido:'Presentar al equipo docente e institución. Dar la bienvenida al espacio de entrenamiento.'},{titulo:'Contrato de ficción',contenido:'Este es un espacio seguro y confidencial. Lo que ocurra aquí no sale de la sala. El objetivo es aprender juntos, no evaluar.'},{titulo:'Objetivos del día',puntos:['Objetivo 1','Objetivo 2','Objetivo 3']},{titulo:'Logística',puntos:['Rotación cada X minutos','Celulares en silencio','Recursos disponibles']},{titulo:'Supuesto básico',contenido:'Todos los participantes son inteligentes, capaces y quieren mejorar. El error es oportunidad de aprendizaje, no de sanción.'},{titulo:'Preguntas antes de comenzar',contenido:'Espacio abierto para dudas del grupo.'}];
+    const secs=(d.secciones||defs).map(s=>`<h2>${e(s.titulo)}</h2>${s.puntos?ul(s.puntos):`<p>${e(s.contenido||'')}</p>`}<span class="espacio"></span>`).join('');
+    body=`<h1>${e(titulo||'Planilla de Prebriefing')}</h1>
+<p class="meta">Curso: ${e(d.curso||'')} &nbsp;|&nbsp; Duración: ${d.duracion_min||'—'} min</p>
+${secs}${nota}`;
+  }
+
+  else if(tipo==='planilla_debrief'){
+    const d=datos;
+    const defs=[{sigla:'P',titulo:'Partnership',descripcion:'Establecer alianza colaborativa con el grupo.',preguntas:['¿Cómo se sintieron?','¿Qué fue lo más llamativo del ejercicio?']},{sigla:'E',titulo:'Empathy',descripcion:'Reconocer el esfuerzo y las emociones del grupo.',preguntas:['Fue un ejercicio muy desafiante...','¿Qué emociones surgieron durante la práctica?']},{sigla:'A',titulo:'Acknowledgment',descripcion:'Reconocer explícitamente lo que funcionó bien.',preguntas:['¿Qué hicieron bien?','¿Qué acciones los ayudaron a avanzar?']},{sigla:'R',titulo:'Reflection',descripcion:'Promover reflexión sobre lo que mejorar.',preguntas:['¿Qué cambiarían?','¿Por qué creen que ocurrió X?','¿Qué pudieron haber hecho diferente?']},{sigla:'L',titulo:'Learning',descripcion:'Consolidar los aprendizajes clave.',puntos_clave:['Punto clave 1 a reforzar','Punto clave 2 a reforzar']},{sigla:'S',titulo:'Supporting',descripcion:'Cierre y plan de aplicación clínica.',preguntas:['¿Cómo van a aplicar esto en la práctica?','¿Qué apoyo necesitan del equipo?']}];
+    const secs=(d.secciones||defs).map(s=>`<h2><strong>${e(s.sigla)}</strong> — ${e(s.titulo)}</h2>
+<p style="font-style:italic;color:#555">${e(s.descripcion||'')}</p>
+${s.puntos_clave?`<h3>Puntos clave</h3>${ul(s.puntos_clave)}`:''}
+${s.preguntas?`<h3>Preguntas guía</h3>${ul(s.preguntas)}`:''}
+<h3>Notas del facilitador</h3><span class="espacio"></span><span class="espacio"></span>`).join('');
+    body=`<h1>${e(titulo||'Planilla de Debriefing PEARLS')}</h1>
+<p class="meta">Curso: ${e(d.curso||'')} &nbsp;|&nbsp; Duración: ${d.duracion_min||'—'} min &nbsp;|&nbsp; Método: PEARLS</p>
+${secs}${nota}`;
+  }
+
+  else if(tipo==='instrumento_eval'){
+    const d=datos;
+    const esc_n=d.items?.[0]?.escala||5;
+    const headers=`<th>#</th><th style="width:45%">Descriptor</th>${Array.from({length:esc_n},(_,i)=>`<th style="text-align:center">${i+1}</th>`).join('')}`;
+    const rows=(d.items||[]).map(it=>`<tr><td>${it.n||''}</td><td>${e(it.descripcion||'')}</td>${Array.from({length:it.escala||esc_n},()=>`<td></td>`).join('')}</tr>`).join('');
+    const escDesc=d.escala_descripcion?Object.entries(d.escala_descripcion).map(([k,v])=>`<tr><td><strong>${k}</strong></td><td>${e(v)}</td></tr>`).join(''):'';
+    body=`<h1>${e(titulo||'Instrumento de Evaluación')}</h1>
+<p class="meta">Tipo: <span class="badge">${e((d.tipo||'checklist').toUpperCase())}</span>&nbsp; Curso: ${e(d.curso||'')} &nbsp;|&nbsp; Estación: ${e(d.estacion||'')}</p>
+<table><tr><td><strong>Participante</strong></td><td style="width:45%"></td><td><strong>Fecha</strong></td><td style="width:20%"></td></tr>
+<tr><td><strong>Evaluador</strong></td><td></td><td><strong>Instancia</strong></td><td>☐ Formativa</td></tr></table>
+<h2>Ítems de evaluación</h2>
+<table><tr>${headers}</tr>${rows||`<tr><td colspan="${esc_n+2}">—</td></tr>`}</table>
+<h2>Puntaje total</h2>
+<table><tr><td>Total obtenido</td><td style="width:55%"></td><td>Total posible</td><td></td></tr></table>
+${escDesc?`<h2>Descripción de la escala</h2><table>${escDesc}</table>`:''}
+<h2>Observaciones</h2><span class="espacio"></span><span class="espacio"></span>
+<p style="font-size:9pt;color:#6B7280">${e(d.nota_formativa||'Evaluación 100% formativa. No habilita actos asistenciales ni certifica especialidad.')}</p>
+${nota}`;
+  }
+
+  else if(tipo==='consentimiento'){
+    const d=datos;
+    body=`<h1>Consentimiento Informado para Grabación de Video</h1>
+<p class="meta">Curso: ${e(d.curso||'')} &nbsp;|&nbsp; Fecha: ${e(d.fecha||'')}</p>
+<p>${e(d.texto_consentimiento||'Yo, el/la abajo firmante, en pleno uso de mis facultades, autorizo a Metanoia SMX — SUDES S.A.S. a realizar la grabación de audio y video durante la actividad de simulación médica indicada, bajo las condiciones aquí descritas.')}</p>
+<h2>Condiciones</h2>
+${ul(d.puntos_clave||['Las grabaciones son de uso exclusivo con fines educativos y de retroalimentación formativa','El material será tratado con estricta confidencialidad y no se divulgará sin consentimiento adicional','Podés solicitar la eliminación del material en cualquier momento, sin consecuencias','Las grabaciones no serán usadas con fines comerciales ni de investigación sin nuevo consentimiento específico'])}
+<h2>Datos del participante y firma</h2>
+<table><tr><td style="width:55%"><strong>Nombre completo</strong><br><span class="espacio"></span></td><td><strong>DNI</strong><br><span class="espacio"></span></td></tr>
+<tr><td><strong>Institución / Matrícula</strong><br><span class="espacio"></span></td><td><strong>Especialidad</strong><br><span class="espacio"></span></td></tr>
+<tr><td><strong>Firma</strong><br><span class="espacio"></span></td><td><strong>Fecha de firma</strong><br><span class="espacio"></span></td></tr></table>
+<p style="font-size:9pt;color:#6B7280">Formulario Metanoia SMX — Código de Ética v1.1, Art. 5 (Confidencialidad y gestión de datos).</p>
+${nota}`;
+  }
+
+  else if(tipo==='cronograma'){
+    const d=datos;
+    const rots=d.rotaciones||[];
+    const hdrs=rots.length?Object.keys(rots[0]).map(k=>`<th>${e(k)}</th>`).join(''):'';
+    const trs=rots.map(r=>`<tr>${Object.values(r).map(v=>`<td>${e(String(v||''))}</td>`).join('')}</tr>`).join('');
+    body=`<h1>${e(titulo||'Cronograma de Rotaciones')}</h1>
+<p class="meta">Curso: ${e(d.curso||'')} &nbsp;|&nbsp; Fecha: ${e(d.fecha||'')} &nbsp;|&nbsp; Inicio: ${e(d.hora_inicio||'09:00')}</p>
+<h2>Estaciones</h2>${ul(d.estaciones)}
+<h2>Tabla de rotaciones</h2>
+<table><tr>${hdrs}</tr>${trs||'<tr><td>—</td></tr>'}</table>
+<p>Duración por estación: <strong>${d.duracion_estacion_min||'—'} min</strong> &nbsp;|&nbsp; Grupos: <strong>${d.grupos_count||'—'}</strong> &nbsp;|&nbsp; Participantes: <strong>${d.participantes_total||'—'}</strong></p>
+${nota}`;
+  }
+
+  else{
+    body=`<h1>${e(titulo||tipo)}</h1><pre style="font-size:9pt;white-space:pre-wrap">${e(JSON.stringify(datos,null,2))}</pre>${nota}`;
+  }
+
+  const htmlDoc=_wrapWordDoc(body,titulo||tipo);
+  const blob=new Blob(['﻿'+htmlDoc],{type:'application/msword'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=filename+'.doc';a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),3000);
+  toast('Documento descargado','ok');
+  if(cursoId)_guardarArchivoEnCurso(cursoId,blob,filename+'.doc',tipo,true);
+}
+
+async function _generarCronogramaXLS(datos,titulo,cursoId){
+  if(typeof XLSX==='undefined'){
+    await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+  }
+  toast('Generando Excel...','inf');
+  const d=datos;
+  const ests=d.estaciones||[];
+  const grupos=d.grupos_count||4;
+  const minEst=d.duracion_estacion_min||30;
+  const horaInicio=d.hora_inicio||'09:00';
+  const addMin=(hi,min)=>{const[h,m]=hi.split(':').map(Number);const t=h*60+m+min;return`${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`;};
+  const gLabels=Array.from({length:grupos},(_,i)=>`Grupo ${String.fromCharCode(65+i)}`);
+  const headers=['Rotación','Horario',...gLabels];
+  const rows=[headers];
+  const rots=d.rotaciones||[];
+  if(rots.length){
+    rots.forEach((r,i)=>{
+      const tIni=addMin(horaInicio,i*minEst);
+      const tFin=addMin(horaInicio,(i+1)*minEst);
+      const vals=Object.keys(r).filter(k=>k!=='grupo'&&k!=='hora').map(k=>r[k]||'');
+      rows.push([`Rotación ${i+1}`,`${tIni}–${tFin}`,...vals]);
+    });
+  }else{
+    for(let rot=0;rot<ests.length;rot++){
+      const tIni=addMin(horaInicio,rot*minEst);
+      const tFin=addMin(horaInicio,(rot+1)*minEst);
+      const row=[`Rotación ${rot+1}`,`${tIni}–${tFin}`];
+      for(let g=0;g<grupos;g++)row.push(ests[(rot+g)%ests.length]||`E${(rot+g)%ests.length+1}`);
+      rows.push(row);
+    }
+  }
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:14},{wch:14},...Array(grupos).fill({wch:30})];
+  XLSX.utils.book_append_sheet(wb,'Cronograma',ws);
+  const info=[['Curso',d.curso||''],['Fecha',d.fecha||''],['Hora inicio',horaInicio],['Duración estación (min)',minEst],['Participantes',d.participantes_total||''],['Grupos',grupos],['Estaciones',ests.join(', ')],['',''],['BORRADOR — Requiere aprobación PEV','']];
+  const wsI=XLSX.utils.aoa_to_sheet(info);wsI['!cols']=[{wch:30},{wch:40}];
+  XLSX.utils.book_append_sheet(wb,'Info',wsI);
+  const fname=(titulo||'Cronograma').replace(/[^a-zA-Z0-9 _-]/g,'_').slice(0,50);
+  XLSX.writeFile(wb,fname+'.xlsx');
+  toast('Excel descargado','ok');
+  if(cursoId){const buf=XLSX.write(wb,{type:'array',bookType:'xlsx'});const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});_guardarArchivoEnCurso(cursoId,blob,fname+'.xlsx','cronograma',true);}
 }
 
 // ── ESCENARIOS CLÍNICOS PROYECTABLES ─────────────────────────────────────────
@@ -8901,7 +9151,14 @@ async function sendCursoIA(){
         try{escJson=JSON.parse(escMatch[1].trim());}catch(e){}
         textoDisplay=respuesta.replace(/<ESCENARIO_JSON>[\s\S]*?<\/ESCENARIO_JSON>/,'').trim();
       }
-      cursoIAHistorial.push({role:"assistant",content:textoDisplay,...(escJson?{escenario:escJson}:{})});
+      // Parsear documento generado por el agente
+      const docMatch=textoDisplay.match(/<DOCUMENTO_JSON>([\s\S]*?)<\/DOCUMENTO_JSON>/);
+      let docJson=null;
+      if(docMatch){
+        try{docJson=JSON.parse(docMatch[1].trim());}catch(e){}
+        textoDisplay=textoDisplay.replace(/<DOCUMENTO_JSON>[\s\S]*?<\/DOCUMENTO_JSON>/,'').trim();
+      }
+      cursoIAHistorial.push({role:"assistant",content:textoDisplay,...(escJson?{escenario:escJson}:{}),...(docJson?{doc:docJson}:{})});
       _autoguardarChatCurso();
       if(cursoIAHistorial.length>=2){
         const actions=document.getElementById("curso-ia-actions");
@@ -8916,6 +9173,11 @@ async function sendCursoIA(){
           const escIdx=_cursoEscenarios.length;
           _cursoEscenarios.push(escJson);
           loadEl.innerHTML+=_buildEscenarioCard(escJson,escIdx);
+        }
+        if(docJson){
+          const docIdx=_cursoDocumentos.length;
+          _cursoDocumentos.push(docJson);
+          loadEl.innerHTML+=_buildDocumentoCard(docJson,docIdx);
         }
       }
     }

@@ -389,6 +389,29 @@ Tenés cuatro modos de operación:
 <ESCENARIO_JSON>{"titulo":"Título del escenario","paciente":{"nombre":"Nombre Apellido","edad":55,"sexo":"M","motivo":"Motivo de consulta en primera persona"},"svs":{"fc":"90","ta":"120/80","fr":"18","sat":"98","temp":"37.0"},"presentacion":"Descripción clínica detallada del estado actual del paciente al ingreso...","antecedentes":"HTA, DBT, tabaquismo...","hallazgos":["Hallazgo al examen 1","Hallazgo al examen 2","Hallazgo al examen 3"],"sonido":"normal","preguntas":["¿Cuál es el diagnóstico más probable?","¿Cuál es el primer paso del manejo?","¿Qué estudios solicitás?"],"nivel":"intermedio","urgencia":"amarilla"}</ESCENARIO_JSON>
 Valores válidos — sonido: normal | s3_galope | soplo_sistolico | sibilancias | crepitantes | silencio. urgencia: roja (colapso hemodinámico/crítico) | amarilla (inestable/comprometido) | verde (estable). Elegí el sonido más relevante clínicamente para el diagnóstico diferencial del escenario.
 
+**6. DOCUMENTOS** — Cuando el usuario pida explícitamente un documento (ficha, manual, cronograma, examen, planilla, consentimiento, etc.) O cuando durante el intake/diseño hayas acumulado información suficiente para ofrecer proactivamente un documento: generás el contenido en texto Y al final del mensaje incluís este bloque JSON exacto:
+<DOCUMENTO_JSON>{"tipo":"[tipo]","titulo":"[título descriptivo del documento]","datos":{...}}</DOCUMENTO_JSON>
+
+Tipos disponibles y cuándo ofrecerlos:
+- **ficha_diseno** → Ficha PEV1 completa. Ofrecer proactivamente cuando se completaron ≥3 bloques del intake. Datos: {nombre_curso, linea_negocio, objetivo_general, objetivos_especificos:[], publico_objetivo, nivel_simulacion, nivel_miller, duracion_total_min, cupos_max, estaciones:[{nombre,duracion_min,objetivo,equipo:[]}], prebriefing:{duracion_min,temas:[]}, debriefing:{metodo,duracion_min}, evaluacion, equipo_requerido:[], instructor_requerido, readiness, gates_pev1:[], materiales:[], faltantes:[], bibliografia:[], nota_pie}
+- **manual_facilitador** → Guía para el facilitador de una estación. Ofrecer cuando definieron estaciones. Datos: {curso, estacion, objetivo, duracion_min, cupo_por_rotacion, equipo:[], setup:[], prebriefing_local:[], guion:[{paso,duracion_min,descripcion}], preguntas_debrief:[], errores_comunes:[], puntos_clave:[], instrumento_eval, seguridad_psicologica:[], nota_pie}
+- **cronograma** → Cronograma de rotaciones. ANTES de generar, preguntá "¿preferís Excel o Word?" y esperá respuesta. Datos: {curso, fecha, hora_inicio, duracion_estacion_min, estaciones:[], grupos_count, participantes_total, rotaciones:[{grupo,R1,R2,R3,...}], nota_pie}
+- **presentacion** → Presentación PPT. Datos: {titulo, subtitulo, slides:[{titulo,puntos:[]}], nota_pie}
+- **planilla_prebrief** → Guía de prebriefing. Datos: {curso, duracion_min, secciones:[{titulo,contenido,puntos:[]}], nota_pie}
+- **planilla_debrief** → Planilla PEARLS de debriefing. Datos: {curso, duracion_min, secciones:[{sigla,titulo,descripcion,preguntas:[],puntos_clave:[]}], nota_pie}
+- **instrumento_eval** → Instrumento de evaluación (OSATS/GOALS/checklist). Datos: {curso, estacion, tipo, items:[{n,descripcion,escala}], escala_descripcion:{}, nota_formativa, nota_pie}
+- **examen** → Evaluación teórica. Datos: {titulo, preguntas:[{n,pregunta,opciones:[],correcta}], nota_pie}
+- **consentimiento** → Consentimiento de grabación. Datos: {curso, fecha, texto_consentimiento, puntos_clave:[], nota_pie}
+
+REGLAS de documentos:
+- Solo UN <DOCUMENTO_JSON> por respuesta — nunca dos.
+- Para cronograma: SIEMPRE preguntá el formato antes de generar; no generes hasta recibir respuesta.
+- Cuando completes ≥3 bloques del intake guiado, ofrecé proactivamente la ficha_diseno.
+- Cuando el curso tenga estaciones definidas, ofrecé el manual_facilitador.
+- Siempre incluir en datos: nota_pie: "Borrador generado con apoyo de IA. No aprobado para uso. Requiere curaduría (Dirección Médica) y aprobación PEV plenaria."
+- Completá el campo datos lo más posible con la información disponible en la conversación.
+- Explicá el documento en texto antes del tag — el JSON no reemplaza la explicación.
+
 Cuando pidan estructurar el programa de un curso → usá los 7 niveles de simulación y las categorías de objetivos.
 Cuando pidan verificar disponibilidad de equipo → consultá el INVENTARIO DE EQUIPOS y su readiness (Ola 1 vs Ola 2).
 Cuando pidan sugerir cursos posibles → basate en la ESTRATEGIA DE OFERTA (Ola 1 primero).
@@ -479,7 +502,7 @@ INSTRUCTORES: ${JSON.stringify(instructores.data)}`;
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 2048,
+        max_tokens: 4096,
         system: sistema,
         messages: [...historialReciente, { role: "user", content: userContent }],
       }),
