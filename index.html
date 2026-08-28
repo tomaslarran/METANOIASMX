@@ -1636,6 +1636,84 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="chart-card chart-full"><div class="chart-title">Flujo mensual estimado — ingresos, egresos y neto</div><div class="chart-wrap" style="height:260px"><canvas id="chartProyeccion"></canvas></div></div>
     </div>
   </div>
+
+  <!-- ── ANALYTICS COMPETENCIAS ── -->
+  <div style="margin-top:28px" id="comp-analytics-section">
+    <div style="font-size:13px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px">📊 Competencias — Evaluación por instrumento</div>
+
+    <!-- Filtros -->
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:16px;background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:14px 16px">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:11px;font-weight:600;color:var(--tx3)">Curso</label>
+        <select id="comp-f-curso" class="sel" style="min-width:200px" onchange="loadCompetenciasAnalytics()"><option value="">Todos los cursos</option></select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:11px;font-weight:600;color:var(--tx3)">Instrumento</label>
+        <select id="comp-f-instr" class="sel" style="min-width:160px" onchange="loadCompetenciasAnalytics()"><option value="">Todos</option></select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:11px;font-weight:600;color:var(--tx3)">Desde</label>
+        <input type="date" id="comp-f-desde" class="inp" style="width:145px" onchange="loadCompetenciasAnalytics()">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:11px;font-weight:600;color:var(--tx3)">Hasta</label>
+        <input type="date" id="comp-f-hasta" class="inp" style="width:145px" onchange="loadCompetenciasAnalytics()">
+      </div>
+      <button class="btn sec" onclick="limpiarFiltrosComp()">Limpiar</button>
+    </div>
+
+    <!-- KPIs -->
+    <div id="comp-kpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px"></div>
+
+    <!-- Gráficos superiores -->
+    <div class="charts-grid" style="grid-template-columns:1fr 1fr;margin-bottom:0">
+      <div class="chart-card">
+        <div class="chart-title">Score promedio por instrumento</div>
+        <div class="chart-wrap"><canvas id="chartCompInstr"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Distribución de scores</div>
+        <div class="chart-wrap"><canvas id="chartCompDist"></canvas></div>
+      </div>
+    </div>
+    <div class="charts-grid" style="grid-template-columns:1fr;margin-top:0">
+      <div class="chart-card chart-full">
+        <div class="chart-title">Evolución temporal — score promedio del grupo</div>
+        <div class="chart-wrap" style="height:220px"><canvas id="chartCompEvol"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Tabla paginada -->
+    <div class="chart-card" style="margin-top:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="chart-title" style="margin-bottom:0">Detalle por evaluación</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span id="comp-tabla-info" style="font-size:11px;color:var(--tx3)"></span>
+          <button class="btn sec" onclick="exportCompetenciasXLS()" style="font-size:11px;padding:5px 10px">📥 Excel</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="border-bottom:1px solid var(--b)">
+              <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em">Alumno</th>
+              <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em">Curso</th>
+              <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em">Instrumento</th>
+              <th style="text-align:center;padding:8px 10px;font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em">Score</th>
+              <th style="text-align:center;padding:8px 10px;font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em">Estado</th>
+              <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em">Fecha</th>
+            </tr>
+          </thead>
+          <tbody id="comp-tabla-body"></tbody>
+        </table>
+      </div>
+      <div id="comp-pag" style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--b)"></div>
+    </div>
+
+    <div id="comp-warning" style="display:none;font-size:11px;color:var(--al);background:rgba(255,165,0,.08);border:1px solid rgba(255,165,0,.2);border-radius:8px;padding:8px 12px;margin-top:8px">
+      ⚠️ Se muestran los primeros 2.000 registros en los gráficos. Usá los filtros de fecha para acotar el análisis.
+    </div>
+  </div>
 </div>
 
 
@@ -5284,7 +5362,8 @@ function goPage(name,el){
     const loads=[];
     if(!comprobantes.length)loads.push(loadComprobantes());
     if(!cfPrestamos.length||!cfInversiones.length)loads.push(loadCF());
-    if(loads.length)Promise.all(loads).then(renderCharts);else renderCharts();
+    if(loads.length)Promise.all(loads).then(()=>{renderCharts();loadCompetenciasAnalytics();});
+    else{renderCharts();loadCompetenciasAnalytics();}
   }
   if(name==="calendario"){
     // Rol comunicaciones: solo ve cursos en el calendario
@@ -14658,6 +14737,187 @@ async function saveInflacion(periodo,campo,valor){
     }
     renderBenchmark();
   }catch(e){toast("Error al guardar: "+e.message,"err");}
+}
+
+// ── ANALYTICS COMPETENCIAS ──
+let _compPage=0,_compPageSize=50,_compTotal=0,_compSelectsInit=false;
+
+async function _initCompSelects(){
+  if(_compSelectsInit)return;
+  _compSelectsInit=true;
+  const [instrData,cursosData]=await Promise.all([
+    sb("instrumentos_evaluacion?select=id,nombre&activo=eq.true&order=nombre"),
+    sb("cursos?select=id,nombre&order=nombre.desc&limit=300")
+  ]).catch(()=>[]);
+  const fC=document.getElementById("comp-f-curso"),fI=document.getElementById("comp-f-instr");
+  if(fC&&cursosData)(cursosData||[]).forEach(c=>{const o=document.createElement("option");o.value=c.id;o.textContent=c.nombre;fC.appendChild(o);});
+  if(fI&&instrData)(instrData||[]).forEach(i=>{const o=document.createElement("option");o.value=i.id;o.textContent=i.nombre;fI.appendChild(o);});
+}
+
+function _compFilters(){
+  const curso=document.getElementById("comp-f-curso")?.value||"";
+  const instr=document.getElementById("comp-f-instr")?.value||"";
+  const desde=document.getElementById("comp-f-desde")?.value||"";
+  const hasta=document.getElementById("comp-f-hasta")?.value||"";
+  let f="";
+  if(curso)f+=`&curso_id=eq.${curso}`;
+  if(instr)f+=`&instrumento_id=eq.${instr}`;
+  if(desde)f+=`&created_at=gte.${desde}T00:00:00`;
+  if(hasta)f+=`&created_at=lte.${hasta}T23:59:59`;
+  return f;
+}
+
+async function loadCompetenciasAnalytics(resetPage=true){
+  if(curPage!=="graficos")return;
+  await _initCompSelects();
+  if(resetPage)_compPage=0;
+  const f=_compFilters();
+
+  // Query ligera para gráficos (sin items_scores, max 2000)
+  const chartData=await sb(
+    `evaluaciones_alumno?select=porcentaje,aprobado,instrumento_id,alumno_id,curso_id,created_at,instrumentos_evaluacion(nombre)${f}&order=created_at.asc&limit=2000`
+  ).catch(()=>[]);
+  const data=chartData||[];
+  const warn=document.getElementById("comp-warning");
+  if(warn)warn.style.display=data.length===2000?"":"none";
+
+  _renderCompKPIs(data);
+  _renderCompCharts(data);
+
+  // Count total para paginación
+  try{
+    const cr=await fetch(`${SB}/rest/v1/evaluaciones_alumno?select=id${f}&limit=1`,{
+      headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Prefer":"count=exact"}
+    });
+    const range=cr.headers.get("content-range");
+    if(range)_compTotal=parseInt(range.split("/")[1])||0;
+  }catch(e){_compTotal=data.length;}
+
+  // Tabla paginada con joins
+  const offset=_compPage*_compPageSize;
+  const tableData=await sb(
+    `evaluaciones_alumno?select=porcentaje,aprobado,created_at,instrumentos_evaluacion(nombre),alumnos(nombre,apellido),cursos(nombre)${f}&order=created_at.desc&limit=${_compPageSize}&offset=${offset}`
+  ).catch(()=>[]);
+  _renderCompTabla(tableData||[]);
+  _renderCompPag();
+}
+
+function _renderCompKPIs(data){
+  const el=document.getElementById("comp-kpis");if(!el)return;
+  const total=data.length;
+  const aprobados=data.filter(e=>e.aprobado).length;
+  const avg=total?Math.round(data.reduce((s,e)=>s+e.porcentaje,0)/total):0;
+  const uniq=new Set(data.map(e=>e.alumno_id)).size;
+  const kpis=[
+    {label:"Evaluaciones",val:total.toLocaleString("es-AR"),icon:"📋"},
+    {label:"Alumnos evaluados",val:uniq.toLocaleString("es-AR"),icon:"🎓"},
+    {label:"Score promedio",val:`${avg}%`,icon:"📊"},
+    {label:"Tasa de aprobación",val:total?`${Math.round(aprobados/total*100)}%`:"—",icon:"✅"},
+  ];
+  el.innerHTML=kpis.map(k=>`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:14px 16px;display:flex;align-items:center;gap:12px">
+    <div style="font-size:22px">${k.icon}</div>
+    <div><div style="font-size:20px;font-weight:800;color:var(--tx);font-variant-numeric:tabular-nums">${k.val}</div>
+    <div style="font-size:11px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">${k.label}</div></div>
+  </div>`).join("");
+}
+
+function _renderCompCharts(data){
+  const isDark=document.body.classList.contains("dark");
+  const tc=isDark?"#94a3b8":"#64748b",gc=isDark?"rgba(255,255,255,.06)":"rgba(0,0,0,.06)";
+
+  // Agrupación por instrumento
+  const byI={};
+  data.forEach(e=>{const n=e.instrumentos_evaluacion?.nombre||"Sin nombre";if(!byI[n])byI[n]=[];byI[n].push(e.porcentaje);});
+  const iLabels=Object.keys(byI);
+  const iAvgs=iLabels.map(n=>Math.round(byI[n].reduce((s,v)=>s+v,0)/byI[n].length));
+  const iColors=iAvgs.map(v=>v>=60?"#10b981":v>=40?"#f59e0b":"#ef4444");
+
+  // Chart 1: promedio por instrumento (horizontal)
+  const el1=document.getElementById("chartCompInstr");
+  if(el1){destroyChart("compInstr");charts.compInstr=new Chart(el1,{type:"bar",data:{labels:iLabels.length?iLabels:["Sin datos"],datasets:[{data:iAvgs.length?iAvgs:[0],backgroundColor:iColors,borderRadius:6}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{x:{min:0,max:100,ticks:{color:tc,callback:v=>v+"%"},grid:{color:gc}},y:{ticks:{color:tc}}}}});}
+
+  // Chart 2: distribución de scores (histograma)
+  const rangos=["0–20%","21–40%","41–60%","61–80%","81–100%"];
+  const cnt=[0,0,0,0,0];
+  data.forEach(e=>{const v=e.porcentaje;if(v<=20)cnt[0]++;else if(v<=40)cnt[1]++;else if(v<=60)cnt[2]++;else if(v<=80)cnt[3]++;else cnt[4]++;});
+  const el2=document.getElementById("chartCompDist");
+  if(el2){destroyChart("compDist");charts.compDist=new Chart(el2,{type:"bar",data:{labels:rangos,datasets:[{label:"Evaluaciones",data:cnt,backgroundColor:["#ef4444","#f97316","#f59e0b","#10b981","#059669"],borderRadius:6}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:tc}},y:{ticks:{color:tc,stepSize:1},grid:{color:gc}}}}});}
+
+  // Chart 3: evolución temporal (por semana ISO)
+  const byW={};
+  data.forEach(e=>{
+    const d=new Date(e.created_at),yr=d.getFullYear();
+    const t=new Date(d);t.setHours(0,0,0,0);t.setDate(t.getDate()+3-(t.getDay()+6)%7);
+    const w1=new Date(t.getFullYear(),0,4);
+    const wk=String(1+Math.round(((t-w1)/86400000-3+(w1.getDay()+6)%7)/7)).padStart(2,"0");
+    const key=`${yr}-S${wk}`;
+    if(!byW[key])byW[key]=[];byW[key].push(e.porcentaje);
+  });
+  const wkL=Object.keys(byW).sort();
+  const wkA=wkL.map(k=>Math.round(byW[k].reduce((s,v)=>s+v,0)/byW[k].length));
+  const el3=document.getElementById("chartCompEvol");
+  if(el3){destroyChart("compEvol");charts.compEvol=new Chart(el3,{type:"line",data:{labels:wkL.length?wkL:["Sin datos"],datasets:[{label:"Score %",data:wkA.length?wkA:[0],borderColor:"#7c3aed",backgroundColor:"rgba(124,58,237,.1)",fill:true,tension:0.3,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:tc,maxTicksLimit:14}},y:{min:0,max:100,ticks:{color:tc,callback:v=>v+"%"},grid:{color:gc}}}}});}
+}
+
+function _renderCompTabla(data){
+  const tbody=document.getElementById("comp-tabla-body"),info=document.getElementById("comp-tabla-info");
+  if(!tbody)return;
+  if(info){const from=_compPage*_compPageSize+1,to=Math.min((_compPage+1)*_compPageSize,_compTotal);info.textContent=_compTotal?`${from}–${to} de ${_compTotal.toLocaleString("es-AR")}`:"";}
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--tx3);font-size:13px">Sin evaluaciones para estos filtros</td></tr>`;return;}
+  tbody.innerHTML=data.map(e=>{
+    const nombre=e.alumnos?`${esc(e.alumnos.nombre||"")} ${esc(e.alumnos.apellido||"")}`.trim():"—";
+    const pct=Math.round(e.porcentaje??0);
+    const color=pct>=60?"var(--ve)":pct>=40?"var(--al)":"var(--re)";
+    const badge=e.aprobado?`<span style="background:rgba(16,185,129,.12);color:#10b981;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">Aprobado</span>`:`<span style="background:rgba(239,68,68,.12);color:#ef4444;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">No aprobado</span>`;
+    const fecha=e.created_at?new Date(e.created_at).toLocaleDateString("es-AR"):"—";
+    return`<tr style="border-bottom:1px solid var(--b)">
+      <td style="padding:8px 10px">${nombre}</td>
+      <td style="padding:8px 10px;color:var(--tx2);font-size:12px">${esc(e.cursos?.nombre||"—")}</td>
+      <td style="padding:8px 10px;color:var(--tx2);font-size:12px">${esc(e.instrumentos_evaluacion?.nombre||"—")}</td>
+      <td style="padding:8px 10px;text-align:center;font-weight:700;color:${color};font-variant-numeric:tabular-nums">${pct}%</td>
+      <td style="padding:8px 10px;text-align:center">${badge}</td>
+      <td style="padding:8px 10px;font-size:12px;color:var(--tx3)">${fecha}</td>
+    </tr>`;
+  }).join("");
+}
+
+function _renderCompPag(){
+  const el=document.getElementById("comp-pag");if(!el)return;
+  const total=Math.ceil(_compTotal/_compPageSize);
+  if(total<=1){el.innerHTML="";return;}
+  let h="";
+  if(_compPage>0)h+=`<button class="btn sec" style="font-size:12px;padding:5px 12px" onclick="_compPage--;loadCompetenciasAnalytics(false)">← Anterior</button>`;
+  h+=`<span style="font-size:12px;color:var(--tx3)">Página ${_compPage+1} de ${total}</span>`;
+  if(_compPage<total-1)h+=`<button class="btn sec" style="font-size:12px;padding:5px 12px" onclick="_compPage++;loadCompetenciasAnalytics(false)">Siguiente →</button>`;
+  el.innerHTML=h;
+}
+
+function limpiarFiltrosComp(){
+  ["comp-f-curso","comp-f-instr"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  ["comp-f-desde","comp-f-hasta"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  loadCompetenciasAnalytics();
+}
+
+async function exportCompetenciasXLS(){
+  if(typeof XLSX==="undefined"){
+    await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+  }
+  toast("Generando Excel...","inf");
+  const f=_compFilters();
+  const all=await sb(`evaluaciones_alumno?select=porcentaje,aprobado,created_at,instrumentos_evaluacion(nombre),alumnos(nombre,apellido),cursos(nombre)${f}&order=created_at.desc&limit=10000`).catch(()=>[]);
+  const rows=(all||[]).map(e=>({
+    "Alumno":e.alumnos?`${e.alumnos.nombre||""} ${e.alumnos.apellido||""}`.trim():"",
+    "Curso":e.cursos?.nombre||"",
+    "Instrumento":e.instrumentos_evaluacion?.nombre||"",
+    "Score %":Math.round(e.porcentaje??0),
+    "Aprobado":e.aprobado?"Sí":"No",
+    "Fecha":e.created_at?new Date(e.created_at).toLocaleDateString("es-AR"):"",
+  }));
+  const ws=XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"Competencias");
+  XLSX.writeFile(wb,`competencias_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast("Excel generado","ok");
 }
 
 function renderRendStats(){
