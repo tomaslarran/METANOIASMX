@@ -21411,8 +21411,12 @@ async function renderComMensajes(){
     });
     const terminados=convs.filter(c=>{
       if(c.escalado)return false;
+      // Terminado: algún mensaje tiene estado "cerrado" (usuario confirmó que está todo bien)
+      // o la última respuesta es del equipo (manual)
+      const tieneCerrado=c.msgs.some(m=>m.estado==="cerrado");
       const ultimoMsg=c.msgs[0];
-      return!ultimoMsg||ultimoMsg.es_respuesta_manual||(ultimoMsg.respuesta&&ultimoMsg.respuesta!=="");
+      const ultimaEsManual=ultimoMsg?.es_respuesta_manual===true;
+      return tieneCerrado||ultimaEsManual;
     });
     document.getElementById("msg-badge-escalados").textContent=escalados.length;
     document.getElementById("msg-badge-inconclusos").textContent=inconclusos.length;

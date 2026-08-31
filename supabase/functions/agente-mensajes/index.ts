@@ -390,6 +390,7 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
   }
 
   let escalado = false;
+  let cerrado = false;
   let motivoEscalado: string | null = null;
   let respuesta = rawResp;
 
@@ -414,13 +415,20 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
       const notif = `🚨 *Consulta derivada — Metanoia SMX*\n\n*De:* ${fromName}\n*Canal:* ${platLabel}\n*Mensaje:* "${texto}"\n*Motivo:* ${motivoEscalado}\n\nResponder por ${platLabel}.`;
       await sendEscalacion(notif);
     }
+
+    // Conversación cerrada explícitamente por el usuario
+    if (parsed.cerrar === true) {
+      cerrado = true;
+      respuesta = parsed.mensaje ?? "¡Hasta pronto! Cualquier consulta que tengas, acá estamos 😊";
+    }
   } catch (_) {}
 
   await sendReply(respuesta);
 
   if (idsPendientes.length > 0) {
+    const estadoFinal = escalado ? "escalado" : cerrado ? "cerrado" : "respondido";
     await supabase.from("mensajes_publico")
-      .update({ respuesta, escalado, motivo_escalado: motivoEscalado, estado: escalado ? "escalado" : "respondido" })
+      .update({ respuesta, escalado, motivo_escalado: motivoEscalado, estado: estadoFinal })
       .in("id", idsPendientes);
   }
 }
@@ -662,20 +670,29 @@ Ejemplo: "¡Gracias por compartir! 🙌 Nos alegra mucho el apoyo." / "¡Qué bu
 - Para respuestas normales: texto plano. NUNCA uses JSON salvo para ignorar o escalar.
 - NUNCA uses markdown en las respuestas: sin asteriscos (**), sin guiones como bullets, sin #. Los links van siempre solos, sin ningún carácter extra alrededor.
 
+### Cómo cerrar una conversación
+Cuando la consulta del usuario quedó resuelta, antes de despedirte siempre preguntá: "¿Hay algo más en lo que te pueda ayudar? 😊"
+
+Si el usuario responde que no, que está todo bien, que gracias, o cualquier señal de cierre (ej: "no, listo", "era eso", "todo bien", "gracias, eso era todo", "ok perfecto", etc.):
+Respondé ÚNICAMENTE con este JSON:
+{"cerrar":true,"mensaje":"¡Perfecto! Cualquier consulta que tengas, por acá estamos. ¡Hasta pronto! 😊"}
+
+Podés variar levemente el mensaje de cierre para que no suene robótico.
+
 ### Mensajes a ignorar — respondé ÚNICAMENTE con {"ignorar":true}
 - Autorespuestas de otras empresas o bots
 - Mensajes que claramente no tienen intención real de contacto con Metanoia (spam, cadenas, notificaciones automáticas)
 
 ### Cuándo escalar — respondé ÚNICAMENTE con el JSON de escalación
-Derivá cuando:
-- Recopilaste email/datos de alguien interesado en inscribirse
-- El usuario pide hablar con una persona explícitamente
+Escalá SOLO cuando el usuario dejó sus datos de contacto (email, teléfono, nombre) para que el equipo se comunique, o pidió hablar con una persona explícitamente.
+También escalá en:
 - Reclamo, queja o situación de conflicto
 - Descuento especial, convenio institucional, nota de crédito
 - Pagos realizados, devoluciones o facturas
 - Consulta médica clínica (síntomas, diagnósticos, tratamientos)
-- La pregunta está fuera de tu conocimiento
 - El usuario está muy frustrado o urgente
+
+NO escalés solo porque la pregunta sea difícil o esté fuera de tu conocimiento — en ese caso respondé lo que puedas y ofrecé conectarlos con el equipo si quieren más info.
 
 JSON de escalación (sin texto adicional):
 {"escalar":true,"motivo":"descripción breve con datos del usuario si los tenés","mensaje_usuario":"¡Perfecto! Le paso tus datos al equipo y en breve se comunican con vos. 😊"}
