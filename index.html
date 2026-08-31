@@ -1336,6 +1336,14 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       </div>
       <div id="msg-lista-inconclusos" style="border:1px solid #F59E0B;border-radius:10px;overflow:hidden"></div>
     </div>
+    <div id="msg-sec-gestionadas" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;cursor:pointer" onclick="toggleMsgSec('gestionadas')">
+        <span style="font-weight:700;font-size:14px;color:#6366F1">📋 Gestionadas</span>
+        <span id="msg-badge-gestionadas" style="background:#6366F1;color:#fff;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:700">0</span>
+        <span id="msg-ico-gestionadas" style="color:var(--tx3);font-size:13px;margin-left:auto">▶</span>
+      </div>
+      <div id="msg-lista-gestionadas" style="display:none;border:1px solid #6366F1;border-radius:10px;overflow:hidden"></div>
+    </div>
     <div id="msg-sec-terminados">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;cursor:pointer" onclick="toggleMsgSec('terminados')">
         <span style="font-weight:700;font-size:14px;color:#10B981">✅ Terminados</span>
@@ -21323,25 +21331,42 @@ function toggleMsgSec(sec){
   if(ico)ico.textContent=abierto?"▶":"▼";
 }
 
-function _renderConvList(convs,platIcon){
+function _renderConvList(convs,platIcon,mostrarGestionar){
   if(!convs.length)return'<div style="padding:14px 16px;color:var(--tx3);font-size:13px;text-align:center">Sin conversaciones</div>';
   return convs.map(c=>{
-    const ultimo=c.msgs[c.msgs.length-1];
-    const preview=(ultimo?.mensaje||"").slice(0,65)+(( ultimo?.mensaje?.length||0)>65?"…":"");
+    const ultimo=c.msgs[0]; // msgs vienen desc, [0] es el más nuevo
+    const preview=(ultimo?.mensaje||"").slice(0,65)+((ultimo?.mensaje?.length||0)>65?"…":"");
     const fecha=c.ultimo?new Date(c.ultimo).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
-    return`<div onclick="abrirConvMsg('${c.from_id}','${c.plataforma}')" style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--b);cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      <div style="font-size:22px;flex-shrink:0">${platIcon[c.plataforma]||"💬"}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:13px;margin-bottom:2px">${esc(c.from_name||c.from_id)}</div>
-        <div style="color:var(--tx3);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(preview)||"—"}</div>
+    const btnGestionar=mostrarGestionar
+      ?`<button onclick="event.stopPropagation();marcarGestionada('${c.from_id}','${c.plataforma}')" style="flex-shrink:0;background:#10B981;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap">✓ Gestionar</button>`
+      :"";
+    return`<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--b);cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <div onclick="abrirConvMsg('${c.from_id}','${c.plataforma}')" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+        <div style="font-size:22px;flex-shrink:0">${platIcon[c.plataforma]||"💬"}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:13px;margin-bottom:2px">${esc(c.from_name||c.from_id)}</div>
+          <div style="color:var(--tx3);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(preview)||"—"}</div>
+        </div>
+        <div style="flex-shrink:0;text-align:right;padding-right:4px">
+          <div style="color:var(--tx3);font-size:11px">${fecha}</div>
+          <div style="color:var(--tx2);font-size:11px;margin-top:2px">${c.msgs.length} msg${c.msgs.length!==1?"s":""}</div>
+        </div>
       </div>
-      <div style="flex-shrink:0;text-align:right">
-        <div style="color:var(--tx3);font-size:11px">${fecha}</div>
-        <div style="color:var(--tx2);font-size:11px;margin-top:2px">${c.msgs.length} msg${c.msgs.length!==1?"s":""}</div>
-      </div>
-      <div style="color:var(--tx3);font-size:18px">›</div>
+      ${btnGestionar}
+      <div onclick="abrirConvMsg('${c.from_id}','${c.plataforma}')" style="color:var(--tx3);font-size:18px;flex-shrink:0">›</div>
     </div>`;
   }).join("");
+}
+
+function marcarGestionada(fromId,plataforma){
+  try{
+    const key=`${plataforma}||${fromId}`;
+    const lista=JSON.parse(localStorage.getItem("msg_gestionadas")||"[]");
+    if(!lista.includes(key))lista.push(key);
+    localStorage.setItem("msg_gestionadas",JSON.stringify(lista));
+    renderComMensajes();
+    toast("Conversación marcada como gestionada ✓","ok");
+  }catch(e){toast("Error: "+e.message,"err");}
 }
 
 async function renderComMensajes(){
@@ -21349,6 +21374,7 @@ async function renderComMensajes(){
   const listaEsc=document.getElementById("msg-lista-escalados");
   const listaInc=document.getElementById("msg-lista-inconclusos");
   const listaTer=document.getElementById("msg-lista-terminados");
+  const listaGes=document.getElementById("msg-lista-gestionadas");
   if(!listaEsc)return;
   listaEsc.innerHTML='<div class="loading" style="padding:12px"><div class="loader"></div></div>';
   try{
@@ -21356,27 +21382,46 @@ async function renderComMensajes(){
     let q="mensajes_publico?order=created_at.desc&limit=500";
     if(plat)q+=`&plataforma=eq.${plat}`;
     const msgs=await sb(q)||[];
+    const gestionadas=JSON.parse(localStorage.getItem("msg_gestionadas")||"[]");
     // Agrupar por conversación
     const convMap={};
     for(const m of msgs){
       const key=`${m.plataforma}||${m.from_id}`;
-      if(!convMap[key]){convMap[key]={plataforma:m.plataforma,from_id:m.from_id,from_name:m.from_name,msgs:[],escalado:false,tienePendiente:false,ultimo:m.created_at};}
+      if(!convMap[key]){convMap[key]={plataforma:m.plataforma,from_id:m.from_id,from_name:m.from_name,msgs:[],escalado:false,ultimo:m.created_at};}
       convMap[key].msgs.push(m);
-      if(m.estado==="escalado")convMap[key].escalado=true;
-      if(m.estado==="pendiente")convMap[key].tienePendiente=true;
+      if(m.escalado===true)convMap[key].escalado=true; // campo boolean, no estado
       if(m.created_at>convMap[key].ultimo)convMap[key].ultimo=m.created_at;
     }
     const convs=Object.values(convMap).sort((a,b)=>new Date(b.ultimo)-new Date(a.ultimo));
-    const escalados=convs.filter(c=>c.escalado);
-    const inconclusos=convs.filter(c=>!c.escalado&&c.tienePendiente);
-    const terminados=convs.filter(c=>!c.escalado&&!c.tienePendiente);
     const platIcon={whatsapp:"📱",instagram:"📸",facebook:"👤"};
+    // Clasificar
+    const escalados=convs.filter(c=>{
+      if(!c.escalado)return false;
+      return!gestionadas.includes(`${c.plataforma}||${c.from_id}`);
+    });
+    const gest=convs.filter(c=>{
+      if(!c.escalado)return false;
+      return gestionadas.includes(`${c.plataforma}||${c.from_id}`);
+    });
+    const inconclusos=convs.filter(c=>{
+      if(c.escalado)return false;
+      // Inconcluso: el mensaje más nuevo no tiene respuesta del bot y no es del equipo
+      const ultimoMsg=c.msgs[0];
+      return ultimoMsg&&!ultimoMsg.es_respuesta_manual&&(!ultimoMsg.respuesta||ultimoMsg.respuesta==="");
+    });
+    const terminados=convs.filter(c=>{
+      if(c.escalado)return false;
+      const ultimoMsg=c.msgs[0];
+      return!ultimoMsg||ultimoMsg.es_respuesta_manual||(ultimoMsg.respuesta&&ultimoMsg.respuesta!=="");
+    });
     document.getElementById("msg-badge-escalados").textContent=escalados.length;
     document.getElementById("msg-badge-inconclusos").textContent=inconclusos.length;
     document.getElementById("msg-badge-terminados").textContent=terminados.length;
-    listaEsc.innerHTML=_renderConvList(escalados,platIcon);
-    if(listaInc)listaInc.innerHTML=_renderConvList(inconclusos,platIcon);
-    if(listaTer)listaTer.innerHTML=_renderConvList(terminados,platIcon);
+    document.getElementById("msg-badge-gestionadas").textContent=gest.length;
+    listaEsc.innerHTML=_renderConvList(escalados,platIcon,true);
+    if(listaInc)listaInc.innerHTML=_renderConvList(inconclusos,platIcon,false);
+    if(listaTer)listaTer.innerHTML=_renderConvList(terminados,platIcon,false);
+    if(listaGes)listaGes.innerHTML=_renderConvList(gest,platIcon,false);
   }catch(e){listaEsc.innerHTML=`<div style="padding:12px;color:#EF4444;font-size:13px">Error: ${e.message}</div>`;}
 }
 
