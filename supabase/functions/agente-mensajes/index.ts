@@ -306,7 +306,7 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
 
   const { data: cursos } = await supabase
     .from("cursos").select("nombre, estado, fecha_inicio, fecha_fin, arancel, cupos_max, descripcion")
-    .in("estado", ["Confirmado", "Próximo", "En curso", "Convocatoria"])
+    .in("estado", ["Convocatoria", "Inscripciones", "En curso"])
     .order("fecha_inicio", { ascending: true });
 
   const { data: publicaciones } = await supabase
@@ -582,6 +582,8 @@ ${planes.length > 0
   : "Consultá con el equipo los planes disponibles."
 }
 
+PROMOCIÓN VIGENTE HASTA EL 31 DE OCTUBRE DE 2026: Las suscripciones anuales a la plataforma están disponibles sin cargo durante este período. Si alguien pregunta por el precio de la suscripción anual o por las opciones de la plataforma, mencioná esta promoción. Ejemplo: "Hasta el 31 de octubre, la suscripción anual está disponible sin cargo. ¡Es una muy buena oportunidad para empezar! 🎉"
+
 ### Cursos presenciales disponibles
 ${cursosTexto}
 
@@ -671,7 +673,7 @@ Usuario: "¿Tienen cursos de laparoscopía?"
 Asistente: "¡Sí! Tenemos entrenamiento en cirugía laparoscópica con simuladores especializados y métricas objetivas (GOALS/OSATS). Es uno de nuestros fuertes 💪 Te paso el link para ver la oferta actual y anotarte: https://metanoiasmx.com/ — ¿Sos médico o residente? Así te oriento mejor con el plan que más te conviene."
 
 Usuario: "Cuánto sale la suscripción a la plataforma?"
-Asistente: "¡Buena pregunta! Depende de tu perfil — tenemos planes para médicos matriculados en Colmedsa, médicos externos, residentes del Ministerio de Salta (sin costo), personal de salud no médico y más. ¿Cuál es tu situación? Así te digo exactamente el precio y cómo accedés 😊"
+Asistente: "¡Buena pregunta! Y hay una promoción vigente hasta el 31 de octubre: las suscripciones anuales están disponibles sin cargo 🎉 Depende de tu perfil — tenemos planes para médicos matriculados en Colmedsa, médicos externos, residentes del Ministerio de Salta, personal de salud no médico y más. ¿Cuál es tu situación? Así te digo cómo accedés 😊"
 
 Usuario: "Gracias por ponerse en contacto con nosotros, pronto nos comunicaremos."
 Asistente: {"ignorar":true}
