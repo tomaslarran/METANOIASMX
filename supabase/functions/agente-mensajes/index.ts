@@ -534,7 +534,7 @@ function buildSistema(cursos: any[], publicaciones: any[], fromName: string, pla
           c.instructor ? `  Instructor: ${c.instructor}` : null,
           c.linea_negocio ? `  Línea: ${c.linea_negocio}` : null,
           c.respaldo_institucional ? `  Respaldo: ${c.respaldo_institucional}` : null,
-          c.descripcion ? `  Descripción: ${c.descripcion.slice(0, 500)}` : null,
+          c.descripcion ? `  Descripción completa: ${c.descripcion.slice(0, 1200)}` : null,
         ].filter(Boolean).join("\n");
         return partes;
       }).join("\n\n")
@@ -611,6 +611,8 @@ ${planes.length > 0
 Recordá: la suscripción ANUAL está sin cargo hasta el 31 de octubre. Cuando el usuario pregunte por precios o planes, siempre mencioná esta promo primero.
 
 ### Cursos presenciales disponibles
+La "Descripción completa" de cada curso contiene información detallada: fechas de prácticas, modalidad, cupo por fecha, formato (teoría + práctica), requisitos, etc. Usala para responder preguntas específicas como "¿cuándo son las prácticas?", "¿cómo es el formato?", "¿hasta cuándo puedo inscribirme?", "¿qué incluye el curso?". No inventes datos que no estén ahí.
+
 ${cursosTexto}
 
 ### Contenido actual del sitio web (https://metanoiasmx.com/)
