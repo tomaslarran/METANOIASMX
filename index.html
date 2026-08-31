@@ -21340,11 +21340,15 @@ function _renderConvList(convs,platIcon,mostrarGestionar){
     const btnGestionar=mostrarGestionar
       ?`<button onclick="event.stopPropagation();marcarGestionada('${c.from_id}','${c.plataforma}')" style="flex-shrink:0;background:#10B981;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap">✓ Gestionar</button>`
       :"";
+    const badgeCerrado=c.cerrado?`<span style="background:#10B981;color:#fff;border-radius:999px;padding:1px 7px;font-size:10px;font-weight:700">cerrado</span>`:"";
     return`<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--b);cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
       <div onclick="abrirConvMsg('${c.from_id}','${c.plataforma}')" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
         <div style="font-size:22px;flex-shrink:0">${platIcon[c.plataforma]||"💬"}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:13px;margin-bottom:2px">${esc(c.from_name||c.from_id)}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+            <span style="font-weight:700;font-size:13px">${esc(c.from_name||c.from_id)}</span>
+            ${badgeCerrado}
+          </div>
           <div style="color:var(--tx3);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(preview)||"—"}</div>
         </div>
         <div style="flex-shrink:0;text-align:right;padding-right:4px">
@@ -21387,36 +21391,30 @@ async function renderComMensajes(){
     const convMap={};
     for(const m of msgs){
       const key=`${m.plataforma}||${m.from_id}`;
-      if(!convMap[key]){convMap[key]={plataforma:m.plataforma,from_id:m.from_id,from_name:m.from_name,msgs:[],escalado:false,ultimo:m.created_at};}
+      if(!convMap[key]){convMap[key]={plataforma:m.plataforma,from_id:m.from_id,from_name:m.from_name,msgs:[],escalado:false,cerrado:false,ultimo:m.created_at};}
       convMap[key].msgs.push(m);
-      if(m.escalado===true)convMap[key].escalado=true; // campo boolean, no estado
+      if(m.escalado===true)convMap[key].escalado=true;
+      if(m.estado==="cerrado")convMap[key].cerrado=true;
       if(m.created_at>convMap[key].ultimo)convMap[key].ultimo=m.created_at;
     }
     const convs=Object.values(convMap).sort((a,b)=>new Date(b.ultimo)-new Date(a.ultimo));
     const platIcon={whatsapp:"📱",instagram:"📸",facebook:"👤"};
     // Clasificar
-    const escalados=convs.filter(c=>{
-      if(!c.escalado)return false;
-      return!gestionadas.includes(`${c.plataforma}||${c.from_id}`);
-    });
-    const gest=convs.filter(c=>{
-      if(!c.escalado)return false;
-      return gestionadas.includes(`${c.plataforma}||${c.from_id}`);
-    });
+    const escalados=convs.filter(c=>c.escalado&&!gestionadas.includes(`${c.plataforma}||${c.from_id}`));
+    const gest=convs.filter(c=>c.escalado&&gestionadas.includes(`${c.plataforma}||${c.from_id}`));
     const inconclusos=convs.filter(c=>{
       if(c.escalado)return false;
-      // Inconcluso: el mensaje más nuevo no tiene respuesta del bot y no es del equipo
       const ultimoMsg=c.msgs[0];
+      // Inconcluso: último mensaje no tiene respuesta del bot y no es del equipo
       return ultimoMsg&&!ultimoMsg.es_respuesta_manual&&(!ultimoMsg.respuesta||ultimoMsg.respuesta==="");
     });
+    // Terminados: todo lo que no es escalado ni inconcluso (catch-all)
+    // Los explícitamente cerrados (c.cerrado) se distinguen visualmente en el render
     const terminados=convs.filter(c=>{
       if(c.escalado)return false;
-      // Terminado: algún mensaje tiene estado "cerrado" (usuario confirmó que está todo bien)
-      // o la última respuesta es del equipo (manual)
-      const tieneCerrado=c.msgs.some(m=>m.estado==="cerrado");
       const ultimoMsg=c.msgs[0];
-      const ultimaEsManual=ultimoMsg?.es_respuesta_manual===true;
-      return tieneCerrado||ultimaEsManual;
+      const esInconcluso=ultimoMsg&&!ultimoMsg.es_respuesta_manual&&(!ultimoMsg.respuesta||ultimoMsg.respuesta==="");
+      return!esInconcluso;
     });
     document.getElementById("msg-badge-escalados").textContent=escalados.length;
     document.getElementById("msg-badge-inconclusos").textContent=inconclusos.length;
