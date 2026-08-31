@@ -1344,6 +1344,14 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       </div>
       <div id="msg-lista-gestionadas" style="display:none;border:1px solid #6366F1;border-radius:10px;overflow:hidden"></div>
     </div>
+    <div id="msg-sec-enproceso" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;cursor:pointer" onclick="toggleMsgSec('enproceso')">
+        <span style="font-weight:700;font-size:14px;color:#3B82F6">💬 En proceso</span>
+        <span id="msg-badge-enproceso" style="background:#3B82F6;color:#fff;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:700">0</span>
+        <span id="msg-ico-enproceso" style="color:var(--tx3);font-size:13px;margin-left:auto">▼</span>
+      </div>
+      <div id="msg-lista-enproceso" style="border:1px solid #3B82F6;border-radius:10px;overflow:hidden"></div>
+    </div>
     <div id="msg-sec-terminados">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;cursor:pointer" onclick="toggleMsgSec('terminados')">
         <span style="font-weight:700;font-size:14px;color:#10B981">✅ Terminados</span>
@@ -21377,6 +21385,7 @@ async function renderComMensajes(){
   if(msgConvActual)return renderMsgDetalle(msgConvActual.fromId,msgConvActual.plataforma);
   const listaEsc=document.getElementById("msg-lista-escalados");
   const listaInc=document.getElementById("msg-lista-inconclusos");
+  const listaEnP=document.getElementById("msg-lista-enproceso");
   const listaTer=document.getElementById("msg-lista-terminados");
   const listaGes=document.getElementById("msg-lista-gestionadas");
   if(!listaEsc)return;
@@ -21408,27 +21417,31 @@ async function renderComMensajes(){
       // Inconcluso: último mensaje no tiene respuesta del bot y no es del equipo
       return ultimoMsg&&!ultimoMsg.es_respuesta_manual&&(!ultimoMsg.respuesta||ultimoMsg.respuesta==="");
     });
-    // Terminados: todo lo que no es escalado ni inconcluso (catch-all)
-    // Los explícitamente cerrados (c.cerrado) se distinguen visualmente en el render
-    const terminados=convs.filter(c=>{
+    // En proceso: el bot respondió, pero NO está cerrado explícitamente
+    const enProceso=convs.filter(c=>{
       if(c.escalado)return false;
+      if(c.cerrado)return false;
       const ultimoMsg=c.msgs[0];
       const esInconcluso=ultimoMsg&&!ultimoMsg.es_respuesta_manual&&(!ultimoMsg.respuesta||ultimoMsg.respuesta==="");
       return!esInconcluso;
     });
+    // Terminados: solo los cerrados explícitamente (estado='cerrado')
+    const terminados=convs.filter(c=>!c.escalado&&c.cerrado);
     document.getElementById("msg-badge-escalados").textContent=escalados.length;
     document.getElementById("msg-badge-inconclusos").textContent=inconclusos.length;
+    document.getElementById("msg-badge-enproceso").textContent=enProceso.length;
     document.getElementById("msg-badge-terminados").textContent=terminados.length;
     document.getElementById("msg-badge-gestionadas").textContent=gest.length;
     listaEsc.innerHTML=_renderConvList(escalados,platIcon,true);
     if(listaInc)listaInc.innerHTML=_renderConvList(inconclusos,platIcon,false);
+    if(listaEnP)listaEnP.innerHTML=_renderConvList(enProceso,platIcon,false);
     if(listaTer)listaTer.innerHTML=_renderConvList(terminados,platIcon,false);
     if(listaGes)listaGes.innerHTML=_renderConvList(gest,platIcon,false);
   }catch(e){listaEsc.innerHTML=`<div style="padding:12px;color:#EF4444;font-size:13px">Error: ${e.message}</div>`;}
 }
 
 function _msgShowDetalle(show){
-  ["msg-sec-escalados","msg-sec-inconclusos","msg-sec-terminados"].forEach(id=>{
+  ["msg-sec-escalados","msg-sec-inconclusos","msg-sec-enproceso","msg-sec-terminados"].forEach(id=>{
     const el=document.getElementById(id);
     if(el)el.style.display=show?"none":"";
   });
