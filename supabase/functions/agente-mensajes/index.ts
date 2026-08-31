@@ -305,7 +305,7 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
     .order("created_at", { ascending: false }).limit(5);
 
   const { data: cursos } = await supabase
-    .from("cursos").select("nombre, estado, fecha_inicio, fecha_fin, arancel, cupos_max, descripcion")
+    .from("cursos").select("nombre, estado, fecha_inicio, fecha_fin, arancel, cupos_max, descripcion, instructor, linea_negocio, desc_colegio, recurrencia, respaldo_institucional")
     .in("estado", ["Convocatoria", "Inscripciones", "En curso"])
     .order("fecha_inicio", { ascending: true });
 
@@ -510,10 +510,26 @@ async function fetchWebContent(url: string): Promise<string> {
 function buildSistema(cursos: any[], publicaciones: any[], fromName: string, plataforma: string, mejoras: any[] = [], planes: any[] = [], siteContent = ""): string {
   const hoy = new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Salta" });
 
+  const fmtFecha = (f: string | null) => {
+    if (!f) return "a confirmar";
+    const d = new Date(f + "T12:00:00");
+    return d.toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Argentina/Salta" });
+  };
+
   const cursosTexto = cursos.length > 0
-    ? cursos.map(c =>
-        `• ${c.nombre} | ${c.estado} | Inicio: ${c.fecha_inicio ?? "a confirmar"} | Arancel: ${c.arancel ? "$" + Number(c.arancel).toLocaleString("es-AR") : "a consultar"}`
-      ).join("\n")
+    ? cursos.map((c: any) => {
+        const partes = [
+          `• ${c.nombre} [${c.estado}]`,
+          `  Inicio: ${fmtFecha(c.fecha_inicio)} — Fin: ${fmtFecha(c.fecha_fin)}`,
+          `  Arancel: ${c.arancel ? "$" + Number(c.arancel).toLocaleString("es-AR") : "a consultar"}${c.desc_colegio ? ` (descuento Colmedsa: ${c.desc_colegio}%)` : ""}`,
+          `  Cupos máximos: ${c.cupos_max ?? "a confirmar"}`,
+          c.instructor ? `  Instructor: ${c.instructor}` : null,
+          c.linea_negocio ? `  Línea: ${c.linea_negocio}` : null,
+          c.respaldo_institucional ? `  Respaldo: ${c.respaldo_institucional}` : null,
+          c.descripcion ? `  Descripción: ${c.descripcion.slice(0, 500)}` : null,
+        ].filter(Boolean).join("\n");
+        return partes;
+      }).join("\n\n")
     : "No hay cursos próximos publicados en este momento.";
 
   const pubTexto = publicaciones.length > 0
