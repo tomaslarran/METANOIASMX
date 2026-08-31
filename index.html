@@ -1317,16 +1317,34 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <option value="instagram">Instagram</option>
         <option value="facebook">Facebook</option>
       </select>
-      <select id="msg-fil-estado" onchange="renderComMensajes()" style="padding:6px 10px;border:1px solid var(--b);border-radius:6px;background:var(--surf);color:var(--tx);font-size:13px">
-        <option value="">Todos</option>
-        <option value="respondido">Respondidos</option>
-        <option value="escalado">Escalados</option>
-        <option value="pendiente">Pendientes</option>
-      </select>
-      <span id="msg-badge-escalados" style="display:none;background:#EF4444;color:#fff;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700"></span>
       <button class="btn" style="margin-left:auto" onclick="renderComMensajes()">↻ Actualizar</button>
     </div>
-    <div id="com-msg-lista"></div>
+    <!-- Secciones de mensajes -->
+    <div id="msg-sec-escalados" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;cursor:pointer" onclick="toggleMsgSec('escalados')">
+        <span style="font-weight:700;font-size:14px;color:#EF4444">🚨 Escalados</span>
+        <span id="msg-badge-escalados" style="background:#EF4444;color:#fff;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:700">0</span>
+        <span id="msg-ico-escalados" style="color:var(--tx3);font-size:13px;margin-left:auto">▼</span>
+      </div>
+      <div id="msg-lista-escalados" style="border:1px solid #EF4444;border-radius:10px;overflow:hidden"></div>
+    </div>
+    <div id="msg-sec-inconclusos" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;cursor:pointer" onclick="toggleMsgSec('inconclusos')">
+        <span style="font-weight:700;font-size:14px;color:#F59E0B">⏳ Inconclusos</span>
+        <span id="msg-badge-inconclusos" style="background:#F59E0B;color:#fff;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:700">0</span>
+        <span id="msg-ico-inconclusos" style="color:var(--tx3);font-size:13px;margin-left:auto">▼</span>
+      </div>
+      <div id="msg-lista-inconclusos" style="border:1px solid #F59E0B;border-radius:10px;overflow:hidden"></div>
+    </div>
+    <div id="msg-sec-terminados">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;cursor:pointer" onclick="toggleMsgSec('terminados')">
+        <span style="font-weight:700;font-size:14px;color:#10B981">✅ Terminados</span>
+        <span id="msg-badge-terminados" style="background:#10B981;color:#fff;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:700">0</span>
+        <span id="msg-ico-terminados" style="color:var(--tx3);font-size:13px;margin-left:auto">▶</span>
+      </div>
+      <div id="msg-lista-terminados" style="display:none;border:1px solid #10B981;border-radius:10px;overflow:hidden"></div>
+    </div>
+    <div id="com-msg-lista" style="display:none"></div>
   </div>
 </div>
 
@@ -3433,24 +3451,24 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
     <!-- PASO 1: Upload -->
     <div id="ap-step1">
-      <div style="font-size:13px;color:var(--tx2);margin-bottom:14px">Subí una foto, captura o PDF del resumen del préstamo. La IA va a extraer fechas, cuotas, capital e intereses.</div>
+      <div style="font-size:13px;color:var(--tx2);margin-bottom:14px">Subí fotos o capturas del cronograma (podés agregar varias si ocupa varias pantallas). También acepta PDF.</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
         <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border:2px dashed var(--b);border-radius:10px;padding:22px 12px;cursor:pointer;color:var(--tx3);transition:border-color .2s" ondragover="event.preventDefault()" ondrop="apHandleDrop(event)">
           <span style="font-size:28px">📷</span>
-          <span style="font-size:13px;font-weight:500;color:var(--tx2)">Foto o imagen</span>
-          <span style="font-size:11px">JPG, PNG, WEBP</span>
-          <input type="file" accept="image/*" style="display:none" onchange="apHandleFile(this.files[0])">
+          <span style="font-size:13px;font-weight:500;color:var(--tx2)">Fotos / imágenes</span>
+          <span style="font-size:11px">Podés seleccionar varias</span>
+          <input type="file" accept="image/*" multiple style="display:none" onchange="apHandleFiles(this.files)">
         </label>
         <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border:2px dashed var(--b);border-radius:10px;padding:22px 12px;cursor:pointer;color:var(--tx3);transition:border-color .2s" ondragover="event.preventDefault()" ondrop="apHandleDrop(event)">
           <span style="font-size:28px">📄</span>
           <span style="font-size:13px;font-weight:500;color:var(--tx2)">Archivo PDF</span>
           <span style="font-size:11px">PDF del banco</span>
-          <input type="file" accept="application/pdf" style="display:none" onchange="apHandleFile(this.files[0])">
+          <input type="file" accept="application/pdf" style="display:none" onchange="apHandleFiles(this.files)">
         </label>
       </div>
-      <div id="ap-preview" style="display:none;margin-top:4px;text-align:center">
-        <img id="ap-preview-img" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--b)" src="">
-        <div id="ap-preview-name" style="font-size:12px;color:var(--tx3);margin-top:6px"></div>
+      <div id="ap-preview" style="display:none;margin-top:4px">
+        <div id="ap-preview-grid" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center"></div>
+        <div id="ap-preview-name" style="font-size:12px;color:var(--tx3);margin-top:6px;text-align:center"></div>
       </div>
       <div class="ma" style="margin-top:16px">
         <button class="bc" onclick="closeModal('modal-analizar-prestamo')">Cancelar</button>
@@ -15423,7 +15441,7 @@ async function confirmarPagoCuota(){
 }
 
 /* ── ANALIZAR PRÉSTAMO CON IA ── */
-let apArchivoUrl=null,apArchivoFile=null,apCuotasExtraidas=[],apTnaNum=null,apCapitalNum=null;
+let apArchivoUrl=null,apArchivoFile=null,apArchivosFiles=[],apCuotasExtraidas=[],apTnaNum=null,apCapitalNum=null;
 const SUPA_URL_P="https://jppxmdvddvbsvymogvcp.supabase.co";
 const KEY_P="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwcHhtZHZkZHZic3Z5bW9ndmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMjcyODAsImV4cCI6MjA5MDgwMzI4MH0.KPAqCKfUteE3XK9QFqb_44Hm8jYQxfjVLkrlyGvaMhE";
 
@@ -15433,59 +15451,82 @@ function openAnalizarPrestamo(){
 }
 
 function apReset(){
-  apArchivoUrl=null;apArchivoFile=null;apCuotasExtraidas=[];apTnaNum=null;apCapitalNum=null;
+  apArchivoUrl=null;apArchivoFile=null;apArchivosFiles=[];apCuotasExtraidas=[];apTnaNum=null;apCapitalNum=null;
   document.getElementById("ap-step1").style.display="";
   document.getElementById("ap-step2").style.display="none";
   document.getElementById("ap-step3").style.display="none";
   document.getElementById("ap-preview").style.display="none";
-  document.getElementById("ap-preview-img").src="";
+  const grid=document.getElementById("ap-preview-grid");if(grid)grid.innerHTML="";
   document.getElementById("ap-btn-analizar").disabled=true;
-  document.getElementById("ap-file").value="";
 }
 
 function apHandleDrop(e){
   e.preventDefault();
-  const f=e.dataTransfer.files[0];if(f)apHandleFile(f);
+  if(e.dataTransfer.files.length)apHandleFiles(e.dataTransfer.files);
 }
 
-function apHandleFile(file){
-  if(!file)return;
-  apArchivoFile=file;
+function apHandleFiles(fileList){
+  if(!fileList||!fileList.length)return;
+  Array.from(fileList).forEach(f=>{ if(!apArchivosFiles.find(x=>x.name===f.name&&x.size===f.size)) apArchivosFiles.push(f); });
+  apArchivoFile=apArchivosFiles[0];
   document.getElementById("ap-btn-analizar").disabled=false;
-  document.getElementById("ap-drop-label").style.borderColor="var(--ac)";
   const prev=document.getElementById("ap-preview");
-  if(file.type.startsWith("image/")){
-    const reader=new FileReader();
-    reader.onload=e=>{document.getElementById("ap-preview-img").src=e.target.result;prev.style.display=""};
-    reader.readAsDataURL(file);
-  } else {
-    document.getElementById("ap-preview-img").src="";
-    prev.style.display="";
-  }
-  document.getElementById("ap-preview-name").textContent=file.name+" ("+Math.round(file.size/1024)+" KB)";
+  const grid=document.getElementById("ap-preview-grid");
+  prev.style.display="";
+  grid.innerHTML="";
+  apArchivosFiles.forEach((f,i)=>{
+    if(f.type.startsWith("image/")){
+      const reader=new FileReader();
+      reader.onload=ev=>{
+        const img=document.createElement("img");
+        img.src=ev.target.result;
+        img.style.cssText="max-height:120px;max-width:160px;border-radius:6px;border:1px solid var(--b);object-fit:cover";
+        const wrap=document.createElement("div");
+        wrap.style.cssText="position:relative;display:inline-block";
+        const rm=document.createElement("button");
+        rm.textContent="✕";rm.style.cssText="position:absolute;top:-6px;right:-6px;background:var(--re);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:1;padding:0";
+        rm.onclick=()=>{apArchivosFiles.splice(i,1);apArchivoFile=apArchivosFiles[0]||null;if(!apArchivosFiles.length)document.getElementById("ap-btn-analizar").disabled=true;apHandleFiles([]);};
+        wrap.appendChild(img);wrap.appendChild(rm);grid.appendChild(wrap);
+      };
+      reader.readAsDataURL(f);
+    } else {
+      const wrap=document.createElement("div");
+      wrap.style.cssText="display:flex;align-items:center;gap:6px;background:var(--surf2);border:1px solid var(--b);border-radius:6px;padding:8px 12px;font-size:12px;color:var(--tx2)";
+      wrap.innerHTML=`<span>📄</span><span>${esc(f.name)}</span>`;
+      grid.appendChild(wrap);
+    }
+  });
+  document.getElementById("ap-preview-name").textContent=`${apArchivosFiles.length} archivo${apArchivosFiles.length>1?"s":""} seleccionado${apArchivosFiles.length>1?"s":""}`;
 }
+
+function apHandleFile(file){if(file)apHandleFiles([file]);}
 
 async function apAnalizar(){
-  if(!apArchivoFile){toast("Seleccioná un archivo primero","err");return}
+  const files=apArchivosFiles.length?apArchivosFiles:(apArchivoFile?[apArchivoFile]:[]);
+  if(!files.length){toast("Seleccioná al menos un archivo","err");return}
   document.getElementById("ap-step1").style.display="none";
   document.getElementById("ap-step2").style.display="";
   try{
-    // Subir archivo a Supabase Storage (bucket Facturas)
-    const ext=apArchivoFile.name.split(".").pop()||"pdf";
-    const fname=`prestamos_${Date.now()}.${ext}`;
-    const upRes=await fetch(`${SB}/storage/v1/object/Facturas/${fname}`,{
-      method:"POST",
-      headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":apArchivoFile.type,"x-upsert":"true"},
-      body:apArchivoFile
-    });
-    if(!upRes.ok){const t=await upRes.text();throw new Error("Upload: "+t.slice(0,80));}
-    apArchivoUrl=`${SB}/storage/v1/object/public/Facturas/${fname}`;
+    // Subir todos los archivos a Supabase Storage
+    const ts=Date.now();
+    const urls=await Promise.all(files.map(async(f,i)=>{
+      const ext=f.name.split(".").pop()||"jpg";
+      const fname=`prestamos_${ts}_${i}.${ext}`;
+      const upRes=await fetch(`${SB}/storage/v1/object/Facturas/${fname}`,{
+        method:"POST",
+        headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":f.type,"x-upsert":"true"},
+        body:f
+      });
+      if(!upRes.ok){const t=await upRes.text();throw new Error("Upload: "+t.slice(0,80));}
+      return `${SB}/storage/v1/object/public/Facturas/${fname}`;
+    }));
+    apArchivoUrl=urls[0];
 
-    // Llamar Edge Function
+    // Llamar Edge Function con array de URLs
     const res=await fetch(`${SB}/functions/v1/leer-prestamo`,{
       method:"POST",
       headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":"application/json"},
-      body:JSON.stringify({url:apArchivoUrl})
+      body:JSON.stringify({urls,url:urls[0]})
     });
     const raw=await res.text();
     // Sanitizar números con formato argentino que tienen 2+ puntos como separadores de miles
@@ -21273,57 +21314,86 @@ function showComTab(tab){
 
 let msgConvActual=null;
 
+function toggleMsgSec(sec){
+  const lista=document.getElementById(`msg-lista-${sec}`);
+  const ico=document.getElementById(`msg-ico-${sec}`);
+  if(!lista)return;
+  const abierto=lista.style.display!=="none";
+  lista.style.display=abierto?"none":"block";
+  if(ico)ico.textContent=abierto?"▶":"▼";
+}
+
+function _renderConvList(convs,platIcon){
+  if(!convs.length)return'<div style="padding:14px 16px;color:var(--tx3);font-size:13px;text-align:center">Sin conversaciones</div>';
+  return convs.map(c=>{
+    const ultimo=c.msgs[c.msgs.length-1];
+    const preview=(ultimo?.mensaje||"").slice(0,65)+(( ultimo?.mensaje?.length||0)>65?"…":"");
+    const fecha=c.ultimo?new Date(c.ultimo).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
+    return`<div onclick="abrirConvMsg('${c.from_id}','${c.plataforma}')" style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--b);cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <div style="font-size:22px;flex-shrink:0">${platIcon[c.plataforma]||"💬"}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:13px;margin-bottom:2px">${esc(c.from_name||c.from_id)}</div>
+        <div style="color:var(--tx3);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(preview)||"—"}</div>
+      </div>
+      <div style="flex-shrink:0;text-align:right">
+        <div style="color:var(--tx3);font-size:11px">${fecha}</div>
+        <div style="color:var(--tx2);font-size:11px;margin-top:2px">${c.msgs.length} msg${c.msgs.length!==1?"s":""}</div>
+      </div>
+      <div style="color:var(--tx3);font-size:18px">›</div>
+    </div>`;
+  }).join("");
+}
+
 async function renderComMensajes(){
   if(msgConvActual)return renderMsgDetalle(msgConvActual.fromId,msgConvActual.plataforma);
-  const cont=document.getElementById("com-msg-lista");
-  const badge=document.getElementById("msg-badge-escalados");
-  if(!cont)return;
-  cont.innerHTML='<div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>';
+  const listaEsc=document.getElementById("msg-lista-escalados");
+  const listaInc=document.getElementById("msg-lista-inconclusos");
+  const listaTer=document.getElementById("msg-lista-terminados");
+  if(!listaEsc)return;
+  listaEsc.innerHTML='<div class="loading" style="padding:12px"><div class="loader"></div></div>';
   try{
     const plat=document.getElementById("msg-fil-plat")?.value||"";
-    const estado=document.getElementById("msg-fil-estado")?.value||"";
     let q="mensajes_publico?order=created_at.desc&limit=500";
     if(plat)q+=`&plataforma=eq.${plat}`;
     const msgs=await sb(q)||[];
-    const nEsc=msgs.filter(m=>m.estado==="escalado").length;
-    if(badge){badge.textContent=`${nEsc} escalados`;badge.style.display=nEsc>0?"inline":"none";}
     // Agrupar por conversación
     const convMap={};
     for(const m of msgs){
       const key=`${m.plataforma}||${m.from_id}`;
-      if(!convMap[key]){convMap[key]={plataforma:m.plataforma,from_id:m.from_id,from_name:m.from_name,msgs:[],escalado:false,ultimo:m.created_at};}
+      if(!convMap[key]){convMap[key]={plataforma:m.plataforma,from_id:m.from_id,from_name:m.from_name,msgs:[],escalado:false,tienePendiente:false,ultimo:m.created_at};}
       convMap[key].msgs.push(m);
       if(m.estado==="escalado")convMap[key].escalado=true;
+      if(m.estado==="pendiente")convMap[key].tienePendiente=true;
+      if(m.created_at>convMap[key].ultimo)convMap[key].ultimo=m.created_at;
     }
-    let convs=Object.values(convMap).sort((a,b)=>new Date(b.ultimo)-new Date(a.ultimo));
-    if(estado)convs=convs.filter(c=>estado==="escalado"?c.escalado:c.msgs.some(m=>m.estado===estado));
-    if(!convs.length){cont.innerHTML='<div class="empty"><div class="ei">💬</div><div>No hay conversaciones registradas</div></div>';return;}
+    const convs=Object.values(convMap).sort((a,b)=>new Date(b.ultimo)-new Date(a.ultimo));
+    const escalados=convs.filter(c=>c.escalado);
+    const inconclusos=convs.filter(c=>!c.escalado&&c.tienePendiente);
+    const terminados=convs.filter(c=>!c.escalado&&!c.tienePendiente);
     const platIcon={whatsapp:"📱",instagram:"📸",facebook:"👤"};
-    cont.innerHTML=convs.map(c=>{
-      const ultimo=c.msgs[0];
-      const fecha=c.ultimo?new Date(c.ultimo).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
-      const preview=(ultimo?.mensaje||"").slice(0,60)+(ultimo?.mensaje?.length>60?"…":"");
-      return`<div onclick="abrirConvMsg('${c.from_id}','${c.plataforma}')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--b);cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-        <div style="font-size:24px;flex-shrink:0">${platIcon[c.plataforma]||"💬"}</div>
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
-            <span style="font-weight:700;font-size:14px">${esc(c.from_name||c.from_id)}</span>
-            ${c.escalado?'<span style="background:#EF4444;color:#fff;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700">escalado</span>':""}
-          </div>
-          <div style="color:var(--tx3);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(preview)||"—"}</div>
-        </div>
-        <div style="flex-shrink:0;text-align:right">
-          <div style="color:var(--tx3);font-size:11px">${fecha}</div>
-          <div style="color:var(--tx2);font-size:12px;margin-top:2px">${c.msgs.length} msg${c.msgs.length!==1?"s":""}</div>
-        </div>
-        <div style="color:var(--tx3);font-size:18px">›</div>
-      </div>`;
-    }).join("");
-  }catch(e){cont.innerHTML=`<div class="empty"><div class="ei">⚠</div><div>Error: ${e.message}</div></div>`;}
+    document.getElementById("msg-badge-escalados").textContent=escalados.length;
+    document.getElementById("msg-badge-inconclusos").textContent=inconclusos.length;
+    document.getElementById("msg-badge-terminados").textContent=terminados.length;
+    listaEsc.innerHTML=_renderConvList(escalados,platIcon);
+    if(listaInc)listaInc.innerHTML=_renderConvList(inconclusos,platIcon);
+    if(listaTer)listaTer.innerHTML=_renderConvList(terminados,platIcon);
+  }catch(e){listaEsc.innerHTML=`<div style="padding:12px;color:#EF4444;font-size:13px">Error: ${e.message}</div>`;}
+}
+
+function _msgShowDetalle(show){
+  ["msg-sec-escalados","msg-sec-inconclusos","msg-sec-terminados"].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.style.display=show?"none":"";
+  });
+  const det=document.getElementById("com-msg-lista");
+  if(det)det.style.display=show?"":"none";
+  const fil=document.getElementById("msg-fil-plat");
+  if(fil)fil.parentElement.style.display=show?"none":"";
 }
 
 function abrirConvMsg(fromId,plataforma){
   msgConvActual={fromId,plataforma};
+  _msgShowDetalle(true);
   renderMsgDetalle(fromId,plataforma);
 }
 
@@ -21408,7 +21478,7 @@ async function renderMsgDetalle(fromId,plataforma){
   }catch(e){cont.innerHTML=`<div class="empty"><div class="ei">⚠</div><div>Error: ${e.message}</div></div>`;}
 }
 
-function volverListaMsg(){msgConvActual=null;renderComMensajes();}
+function volverListaMsg(){msgConvActual=null;_msgShowDetalle(false);renderComMensajes();}
 
 async function eliminarConvMsg(fromId,plataforma,nombre){
   if(!confirm(`¿Eliminar toda la conversación con ${nombre}?\nEsta acción no se puede deshacer.`))return;
