@@ -10873,6 +10873,13 @@ async function renderCFPendientes(){
   </div>`:""}`;
 }
 
+function toggleCFPrestFin(){
+  const rows=document.querySelectorAll('.cf-prest-fin-row');
+  const ico=document.getElementById('cf-prest-fin-ico');
+  const ocultos=rows.length&&rows[0].style.display==='none';
+  rows.forEach(r=>r.style.display=ocultos?'':'none');
+  if(ico)ico.textContent=ocultos?'▼':'▶';
+}
 function setCFTab(tab,btn){
   cfTab=tab;
   document.querySelectorAll("#pg-cashflow .cd-tab").forEach(b=>b.classList.remove("on"));
@@ -12692,14 +12699,16 @@ function renderCFResumen(){
     }
     // Cuotas de préstamos integradas dentro de egresos
     if(tipo==="Egreso"){
-      const prestCF=cfPrestamos.filter(p=>p.activo&&p.incluir_en_cf!==false&&
-        (p.sociedad===cfSociedad||cfSociedad==="Ambas")&&
-        cfPrestCuotas.some(c=>c.prestamo_id===p.id));
-      if(prestCF.length){
+      const _hayPend=p=>cfPrestCuotas.some(c=>c.prestamo_id===p.id&&!c.pagada);
+      const _hayCuota=p=>cfPrestCuotas.some(c=>c.prestamo_id===p.id);
+      const _base=cfPrestamos.filter(p=>p.activo&&p.incluir_en_cf!==false&&(p.sociedad===cfSociedad||cfSociedad==="Ambas"));
+      const prestActivos=_base.filter(p=>_hayCuota(p)&&_hayPend(p));
+      const prestFin=_base.filter(p=>_hayCuota(p)&&!_hayPend(p));
+      if(prestActivos.length||prestFin.length){
         rows+=`<tr style="background:rgba(239,68,68,.05)">
           <td colspan="${meses.length+2}" style="padding:3px 12px 3px 22px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#FCA5A5">↳ Cuotas préstamos</td>
         </tr>`;
-        prestCF.forEach(p=>{
+        prestActivos.forEach(p=>{
           const cuotasP=cfPrestCuotas.filter(c=>c.prestamo_id===p.id&&!c.pagada);
           const celdas=meses.map(m=>{
             const cuotasMes=cuotasP.filter(c=>c.fecha&&c.fecha.startsWith(m.key));
@@ -12721,6 +12730,26 @@ function renderCFResumen(){
             </td>${celdas}
           </tr>`;
         });
+        if(prestFin.length){
+          const finCeldas=meses.map(m=>{const bg=m.actual?"background:rgba(124,58,237,.06)":"";return`<td style="text-align:right;padding:6px 10px;font-size:12px;color:var(--tx4);border-right:1px solid var(--b);${bg}">—</td>`;}).join("");
+          rows+=`<tr id="cf-prest-fin-tog" style="background:rgba(16,185,129,.04);cursor:pointer;border-bottom:1px solid var(--b)" onclick="toggleCFPrestFin()">
+            <td colspan="${meses.length+2}" style="padding:4px 12px 4px 22px;font-size:10px;color:var(--tx4);font-style:italic">
+              <span id="cf-prest-fin-ico">▶</span> Finalizados (${prestFin.length}) — sin cuotas pendientes
+            </td>
+          </tr>`;
+          prestFin.forEach(p=>{
+            const socCls=p.sociedad==="SUDES"?"bpr":"bdo";
+            rows+=`<tr class="cf-prest-fin-row" style="display:none;border-bottom:1px solid var(--b);opacity:.6">
+              <td style="padding:6px 12px 6px 28px;font-size:12px;color:var(--tx4);min-width:240px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="font-size:10px;color:#10B981">✓</span>
+                  <span style="flex:1;text-decoration:line-through">${esc(p.nombre)}</span>
+                  <span class="badge ${socCls}" style="font-size:9px">${p.sociedad}</span>
+                </div>
+              </td>${finCeldas}
+            </tr>`;
+          });
+        }
       }
     }
     // Sueldos y honorarios integrados en egresos
