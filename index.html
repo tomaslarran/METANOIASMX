@@ -1377,11 +1377,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <button class="btn sec" id="btn-realizados" onclick="setCursoFilter('completados')" title="Ver cursos ya realizados" style="opacity:.75;white-space:nowrap">
         🏁 Realizados
       </button>
-      <button class="btn sec" onclick="exportCursosPixelio()" title="Exportar para Pixelio" style="white-space:nowrap">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span class="hide-xs">Exportar para </span>Pixelio
-      </button>
-      <button class="btn" onclick="openPlantillaModal()" style="white-space:nowrap">📋 Plantillas</button>
+<button class="btn" onclick="openPlantillaModal()" style="white-space:nowrap">📋 Plantillas</button>
       <button class="btn pri" onclick="openCrearCursoIA()" style="gap:6px;white-space:nowrap">✨ <span class="hide-xs">Crear curso con </span>IA</button>
     </div>
   </div>
@@ -1421,10 +1417,6 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 <div id="pg-alumnos" style="display:none">
   <div class="pg-header">
     <div><div class="pg-title">Alumnos</div><div class="pg-title-sub">Base de médicos y residentes</div></div>
-    <button class="btn sec" onclick="exportAlumnosPixelio()" title="Genera un CSV listo para importar en Pixelio">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Exportar para Pixelio
-    </button>
   </div>
   <div class="toolbar">
     <div class="sw">
@@ -1473,10 +1465,6 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="pg-header">
     <div><div class="pg-title">Instructores</div><div class="pg-title-sub">Docentes y facilitadores de simulación</div></div>
     <div class="pg-header-actions">
-      <button class="btn sec" onclick="exportInstructoresPixelio()" title="Genera un CSV listo para importar en Pixelio">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Exportar para Pixelio
-      </button>
       <button class="btn pri" onclick="openNewModal()">+ Nuevo instructor</button>
     </div>
   </div>
@@ -10236,23 +10224,30 @@ async function invitarColaboradorChat(){
   el.id="modal-invitar-chat";
   el.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10001;display:flex;align-items:center;justify-content:center";
   el.onclick=e=>{if(e.target===el)el.remove();};
-  el.innerHTML=`<div style="background:var(--surf);border-radius:14px;padding:20px;min-width:320px;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.28)">
-    <div style="font-weight:600;font-size:14px;margin-bottom:14px">👥 Invitar colaborador — ${esc(cursoIAChatNombre)}</div>
-    <div style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto">
-      ${opts.map(u=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--b);border-radius:8px;cursor:pointer"
+  const buildRows=(list)=>list.map(u=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--b);border-radius:8px;cursor:pointer"
         onclick="enviarInvitacionChat('${u.id}','${esc(u.nombre).replace(/'/g,"&#39;")}');document.getElementById('modal-invitar-chat').remove()">
         <div style="width:32px;height:32px;border-radius:50%;background:var(--pu);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0">${esc(u.nombre).charAt(0).toUpperCase()}</div>
         <div>
           <div style="font-size:13px;font-weight:500">${esc(u.nombre)}</div>
           <div style="font-size:11px;color:var(--tx3)">${esc(u.email||u.rol||"")}</div>
         </div>
-      </div>`).join("")}
+      </div>`).join("")||`<div style="padding:12px;font-size:12px;color:var(--tx3);text-align:center">Sin resultados</div>`;
+  el.innerHTML=`<div style="background:var(--surf);border-radius:14px;padding:20px;min-width:320px;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.28)">
+    <div style="font-weight:600;font-size:14px;margin-bottom:12px">👥 Invitar colaborador — ${esc(cursoIAChatNombre)}</div>
+    <input id="invitar-search" placeholder="Buscar por nombre o email..." autocomplete="off"
+      style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--b);border-radius:8px;font-size:13px;background:var(--surf);color:var(--tx);margin-bottom:10px;outline:none"
+      oninput="(()=>{const q=this.value.toLowerCase();const fil=window._invitarOpts.filter(u=>u.nombre.toLowerCase().includes(q)||(u.email||'').toLowerCase().includes(q));document.getElementById('invitar-list').innerHTML=window._invitarBuildRows(fil)})()">
+    <div id="invitar-list" style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto">
+      ${buildRows(opts)}
     </div>
     <div style="margin-top:14px;display:flex;justify-content:flex-end">
       <button class="btn sm" onclick="document.getElementById('modal-invitar-chat').remove()">Cancelar</button>
     </div>
   </div>`;
+  window._invitarOpts=opts;
+  window._invitarBuildRows=buildRows;
   document.body.appendChild(el);
+  setTimeout(()=>document.getElementById("invitar-search")?.focus(),50);
 }
 
 async function enviarInvitacionChat(userId,nombre){
@@ -16996,7 +16991,7 @@ async function planesDel(id,nombre){
   }catch(e){toast("Error al eliminar","err");}
 }
 
-// ── EXPORTAR A PIXELIO ──
+// ── CSV HELPER ──
 function downloadCSV(filename, rows) {
   const csv = rows.map(r => r.map(c => {
     const s = String(c ?? '').replace(/"/g, '""');
@@ -17008,47 +17003,6 @@ function downloadCSV(filename, rows) {
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
 
-function exportAlumnosPixelio() {
-  if(!alumnos.length){toast('No hay alumnos para exportar','err');return}
-  const header = ['Apellido y nombre','dni','profesion','mp','residencia','anio','institucion'];
-  const rows = alumnos.map(a => {
-    const fullName = [a.apellido, a.nombre].filter(Boolean).join(', ');
-    // Extract profesion and anio from notas field (stored as "Prof: Med | Anio: 1°")
-    const prof = (a.notas||'').match(/Prof:\s*([^|]+)/)?.[1]?.trim() || '';
-    const anio = (a.notas||'').match(/A[nñ]io?:\s*([^|]+)/i)?.[1]?.trim() || '';
-    return [fullName, a.dni||'', prof, a.matricula||'', a.especialidad||'', anio, a.institucion||''];
-  });
-  downloadCSV(`alumnos_pixelio_${today()}.csv`, [header, ...rows]);
-  toast(`${alumnos.length} alumnos exportados`, 'ok');
-}
-
-function exportCursosPixelio() {
-  if(!cursos.length){toast('No hay cursos para exportar','err');return}
-  // Pixelio contenido fields: titulo;categoria;descripcion;fecha_inicio;duracion;cupos
-  const header = ['titulo','categoria','descripcion','fecha_inicio','duracion','cupos'];
-  const rows = cursos.map(c => [
-    c.nombre||'',
-    c.tipo||'',
-    c.descripcion||c.notas||'',
-    c.fecha_inicio||'',
-    c.duracion_horas||'',
-    c.cupos_max||''
-  ]);
-  downloadCSV(`cursos_pixelio_${today()}.csv`, [header, ...rows]);
-  toast(`${cursos.length} cursos exportados`, 'ok');
-}
-
-function exportInstructoresPixelio() {
-  if(!instructores.length){toast('No hay instructores para exportar','err');return}
-  // Pixelio profesores: nombre;apellido;especialidad;email;telefono;institucion
-  const header = ['nombre','apellido','especialidad','email','telefono','institucion','notas'];
-  const rows = instructores.map(i => [
-    i.nombre||'', i.apellido||'', i.especialidad||'',
-    i.email||'', i.telefono||'', i.institucion||'', i.notas||''
-  ]);
-  downloadCSV(`instructores_pixelio_${today()}.csv`, [header, ...rows]);
-  toast(`${instructores.length} instructores exportados`, 'ok');
-}
 
 // ── REPORTES ──────────────────────────────────────────────────────
 function initReportesPage(){
