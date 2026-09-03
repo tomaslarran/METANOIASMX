@@ -21800,7 +21800,8 @@ async function renderMsgDetalle(fromId,plataforma){
           return`
             <div style="display:flex;justify-content:flex-end">
               <div style="background:var(--primary);color:#000;border-radius:16px 16px 4px 16px;padding:10px 14px;max-width:70%;font-size:13px;white-space:pre-wrap;word-break:break-word">
-                ${esc(m.mensaje||"")}
+                ${m.imagen_url?`<img src="${esc(m.imagen_url)}" alt="imagen" style="max-width:100%;max-height:220px;border-radius:8px;display:block;margin-bottom:${m.mensaje&&m.mensaje!=='[imagen]'?'6px':'0'}" loading="lazy">`:""}
+                ${m.mensaje&&m.mensaje!=='[imagen]'?esc(m.mensaje):""}
                 <div style="font-size:10px;opacity:.7;margin-top:4px;text-align:right">${fecha}</div>
               </div>
             </div>

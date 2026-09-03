@@ -70,6 +70,7 @@ serve(async (req) => {
     let texto = "";
     let imageBase64: string | null = null;
     let imageMediaType = "image/jpeg";
+    let imageUrl: string | null = null;
 
     if (msg.type === "text") {
       texto = (msg.text.body as string).trim();
@@ -106,6 +107,16 @@ serve(async (req) => {
         imageBase64 = btoa(binary);
         imageMediaType = media.mimeType || "image/jpeg";
         texto = msg.image?.caption?.trim() || "[imagen]";
+        // Subir imagen a Storage para mostrar en el panel
+        try {
+          const ext = imageMediaType.split("/")[1]?.split(";")[0] || "jpg";
+          const storePath = `wa/${fromId.replace(/\D/g,"")}/${Date.now()}.${ext}`;
+          const { data: upData } = await supabase.storage.from("mensajes-media").upload(storePath, bytes, { contentType: imageMediaType, upsert: false });
+          if (upData) {
+            const { data: { publicUrl } } = supabase.storage.from("mensajes-media").getPublicUrl(storePath);
+            imageUrl = publicUrl;
+          }
+        } catch (_) {}
       } catch (_) {
         await sendWA(fromId, "No pude procesar la imagen. ¿Podés describirme lo que necesitás? 😊");
         return new Response("OK", { status: 200 });
@@ -157,7 +168,7 @@ serve(async (req) => {
 
     await procesarMensaje({
       supabase, fromId, fromName, texto, plataforma: "whatsapp", msgId,
-      imageBase64, imageMediaType,
+      imageBase64, imageMediaType, imageUrl,
       sendReply: (t) => sendWA(fromId, t),
       sendEscalacion: (t) => Promise.all(EQUIPO.map(p => sendWA(p.wa, t))).then(() => {}),
     });
@@ -194,6 +205,7 @@ serve(async (req) => {
     let texto = messaging.message.text?.trim() || "";
     let imageBase64: string | null = null;
     let imageMediaType = "image/jpeg";
+    let imageUrl: string | null = null;
 
     // Attachments (imágenes, audio)
     if (messaging.message.attachments?.length) {
@@ -208,6 +220,15 @@ serve(async (req) => {
           imageBase64 = btoa(binary);
           imageMediaType = "image/jpeg";
           texto = "[imagen]";
+          // Subir imagen a Storage para mostrar en el panel
+          try {
+            const storePath = `${plataforma}/${fromId.replace(/[^a-zA-Z0-9]/g,"_")}/${Date.now()}.jpg`;
+            const { data: upData } = await supabase.storage.from("mensajes-media").upload(storePath, bytes, { contentType: "image/jpeg", upsert: false });
+            if (upData) {
+              const { data: { publicUrl } } = supabase.storage.from("mensajes-media").getPublicUrl(storePath);
+              imageUrl = publicUrl;
+            }
+          } catch (_) {}
         } catch (_) {
           texto = "[imagen no procesada]";
         }
@@ -240,7 +261,7 @@ serve(async (req) => {
 
     await procesarMensaje({
       supabase, fromId, fromName, texto, plataforma, msgId,
-      imageBase64, imageMediaType,
+      imageBase64, imageMediaType, imageUrl,
       sendReply: (t) => sendMessenger(fromId, t, pageId, apiToken, isIG),
       sendEscalacion: (t) => Promise.all(EQUIPO.map(p => sendWA(p.wa, t))).then(() => {}),
     });
@@ -252,7 +273,7 @@ serve(async (req) => {
 });
 
 // ── Procesamiento común (Claude + DB) ─────────────────────────────────────────
-async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, msgId, imageBase64, imageMediaType, sendReply, sendEscalacion }: {
+async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, msgId, imageBase64, imageMediaType, imageUrl, sendReply, sendEscalacion }: {
   supabase: any;
   fromId: string;
   fromName: string;
@@ -261,6 +282,7 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
   msgId: string;
   imageBase64: string | null;
   imageMediaType: string;
+  imageUrl: string | null;
   sendReply: (text: string) => Promise<void>;
   sendEscalacion: (text: string) => Promise<void>;
 }) {
@@ -272,10 +294,9 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
   const mensajeGuardado = imageBase64
     ? `🖼️ ${texto}` : texto.startsWith("🎤") ? texto : texto;
 
-  await supabase.from("mensajes_publico").insert({
-    plataforma, from_id: fromId, from_name: fromName,
-    mensaje: mensajeGuardado, estado: "pendiente", wa_message_id: msgId,
-  });
+  const insertData: any = { plataforma, from_id: fromId, from_name: fromName, mensaje: mensajeGuardado, estado: "pendiente", wa_message_id: msgId };
+  if (imageUrl) insertData.imagen_url = imageUrl;
+  await supabase.from("mensajes_publico").insert(insertData);
 
   // Debounce
   await new Promise(r => setTimeout(r, 2000));
