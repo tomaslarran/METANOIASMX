@@ -21368,7 +21368,7 @@ function toggleMsgSec(sec){
   if(ico)ico.textContent=abierto?"▶":"▼";
 }
 
-function _renderConvList(convs,platIcon,mostrarGestionar){
+function _renderConvList(convs,platIcon,mostrarGestionar,mostrarEscalar){
   if(!convs.length)return'<div style="padding:14px 16px;color:var(--tx3);font-size:13px;text-align:center">Sin conversaciones</div>';
   return convs.map(c=>{
     const ultimo=c.msgs[0]; // msgs vienen desc, [0] es el más nuevo
@@ -21376,6 +21376,9 @@ function _renderConvList(convs,platIcon,mostrarGestionar){
     const fecha=c.ultimo?new Date(c.ultimo).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
     const btnGestionar=mostrarGestionar
       ?`<button onclick="event.stopPropagation();marcarGestionada('${c.from_id}','${c.plataforma}')" style="flex-shrink:0;background:#10B981;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap">✓ Gestionar</button>`
+      :"";
+    const btnEscalar=mostrarEscalar
+      ?`<button onclick="event.stopPropagation();escalarManual('${esc(c.from_id)}','${c.plataforma}')" style="flex-shrink:0;background:#EF4444;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap">📤 Escalar</button>`
       :"";
     const badgeCerrado=c.cerrado?`<span style="background:#10B981;color:#fff;border-radius:999px;padding:1px 7px;font-size:10px;font-weight:700">cerrado</span>`:"";
     return`<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--b);cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
@@ -21393,7 +21396,7 @@ function _renderConvList(convs,platIcon,mostrarGestionar){
           <div style="color:var(--tx2);font-size:11px;margin-top:2px">${c.msgs.length} msg${c.msgs.length!==1?"s":""}</div>
         </div>
       </div>
-      ${btnGestionar}
+      ${btnGestionar}${btnEscalar}
       <div onclick="abrirConvMsg('${c.from_id}','${c.plataforma}')" style="color:var(--tx3);font-size:18px;flex-shrink:0">›</div>
     </div>`;
   }).join("");
@@ -21408,6 +21411,16 @@ function marcarGestionada(fromId,plataforma){
     renderComMensajes();
     toast("Conversación marcada como gestionada ✓","ok");
   }catch(e){toast("Error: "+e.message,"err");}
+}
+async function escalarManual(fromId,plataforma){
+  if(!confirm("¿Marcar esta conversación como escalada?"))return;
+  try{
+    // Actualizar todos los mensajes respondidos de esta conversación
+    await sb(`mensajes_publico?from_id=eq.${encodeURIComponent(fromId)}&plataforma=eq.${plataforma}&estado=eq.respondido`,
+      {method:"PATCH",body:JSON.stringify({escalado:true,estado:"escalado"})});
+    toast("Conversación escalada ✓","ok");
+    renderComMensajes();
+  }catch(e){toast("Error al escalar: "+e.message,"err");}
 }
 
 async function renderComMensajes(){
@@ -21431,7 +21444,7 @@ async function renderComMensajes(){
       const key=`${m.plataforma}||${m.from_id}`;
       if(!convMap[key]){convMap[key]={plataforma:m.plataforma,from_id:m.from_id,from_name:m.from_name,msgs:[],escalado:false,cerrado:false,ultimo:m.created_at};}
       convMap[key].msgs.push(m);
-      if(m.escalado===true)convMap[key].escalado=true;
+      if(m.escalado===true||m.estado==="escalado")convMap[key].escalado=true;
       if(m.estado==="cerrado")convMap[key].cerrado=true;
       if(m.created_at>convMap[key].ultimo)convMap[key].ultimo=m.created_at;
     }
@@ -21463,7 +21476,7 @@ async function renderComMensajes(){
     document.getElementById("msg-badge-gestionadas").textContent=gest.length;
     listaEsc.innerHTML=_renderConvList(escalados,platIcon,true);
     if(listaInc)listaInc.innerHTML=_renderConvList(inconclusos,platIcon,false);
-    if(listaEnP)listaEnP.innerHTML=_renderConvList(enProceso,platIcon,false);
+    if(listaEnP)listaEnP.innerHTML=_renderConvList(enProceso,platIcon,false,true);
     if(listaTer)listaTer.innerHTML=_renderConvList(terminados,platIcon,false);
     if(listaGes)listaGes.innerHTML=_renderConvList(gest,platIcon,false);
   }catch(e){listaEsc.innerHTML=`<div style="padding:12px;color:#EF4444;font-size:13px">Error: ${e.message}</div>`;}
