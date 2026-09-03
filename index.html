@@ -5799,8 +5799,15 @@ function renderCursos(){
   document.getElementById("cA").textContent=cursos.filter(x=>["Convocatoria","Inscripciones","En curso"].includes(x.estado)).length;
   document.getElementById("cI").textContent=cursos.reduce((a,x)=>a+(x.cupos_inscriptos||0),0);
   document.getElementById("cC").textContent=realizados.length;
-  if(!list.length){c.innerHTML=`<div class="empty"><div class="ei">${cursoFilter==="completados"?"🏁":"📚"}</div>${cursoFilter==="completados"?"No hay cursos realizados todavía.":"No hay cursos en esta vista. Creá el primero."}</div>`;return}
-  c.innerHTML=`<div class="curso-grid">${list.map(curso=>{
+  if(!list.length){
+    const colabPre=cursoFilter==="borrador"?`<div id="colab-ideas-section" style="margin-bottom:20px"></div>`:"";
+    c.innerHTML=colabPre+`<div class="empty"><div class="ei">${cursoFilter==="completados"?"🏁":"📚"}</div>${cursoFilter==="completados"?"No hay cursos realizados todavía.":"No hay cursos en esta vista. Creá el primero."}</div>`;
+    if(cursoFilter==="borrador")loadColabIdeasSection();
+    return;
+  }
+  // Sección de ideas colaborativas en Borradores
+  const colabSection=cursoFilter==="borrador"?`<div id="colab-ideas-section" style="margin-bottom:20px"></div>`:"";
+  c.innerHTML=colabSection+`<div class="curso-grid">${list.map(curso=>{
     const prov=proveedores.find(p=>p.id===curso.proveedor_id);
     const pct=curso.progreso||0;
     return`<div class="curso-card" onclick="selectCurso('${curso.id}')">
@@ -5826,6 +5833,41 @@ function renderCursos(){
     </div>`;
   }).join("")}</div>`;
   document.getElementById("curso-detail-container").innerHTML="";
+  if(cursoFilter==="borrador")loadColabIdeasSection();
+}
+
+async function loadColabIdeasSection(){
+  if(!loggedUser?.id)return;
+  const sec=document.getElementById("colab-ideas-section");
+  if(!sec)return;
+  try{
+    // Chats donde soy colaborador aceptado (no propietario)
+    const colabs=await sb(`chat_colaboradores?usuario_id=eq.${loggedUser.id}&estado=eq.aceptado&select=chat_id,agente_cursos_chats(id,nombre,updated_at,user_id)`);
+    const ideas=colabs.filter(c=>c.agente_cursos_chats&&c.agente_cursos_chats.user_id!==loggedUser.id);
+    if(!ideas.length){sec.innerHTML="";return;}
+    sec.innerHTML=`<div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">💬 Ideas en colaboración</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-bottom:16px">
+        ${ideas.map(c=>{
+          const ch=c.agente_cursos_chats;
+          const fecha=new Date(ch.updated_at).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"2-digit"});
+          return `<div onclick="abrirChatColaborativo('${ch.id}','${esc(ch.nombre).replace(/'/g,"&#39;")}')"
+            style="border:1.5px dashed var(--pu);border-radius:12px;padding:14px 16px;cursor:pointer;background:var(--surf)">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <span style="font-size:16px">💬</span>
+              <span style="font-size:11px;color:var(--pu);font-weight:700;border:1px solid var(--pu);border-radius:4px;padding:1px 6px">Idea colaborativa</span>
+            </div>
+            <div style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:4px">${esc(ch.nombre)}</div>
+            <div style="font-size:11px;color:var(--tx3)">Última actividad: ${fecha}</div>
+          </div>`;
+        }).join("")}
+      </div>`;
+  }catch{sec.innerHTML="";}
+}
+
+async function abrirChatColaborativo(chatId,chatNombre){
+  // Navega a cursos y abre el modal con el chat compartido
+  if(curPage!=="cursos")goPage("cursos",document.getElementById("nav-cursos"));
+  setTimeout(()=>cargarChatCurso(chatId,chatNombre),curPage!=="cursos"?300:0);
 }
 
 async function selectCurso(id){
@@ -8711,7 +8753,10 @@ async function cargarChatCurso(id,nombre){
       msgs.innerHTML="";
       cursoIAHistorial.forEach(m=>{
         if(m.role==="user"){
-          msgs.innerHTML+=`<div style="background:var(--pl);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--tx);align-self:flex-end;max-width:85%;margin-left:auto">${esc(m.content)}</div>`;
+          msgs.innerHTML+=`<div style="align-self:flex-end;max-width:85%;margin-left:auto">
+            ${m.nombre?`<div style="font-size:10px;color:var(--tx3);text-align:right;margin-bottom:3px;padding-right:2px">${esc(m.nombre)}</div>`:""}
+            <div style="background:var(--pl);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--tx)">${esc(m.content)}</div>
+          </div>`;
         }else{
           const html=(m.content||"").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\n/g,"<br>");
           let bubble=`<div style="background:var(--surf2);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--tx);max-width:85%">${html}`;
@@ -9224,7 +9269,11 @@ async function sendCursoIA(){
   input.value="";
 
   // Mostrar mensaje del usuario
-  msgs.innerHTML+=`<div style="background:var(--pl);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--tx);align-self:flex-end;max-width:85%;margin-left:auto">${esc(texto)}</div>`;
+  const _uNombre=loggedUser?.nombre||"";
+  msgs.innerHTML+=`<div style="align-self:flex-end;max-width:85%;margin-left:auto">
+    ${_uNombre?`<div style="font-size:10px;color:var(--tx3);text-align:right;margin-bottom:3px;padding-right:2px">${esc(_uNombre)}</div>`:""}
+    <div style="background:var(--pl);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--tx)">${esc(texto)}</div>
+  </div>`;
   msgs.scrollTop=msgs.scrollHeight;
 
   // Loading
@@ -9233,7 +9282,7 @@ async function sendCursoIA(){
   msgs.scrollTop=msgs.scrollHeight;
   if(btn)btn.disabled=true;
 
-  cursoIAHistorial.push({role:"user",content:texto});
+  cursoIAHistorial.push({role:"user",content:texto,nombre:loggedUser?.nombre||""});
 
   try{
     const res=await fetchEdge("agente-cursos",{
