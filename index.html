@@ -988,7 +988,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         Proveedores
         <span class="sitem-badge" id="badge-proveedores">—</span>
       </div>
-      <div class="sitem inst-visible" onclick="goPage('instructores',this)" id="nav-instructores">
+      <div class="sitem inst-visible comu-visible" onclick="goPage('instructores',this)" id="nav-instructores">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><path d="M17 11l2 2 4-4"/></svg>
         Instructores
         <span class="sitem-badge" id="badge-instructores">—</span>
@@ -5450,8 +5450,8 @@ function goPage(name,el){
   if(name==="instructores"){
     renderInstructores();
     loadMensajesInternos();
-    // Instructores arrancan directo en tab Mensajes
-    if(loggedUser?.rol==="instructor")setTimeout(()=>setInstTab("mensajes"),50);
+    // Instructores y comunicaciones arrancan directo en tab Mensajes
+    if(loggedUser?.rol==="instructor"||loggedUser?.rol==="comunicaciones")setTimeout(()=>setInstTab("mensajes"),50);
   }
   if(name==="inventario")loadInventario();
   if(name==="planes")loadPlanes();
