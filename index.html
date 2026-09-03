@@ -962,7 +962,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       </div>
       <div class="sitem comu-visible inst-visible logi-visible" onclick="goPage('mensajes',this)" id="nav-mensajes">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>
-        Mensajes
+        Chats
         <span class="sitem-badge" id="badge-mensajes" style="display:none;background:var(--re);color:#fff">0</span>
       </div>
     </div>
@@ -1230,7 +1230,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="cd-tab" id="com-tab-met" onclick="showComTab('met')">📈 Métricas</div>
     <div class="cd-tab" id="com-tab-agente" onclick="showComTab('agente')">🤖 Agente IA</div>
     <div class="cd-tab" id="com-tab-videos" onclick="showComTab('videos')">🎬 Videos IA</div>
-    <div class="cd-tab" id="com-tab-msg" onclick="showComTab('msg')">💬 Mensajes</div>
+    <div class="cd-tab" id="com-tab-msg" onclick="showComTab('msg')">💬 Chats</div>
   </div>
   <!-- TAB Publicaciones -->
   <div id="com-tab-pub-content">
@@ -10131,7 +10131,7 @@ function renderNotifPanel(){
   if(!body)return;
   if(!bellNotifs.length){body.innerHTML=`<div class="np-empty">Sin notificaciones nuevas 👍</div>`;return;}
   body.innerHTML=bellNotifs.map(n=>`
-    <div class="ni unread" onclick="clickNotif('${n.id}','${n.tarea_id||""}','${n.tipo||""}','${esc(n.meta||"").replace(/'/g,"&#39;")}')">
+    <div class="ni unread" onclick="clickNotif('${n.id}','${n.tarea_id||""}','${n.tipo||""}',${JSON.stringify(JSON.stringify(n.meta||null))})">
       <div class="ni-icon">${tipoNotifIcon(n.tipo)}</div>
       <div class="ni-body">
         <div class="ni-msg">${esc(n.mensaje)}</div>
@@ -10151,8 +10151,21 @@ async function clickNotif(id,tareaId,tipo,meta){
   await markNotifLeida(id);
   document.getElementById("notif-panel")?.classList.remove("show");
   if(tipo==="colaboracion_chat"){
-    // meta contiene chatId y chatNombre
-    if(meta){try{const m=JSON.parse(meta);if(m.chatId)cargarChatCurso(m.chatId,m.chatNombre||"Chat compartido");}catch{}}
+    if(meta){
+      try{
+        const m=typeof meta==="string"?JSON.parse(meta):meta;
+        if(m?.chatId){
+          // Aceptar la invitacion pendiente si existe
+          try{
+            const colabs=await sb(`chat_colaboradores?chat_id=eq.${m.chatId}&usuario_id=eq.${loggedUser.id}&estado=eq.pendiente&select=id`);
+            if(colabs.length)await sb(`chat_colaboradores?id=eq.${colabs[0].id}`,{method:"PATCH",body:JSON.stringify({estado:"aceptado"})});
+          }catch{}
+          // Navegar a cursos y abrir el chat
+          goPage("cursos",document.getElementById("nav-cursos"));
+          setTimeout(()=>cargarChatCurso(m.chatId,m.chatNombre||"Chat compartido"),300);
+        }
+      }catch{}
+    }
     return;
   }
   if(tipo==="mensaje_interno"){
@@ -10189,14 +10202,15 @@ async function markAllNotifsLeidas(){
   }catch(e){toast("Error","err")}
 }
 
-async function createNotif(usuario_id,tipo,tarea_id,mensaje){
+async function createNotif(usuario_id,tipo,tarea_id,mensaje,meta){
   if(!usuario_id)return;
-  // Respetar preferencias del usuario
   const prefMap={bloqueado:"alerta_bloqueado",asignacion:"alerta_asignacion",curso_sin_resp:"alerta_curso"};
   const prefKey=prefMap[tipo];
   if(prefKey){const cfg=notifConfigs.find(n=>n.usuario_id===usuario_id);if(cfg&&cfg[prefKey]===false)return;}
   try{
-    const[n]=await sb("notificaciones",{method:"POST",body:JSON.stringify({usuario_id,tipo,tarea_id:tarea_id||null,mensaje})});
+    const payload={usuario_id,tipo,tarea_id:tarea_id||null,mensaje};
+    if(meta)payload.meta=meta;
+    const[n]=await sb("notificaciones",{method:"POST",body:JSON.stringify(payload)});
     if(loggedUser&&usuario_id===loggedUser.id){
       if(n)bellNotifs.unshift(n);
       renderBell();
@@ -10259,7 +10273,7 @@ async function enviarInvitacionChat(userId,nombre){
       estado:"pendiente",
       organizacion_id:loggedUser?.organizacion_id||null
     })});
-    await createNotif(userId,"colaboracion_chat",null,`${loggedUser?.nombre||"Alguien"} te invitó al chat "${cursoIAChatNombre}"`);
+    await createNotif(userId,"colaboracion_chat",null,`${loggedUser?.nombre||"Alguien"} te invitó al chat "${cursoIAChatNombre}"`,{chatId:cursoIAChatId,chatNombre:cursoIAChatNombre});
     toast(`Invitación enviada a ${nombre}`,"ok");
   }catch(e){toast("Error enviando invitación: "+e.message,"err");}
 }
