@@ -960,6 +960,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         Comunicaciones
       </div>
+      <div class="sitem comu-visible inst-visible logi-visible" onclick="goPage('mensajes',this)" id="nav-mensajes">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>
+        Mensajes
+        <span class="sitem-badge" id="badge-mensajes" style="display:none;background:var(--re);color:#fff">0</span>
+      </div>
     </div>
   </div>
   <div class="sgroup" id="sg-cursos">
@@ -1475,38 +1480,37 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <button class="btn pri" onclick="openNewModal()">+ Nuevo instructor</button>
     </div>
   </div>
-  <div style="display:flex;gap:0;border-bottom:2px solid var(--b);margin-bottom:16px">
-    <button id="inst-tab-inst" onclick="setInstTab('instructores')" style="background:none;border:none;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;color:var(--pu);border-bottom:2px solid var(--pu);margin-bottom:-2px">👥 Instructores</button>
-    <button id="inst-tab-mens" onclick="setInstTab('mensajes')" style="background:none;border:none;padding:8px 18px;font-size:13px;cursor:pointer;color:var(--tx3);border-bottom:2px solid transparent;margin-bottom:-2px">💬 Mensajes <span id="inst-msg-badge" style="display:none;background:var(--re);color:#fff;border-radius:10px;font-size:10px;padding:1px 6px;margin-left:4px">0</span></button>
-  </div>
-  <div id="inst-panel-instructores">
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
-      <div style="position:relative;flex:1;min-width:200px">
-        <input id="inst-sq" class="search" placeholder="Buscar por nombre, especialidad, institución..." oninput="instOnSearch(this.value)" style="width:100%">
-      </div>
-      <select class="mini-sel" id="inst-activo-filter" onchange="instSetActivo(this.value)" style="min-width:130px">
-        <option value="">Todos</option>
-        <option value="true">Activos</option>
-        <option value="false">Inactivos</option>
-      </select>
-      <button class="btn sm" onclick="instClearFilters()">Limpiar</button>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+    <div style="position:relative;flex:1;min-width:200px">
+      <input id="inst-sq" class="search" placeholder="Buscar por nombre, especialidad, institución..." oninput="instOnSearch(this.value)" style="width:100%">
     </div>
-    <div id="instructores-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando instructores...</div></div></div>
+    <select class="mini-sel" id="inst-activo-filter" onchange="instSetActivo(this.value)" style="min-width:130px">
+      <option value="">Todos</option>
+      <option value="true">Activos</option>
+      <option value="false">Inactivos</option>
+    </select>
+    <button class="btn sm" onclick="instClearFilters()">Limpiar</button>
   </div>
-  <div id="inst-panel-mensajes" style="display:none">
-    <div style="display:flex;gap:14px;height:520px">
-      <div id="inst-conv-list" style="width:240px;min-width:200px;border:1px solid var(--b);border-radius:12px;overflow-y:auto;flex-shrink:0">
-        <div style="padding:12px 14px;font-size:11px;font-weight:700;color:var(--tx3);border-bottom:1px solid var(--b);text-transform:uppercase;letter-spacing:.5px">Conversaciones</div>
-        <div id="inst-conv-items"><div style="padding:16px;font-size:12px;color:var(--tx3);text-align:center">Cargando...</div></div>
-        <button onclick="nuevaConversacion()" style="width:100%;padding:10px;border:none;border-top:1px solid var(--b);background:none;color:var(--pu);font-size:12px;font-weight:600;cursor:pointer">+ Nueva conversación</button>
-      </div>
-      <div style="flex:1;display:flex;flex-direction:column;border:1px solid var(--b);border-radius:12px;overflow:hidden">
-        <div id="inst-thread-header" style="padding:12px 16px;border-bottom:1px solid var(--b);font-size:13px;font-weight:600;color:var(--tx)">Seleccioná una conversación</div>
-        <div id="inst-thread-msgs" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px"><div style="text-align:center;color:var(--tx3);font-size:12px;margin-top:40px">Seleccioná una conversación para ver los mensajes</div></div>
-        <div id="inst-thread-input" style="display:none;padding:10px 12px;border-top:1px solid var(--b);display:flex;gap:8px">
-          <textarea id="inst-msg-input" placeholder="Escribí un mensaje..." rows="2" style="flex:1;resize:none;border:1px solid var(--b);border-radius:8px;padding:8px;font-size:13px;background:var(--surf);color:var(--tx);font-family:inherit" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarMensajeInterno()}"></textarea>
-          <button class="btn pri" onclick="enviarMensajeInterno()" style="padding:8px 14px;align-self:flex-end">Enviar</button>
-        </div>
+  <div id="instructores-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando instructores...</div></div></div>
+</div>
+
+<!-- ══ MENSAJES INTERNOS ══ -->
+<div id="pg-mensajes" style="display:none">
+  <div class="pg-header">
+    <div><div class="pg-title">💬 Mensajes</div><div class="pg-title-sub">Conversaciones internas del equipo</div></div>
+    <button class="btn pri" onclick="nuevaConversacion()">+ Nueva conversación</button>
+  </div>
+  <div style="display:flex;gap:14px;height:calc(100vh - 160px);min-height:400px">
+    <div id="msgs-conv-list" style="width:260px;min-width:200px;border:1px solid var(--b);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;flex-shrink:0">
+      <div style="padding:12px 14px;font-size:11px;font-weight:700;color:var(--tx3);border-bottom:1px solid var(--b);text-transform:uppercase;letter-spacing:.5px">Conversaciones</div>
+      <div id="msgs-conv-items" style="flex:1;overflow-y:auto"><div style="padding:16px;font-size:12px;color:var(--tx3);text-align:center">Cargando...</div></div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;border:1px solid var(--b);border-radius:12px;overflow:hidden">
+      <div id="msgs-thread-header" style="padding:12px 16px;border-bottom:1px solid var(--b);font-size:13px;font-weight:600;color:var(--tx)">Seleccioná una conversación</div>
+      <div id="msgs-thread-msgs" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px"><div style="text-align:center;color:var(--tx3);font-size:12px;margin-top:40px">Seleccioná una conversación para ver los mensajes</div></div>
+      <div id="msgs-thread-input" style="display:none;padding:10px 12px;border-top:1px solid var(--b);display:flex;gap:8px">
+        <textarea id="msgs-msg-input" placeholder="Escribí un mensaje..." rows="2" style="flex:1;resize:none;border:1px solid var(--b);border-radius:8px;padding:8px;font-size:13px;background:var(--surf);color:var(--tx);font-family:inherit" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarMensajeInterno()}"></textarea>
+        <button class="btn pri" onclick="enviarMensajeInterno()" style="padding:8px 14px;align-self:flex-end">Enviar</button>
       </div>
     </div>
   </div>
@@ -5447,12 +5451,8 @@ function goPage(name,el){
   if(name==="alertas"){const load=cfPrestamos.length?Promise.resolve():loadCF().catch(()=>{});load.then(renderAlertas);}
   if(name==="sueldos"){const load=cfEmpleados.length?Promise.resolve():loadCF().catch(()=>{});load.then(renderSueldos);}
   if(name==="cashflow")loadCF().then(()=>setCFTab(cfTab||"resumen"));
-  if(name==="instructores"){
-    renderInstructores();
-    loadMensajesInternos();
-    // Instructores y comunicaciones arrancan directo en tab Mensajes
-    if(loggedUser?.rol==="instructor"||loggedUser?.rol==="comunicaciones")setTimeout(()=>setInstTab("mensajes"),50);
-  }
+  if(name==="instructores")renderInstructores();
+  if(name==="mensajes"){loadMensajesInternos();renderConvList();}
   if(name==="inventario")loadInventario();
   if(name==="planes")loadPlanes();
   if(name==="comprobantes")loadComprobantes();
@@ -10168,8 +10168,7 @@ async function clickNotif(id,tareaId,tipo,meta){
     return;
   }
   if(tipo==="mensaje_interno"){
-    goPage("instructores",document.getElementById("nav-instructores"));
-    setTimeout(()=>setInstTab("mensajes"),350);
+    goPage("mensajes",document.getElementById("nav-mensajes"));
     return;
   }
   // Rol comunicaciones: no redirigir a tareas
@@ -10301,9 +10300,8 @@ function setInstTab(tab){
 async function loadMensajesInternos(){
   if(!loggedUser)return;
   try{
-    // Contar no leídos
     const noLeidos=await sb(`mensajes_internos?to_user_id=eq.${loggedUser.id}&leido=eq.false&select=id`);
-    const badge=document.getElementById("inst-msg-badge");
+    const badge=document.getElementById("badge-mensajes");
     if(badge){
       if(noLeidos.length>0){badge.textContent=noLeidos.length>9?"9+":noLeidos.length;badge.style.display="";}
       else{badge.style.display="none";}
@@ -10313,7 +10311,7 @@ async function loadMensajesInternos(){
 
 async function renderConvList(){
   if(!loggedUser)return;
-  const cont=document.getElementById("inst-conv-items");
+  const cont=document.getElementById("msgs-conv-items");
   if(!cont)return;
   cont.innerHTML=`<div style="padding:16px;font-size:12px;color:var(--tx3);text-align:center">Cargando...</div>`;
   try{
@@ -10348,11 +10346,11 @@ async function abrirConversacion(userId,nombre,el){
   _mensConvActiva={userId,nombre};
   document.querySelectorAll(".conv-item").forEach(i=>i.style.background="");
   if(el)el.style.background="var(--surf2)";
-  const header=document.getElementById("inst-thread-header");
+  const header=document.getElementById("msgs-thread-header");
   if(header)header.textContent=nombre;
-  const inputDiv=document.getElementById("inst-thread-input");
+  const inputDiv=document.getElementById("msgs-thread-input");
   if(inputDiv)inputDiv.style.display="flex";
-  const msgCont=document.getElementById("inst-thread-msgs");
+  const msgCont=document.getElementById("msgs-thread-msgs");
   if(msgCont)msgCont.innerHTML=`<div style="text-align:center;font-size:12px;color:var(--tx3)">Cargando...</div>`;
   try{
     // Marcar como leídos
@@ -10370,7 +10368,7 @@ async function abrirConversacion(userId,nombre,el){
 }
 
 function renderMensajesThread(){
-  const cont=document.getElementById("inst-thread-msgs");
+  const cont=document.getElementById("msgs-thread-msgs");
   if(!cont)return;
   if(!_mensajes.length){cont.innerHTML=`<div style="text-align:center;color:var(--tx3);font-size:12px;margin-top:40px">Comenzá la conversación</div>`;return;}
   cont.innerHTML=_mensajes.map(m=>{
@@ -10385,7 +10383,7 @@ function renderMensajesThread(){
 }
 
 async function enviarMensajeInterno(){
-  const input=document.getElementById("inst-msg-input");
+  const input=document.getElementById("msgs-msg-input");
   const contenido=(input?.value||"").trim();
   if(!contenido||!_mensConvActiva||!loggedUser)return;
   input.value="";
@@ -10471,7 +10469,7 @@ async function checkVencimientos(){
 
 function startNotifPoll(){
   if(notifPollTimer)clearInterval(notifPollTimer);
-  notifPollTimer=setInterval(pollNotificaciones,60000);
+  notifPollTimer=setInterval(()=>{pollNotificaciones();loadMensajesInternos();},60000);
 }
 function stopNotifPoll(){
   if(notifPollTimer){clearInterval(notifPollTimer);notifPollTimer=null;}
@@ -18048,6 +18046,7 @@ function enterPanel(user,isNewLogin){
   loadAll().then(()=>{if(curPage==="alertas")renderAlertas();syncMobileNavBadges();});
   requestPushPermission();
   loadNotificaciones();
+  loadMensajesInternos();
   startNotifPoll();
   checkTokensExpiry();
 }
