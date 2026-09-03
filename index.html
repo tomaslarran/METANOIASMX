@@ -21707,11 +21707,14 @@ async function renderComMensajes(){
     const gestionadas=JSON.parse(localStorage.getItem("msg_gestionadas")||"[]");
     // Agrupar por conversación
     const convMap={};
+    const _frasesEscalado=["paso tus datos al equipo","paso toda esta información al equipo","le paso tus datos","se comunican con vos","Le paso tus datos","Le paso toda esta"];
     for(const m of msgs){
       const key=`${m.plataforma}||${m.from_id}`;
       if(!convMap[key]){convMap[key]={plataforma:m.plataforma,from_id:m.from_id,from_name:m.from_name,msgs:[],escalado:false,cerrado:false,ultimo:m.created_at};}
       convMap[key].msgs.push(m);
       if(m.escalado===true||m.estado==="escalado")convMap[key].escalado=true;
+      // Detección por contenido: bot respondió con frases de escalado aunque no seteó el flag
+      if(!convMap[key].escalado&&m.respuesta&&_frasesEscalado.some(f=>m.respuesta.includes(f)))convMap[key].escalado=true;
       if(m.estado==="cerrado")convMap[key].cerrado=true;
       if(m.created_at>convMap[key].ultimo)convMap[key].ultimo=m.created_at;
     }
