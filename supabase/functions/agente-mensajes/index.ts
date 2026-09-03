@@ -412,7 +412,10 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
       motivoEscalado = parsed.motivo ?? null;
       respuesta = parsed.mensaje_usuario ?? "¡Perfecto! Le paso tus datos al equipo y en breve se comunican con vos. 😊";
       const platLabel = plataforma === "whatsapp" ? "WhatsApp" : plataforma === "instagram" ? "Instagram DM" : "Facebook Messenger";
-      const notif = `🚨 *Consulta derivada — Metanoia SMX*\n\n*De:* ${fromName}\n*Canal:* ${platLabel}\n*Mensaje:* "${texto}"\n*Motivo:* ${motivoEscalado}\n\nResponder por ${platLabel}.`;
+      const contactoLinea = plataforma === "whatsapp"
+        ? `\n*Número:* https://wa.me/${fromId.replace(/\D/g, "")}`
+        : `\n*ID:* ${fromId}`;
+      const notif = `🚨 *Consulta derivada — Metanoia SMX*\n\n*De:* ${fromName}${contactoLinea}\n*Canal:* ${platLabel}\n*Mensaje:* "${texto}"\n*Motivo:* ${motivoEscalado}\n\nTocá el link para escribirle directo por WhatsApp.`;
       await sendEscalacion(notif);
     }
 
