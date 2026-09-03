@@ -10152,7 +10152,6 @@ function renderNotifPanel(){
   if(!body)return;
   if(!bellNotifs.length){body.innerHTML=`<div class="np-empty">Sin notificaciones nuevas 👍</div>`;return;}
   body.innerHTML=bellNotifs.map(n=>{
-    const metaStr=JSON.stringify(JSON.stringify(n.meta||null));
     if(n.tipo==="colaboracion_chat"&&n.meta?.chatId){
       return `<div class="ni unread">
         <div class="ni-icon">${tipoNotifIcon(n.tipo)}</div>
@@ -10160,13 +10159,13 @@ function renderNotifPanel(){
           <div class="ni-msg">${esc(n.mensaje)}</div>
           <div class="ni-time">${tiempoAtras(n.created_at)}</div>
           <div style="display:flex;gap:6px;margin-top:7px">
-            <button onclick="aceptarInvitacionChat('${n.id}',${metaStr})" style="background:var(--ok);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">✅ Aceptar</button>
-            <button onclick="rechazarInvitacionChat('${n.id}',${metaStr})" style="background:none;border:1px solid var(--b);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;color:var(--tx3)">❌ Rechazar</button>
+            <button onclick="aceptarInvitacionChat('${n.id}')" style="background:var(--ok);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">✅ Aceptar</button>
+            <button onclick="rechazarInvitacionChat('${n.id}')" style="background:none;border:1px solid var(--b);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;color:var(--tx3)">❌ Rechazar</button>
           </div>
         </div>
       </div>`;
     }
-    return `<div class="ni unread" onclick="clickNotif('${n.id}','${n.tarea_id||""}','${n.tipo||""}',${metaStr})">
+    return `<div class="ni unread" onclick="clickNotif('${n.id}','${n.tarea_id||""}','${n.tipo||""}')">
       <div class="ni-icon">${tipoNotifIcon(n.tipo)}</div>
       <div class="ni-body">
         <div class="ni-msg">${esc(n.mensaje)}</div>
@@ -10183,25 +10182,12 @@ function toggleNotifPanel(){
   if(panel.classList.contains("show"))renderNotifPanel();
 }
 
-async function clickNotif(id,tareaId,tipo,meta){
+async function clickNotif(id,tareaId,tipo){
+  const notif=bellNotifs.find(n=>n.id===id);
   await markNotifLeida(id);
   document.getElementById("notif-panel")?.classList.remove("show");
   if(tipo==="colaboracion_chat"){
-    if(meta){
-      try{
-        const m=typeof meta==="string"?JSON.parse(meta):meta;
-        if(m?.chatId){
-          // Aceptar la invitacion pendiente si existe
-          try{
-            const colabs=await sb(`chat_colaboradores?chat_id=eq.${m.chatId}&usuario_id=eq.${loggedUser.id}&estado=eq.pendiente&select=id`);
-            if(colabs.length)await sb(`chat_colaboradores?id=eq.${colabs[0].id}`,{method:"PATCH",body:JSON.stringify({estado:"aceptado"})});
-          }catch{}
-          // Navegar a cursos y abrir el chat
-          goPage("cursos",document.getElementById("nav-cursos"));
-          setTimeout(()=>cargarChatCurso(m.chatId,m.chatNombre||"Chat compartido"),300);
-        }
-      }catch{}
-    }
+    // Las invitaciones se manejan con los botones Aceptar/Rechazar inline — ignorar clic general
     return;
   }
   if(tipo==="mensaje_interno"){
@@ -10330,12 +10316,13 @@ async function rechazarInvitacionDesdeListado(colabId){
   }catch(e){toast("Error: "+e.message,"err");}
 }
 
-async function aceptarInvitacionChat(notifId,meta){
+async function aceptarInvitacionChat(notifId){
+  const notif=bellNotifs.find(n=>n.id===notifId);
+  const m=notif?.meta;
   await markNotifLeida(notifId);
   document.getElementById("notif-panel")?.classList.remove("show");
   try{
-    const m=typeof meta==="string"?JSON.parse(meta):meta;
-    if(!m?.chatId)return;
+    if(!m?.chatId){toast("No se encontró el chat","err");return;}
     const colabs=await sb(`chat_colaboradores?chat_id=eq.${m.chatId}&usuario_id=eq.${loggedUser.id}&estado=eq.pendiente&select=id`);
     if(colabs.length)await sb(`chat_colaboradores?id=eq.${colabs[0].id}`,{method:"PATCH",body:JSON.stringify({estado:"aceptado"})});
     toast(`✅ Invitación aceptada — abriendo "${m.chatNombre}"...`,"ok");
@@ -10344,10 +10331,12 @@ async function aceptarInvitacionChat(notifId,meta){
   }catch(e){toast("Error al aceptar: "+e.message,"err");}
 }
 
-async function rechazarInvitacionChat(notifId,meta){
+async function rechazarInvitacionChat(notifId){
+  const notif=bellNotifs.find(n=>n.id===notifId);
+  const m=notif?.meta;
   await markNotifLeida(notifId);
+  document.getElementById("notif-panel")?.classList.remove("show");
   try{
-    const m=typeof meta==="string"?JSON.parse(meta):meta;
     if(m?.chatId){
       const colabs=await sb(`chat_colaboradores?chat_id=eq.${m.chatId}&usuario_id=eq.${loggedUser.id}&estado=eq.pendiente&select=id`);
       if(colabs.length)await sb(`chat_colaboradores?id=eq.${colabs[0].id}`,{method:"PATCH",body:JSON.stringify({estado:"rechazado"})});
