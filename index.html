@@ -8653,13 +8653,34 @@ async function listarChatsCurso(){
         ${!isShared?`<button onclick="event.stopPropagation();eliminarChatCurso('${r.id}')" style="background:none;border:none;color:var(--tx3);cursor:pointer;font-size:15px;padding:0 4px">🗑</button>`:""}
       </div>`;
     };
-    let html=`<div style="font-weight:600;margin-bottom:12px;font-size:14px">📂 Chats guardados</div>
-      <div style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto">`;
+    // Invitaciones pendientes
+    let pendientes=[];
+    try{
+      if(loggedUser?.id){
+        const p=await sb(`chat_colaboradores?usuario_id=eq.${loggedUser.id}&estado=eq.pendiente&select=id,chat_id,agente_cursos_chats(id,nombre,updated_at)`);
+        pendientes=p.filter(c=>c.agente_cursos_chats);
+      }
+    }catch{}
+    let html=`<div style="font-weight:600;margin-bottom:12px;font-size:14px">📂 Chats guardados</div>`;
+    if(pendientes.length){
+      html+=`<div style="background:var(--am-bg,#fffbeb);border:1px solid var(--am,#f59e0b);border-radius:10px;padding:10px 12px;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--am,#f59e0b);margin-bottom:6px">⏳ INVITACIONES PENDIENTES</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${pendientes.map(c=>`<div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;font-size:13px">${esc(c.agente_cursos_chats.nombre)}</div>
+            <button onclick="aceptarInvitacionDesdeListado('${c.id}','${c.agente_cursos_chats.id}','${esc(c.agente_cursos_chats.nombre).replace(/'/g,"&#39;")}');document.getElementById('modal-chats-cursos-list').remove()" style="background:var(--ok);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">✅ Aceptar</button>
+            <button onclick="rechazarInvitacionDesdeListado('${c.id}');this.closest('div[style]').remove()" style="background:none;border:1px solid var(--b);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;color:var(--tx3)">❌</button>
+          </div>`).join("")}
+        </div>
+      </div>`;
+    }
+    html+=`<div style="display:flex;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto">`;
     rows.forEach(r=>html+=buildRow(r,false));
     if(sharedRows.length){
       html+=`<div style="font-size:11px;color:var(--tx3);margin-top:8px;font-weight:600;padding:4px 2px">COMPARTIDOS CONMIGO</div>`;
       sharedRows.forEach(r=>html+=buildRow(r,true));
     }
+    if(!rows.length&&!sharedRows.length&&!pendientes.length)html+=`<div style="padding:12px;text-align:center;font-size:12px;color:var(--tx3)">No hay chats guardados</div>`;
     html+=`</div>`;
     const el=document.createElement("div");
     el.id="modal-chats-cursos-list";
@@ -10130,14 +10151,29 @@ function renderNotifPanel(){
   const body=document.getElementById("np-body");
   if(!body)return;
   if(!bellNotifs.length){body.innerHTML=`<div class="np-empty">Sin notificaciones nuevas 👍</div>`;return;}
-  body.innerHTML=bellNotifs.map(n=>`
-    <div class="ni unread" onclick="clickNotif('${n.id}','${n.tarea_id||""}','${n.tipo||""}',${JSON.stringify(JSON.stringify(n.meta||null))})">
+  body.innerHTML=bellNotifs.map(n=>{
+    const metaStr=JSON.stringify(JSON.stringify(n.meta||null));
+    if(n.tipo==="colaboracion_chat"&&n.meta?.chatId){
+      return `<div class="ni unread">
+        <div class="ni-icon">${tipoNotifIcon(n.tipo)}</div>
+        <div class="ni-body">
+          <div class="ni-msg">${esc(n.mensaje)}</div>
+          <div class="ni-time">${tiempoAtras(n.created_at)}</div>
+          <div style="display:flex;gap:6px;margin-top:7px">
+            <button onclick="aceptarInvitacionChat('${n.id}',${metaStr})" style="background:var(--ok);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">✅ Aceptar</button>
+            <button onclick="rechazarInvitacionChat('${n.id}',${metaStr})" style="background:none;border:1px solid var(--b);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;color:var(--tx3)">❌ Rechazar</button>
+          </div>
+        </div>
+      </div>`;
+    }
+    return `<div class="ni unread" onclick="clickNotif('${n.id}','${n.tarea_id||""}','${n.tipo||""}',${metaStr})">
       <div class="ni-icon">${tipoNotifIcon(n.tipo)}</div>
       <div class="ni-body">
         <div class="ni-msg">${esc(n.mensaje)}</div>
         <div class="ni-time">${tiempoAtras(n.created_at)}</div>
       </div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
 }
 
 function toggleNotifPanel(){
@@ -10276,6 +10312,48 @@ async function enviarInvitacionChat(userId,nombre){
     await createNotif(userId,"colaboracion_chat",null,`${loggedUser?.nombre||"Alguien"} te invitó al chat "${cursoIAChatNombre}"`,{chatId:cursoIAChatId,chatNombre:cursoIAChatNombre});
     toast(`Invitación enviada a ${nombre}`,"ok");
   }catch(e){toast("Error enviando invitación: "+e.message,"err");}
+}
+
+async function aceptarInvitacionDesdeListado(colabId,chatId,chatNombre){
+  try{
+    await sb(`chat_colaboradores?id=eq.${colabId}`,{method:"PATCH",body:JSON.stringify({estado:"aceptado"})});
+    toast(`✅ Aceptado — abriendo "${chatNombre}"...`,"ok");
+    goPage("cursos",document.getElementById("nav-cursos"));
+    setTimeout(()=>cargarChatCurso(chatId,chatNombre),300);
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function rechazarInvitacionDesdeListado(colabId){
+  try{
+    await sb(`chat_colaboradores?id=eq.${colabId}`,{method:"PATCH",body:JSON.stringify({estado:"rechazado"})});
+    toast("Invitación rechazada","inf");
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function aceptarInvitacionChat(notifId,meta){
+  await markNotifLeida(notifId);
+  document.getElementById("notif-panel")?.classList.remove("show");
+  try{
+    const m=typeof meta==="string"?JSON.parse(meta):meta;
+    if(!m?.chatId)return;
+    const colabs=await sb(`chat_colaboradores?chat_id=eq.${m.chatId}&usuario_id=eq.${loggedUser.id}&estado=eq.pendiente&select=id`);
+    if(colabs.length)await sb(`chat_colaboradores?id=eq.${colabs[0].id}`,{method:"PATCH",body:JSON.stringify({estado:"aceptado"})});
+    toast(`✅ Invitación aceptada — abriendo "${m.chatNombre}"...`,"ok");
+    goPage("cursos",document.getElementById("nav-cursos"));
+    setTimeout(()=>cargarChatCurso(m.chatId,m.chatNombre||"Chat compartido"),300);
+  }catch(e){toast("Error al aceptar: "+e.message,"err");}
+}
+
+async function rechazarInvitacionChat(notifId,meta){
+  await markNotifLeida(notifId);
+  try{
+    const m=typeof meta==="string"?JSON.parse(meta):meta;
+    if(m?.chatId){
+      const colabs=await sb(`chat_colaboradores?chat_id=eq.${m.chatId}&usuario_id=eq.${loggedUser.id}&estado=eq.pendiente&select=id`);
+      if(colabs.length)await sb(`chat_colaboradores?id=eq.${colabs[0].id}`,{method:"PATCH",body:JSON.stringify({estado:"rechazado"})});
+    }
+    toast("Invitación rechazada","inf");
+  }catch(e){toast("Error: "+e.message,"err");}
 }
 
 async function responderInvitacionChat(colabId,chatId,chatNombre,accept){
