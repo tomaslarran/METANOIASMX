@@ -1475,18 +1475,41 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <button class="btn pri" onclick="openNewModal()">+ Nuevo instructor</button>
     </div>
   </div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
-    <div style="position:relative;flex:1;min-width:200px">
-      <input id="inst-sq" class="search" placeholder="Buscar por nombre, especialidad, institución..." oninput="instOnSearch(this.value)" style="width:100%">
-    </div>
-    <select class="mini-sel" id="inst-activo-filter" onchange="instSetActivo(this.value)" style="min-width:130px">
-      <option value="">Todos</option>
-      <option value="true">Activos</option>
-      <option value="false">Inactivos</option>
-    </select>
-    <button class="btn sm" onclick="instClearFilters()">Limpiar</button>
+  <div style="display:flex;gap:0;border-bottom:2px solid var(--b);margin-bottom:16px">
+    <button id="inst-tab-inst" onclick="setInstTab('instructores')" style="background:none;border:none;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;color:var(--pu);border-bottom:2px solid var(--pu);margin-bottom:-2px">👥 Instructores</button>
+    <button id="inst-tab-mens" onclick="setInstTab('mensajes')" style="background:none;border:none;padding:8px 18px;font-size:13px;cursor:pointer;color:var(--tx3);border-bottom:2px solid transparent;margin-bottom:-2px">💬 Mensajes <span id="inst-msg-badge" style="display:none;background:var(--re);color:#fff;border-radius:10px;font-size:10px;padding:1px 6px;margin-left:4px">0</span></button>
   </div>
-  <div id="instructores-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando instructores...</div></div></div>
+  <div id="inst-panel-instructores">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      <div style="position:relative;flex:1;min-width:200px">
+        <input id="inst-sq" class="search" placeholder="Buscar por nombre, especialidad, institución..." oninput="instOnSearch(this.value)" style="width:100%">
+      </div>
+      <select class="mini-sel" id="inst-activo-filter" onchange="instSetActivo(this.value)" style="min-width:130px">
+        <option value="">Todos</option>
+        <option value="true">Activos</option>
+        <option value="false">Inactivos</option>
+      </select>
+      <button class="btn sm" onclick="instClearFilters()">Limpiar</button>
+    </div>
+    <div id="instructores-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando instructores...</div></div></div>
+  </div>
+  <div id="inst-panel-mensajes" style="display:none">
+    <div style="display:flex;gap:14px;height:520px">
+      <div id="inst-conv-list" style="width:240px;min-width:200px;border:1px solid var(--b);border-radius:12px;overflow-y:auto;flex-shrink:0">
+        <div style="padding:12px 14px;font-size:11px;font-weight:700;color:var(--tx3);border-bottom:1px solid var(--b);text-transform:uppercase;letter-spacing:.5px">Conversaciones</div>
+        <div id="inst-conv-items"><div style="padding:16px;font-size:12px;color:var(--tx3);text-align:center">Cargando...</div></div>
+        <button onclick="nuevaConversacion()" style="width:100%;padding:10px;border:none;border-top:1px solid var(--b);background:none;color:var(--pu);font-size:12px;font-weight:600;cursor:pointer">+ Nueva conversación</button>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;border:1px solid var(--b);border-radius:12px;overflow:hidden">
+        <div id="inst-thread-header" style="padding:12px 16px;border-bottom:1px solid var(--b);font-size:13px;font-weight:600;color:var(--tx)">Seleccioná una conversación</div>
+        <div id="inst-thread-msgs" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px"><div style="text-align:center;color:var(--tx3);font-size:12px;margin-top:40px">Seleccioná una conversación para ver los mensajes</div></div>
+        <div id="inst-thread-input" style="display:none;padding:10px 12px;border-top:1px solid var(--b);display:flex;gap:8px">
+          <textarea id="inst-msg-input" placeholder="Escribí un mensaje..." rows="2" style="flex:1;resize:none;border:1px solid var(--b);border-radius:8px;padding:8px;font-size:13px;background:var(--surf);color:var(--tx);font-family:inherit" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarMensajeInterno()}"></textarea>
+          <button class="btn pri" onclick="enviarMensajeInterno()" style="padding:8px 14px;align-self:flex-end">Enviar</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ══ INVENTARIO ══ -->
@@ -4080,6 +4103,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div style="display:flex;align-items:center;gap:8px">
         <button onclick="guardarChatCurso()" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:3px 8px;cursor:pointer" title="Guardar chat">💾 Guardar</button>
         <button onclick="listarChatsCurso()" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:3px 8px;cursor:pointer" title="Retomar chat guardado">📂 Retomar</button>
+        <button id="btn-invitar-chat" onclick="invitarColaboradorChat()" style="background:none;border:1px solid var(--pu);border-radius:6px;color:var(--pu);font-size:11px;padding:3px 8px;cursor:pointer;display:none" title="Invitar colaborador a este chat">👥 Invitar</button>
         <button onclick="resetCursoIA()" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:3px 8px;cursor:pointer" title="Nueva conversación">🗑 Nueva</button>
         <button onclick="closeModal('modal-curso-ia')" style="background:none;border:none;color:var(--tx3);font-size:18px;cursor:pointer">✕</button>
       </div>
@@ -5423,7 +5447,7 @@ function goPage(name,el){
   if(name==="alertas"){const load=cfPrestamos.length?Promise.resolve():loadCF().catch(()=>{});load.then(renderAlertas);}
   if(name==="sueldos"){const load=cfEmpleados.length?Promise.resolve():loadCF().catch(()=>{});load.then(renderSueldos);}
   if(name==="cashflow")loadCF().then(()=>setCFTab(cfTab||"resumen"));
-  if(name==="instructores")renderInstructores();
+  if(name==="instructores"){renderInstructores();loadMensajesInternos();}
   if(name==="inventario")loadInventario();
   if(name==="planes")loadPlanes();
   if(name==="comprobantes")loadComprobantes();
@@ -8572,6 +8596,8 @@ let cursoIAChatNombre=null;
 function _updateChatLabel(){
   const lbl=document.getElementById("curso-ia-chat-label");
   if(lbl)lbl.textContent=cursoIAChatNombre?"📝 "+cursoIAChatNombre:"";
+  const invBtn=document.getElementById("btn-invitar-chat");
+  if(invBtn)invBtn.style.display=cursoIAChatId?"inline-block":"none";
 }
 
 async function guardarChatCurso(){
@@ -8584,7 +8610,7 @@ async function guardarChatCurso(){
       await sb(`agente_cursos_chats?id=eq.${cursoIAChatId}`,{method:"PATCH",body:JSON.stringify({nombre,historial:cursoIAHistorial,archivos_meta:cursoIAArchivos.map(a=>({nombre:a.nombre,tipo:a.tipo})),updated_at:new Date().toISOString()})});
     }else{
       const _sess=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
-      const [row]=await sb("agente_cursos_chats",{method:"POST",body:JSON.stringify({nombre,historial:cursoIAHistorial,archivos_meta:cursoIAArchivos.map(a=>({nombre:a.nombre,tipo:a.tipo})),usuario:_sess.email||""})});
+      const [row]=await sb("agente_cursos_chats",{method:"POST",body:JSON.stringify({nombre,historial:cursoIAHistorial,archivos_meta:cursoIAArchivos.map(a=>({nombre:a.nombre,tipo:a.tipo})),usuario:_sess.email||"",user_id:loggedUser?.id||null,organizacion_id:loggedUser?.organizacion_id||null})});
       cursoIAChatId=row?.id;
     }
     _updateChatLabel();
@@ -8601,22 +8627,46 @@ async function _autoguardarChatCurso(){
 
 async function listarChatsCurso(){
   try{
-    const rows=await sb("agente_cursos_chats?select=id,nombre,updated_at&order=updated_at.desc&limit=20");
-    if(!rows.length){toast("No hay chats guardados","inf");return;}
+    // Propios (filtrado por user_id si ya existe la columna, fallback a usuario email)
+    let rows=[];
+    if(loggedUser?.id){
+      try{rows=await sb(`agente_cursos_chats?select=id,nombre,updated_at,user_id&user_id=eq.${loggedUser.id}&order=updated_at.desc&limit=20`);}
+      catch{rows=await sb(`agente_cursos_chats?select=id,nombre,updated_at&usuario=eq.${encodeURIComponent(loggedUser.email||"")}&order=updated_at.desc&limit=20`);}
+    }else{
+      rows=await sb("agente_cursos_chats?select=id,nombre,updated_at&order=updated_at.desc&limit=20");
+    }
+    // Chats compartidos (colaborador)
+    let sharedRows=[];
+    try{
+      if(loggedUser?.id){
+        const colabs=await sb(`chat_colaboradores?select=chat_id,estado&usuario_id=eq.${loggedUser.id}&estado=eq.aceptado`);
+        if(colabs.length){
+          const ids=colabs.map(c=>c.chat_id).join(",");
+          const shared=await sb(`agente_cursos_chats?select=id,nombre,updated_at&id=in.(${ids})&order=updated_at.desc`);
+          sharedRows=shared.filter(s=>!rows.find(r=>r.id===s.id));
+        }
+      }
+    }catch{}
+    if(!rows.length&&!sharedRows.length){toast("No hay chats guardados","inf");return;}
     document.getElementById("modal-chats-cursos-list")?.remove();
-    let html=`<div style="font-weight:600;margin-bottom:12px;font-size:14px">📂 Chats guardados</div>
-      <div style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto">`;
-    rows.forEach(r=>{
+    const buildRow=(r,isShared)=>{
       const fecha=new Date(r.updated_at).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"});
-      html+=`<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--b);border-radius:8px;cursor:pointer"
+      return `<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--b);border-radius:8px;cursor:pointer"
         onclick="cargarChatCurso('${r.id}','${esc(r.nombre).replace(/'/g,"&#39;")}');document.getElementById('modal-chats-cursos-list').remove()">
         <div style="flex:1">
-          <div style="font-size:13px">${esc(r.nombre)}</div>
+          <div style="font-size:13px">${esc(r.nombre)}${isShared?` <span style="font-size:10px;color:var(--pu);border:1px solid var(--pu);border-radius:4px;padding:1px 5px">compartido</span>`:""}</div>
           <div style="font-size:11px;color:var(--tx3)">${fecha}</div>
         </div>
-        <button onclick="event.stopPropagation();eliminarChatCurso('${r.id}')" style="background:none;border:none;color:var(--tx3);cursor:pointer;font-size:15px;padding:0 4px">🗑</button>
+        ${!isShared?`<button onclick="event.stopPropagation();eliminarChatCurso('${r.id}')" style="background:none;border:none;color:var(--tx3);cursor:pointer;font-size:15px;padding:0 4px">🗑</button>`:""}
       </div>`;
-    });
+    };
+    let html=`<div style="font-weight:600;margin-bottom:12px;font-size:14px">📂 Chats guardados</div>
+      <div style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto">`;
+    rows.forEach(r=>html+=buildRow(r,false));
+    if(sharedRows.length){
+      html+=`<div style="font-size:11px;color:var(--tx3);margin-top:8px;font-weight:600;padding:4px 2px">COMPARTIDOS CONMIGO</div>`;
+      sharedRows.forEach(r=>html+=buildRow(r,true));
+    }
     html+=`</div>`;
     const el=document.createElement("div");
     el.id="modal-chats-cursos-list";
@@ -10057,11 +10107,11 @@ async function pollNotificaciones(){
 }
 
 function tipoNotifLabel(tipo){
-  const map={asignacion:"Nueva asignación",modificacion:"Tarea modificada",comentario:"Nuevo comentario",vencimiento:"Vencimiento próximo"};
+  const map={asignacion:"Nueva asignación",modificacion:"Tarea modificada",comentario:"Nuevo comentario",vencimiento:"Vencimiento próximo",colaboracion_chat:"Invitación a chat",mensaje_interno:"Mensaje interno"};
   return map[tipo]||"Notificación";
 }
 function tipoNotifIcon(tipo){
-  const map={asignacion:"👤",modificacion:"✏️",comentario:"💬",vencimiento:"⏰"};
+  const map={asignacion:"👤",modificacion:"✏️",comentario:"💬",vencimiento:"⏰",colaboracion_chat:"👥",mensaje_interno:"💬"};
   return map[tipo]||"🔔";
 }
 function tiempoAtras(iso){
@@ -10088,7 +10138,7 @@ function renderNotifPanel(){
   if(!body)return;
   if(!bellNotifs.length){body.innerHTML=`<div class="np-empty">Sin notificaciones nuevas 👍</div>`;return;}
   body.innerHTML=bellNotifs.map(n=>`
-    <div class="ni unread" onclick="clickNotif('${n.id}','${n.tarea_id||""}')">
+    <div class="ni unread" onclick="clickNotif('${n.id}','${n.tarea_id||""}','${n.tipo||""}','${esc(n.meta||"").replace(/'/g,"&#39;")}')">
       <div class="ni-icon">${tipoNotifIcon(n.tipo)}</div>
       <div class="ni-body">
         <div class="ni-msg">${esc(n.mensaje)}</div>
@@ -10104,9 +10154,19 @@ function toggleNotifPanel(){
   if(panel.classList.contains("show"))renderNotifPanel();
 }
 
-async function clickNotif(id,tareaId){
+async function clickNotif(id,tareaId,tipo,meta){
   await markNotifLeida(id);
   document.getElementById("notif-panel")?.classList.remove("show");
+  if(tipo==="colaboracion_chat"){
+    // meta contiene chatId y chatNombre
+    if(meta){try{const m=JSON.parse(meta);if(m.chatId)cargarChatCurso(m.chatId,m.chatNombre||"Chat compartido");}catch{}}
+    return;
+  }
+  if(tipo==="mensaje_interno"){
+    goPage("instructores",document.getElementById("nav-instructores"));
+    setTimeout(()=>setInstTab("mensajes"),350);
+    return;
+  }
   // Rol comunicaciones: no redirigir a tareas
   if(loggedUser?.rol==="comunicaciones")return;
   if(tareaId){
@@ -10159,6 +10219,213 @@ async function notifyAssignees(tarea,tipo,mensaje,excludeId){
     if(uid===excludeId)continue;
     await createNotif(uid,tipo,tarea.id,mensaje);
   }
+}
+
+// ══ COLABORACIÓN DE CHATS ══
+async function invitarColaboradorChat(){
+  if(!cursoIAChatId){toast("Guardá el chat antes de invitar","inf");return;}
+  if(!users.length)await loadUsuarios();
+  const opts=users.filter(u=>u.id!==loggedUser?.id&&u.activo!==false);
+  if(!opts.length){toast("No hay otros usuarios disponibles","inf");return;}
+  document.getElementById("modal-invitar-chat")?.remove();
+  const el=document.createElement("div");
+  el.id="modal-invitar-chat";
+  el.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10001;display:flex;align-items:center;justify-content:center";
+  el.onclick=e=>{if(e.target===el)el.remove();};
+  el.innerHTML=`<div style="background:var(--surf);border-radius:14px;padding:20px;min-width:320px;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.28)">
+    <div style="font-weight:600;font-size:14px;margin-bottom:14px">👥 Invitar colaborador — ${esc(cursoIAChatNombre)}</div>
+    <div style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto">
+      ${opts.map(u=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--b);border-radius:8px;cursor:pointer"
+        onclick="enviarInvitacionChat('${u.id}','${esc(u.nombre).replace(/'/g,"&#39;")}');document.getElementById('modal-invitar-chat').remove()">
+        <div style="width:32px;height:32px;border-radius:50%;background:var(--pu);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0">${esc(u.nombre).charAt(0).toUpperCase()}</div>
+        <div>
+          <div style="font-size:13px;font-weight:500">${esc(u.nombre)}</div>
+          <div style="font-size:11px;color:var(--tx3)">${esc(u.email||u.rol||"")}</div>
+        </div>
+      </div>`).join("")}
+    </div>
+    <div style="margin-top:14px;display:flex;justify-content:flex-end">
+      <button class="btn sm" onclick="document.getElementById('modal-invitar-chat').remove()">Cancelar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(el);
+}
+
+async function enviarInvitacionChat(userId,nombre){
+  try{
+    await sb("chat_colaboradores",{method:"POST",body:JSON.stringify({
+      chat_id:cursoIAChatId,
+      usuario_id:userId,
+      invitado_por:loggedUser?.id,
+      estado:"pendiente",
+      organizacion_id:loggedUser?.organizacion_id||null
+    })});
+    await createNotif(userId,"colaboracion_chat",null,`${loggedUser?.nombre||"Alguien"} te invitó al chat "${cursoIAChatNombre}"`);
+    toast(`Invitación enviada a ${nombre}`,"ok");
+  }catch(e){toast("Error enviando invitación: "+e.message,"err");}
+}
+
+async function responderInvitacionChat(colabId,chatId,chatNombre,accept){
+  try{
+    await sb(`chat_colaboradores?id=eq.${colabId}`,{method:"PATCH",body:JSON.stringify({estado:accept?"aceptado":"rechazado"})});
+    if(accept){
+      toast(`Ahora tenés acceso al chat "${chatNombre}"`,"ok");
+      cargarChatCurso(chatId,chatNombre);
+    }else{
+      toast("Invitación rechazada","inf");
+    }
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+// ══ MENSAJERÍA INTERNA ══
+let _instTab="instructores";
+let _mensConvActiva=null; // {userId, nombre}
+let _mensajes=[]; // cache mensajes conv activa
+
+function setInstTab(tab){
+  _instTab=tab;
+  document.getElementById("inst-panel-instructores").style.display=tab==="instructores"?"":"none";
+  document.getElementById("inst-panel-mensajes").style.display=tab==="mensajes"?"":"none";
+  const ti=document.getElementById("inst-tab-inst");
+  const tm=document.getElementById("inst-tab-mens");
+  if(ti){ti.style.color=tab==="instructores"?"var(--pu)":"var(--tx3)";ti.style.borderBottomColor=tab==="instructores"?"var(--pu)":"transparent";ti.style.fontWeight=tab==="instructores"?"700":"400";}
+  if(tm){tm.style.color=tab==="mensajes"?"var(--pu)":"var(--tx3)";tm.style.borderBottomColor=tab==="mensajes"?"var(--pu)":"transparent";tm.style.fontWeight=tab==="mensajes"?"700":"400";}
+  if(tab==="mensajes")renderConvList();
+}
+
+async function loadMensajesInternos(){
+  if(!loggedUser)return;
+  try{
+    // Contar no leídos
+    const noLeidos=await sb(`mensajes_internos?to_user_id=eq.${loggedUser.id}&leido=eq.false&select=id`);
+    const badge=document.getElementById("inst-msg-badge");
+    if(badge){
+      if(noLeidos.length>0){badge.textContent=noLeidos.length>9?"9+":noLeidos.length;badge.style.display="";}
+      else{badge.style.display="none";}
+    }
+  }catch{}
+}
+
+async function renderConvList(){
+  if(!loggedUser)return;
+  const cont=document.getElementById("inst-conv-items");
+  if(!cont)return;
+  cont.innerHTML=`<div style="padding:16px;font-size:12px;color:var(--tx3);text-align:center">Cargando...</div>`;
+  try{
+    // Cargar conversaciones únicas (enviados + recibidos)
+    const [sent,recv]=await Promise.all([
+      sb(`mensajes_internos?from_user_id=eq.${loggedUser.id}&select=to_user_id,to_nombre,created_at,leido&order=created_at.desc`),
+      sb(`mensajes_internos?to_user_id=eq.${loggedUser.id}&select=from_user_id,from_nombre,created_at,leido&order=created_at.desc`)
+    ]);
+    // Construir mapa de conversaciones por userId
+    const convMap={};
+    sent.forEach(m=>{if(!convMap[m.to_user_id])convMap[m.to_user_id]={userId:m.to_user_id,nombre:m.to_nombre,lastTime:m.created_at,unread:0};});
+    recv.forEach(m=>{
+      if(!convMap[m.from_user_id])convMap[m.from_user_id]={userId:m.from_user_id,nombre:m.from_nombre,lastTime:m.created_at,unread:0};
+      if(!m.leido)convMap[m.from_user_id].unread=(convMap[m.from_user_id].unread||0)+1;
+    });
+    const convs=Object.values(convMap).sort((a,b)=>new Date(b.lastTime)-new Date(a.lastTime));
+    if(!convs.length){cont.innerHTML=`<div style="padding:16px;font-size:12px;color:var(--tx3);text-align:center">Ninguna conversación todavía</div>`;return;}
+    cont.innerHTML=convs.map(c=>`
+      <div onclick="abrirConversacion('${c.userId}','${esc(c.nombre).replace(/'/g,"&#39;")}',this)"
+        style="padding:12px 14px;cursor:pointer;border-bottom:1px solid var(--b);display:flex;align-items:center;gap:10px${_mensConvActiva?.userId===c.userId?";background:var(--surf2)":""}"
+        class="conv-item">
+        <div style="width:34px;height:34px;border-radius:50%;background:var(--pu);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;flex-shrink:0">${esc(c.nombre).charAt(0).toUpperCase()}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:${c.unread?"700":"500"}">${esc(c.nombre)}</div>
+          ${c.unread?`<div style="font-size:10px;background:var(--re);color:#fff;border-radius:8px;padding:1px 6px;display:inline-block">${c.unread} sin leer</div>`:""}
+        </div>
+      </div>`).join("");
+  }catch(e){cont.innerHTML=`<div style="padding:16px;font-size:12px;color:var(--re)">Error cargando conversaciones</div>`;}
+}
+
+async function abrirConversacion(userId,nombre,el){
+  _mensConvActiva={userId,nombre};
+  document.querySelectorAll(".conv-item").forEach(i=>i.style.background="");
+  if(el)el.style.background="var(--surf2)";
+  const header=document.getElementById("inst-thread-header");
+  if(header)header.textContent=nombre;
+  const inputDiv=document.getElementById("inst-thread-input");
+  if(inputDiv)inputDiv.style.display="flex";
+  const msgCont=document.getElementById("inst-thread-msgs");
+  if(msgCont)msgCont.innerHTML=`<div style="text-align:center;font-size:12px;color:var(--tx3)">Cargando...</div>`;
+  try{
+    // Marcar como leídos
+    await sb(`mensajes_internos?to_user_id=eq.${loggedUser.id}&from_user_id=eq.${userId}&leido=eq.false`,
+      {method:"PATCH",body:JSON.stringify({leido:true})});
+    loadMensajesInternos();
+    // Cargar mensajes
+    const [sent,recv]=await Promise.all([
+      sb(`mensajes_internos?from_user_id=eq.${loggedUser.id}&to_user_id=eq.${userId}&select=*&order=created_at.asc`),
+      sb(`mensajes_internos?from_user_id=eq.${userId}&to_user_id=eq.${loggedUser.id}&select=*&order=created_at.asc`)
+    ]);
+    _mensajes=[...sent,...recv].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+    renderMensajesThread();
+  }catch(e){if(msgCont)msgCont.innerHTML=`<div style="text-align:center;font-size:12px;color:var(--re)">Error cargando mensajes</div>`;}
+}
+
+function renderMensajesThread(){
+  const cont=document.getElementById("inst-thread-msgs");
+  if(!cont)return;
+  if(!_mensajes.length){cont.innerHTML=`<div style="text-align:center;color:var(--tx3);font-size:12px;margin-top:40px">Comenzá la conversación</div>`;return;}
+  cont.innerHTML=_mensajes.map(m=>{
+    const mine=m.from_user_id===loggedUser?.id;
+    const hora=new Date(m.created_at).toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"});
+    return `<div style="display:flex;flex-direction:column;align-items:${mine?"flex-end":"flex-start"};gap:2px">
+      <div style="background:${mine?"var(--pu)":"var(--surf2)"};color:${mine?"#fff":"var(--tx)"};padding:8px 12px;border-radius:${mine?"12px 12px 2px 12px":"12px 12px 12px 2px"};font-size:13px;max-width:75%">${esc(m.contenido)}</div>
+      <div style="font-size:10px;color:var(--tx3)">${hora}</div>
+    </div>`;
+  }).join("");
+  cont.scrollTop=cont.scrollHeight;
+}
+
+async function enviarMensajeInterno(){
+  const input=document.getElementById("inst-msg-input");
+  const contenido=(input?.value||"").trim();
+  if(!contenido||!_mensConvActiva||!loggedUser)return;
+  input.value="";
+  try{
+    const[m]=await sb("mensajes_internos",{method:"POST",body:JSON.stringify({
+      from_user_id:loggedUser.id,
+      from_nombre:loggedUser.nombre||loggedUser.email||"",
+      to_user_id:_mensConvActiva.userId,
+      to_nombre:_mensConvActiva.nombre,
+      contenido,
+      leido:false,
+      organizacion_id:loggedUser.organizacion_id||null
+    })});
+    if(m)_mensajes.push(m);
+    renderMensajesThread();
+    await createNotif(_mensConvActiva.userId,"mensaje_interno",null,`${loggedUser.nombre||"Alguien"}: ${contenido.substring(0,60)}${contenido.length>60?"...":""}`);
+  }catch(e){toast("Error enviando mensaje: "+e.message,"err");input.value=contenido;}
+}
+
+async function nuevaConversacion(){
+  if(!users.length)await loadUsuarios();
+  const opts=users.filter(u=>u.id!==loggedUser?.id&&u.activo!==false);
+  if(!opts.length){toast("No hay otros usuarios disponibles","inf");return;}
+  document.getElementById("modal-nueva-conv")?.remove();
+  const el=document.createElement("div");
+  el.id="modal-nueva-conv";
+  el.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10001;display:flex;align-items:center;justify-content:center";
+  el.onclick=e=>{if(e.target===el)el.remove();};
+  el.innerHTML=`<div style="background:var(--surf);border-radius:14px;padding:20px;min-width:300px;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,.28)">
+    <div style="font-weight:600;font-size:14px;margin-bottom:14px">💬 Nueva conversación</div>
+    <div style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto">
+      ${opts.map(u=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--b);border-radius:8px;cursor:pointer"
+        onclick="abrirConversacion('${u.id}','${esc(u.nombre).replace(/'/g,"&#39;")}');document.getElementById('modal-nueva-conv').remove()">
+        <div style="width:32px;height:32px;border-radius:50%;background:var(--pu);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0">${esc(u.nombre).charAt(0).toUpperCase()}</div>
+        <div>
+          <div style="font-size:13px;font-weight:500">${esc(u.nombre)}</div>
+          <div style="font-size:11px;color:var(--tx3)">${esc(u.email||u.rol||"")}</div>
+        </div>
+      </div>`).join("")}
+    </div>
+    <div style="margin-top:14px;display:flex;justify-content:flex-end">
+      <button class="btn sm" onclick="document.getElementById('modal-nueva-conv').remove()">Cancelar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(el);
 }
 
 function requestPushPermission(){

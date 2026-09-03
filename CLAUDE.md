@@ -292,7 +292,7 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 
 ### Bloqueados por externos
 - [ ] LinkedIn sync — esperando aprobación Community Management API (app "Metanoia CMS", enviado 2 Jun 2026)
-- [ ] **Meta Business — resubmisión app Instagram DM** — 4 permisos resubmitidos el 7 Jul 2026 con textos mejorados (3 puntos Meta), videos correctos (flujo IG, no WA) y System User token declarado. Esperando revisión (3-7 días hábiles).
+- [ ] **Meta Business — Human Agent (Instagram DM)** — Revisión del 27 Jul 2026: 3/4 aprobados (`instagram_business_basic`, `manage_messages`, `manage_insights` ✅). `Human Agent` rechazado: Meta no pudo acceder al panel (requiere login — faltaron credenciales de prueba). Para resubmitir: crear usuario rol `comunicaciones` para revisores + instrucciones paso a paso (URL → Login → Comunicaciones → tab Mensajes). Impacto bajo: escalación ya va por WhatsApp. **Diferido.**
 
 ### Pendiente de prueba (implementado, validar esta tarde)
 - [ ] Integración E-learning + Finnegans — transmisión automática de cursos a plataforma.metanoiasmx.com + facturación vía Finnegans API. Implementado en teoría. Probar a la tarde del 7 Jul 2026.
@@ -476,7 +476,13 @@ ALTER TABLE cursos ADD CONSTRAINT cursos_estado_check CHECK (estado IN ('Borrado
 - ✅ Tabla `nps_respuestas` en Supabase con RLS
 - ✅ Compatible con futura integración WhatsApp (cuando se apruebe el template Meta `nps_post_curso`)
 
-**SQL corrido (Supabase):** `instrumentos_evaluacion`, `evaluaciones_alumno`, `debriefings`, `nps_respuestas` + 4 INSERT instrumentos estándar
+### NPS WhatsApp (integración completa)
+- ✅ Edge function `enviar-nps-wpp` — envía template `nps_post_curso` a inscriptos con teléfono (normalización automática formato argentino), registra en `nps_envios`
+- ✅ `agente-mensajes` actualizado — detecta respuesta numérica 0-10 de un número con envío pendiente, guarda en `nps_respuestas` (`canal='whatsapp'`), marca `nps_envios.estado='respondido'`, responde con agradecimiento. No pasa a Claude.
+- ✅ Tabla `nps_envios` — seguimiento de encuestas enviadas (telefono, wa_message_id, estado: enviado/respondido/fallido)
+- ⏳ Template Meta `nps_post_curso` — enviado para aprobación (categoría Utilidad, cuerpo: "Hola {{1}}, gracias por participar en *{{2}}*. ¿Cómo calificarías la experiencia del *1 al 10*? Solo respondé con el número."). Aprobación: 24-72h hábiles.
+
+**SQL corrido (Supabase):** `instrumentos_evaluacion`, `evaluaciones_alumno`, `debriefings`, `nps_respuestas`, `nps_envios` + 4 INSERT instrumentos estándar
 
 ## Implementado (27 Ago 2026) — Agente cursos: Excel, guardar/retomar chats, escenarios clínicos proyectables
 
@@ -521,7 +527,7 @@ CREATE POLICY "Solo autenticados" ON agente_cursos_chats FOR ALL TO authenticate
 - ✅ Exportación NC Finnegans — botón "Exportar XLS" en Comprobantes convertido a dropdown: **Facturas** (comportamiento anterior) / **Notas de crédito** (nuevo); archivo `notas_credito_finnegans_FECHA.xls`
 - ✅ Mobile fixes — scroll horizontal en todas las tablas JS-generadas (caja, historial, historial pagos, cuotas préstamos, sueldos pendientes, ap-tabla-cuotas)
 
-**SQL pendiente — correr en Supabase SQL editor:**
+**SQL corrido (31 Ago 2026):**
 ```sql
 -- Tabla VEPs
 CREATE TABLE IF NOT EXISTS impuestos_vep (
@@ -543,12 +549,12 @@ ALTER TABLE impuestos_vep ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Solo autenticados" ON impuestos_vep FOR ALL TO authenticated USING (true) WITH CHECK (true);
 ```
 
-**Storage pendiente — crear en Supabase Dashboard:**
-- Bucket: `impuestos-vep` → Public (para que leer-factura pueda descargar el PDF via URL pública)
+**Storage creado (31 Ago 2026):**
+- ✅ Bucket: `impuestos-vep` → Public
 
-**Deploy pendiente — Supabase Dashboard → Edge Functions:**
-- `leer-factura` — actualizado con soporte tipo=vep
-- `agente-mensajes` — programa MSP Salta (sesión anterior)
+**Deploy realizado (31 Ago 2026) — Supabase Dashboard → Edge Functions:**
+- ✅ `leer-factura` — deployado con soporte tipo=vep
+- ✅ `agente-mensajes` — deployado con programa MSP Salta
 
 ## Implementado (24 Jul 2026) — Caja: cambio de moneda, historial, transferencias inter-sociedad
 
@@ -560,7 +566,7 @@ CREATE POLICY "Solo autenticados" ON impuestos_vep FOR ALL TO authenticated USIN
 - ✅ Cambiar contraseña desde topbar — dropdown usuario → 🔑 Cambiar contraseña → modal con validación, llama a `PUT /auth/v1/user` con el JWT del usuario.
 - ✅ Fix OP modal — `abrirOrdenPago` es async y lazy-carga `medios_pago` si no fueron cargados (cuando se abre CF sin visitar la tab Cuentas primero).
 
-**SQL pendiente (ya documentado en sesión anterior):**
+**SQL corrido (31 Ago 2026):**
 ```sql
 ALTER TABLE caja_movimientos ADD COLUMN IF NOT EXISTS moneda text DEFAULT 'ARS';
 ALTER TABLE medios_pago ADD COLUMN IF NOT EXISTS cuenta_contable_id uuid REFERENCES plan_cuentas(id);
@@ -574,6 +580,75 @@ ALTER TABLE medios_pago ADD COLUMN IF NOT EXISTS cuenta_contable_id uuid REFEREN
 - ✅ Tab Caja unificado dentro de "🏦 Cuentas & Caja" — sub-tabs: "💳 Cuentas y tarjetas" / "💵 Caja". Tab bar con un tab menos.
 - ✅ **Fase 0 contable** — Reporte exportable Excel (4 hojas: Facturas pagadas, Sueldos, Cuotas préstamos, Resumen con totales y retenciones SICORE+IIBB practicadas). Respeta filtros de sociedad y mes activos. Botón en sub-tab Historial.
 - ✅ CLAUDE.md actualizado con spec contable completo (`plan_modulo_contable_metanoia.md`), roadmap 4 fases y nota ARCA.
+
+## Implementado (3 Sep 2026) — Colaboración de chats + Mensajería interna + Multi-tenancy foundation
+
+- ✅ **Tab "💬 Mensajes"** en pg-instructores — tab bar "👥 Instructores" | "💬 Mensajes (N)" con badge de no leídos
+- ✅ **Mensajería interna** — conversaciones entre usuarios del panel (panel izquierdo con lista, panel derecho con burbujas), notificación automática al destinatario
+- ✅ **Colaboración de chats IA** — botón "👥 Invitar" en modal agente-cursos; al guardar un chat el dueño puede invitar a colaboradores; lista de chats muestra sección "COMPARTIDOS CONMIGO" con badge "compartido"
+- ✅ **Privacy de chats** — `listarChatsCurso()` filtra por `user_id` del usuario logueado (con fallback por email)
+- ✅ **`_updateChatLabel()`** actualizado para mostrar/ocultar botón Invitar según si hay chat guardado
+- ✅ **Multi-tenancy foundation** — tablas nuevas incluyen `organizacion_id`; `guardarChatCurso()` persiste `user_id` y `organizacion_id`; arquitectura lista para escalar a FASGO/SASIM
+- ✅ **Tipos de notif nuevos** — `colaboracion_chat` (👥) y `mensaje_interno` (💬) en `tipoNotifLabel` / `tipoNotifIcon`; `clickNotif()` navega al chat o a mensajes según tipo
+- ✅ sw.js v42 → v43
+
+**SQL a correr en Supabase (3 Sep 2026):**
+```sql
+-- Multi-tenancy: tabla de organizaciones
+CREATE TABLE IF NOT EXISTS organizaciones (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  nombre text NOT NULL,
+  slug text UNIQUE,
+  activo boolean DEFAULT true,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE organizaciones ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Solo autenticados" ON organizaciones FOR ALL TO authenticated USING (true) WITH CHECK (true);
+INSERT INTO organizaciones (nombre, slug) VALUES ('Metanoia SMX', 'metanoia-smx') ON CONFLICT (slug) DO NOTHING;
+
+-- Agregar organizacion_id a usuarios (para multi-tenancy futuro)
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS organizacion_id uuid REFERENCES organizaciones(id);
+
+-- Agregar user_id y organizacion_id a chats (para privacidad y multi-tenancy)
+ALTER TABLE agente_cursos_chats ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES usuarios(id);
+ALTER TABLE agente_cursos_chats ADD COLUMN IF NOT EXISTS organizacion_id uuid REFERENCES organizaciones(id);
+
+-- Tabla colaboradores de chat
+CREATE TABLE IF NOT EXISTS chat_colaboradores (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  chat_id uuid NOT NULL REFERENCES agente_cursos_chats(id) ON DELETE CASCADE,
+  usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  invitado_por uuid REFERENCES usuarios(id),
+  estado text DEFAULT 'pendiente' CHECK (estado IN ('pendiente','aceptado','rechazado')),
+  organizacion_id uuid REFERENCES organizaciones(id),
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(chat_id, usuario_id)
+);
+ALTER TABLE chat_colaboradores ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Solo autenticados" ON chat_colaboradores FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- Tabla mensajes internos entre usuarios del panel
+CREATE TABLE IF NOT EXISTS mensajes_internos (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  from_user_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  from_nombre text NOT NULL,
+  to_user_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  to_nombre text NOT NULL,
+  contenido text NOT NULL,
+  leido boolean DEFAULT false,
+  organizacion_id uuid REFERENCES organizaciones(id),
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE mensajes_internos ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Solo autenticados" ON mensajes_internos FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- Agregar campo meta a notificaciones (para datos extras como chatId)
+ALTER TABLE notificaciones ADD COLUMN IF NOT EXISTS meta jsonb;
+```
+
+**Deploy necesario (3 Sep 2026):** Solo frontend (index.html + sw.js) — `git push`.
+
+---
 
 ## Implementado (23 Jun 2026) — Agente mensajes y mejoras continuas
 - ✅ agente-mensajes: bot 24/7 para IG DM / FB Messenger / WhatsApp — Claude Haiku, escalación al equipo vía WA, transcripción de audio con Groq/Whisper, visión para imágenes
