@@ -590,7 +590,13 @@ ALTER TABLE medios_pago ADD COLUMN IF NOT EXISTS cuenta_contable_id uuid REFEREN
 - ✅ **`_updateChatLabel()`** actualizado para mostrar/ocultar botón Invitar según si hay chat guardado
 - ✅ **Multi-tenancy foundation** — tablas nuevas incluyen `organizacion_id`; `guardarChatCurso()` persiste `user_id` y `organizacion_id`; arquitectura lista para escalar a FASGO/SASIM
 - ✅ **Tipos de notif nuevos** — `colaboracion_chat` (👥) y `mensaje_interno` (💬) en `tipoNotifLabel` / `tipoNotifIcon`; `clickNotif()` navega al chat o a mensajes según tipo
-- ✅ sw.js v42 → v43
+- ✅ **pg-mensajes como página standalone** — eliminado de pg-instructores, movido a ítem propio en sidebar visible para todos los roles (comu/inst/logi); badge de no leídos actualizado cada 60s
+- ✅ **Búsqueda en modal de invitación** — input de búsqueda con auto-focus que filtra usuarios en tiempo real por nombre
+- ✅ **Aceptar/rechazar desde notificaciones** — botones ✅/❌ en el panel de notificaciones para invitaciones de colaboración; meta del chat guardado en `bellNotifs` y recuperado por ID (evita problemas de serialización JSON en onclick attrs)
+- ✅ **Aceptar/rechazar desde listado de chats** — sección "INVITACIONES PENDIENTES" en modal de chats con botones inline
+- ✅ **Nombre de usuario sobre burbujas** — en chat IA de cursos, el nombre del usuario aparece en gris pequeño encima de cada burbuja enviada (tiempo real y al retomar chats guardados); historial persiste campo `nombre` por mensaje
+- ✅ **Ideas en colaboración en Borradores** — `loadColabIdeasSection()` muestra cards con borde punteado morado en filtro Borradores de Cursos para cada chat colaborativo aceptado; click abre el chat directo
+- ✅ sw.js v42 → v44
 
 **SQL a correr en Supabase (3 Sep 2026):**
 ```sql
@@ -646,7 +652,38 @@ CREATE POLICY "Solo autenticados" ON mensajes_internos FOR ALL TO authenticated 
 ALTER TABLE notificaciones ADD COLUMN IF NOT EXISTS meta jsonb;
 ```
 
-**Deploy necesario (3 Sep 2026):** Solo frontend (index.html + sw.js) — `git push`.
+**Deploy realizado (3 Sep 2026):** `git push` — solo frontend.
+
+## Implementado (3 Sep 2026) — Agente mensajes: fixes, promo anual, imágenes en panel
+
+### agente-mensajes (edge function)
+- ✅ **Descripción de curso ampliada** — campo ampliado a 1200 chars; agente lee descripción completa para responder preguntas de fecha, arancel, formato sin pedir datos al usuario
+- ✅ **REGLA GLOBAL promo** — hasta el 31/10/2026 suscripción anual SIN CARGO; bot lo menciona proactivamente en conversaciones sobre cursos/precios
+- ✅ **REGLA respuesta directa** — responde con info del curso disponible sin pedir datos de contacto primero
+- ✅ **Fix escalación CRÍTICO** — al recibir datos del usuario (nombre/email/tel), retorna `{"escalar":true,...}` directo sin confirmar en texto; ejemplos explícitos en system prompt
+- ✅ **Link wa.me en notificación** — notificación al equipo incluye `https://wa.me/NUMERO` del cliente para contactar directo desde el celular
+- ✅ **Imágenes en Storage** — imagen de cliente (WA/IG/FB) se sube al bucket `mensajes-media` (público) y URL guardada en `imagen_url` de `mensajes_publico`
+
+### Panel — Tab Chats (antes "Mensajes")
+- ✅ **Renombrado Mensajes → Chats** — sidebar y tab interno de Comunicaciones
+- ✅ **Sección "💬 En proceso"** — conversaciones donde bot respondió pero no cerradas/escaladas
+- ✅ **Fix Terminados** — solo muestra `estado = 'cerrado'` explícito
+- ✅ **Detección histórica de escalados** — por frases en respuesta del bot para clasificar conversaciones viejas sin flag
+- ✅ **Botón "📤 Escalar" manual** — en sección En proceso
+- ✅ **Visualización de imágenes** — miniatura dentro de burbuja del cliente si `imagen_url` existe
+- ✅ **Préstamos finalizados colapsables** — en CF, sin cuotas pendientes van a sección plegada
+
+### Eliminado
+- ✅ Exportación Pixelio eliminada de Cursos, Alumnos e Instructores (botones + funciones JS)
+
+**SQL corrido (3 Sep 2026):**
+```sql
+ALTER TABLE mensajes_publico ADD COLUMN IF NOT EXISTS imagen_url text;
+```
+
+**Storage creado (3 Sep 2026):** Bucket `mensajes-media` → Public
+
+**Deploy realizado (3 Sep 2026):** `agente-mensajes` deployado + `index.html` vía `git push`
 
 ---
 
