@@ -502,6 +502,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   /* Formularios: 1 columna en mobile */
   .form-grid{grid-template-columns:1fr}
   .form-grid-2{grid-template-columns:1fr}
+  .oport-tipo-idea-grid{grid-template-columns:1fr!important}
   /* Portal form grids inline */
   .pf-2col{grid-template-columns:1fr !important}
   /* KPIs con ID único — forzar 2 columnas */
@@ -644,12 +645,12 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 .portal-comp-estado{font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;white-space:nowrap}
 .login-input{width:100%;box-sizing:border-box;background:var(--surf2);border:1px solid var(--b2);border-radius:var(--r);padding:10px 12px;font-family:var(--f);font-size:14px;color:var(--tx);outline:none;transition:border-color .15s;margin-bottom:4px}
 .login-input:focus{border-color:var(--pu)}
-.urol-card{display:flex;align-items:center;gap:14px;background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;transition:border-color .15s}
+.urol-card{display:flex;align-items:center;gap:14px;background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;transition:border-color .15s;flex-wrap:wrap}
 .urol-card:hover{border-color:var(--b2)}
 .urol-avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--fc);font-size:15px;font-weight:700;color:#fff;flex-shrink:0;transition:background .3s}
 .urol-info{flex:1;min-width:0}
 .urol-nombre{font-size:14px;font-weight:600;color:var(--tx)}
-.urol-email{font-size:12px;color:var(--tx3);margin-top:2px}
+.urol-email{font-size:12px;color:var(--tx3);margin-top:2px;overflow-wrap:break-word;word-break:break-word}
 .urol-sel{background:var(--surf2);border:1px solid var(--b2);border-radius:var(--r);padding:7px 10px;font-family:var(--f);font-size:13px;color:var(--tx);cursor:pointer;outline:none;transition:border-color .15s}
 .urol-sel:focus{border-color:var(--pu)}
 .urol-badge{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;padding:2px 7px;border-radius:20px;margin-top:4px;display:inline-block}
@@ -1995,7 +1996,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="mb">
       <input type="hidden" id="oport-edit-id">
       <!-- Tipo + Idea -->
-      <div style="display:grid;grid-template-columns:180px 1fr;gap:10px;margin-bottom:10px">
+      <div class="oport-tipo-idea-grid" style="display:grid;grid-template-columns:180px 1fr;gap:10px;margin-bottom:10px">
         <div>
           <div class="fl">Tipo</div>
           <select class="fi" id="oport-tipo">
@@ -2136,7 +2137,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 
   <!-- TABS -->
-  <div style="display:flex;gap:2px;border-bottom:1px solid var(--b);margin-bottom:18px">
+  <div class="cd-tabs" style="display:flex;gap:2px;border-bottom:1px solid var(--b);margin-bottom:18px">
     <button class="cd-tab on" id="cftab-resumen" onclick="setCFTab('resumen',this)">📊 Resumen mensual</button>
     <button class="cd-tab" id="cftab-prestamos" onclick="setCFTab('prestamos',this)">🏦 Préstamos y cuotas</button>
     <button class="cd-tab" id="cftab-cobranzas" onclick="setCFTab('cobranzas',this)">📥 Cobranzas</button>
@@ -2150,7 +2151,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <!-- TAB: RESUMEN MENSUAL -->
   <div id="cfpg-resumen">
     <!-- Sociedad selector -->
-    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
       <div class="fbar">
         <button class="fb on" onclick="setCFSociedad('SUDES',this)">SUDES</button>
         <button class="fb" onclick="setCFSociedad('POINTERS',this)">POINTERS</button>
@@ -2159,7 +2160,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <button class="fb" onclick="setCFEditMode('proy',this)" title="Editar valores proyectados">📊 Proyectado</button>
         <button class="fb on" onclick="setCFEditMode('real',this)" title="Editar valores ejecutados">✅ Real</button>
       </div>
-      <span style="font-size:11px;color:var(--tx3);margin-left:8px">Tab ⇥ siguiente · Enter ↵ abajo · Arrastrá ↘ para copiar</span>
+      <span class="hide-xs" style="font-size:11px;color:var(--tx3);margin-left:8px">Tab ⇥ siguiente · Enter ↵ abajo · Arrastrá ↘ para copiar</span>
       <button class="btn sm" onclick="abrirRegistrarCobro('','libre',0,null)" style="margin-left:auto">💰 Registrar cobro</button>
       <button class="btn sm pri" onclick="openAddConcepto()">+ Concepto</button>
     </div>
@@ -3399,7 +3400,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="sc"><div class="sc-l">Borradores</div><div class="sc-v va" id="cfB">—</div><div class="sc-s">en edición</div></div>
     <div class="sc"><div class="sc-l">Aprobados</div><div class="sc-v vg" id="cfP">—</div><div class="sc-s">listos</div></div>
   </div>
-  <div style="display:flex;gap:0;border-bottom:1px solid var(--b);margin-bottom:16px">
+  <div class="cd-tabs" style="gap:0;margin-bottom:16px">
     <div class="cd-tab on" id="cf-tab-triage" onclick="setCofradiaTab('triage')" style="cursor:pointer">📋 Triage</div>
     <div class="cd-tab" id="cf-tab-borradores" onclick="setCofradiaTab('borradores')" style="cursor:pointer">✍️ Borradores</div>
     <div class="cd-tab" id="cf-tab-fuentes" onclick="setCofradiaTab('fuentes')" style="cursor:pointer">📡 Fuentes</div>
@@ -4287,7 +4288,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <input class="fi" id="mop-obs-op" type="text" placeholder="Opcional">
     </div>
   </div>
-  <div class="ma" style="gap:8px">
+  <div class="ma" style="gap:8px;flex-wrap:wrap">
     <button class="bc" onclick="closeModal('modal-orden-pago')">Cancelar</button>
     <button id="mop-btn-solo-pdf" style="background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);border-radius:8px;padding:8px 16px;color:#A78BFA;cursor:pointer;font-size:13px" onclick="confirmarOrdenPago(false)">📄 Solo PDF</button>
     <button class="bk" onclick="confirmarOrdenPago(true)">💸 Pagar + OP</button>
@@ -10836,7 +10837,7 @@ function rutinaCard(r){
       <span class="tog-sl"></span>
     </label>
   </div>
-  <div style="padding:6px 13px 10px;border-top:1px solid var(--b);display:flex;gap:6px;background:var(--bg3)">
+  <div style="padding:6px 13px 10px;border-top:1px solid var(--b);display:flex;gap:6px;background:var(--bg3);flex-wrap:wrap">
     <button class="btn sm" onclick="openEditRutina('${r.id}')">Editar</button>
     <button class="btn sm" onclick="generarRutinaUnica('${r.id}')">Generar tarea ahora</button>
     <button class="btn sm danger" onclick="confirmDel2('rutina','${r.id}','${esc(r.nombre)}')">Eliminar</button>
@@ -22060,8 +22061,8 @@ async function renderMsgDetalle(fromId,plataforma){
                 </div>
                 ${m.feedback?(m.feedback_comentario?
                   `<div style="font-size:11px;color:var(--tx3);background:var(--surf2);border-radius:8px;padding:5px 8px;font-style:italic">"${esc(m.feedback_comentario)}"</div>`:
-                  `<div style="display:flex;gap:6px;align-items:flex-start" id="fb-comment-${m.id}">
-                    <textarea id="fb-txt-${m.id}" placeholder="${m.feedback==="dislike"?"¿Qué mejorarías?":"¿Qué estuvo bien?"}" rows="2" style="font-size:11px;padding:5px 8px;border:1px solid var(--b);border-radius:8px;background:var(--surf);color:var(--tx);resize:none;width:200px;font-family:inherit"></textarea>
+                  `<div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap" id="fb-comment-${m.id}">
+                    <textarea id="fb-txt-${m.id}" placeholder="${m.feedback==="dislike"?"¿Qué mejorarías?":"¿Qué estuvo bien?"}" rows="2" style="font-size:11px;padding:5px 8px;border:1px solid var(--b);border-radius:8px;background:var(--surf);color:var(--tx);resize:none;flex:1;min-width:120px;font-family:inherit"></textarea>
                     <button onclick="msgFeedbackComentario('${m.id}')" style="background:var(--primary);border:none;border-radius:8px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap">Guardar</button>
                   </div>`
                 ):""}
@@ -23606,7 +23607,7 @@ function renderPevBlocks(){
         <div style="font-size:12px;font-weight:700;color:var(--tx2)">${bloque.icon} ${bloque.label}</div>
         <div style="font-size:12px;color:var(--tx3)">USD ${bloqueTotal.toFixed(2)}</div>
       </div>
-      ${items.length?`<table style="width:100%;border-collapse:collapse;margin-bottom:6px">
+      ${items.length?`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;min-width:420px;border-collapse:collapse;margin-bottom:6px">
         <thead><tr>
           <th style="text-align:left;font-size:11px;color:var(--tx3);padding:2px 4px;font-weight:500">Descripción</th>
           <th style="text-align:right;font-size:11px;color:var(--tx3);padding:2px 4px;font-weight:500;width:70px">Cant/h</th>
@@ -23621,7 +23622,7 @@ function renderPevBlocks(){
           <td style="padding:2px 4px;text-align:right;font-size:12px;font-weight:600;color:var(--tx)">$${((parseFloat(it.cantidad)||0)*(parseFloat(it.precio)||0)).toFixed(2)}</td>
           <td style="padding:2px 4px;text-align:center"><button onclick="cotizPevRemoveItem(${it._idx})" style="background:none;border:none;cursor:pointer;color:var(--re);font-size:13px;padding:0 2px" title="Eliminar">✕</button></td>
         </tr>`).join("")}</tbody>
-      </table>`:""}
+      </table></div>`:""}
       <button class="btn sm sec" onclick="cotizPevAddItem('${bloque.key}')" style="font-size:11px;padding:3px 10px">+ Ítem</button>
     </div>`;
   }).join("");
@@ -24320,10 +24321,10 @@ function renderCofradiaBorradores(){
             <button class="btn sm" style="color:var(--re);border-color:var(--re)" onclick="eliminarBorrador('${bid}')">🗑</button>
           </div>
         </div>
-        <div style="display:flex;gap:2px;border-bottom:1px solid var(--b);margin-bottom:14px">
-          <button onclick="setCofradiaSubtab('${bid}','texto')" id="cst-texto-${bid}" style="font-size:12px;padding:6px 12px;border:none;background:none;color:var(--tx2);cursor:pointer;border-bottom:2px solid var(--ac);font-weight:600">📝 Texto</button>
-          <button onclick="setCofradiaSubtab('${bid}','redes')" id="cst-redes-${bid}" style="font-size:12px;padding:6px 12px;border:none;background:none;color:var(--tx3);cursor:pointer;border-bottom:2px solid transparent">📱 Redes</button>
-          <button onclick="setCofradiaSubtab('${bid}','revision')" id="cst-revision-${bid}" style="font-size:12px;padding:6px 12px;border:none;background:none;color:var(--tx3);cursor:pointer;border-bottom:2px solid transparent">🔬 Revisión</button>
+        <div style="display:flex;gap:2px;border-bottom:1px solid var(--b);margin-bottom:14px;overflow-x:auto;-webkit-overflow-scrolling:touch">
+          <button onclick="setCofradiaSubtab('${bid}','texto')" id="cst-texto-${bid}" style="font-size:12px;padding:6px 12px;border:none;background:none;color:var(--tx2);cursor:pointer;border-bottom:2px solid var(--ac);font-weight:600;white-space:nowrap;flex-shrink:0">📝 Texto</button>
+          <button onclick="setCofradiaSubtab('${bid}','redes')" id="cst-redes-${bid}" style="font-size:12px;padding:6px 12px;border:none;background:none;color:var(--tx3);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;flex-shrink:0">📱 Redes</button>
+          <button onclick="setCofradiaSubtab('${bid}','revision')" id="cst-revision-${bid}" style="font-size:12px;padding:6px 12px;border:none;background:none;color:var(--tx3);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;flex-shrink:0">🔬 Revisión</button>
         </div>
         <div id="csp-texto-${bid}">
           <div class="form-grid">
@@ -24876,7 +24877,7 @@ if('serviceWorker' in navigator){
         La IA genera el video desde cero usando el prompt de texto y las fotos de referencia.
       </div>
     </div>
-    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap">
       <button id="video-btn-del" class="btn" style="color:var(--re);border-color:var(--re);display:none" onclick="deleteVideoIA()">Eliminar</button>
       <button class="btn sec" id="btn-gen-prompt" onclick="comGenerarPrompt()" style="margin-right:auto">✨ Generar prompt con IA</button>
       <button class="btn pri" onclick="saveVideoIA()">Guardar</button>
