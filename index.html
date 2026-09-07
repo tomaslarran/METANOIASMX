@@ -502,6 +502,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   /* Formularios: 1 columna en mobile */
   .form-grid{grid-template-columns:1fr}
   .form-grid-2{grid-template-columns:1fr}
+  .oport-tipo-idea-grid{grid-template-columns:1fr!important}
   /* Portal form grids inline */
   .pf-2col{grid-template-columns:1fr !important}
   /* KPIs con ID único — forzar 2 columnas */
@@ -539,6 +540,13 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   #ch-filtros{grid-template-columns:1fr 1fr!important}
   /* Sueldos / historial filtros flex → wrap */
   .hist-filtros{flex-wrap:wrap}
+  /* Mensajes internos: lista y conversación apiladas, tipo WhatsApp */
+  #msgs-layout{height:calc(100vh - 220px);min-height:320px}
+  #msgs-conv-list{width:100%!important;min-width:0!important}
+  #msgs-thread-panel{display:none}
+  #msgs-layout.thread-open #msgs-conv-list{display:none}
+  #msgs-layout.thread-open #msgs-thread-panel{display:flex!important}
+  #msgs-back-btn{display:inline-block!important}
 }
 @media(max-width:400px){
   .stats{grid-template-columns:1fr}
@@ -637,12 +645,12 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 .portal-comp-estado{font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;white-space:nowrap}
 .login-input{width:100%;box-sizing:border-box;background:var(--surf2);border:1px solid var(--b2);border-radius:var(--r);padding:10px 12px;font-family:var(--f);font-size:14px;color:var(--tx);outline:none;transition:border-color .15s;margin-bottom:4px}
 .login-input:focus{border-color:var(--pu)}
-.urol-card{display:flex;align-items:center;gap:14px;background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;transition:border-color .15s}
+.urol-card{display:flex;align-items:center;gap:14px;background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;transition:border-color .15s;flex-wrap:wrap}
 .urol-card:hover{border-color:var(--b2)}
 .urol-avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--fc);font-size:15px;font-weight:700;color:#fff;flex-shrink:0;transition:background .3s}
 .urol-info{flex:1;min-width:0}
 .urol-nombre{font-size:14px;font-weight:600;color:var(--tx)}
-.urol-email{font-size:12px;color:var(--tx3);margin-top:2px}
+.urol-email{font-size:12px;color:var(--tx3);margin-top:2px;overflow-wrap:break-word;word-break:break-word}
 .urol-sel{background:var(--surf2);border:1px solid var(--b2);border-radius:var(--r);padding:7px 10px;font-family:var(--f);font-size:13px;color:var(--tx);cursor:pointer;outline:none;transition:border-color .15s}
 .urol-sel:focus{border-color:var(--pu)}
 .urol-badge{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;padding:2px 7px;border-radius:20px;margin-top:4px;display:inline-block}
@@ -1488,13 +1496,13 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div><div class="pg-title">💬 Mensajes</div><div class="pg-title-sub">Conversaciones internas del equipo</div></div>
     <button class="btn pri" onclick="nuevaConversacion()">+ Nueva conversación</button>
   </div>
-  <div style="display:flex;gap:14px;height:calc(100vh - 160px);min-height:400px">
+  <div id="msgs-layout" style="display:flex;gap:14px;height:calc(100vh - 160px);min-height:400px">
     <div id="msgs-conv-list" style="width:260px;min-width:200px;border:1px solid var(--b);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;flex-shrink:0">
       <div style="padding:12px 14px;font-size:11px;font-weight:700;color:var(--tx3);border-bottom:1px solid var(--b);text-transform:uppercase;letter-spacing:.5px">Conversaciones</div>
       <div id="msgs-conv-items" style="flex:1;overflow-y:auto"><div style="padding:16px;font-size:12px;color:var(--tx3);text-align:center">Cargando...</div></div>
     </div>
-    <div style="flex:1;display:flex;flex-direction:column;border:1px solid var(--b);border-radius:12px;overflow:hidden">
-      <div id="msgs-thread-header" style="padding:12px 16px;border-bottom:1px solid var(--b);font-size:13px;font-weight:600;color:var(--tx)">Seleccioná una conversación</div>
+    <div id="msgs-thread-panel" style="flex:1;display:flex;flex-direction:column;border:1px solid var(--b);border-radius:12px;overflow:hidden;min-width:0">
+      <div id="msgs-thread-header" style="padding:12px 16px;border-bottom:1px solid var(--b);font-size:13px;font-weight:600;color:var(--tx);display:flex;align-items:center;gap:6px"><button id="msgs-back-btn" onclick="cerrarConversacionMobile()" style="display:none;background:none;border:none;color:var(--tx);font-size:16px;cursor:pointer;padding:0 4px 0 0;line-height:1">←</button><span id="msgs-thread-header-txt">Seleccioná una conversación</span></div>
       <div id="msgs-thread-msgs" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px"><div style="text-align:center;color:var(--tx3);font-size:12px;margin-top:40px">Seleccioná una conversación para ver los mensajes</div></div>
       <div id="msgs-thread-input" style="display:none;padding:10px 12px;border-top:1px solid var(--b);display:flex;gap:8px">
         <textarea id="msgs-msg-input" placeholder="Escribí un mensaje..." rows="2" style="flex:1;resize:none;border:1px solid var(--b);border-radius:8px;padding:8px;font-size:13px;background:var(--surf);color:var(--tx);font-family:inherit" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarMensajeInterno()}"></textarea>
@@ -1988,7 +1996,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="mb">
       <input type="hidden" id="oport-edit-id">
       <!-- Tipo + Idea -->
-      <div style="display:grid;grid-template-columns:180px 1fr;gap:10px;margin-bottom:10px">
+      <div class="oport-tipo-idea-grid" style="display:grid;grid-template-columns:180px 1fr;gap:10px;margin-bottom:10px">
         <div>
           <div class="fl">Tipo</div>
           <select class="fi" id="oport-tipo">
@@ -2129,7 +2137,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 
   <!-- TABS -->
-  <div style="display:flex;gap:2px;border-bottom:1px solid var(--b);margin-bottom:18px">
+  <div class="cd-tabs" style="display:flex;gap:2px;border-bottom:1px solid var(--b);margin-bottom:18px">
     <button class="cd-tab on" id="cftab-resumen" onclick="setCFTab('resumen',this)">📊 Resumen mensual</button>
     <button class="cd-tab" id="cftab-prestamos" onclick="setCFTab('prestamos',this)">🏦 Préstamos y cuotas</button>
     <button class="cd-tab" id="cftab-cobranzas" onclick="setCFTab('cobranzas',this)">📥 Cobranzas</button>
@@ -2143,7 +2151,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <!-- TAB: RESUMEN MENSUAL -->
   <div id="cfpg-resumen">
     <!-- Sociedad selector -->
-    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
       <div class="fbar">
         <button class="fb on" onclick="setCFSociedad('SUDES',this)">SUDES</button>
         <button class="fb" onclick="setCFSociedad('POINTERS',this)">POINTERS</button>
@@ -2152,7 +2160,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <button class="fb" onclick="setCFEditMode('proy',this)" title="Editar valores proyectados">📊 Proyectado</button>
         <button class="fb on" onclick="setCFEditMode('real',this)" title="Editar valores ejecutados">✅ Real</button>
       </div>
-      <span style="font-size:11px;color:var(--tx3);margin-left:8px">Tab ⇥ siguiente · Enter ↵ abajo · Arrastrá ↘ para copiar</span>
+      <span class="hide-xs" style="font-size:11px;color:var(--tx3);margin-left:8px">Tab ⇥ siguiente · Enter ↵ abajo · Arrastrá ↘ para copiar</span>
       <button class="btn sm" onclick="abrirRegistrarCobro('','libre',0,null)" style="margin-left:auto">💰 Registrar cobro</button>
       <button class="btn sm pri" onclick="openAddConcepto()">+ Concepto</button>
     </div>
@@ -3392,7 +3400,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="sc"><div class="sc-l">Borradores</div><div class="sc-v va" id="cfB">—</div><div class="sc-s">en edición</div></div>
     <div class="sc"><div class="sc-l">Aprobados</div><div class="sc-v vg" id="cfP">—</div><div class="sc-s">listos</div></div>
   </div>
-  <div style="display:flex;gap:0;border-bottom:1px solid var(--b);margin-bottom:16px">
+  <div class="cd-tabs" style="gap:0;margin-bottom:16px">
     <div class="cd-tab on" id="cf-tab-triage" onclick="setCofradiaTab('triage')" style="cursor:pointer">📋 Triage</div>
     <div class="cd-tab" id="cf-tab-borradores" onclick="setCofradiaTab('borradores')" style="cursor:pointer">✍️ Borradores</div>
     <div class="cd-tab" id="cf-tab-fuentes" onclick="setCofradiaTab('fuentes')" style="cursor:pointer">📡 Fuentes</div>
@@ -4019,12 +4027,15 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
   <div class="fg" style="margin-bottom:12px"><label class="fl">Responsables</label><div class="user-checks" id="modalUserChecks" style="display:flex;flex-wrap:wrap;gap:5px;padding:6px 0"></div></div>
   <div class="form-grid-2">
+    <div class="fg"><label class="fl">Fecha inicio <span style="color:var(--tx3);font-weight:400">(opcional, para varios días)</span></label><input class="fi" id="mfi" type="date" style="padding:7px 10px"></div>
     <div class="fg"><label class="fl">Vencimiento</label><input class="fi" id="md" type="date" style="padding:7px 10px" onchange="checkTareaConflicto()"></div>
-    <div class="fg"><label class="fl">Hora</label><input class="fi" id="mhora" type="time" style="padding:7px 10px" placeholder="Sin hora específica"></div>
   </div>
   <div class="form-grid-2">
+    <div class="fg"><label class="fl">Hora</label><input class="fi" id="mhora" type="time" style="padding:7px 10px" placeholder="Sin hora específica"></div>
     <div class="fg"><label class="fl">Categoría</label><select class="fs" id="mcat"><option value="">Sin categoría</option><option>Administración</option><option>Finanzas</option><option>Operaciones</option><option>Cursos</option><option>RRHH</option><option>Legal/Impositivo</option><option>Marketing</option><option>General</option></select></div>
-    <div class="fg"><label class="fl">Descripción</label><input class="fi" id="mdesc" type="text" placeholder="Notas..."></div>
+  </div>
+  <div class="form-grid-2">
+    <div class="fg form-full"><label class="fl">Descripción</label><input class="fi" id="mdesc" type="text" placeholder="Notas..."></div>
   </div>
   <div id="tarea-conflicto-aviso" style="display:none;margin-top:8px;padding:8px 12px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);border-radius:6px;font-size:12px;color:#FCD34D"></div>
   <div class="ma"><button class="bc" onclick="closeModal('modal-tarea')">Cancelar</button><button class="bk" id="mbtn" onclick="createTask()">Crear tarea</button></div>
@@ -4112,6 +4123,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         📎
         <input type="file" multiple accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.xlsx,.xls" style="display:none" onchange="adjuntarArchivoCursoIA(this)">
       </label>
+      <button type="button" id="btn-curso-ia-mic" class="btn sm sec" style="padding:7px 10px" title="Grabar audio" onclick="toggleGrabacionCursoIA()">🎤</button>
       <input id="curso-ia-input" class="fi" type="text" placeholder="Describí tu idea o preguntá sobre los archivos adjuntos..." style="flex:1"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendCursoIA()}">
       <button class="btn pri" onclick="sendCursoIA()" id="btn-curso-ia-send" style="padding:8px 16px">Enviar</button>
@@ -4276,7 +4288,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <input class="fi" id="mop-obs-op" type="text" placeholder="Opcional">
     </div>
   </div>
-  <div class="ma" style="gap:8px">
+  <div class="ma" style="gap:8px;flex-wrap:wrap">
     <button class="bc" onclick="closeModal('modal-orden-pago')">Cancelar</button>
     <button id="mop-btn-solo-pdf" style="background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);border-radius:8px;padding:8px 16px;color:#A78BFA;cursor:pointer;font-size:13px" onclick="confirmarOrdenPago(false)">📄 Solo PDF</button>
     <button class="bk" onclick="confirmarOrdenPago(true)">💸 Pagar + OP</button>
@@ -4642,6 +4654,7 @@ async function sb(path,opts={},retry=2){
 
 // ── STATE ──
 let tasks=[],users=[],cursos=[],alumnos=[],proveedores=[],instructores=[],plantillas=[],notifConfigs=[],oportunidades=[];
+let _misCursoIdsInstructor=null;  // Set de curso_id donde el instructor logueado participa (curso_instructores), o null si no aplica
 let _cursoDetalleId=null;
 let oportFilter='all', oportSearch="", oportArchivosTemp=[], oportChatHistorial=[];
 let inventario=[],invFilter="all",invSearch="",editInvId=null;
@@ -4721,6 +4734,7 @@ async function loadAll(){
       sb("plan_cuentas?select=*&order=codigo").catch(()=>[])
     ]);
     fillGlobal();
+    if(loggedUser?.rol==="instructor")await loadMisCursosInstructor();
     renderTareas();
     renderCursos();
     renderAlumnos();
@@ -5440,7 +5454,7 @@ function goPage(name,el){
   if(name==="sueldos"){const load=cfEmpleados.length?Promise.resolve():loadCF().catch(()=>{});load.then(renderSueldos);}
   if(name==="cashflow")loadCF().then(()=>setCFTab(cfTab||"resumen"));
   if(name==="instructores")renderInstructores();
-  if(name==="mensajes"){loadMensajesInternos();renderConvList();}
+  if(name==="mensajes"){document.getElementById("msgs-layout")?.classList.remove("thread-open");loadMensajesInternos();renderConvList();}
   if(name==="inventario")loadInventario();
   if(name==="planes")loadPlanes();
   if(name==="comprobantes")loadComprobantes();
@@ -5483,6 +5497,7 @@ function openNewModal(){
     const dw=document.getElementById("c-desc-clases-wrap");if(dw)dw.style.display="block";
     const dw2=document.getElementById("c-desc-wrap");if(dw2)dw2.style.display="block";
     document.getElementById("c-after-desc-wrap").style.display="none";
+    _cursoDesdeIA=false;
     openModal("modal-curso");
   }
   else if(curPage==="alumnos"){document.getElementById("alum-edit-id").value="";document.getElementById("modal-alum-title").textContent="Nuevo Alumno";["a-nombre","a-apellido","a-dni","a-cuit","a-matricula","a-esp","a-inst","a-email","a-tel","a-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("alum-cursos-section").style.display="none";openModal("modal-alumno")}
@@ -5520,7 +5535,7 @@ function vis(){
   });
 }
 function base(){
-  const pool=(loggedUser?.rol==="logistica"||loggedUser?.rol==="instructor")?tasks.filter(t=>(t.assignees||[]).includes(loggedUser.id)):tasks;
+  const pool=(loggedUser?.rol==="logistica"||loggedUser?.rol==="instructor"||loggedUser?.rol==="comunicaciones")?tasks.filter(t=>(t.assignees||[]).includes(loggedUser.id)):tasks;
   return!curUser?pool:pool.filter(t=>(t.assignees||[]).includes(curUser));
 }
 function renderTareas(){updStats();updCounts();renderTaskList(vis())}
@@ -5569,12 +5584,13 @@ function taskCard(t){
   const pc=PC[t.prioridad];
   const ass=t.assignees||[];
   const d=days(t.fecha_vencimiento);
+  const esRango=t.fecha_inicio&&t.fecha_vencimiento&&t.fecha_inicio!==t.fecha_vencimiento;
   let dueHtml="";
   if(t.fecha_vencimiento&&t.status!=="Listo"){
     if(d<0)dueHtml=`<span class="due ov">⚠ Venció hace ${Math.abs(d)}d</span>`;
-    else if(d===0)dueHtml=`<span class="due sn">⏰ Vence hoy</span>`;
-    else if(d<=3)dueHtml=`<span class="due sn">⏰ ${d}d</span>`;
-    else dueHtml=`<span class="due ok">📅 ${fmt(t.fecha_vencimiento)}</span>`;
+    else if(d===0)dueHtml=`<span class="due sn">⏰ Vence hoy${esRango?` (desde ${fmt(t.fecha_inicio)})`:""}</span>`;
+    else if(d<=3)dueHtml=`<span class="due sn">⏰ ${d}d${esRango?` (desde ${fmt(t.fecha_inicio)})`:""}</span>`;
+    else dueHtml=`<span class="due ok">📅 ${esRango?`${fmt(t.fecha_inicio)} → ${fmt(t.fecha_vencimiento)}`:fmt(t.fecha_vencimiento)}</span>`;
   }
   const assHtml=ass.map(id=>{const n=uName(id);const c2=uColor(id);return n?`<span class="apill" style="background:${c2}18;border-color:${c2}40;color:${c2}">${n}</span>`:""}).join("");
   const sBtns=Object.entries(BC).map(([s,b])=>`<button class="sb ${b.cls}${s===t.status?" cur":""}" onclick="event.stopPropagation();chgTaskStatus('${t.id}','${s}',this)">${b.label}</button>`).join("");
@@ -5597,6 +5613,7 @@ function taskCard(t){
     <div class="tea-row"><span class="al">Categoría</span><select class="mini-sel" id="cat-${t.id}" onchange="saveCategoria('${t.id}')"><option value="">Sin categoría</option>${["Administración","Finanzas","Operaciones","Cursos","RRHH","Legal/Impositivo","Marketing","General"].map(c=>`<option${t.categoria===c?" selected":""}>${c}</option>`).join("")}</select></div>
     <div class="tea-row"><span class="al">Estado</span>${sBtns}</div>
     <div class="tea-row"><span class="al">Prioridad</span><select class="mini-sel" onchange="chgPrio('${t.id}',this.value)">${prioOpts}</select></div>
+    <div class="tea-row"><span class="al">Fecha inicio</span><input class="di" type="date" value="${t.fecha_inicio||""}" id="fi-${t.id}"><button class="sdb" onclick="saveFechaInicio('${t.id}')">Guardar</button></div>
     <div class="tea-row"><span class="al">Vencimiento</span><input class="di" type="date" value="${t.fecha_vencimiento||""}" id="d-${t.id}"><button class="sdb" onclick="saveDate('${t.id}')">Guardar</button></div>
     <div class="tea-row"><span class="al">Responsables</span><div style="display:flex;flex-wrap:wrap;gap:5px">${assChecks}</div></div>
     <div class="tea-row"><span class="al">Nombre</span><input class="desc-inp" style="font-size:13px;font-weight:600" id="tname-inp-${t.id}" value="${esc(t.nombre||"")}" onblur="saveTNameDirect(this,'${t.id}')" onkeydown="if(event.key==='Enter')this.blur()"></div>
@@ -5649,6 +5666,13 @@ async function saveDate(id){
   try{await sb(`tareas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({fecha_vencimiento:val||null,updated_at:new Date().toISOString()})});
     const t=tasks.find(t=>t.id===id);if(t)t.fecha_vencimiento=val||null;toast("Fecha guardada","ok");renderTareas();
     if(t)notifyAssignees(t,"modificacion",`${loggedUser?.nombre||"Alguien"} cambió la fecha de vencimiento de "${t.nombre}"${val?` al ${val}`:""}`,loggedUser?.id);}catch(e){toast("Error","err")}
+}
+async function saveFechaInicio(id){
+  const val=document.getElementById("fi-"+id)?.value;
+  const t=tasks.find(t=>t.id===id);
+  if(val&&t?.fecha_vencimiento&&val>t.fecha_vencimiento){toast("La fecha de inicio no puede ser posterior al vencimiento","err");return}
+  try{await sb(`tareas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({fecha_inicio:val||null,updated_at:new Date().toISOString()})});
+    if(t)t.fecha_inicio=val||null;toast("Fecha guardada","ok");renderTareas();}catch(e){toast("Error","err")}
 }
 function editTName(id){document.getElementById("tn-"+id).classList.add("hide");const inp=document.getElementById("tni-"+id);inp.classList.add("show");inp.focus();inp.select()}
 function nameKey(e,id){if(e.key==="Enter")document.getElementById("tni-"+id).blur();if(e.key==="Escape"){document.getElementById("tni-"+id).classList.remove("show");document.getElementById("tn-"+id).classList.remove("hide")}}
@@ -5753,16 +5777,18 @@ function checkTareaConflicto(){
 async function createTask(){
   const nombre=document.getElementById("mn").value.trim();if(!nombre){toast("Escribí un nombre","err");return}
   const prioridad=document.getElementById("mp").value||null;const status=document.getElementById("ms").value;
+  const fechaInicio=document.getElementById("mfi").value||null;
   const fecha=document.getElementById("md").value||null;
+  if(fechaInicio&&fecha&&fechaInicio>fecha){toast("La fecha de inicio no puede ser posterior al vencimiento","err");return}
   const hora=document.getElementById("mhora").value||null;
   const desc=document.getElementById("mdesc").value.trim()||null;
   const cat=document.getElementById("mcat").value||null;
   const assignees=[...document.querySelectorAll("#modalUserChecks input:checked")].map(i=>i.value);
   const mbtn=document.getElementById("mbtn");mbtn.disabled=true;mbtn.textContent="Creando...";
   try{
-    const [created]=await sb("tareas",{method:"POST",body:JSON.stringify({nombre,status,prioridad,assignees,fecha_vencimiento:fecha,hora_inicio:hora,notas:desc||null,categoria:cat,updated_at:new Date().toISOString()})});
+    const [created]=await sb("tareas",{method:"POST",body:JSON.stringify({nombre,status,prioridad,assignees,fecha_inicio:fechaInicio,fecha_vencimiento:fecha,hora_inicio:hora,notas:desc||null,categoria:cat,updated_at:new Date().toISOString()})});
     tasks.unshift(created);closeModal("modal-tarea");
-    ["mn","mp","md","mhora","mdesc","mcat"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+    ["mn","mp","mfi","md","mhora","mdesc","mcat"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
     document.getElementById("ms").value="Por Hacer";
     document.querySelectorAll("#modalUserChecks input").forEach(i=>{i.checked=false;i.closest(".uc").classList.remove("sel2")});
     const aviso=document.getElementById("tarea-conflicto-aviso");if(aviso)aviso.style.display="none";
@@ -5775,14 +5801,29 @@ async function createTask(){
 function estadoBadge(e){const m={"Borrador":"est-borrador","Convocatoria":"est-convocatoria","Inscripciones":"est-inscripciones","En curso":"est-en curso","Completado":"est-completado","Cancelado":"est-cancelado","Educación médica continua":"est-emc"};return`<span class="cc-estado ${m[e]||"est-borrador"}">${e}</span>`}
 function lineaBadge(l){if(!l)return"";const m={"MSP / Convenio":"lnb-msp","Colmedsa":"lnb-col","Comercial":"lnb-com","EMC / Gratuito":"lnb-emc"};return`<span class="lnb ${m[l]||"lnb-def"}">${esc(l)}</span>`}
 
+async function loadMisCursosInstructor(){
+  try{
+    const email=(loggedUser.email||"").trim().toLowerCase();
+    const miInstructor=instructores.find(i=>(i.email||"").trim().toLowerCase()===email);
+    if(!miInstructor){_misCursoIdsInstructor=new Set();return;}
+    const rows=await sb(`curso_instructores?instructor_id=eq.${miInstructor.id}&select=curso_id`);
+    _misCursoIdsInstructor=new Set(rows.map(r=>r.curso_id));
+  }catch(e){_misCursoIdsInstructor=new Set();}
+}
+// Cursos donde el instructor logueado está asignado (curso_instructores) o coincide como instructor_nombre (dato legado)
+function _filtrarCursosInstructor(list){
+  const miNombre=(loggedUser?.nombre||"").trim().toLowerCase();
+  return list.filter(c=>(_misCursoIdsInstructor&&_misCursoIdsInstructor.has(c.id))||(miNombre&&(c.instructor_nombre||"").toLowerCase().includes(miNombre)));
+}
 function renderCursos(){
   const c=document.getElementById("curso-grid-container");
-  const realizados=cursos.filter(x=>x.estado==="Completado");
-  let list=cursos;
-  if(cursoFilter==="activos")list=cursos.filter(x=>["Convocatoria","Inscripciones","En curso"].includes(x.estado));
-  else if(cursoFilter==="borrador")list=cursos.filter(x=>x.estado==="Borrador");
+  const cursosVisibles=loggedUser?.rol==="instructor"?_filtrarCursosInstructor(cursos):cursos;
+  const realizados=cursosVisibles.filter(x=>x.estado==="Completado");
+  let list=cursosVisibles;
+  if(cursoFilter==="activos")list=cursosVisibles.filter(x=>["Convocatoria","Inscripciones","En curso"].includes(x.estado));
+  else if(cursoFilter==="borrador")list=cursosVisibles.filter(x=>x.estado==="Borrador");
   else if(cursoFilter==="completados")list=realizados;
-  else list=cursos.filter(x=>x.estado!=="Completado"); // vista "all": oculta completados
+  else list=cursosVisibles.filter(x=>x.estado!=="Completado"); // vista "all": oculta completados
   if(cursoLinea) list=list.filter(x=>x.linea_negocio===cursoLinea);
   if(cursoSearch){const Q=cursoSearch.toLowerCase();list=list.filter(x=>(x.nombre||"").toLowerCase().includes(Q)||(x.estado||"").toLowerCase().includes(Q)||(x.linea_negocio||"").toLowerCase().includes(Q));}
   // Ordenar
@@ -5795,9 +5836,9 @@ function renderCursos(){
   const btnReal=document.getElementById("btn-realizados");
   if(btnReal){btnReal.textContent=`🏁 Realizados (${realizados.length})`;btnReal.style.opacity=cursoFilter==="completados"?"1":".75";btnReal.style.fontWeight=cursoFilter==="completados"?"700":"400";}
   // Stats
-  document.getElementById("cT").textContent=cursos.length;
-  document.getElementById("cA").textContent=cursos.filter(x=>["Convocatoria","Inscripciones","En curso"].includes(x.estado)).length;
-  document.getElementById("cI").textContent=cursos.reduce((a,x)=>a+(x.cupos_inscriptos||0),0);
+  document.getElementById("cT").textContent=cursosVisibles.length;
+  document.getElementById("cA").textContent=cursosVisibles.filter(x=>["Convocatoria","Inscripciones","En curso"].includes(x.estado)).length;
+  document.getElementById("cI").textContent=cursosVisibles.reduce((a,x)=>a+(x.cupos_inscriptos||0),0);
   document.getElementById("cC").textContent=realizados.length;
   if(!list.length){
     const colabPre=cursoFilter==="borrador"?`<div id="colab-ideas-section" style="margin-bottom:20px"></div>`:"";
@@ -7620,6 +7661,8 @@ async function createCurso(){
     }
     closeModal("modal-curso");renderCursos();updateSideBadges();toast(`"${nombre}" creado`,"ok");
     await selectCurso(created.id);
+    if(_cursoDesdeIA&&cursoIAArchivos.length)await _subirArchivosIAAlCurso(created.id);
+    _cursoDesdeIA=false;
     const tieneCls=document.getElementById("c-tiene-clases")?.checked;
     if(tieneCls){
       const clasesTab=document.querySelector(`[onclick*="cd-clases-${created.id}"]`);
@@ -7873,7 +7916,7 @@ async function loadCursoArchivos(cursoId){
   }catch(e){cont.innerHTML=`<div style="color:var(--re);padding:20px">Error: ${esc(e.message)}</div>`;}
 }
 
-async function _guardarArchivoEnCurso(cursoId,blob,nombre,tipo,generadoIA=false){
+async function _guardarArchivoEnCurso(cursoId,blob,nombre,tipo,generadoIA=false,silencioso=false){
   try{
     const safe=nombre.replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,80);
     const path=`${cursoId}/${tipo}/${Date.now()}_${safe}`;
@@ -7885,10 +7928,40 @@ async function _guardarArchivoEnCurso(cursoId,blob,nombre,tipo,generadoIA=false)
     if(!upRes.ok){const t=await upRes.text();throw new Error(t);}
     const sess=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
     await sb("curso_archivos",{method:"POST",body:JSON.stringify({curso_id:cursoId,tipo,nombre,storage_path:path,size_bytes:blob.size,subido_por:sess.id||null,generado_ia:generadoIA})});
-    toast(`Guardado en el curso: ${nombre}`,"ok");
+    if(!silencioso)toast(`Guardado en el curso: ${nombre}`,"ok");
     const cont=document.getElementById(`archivos-content-${cursoId}`);
     if(cont&&cont.parentElement&&cont.parentElement.style.display!=="none")loadCursoArchivos(cursoId);
   }catch(e){console.error("Error guardando archivo en curso:",e);}
+}
+
+function _base64ToBlob(base64,mime){
+  const bin=atob(base64);
+  const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  return new Blob([bytes],{type:mime||"application/octet-stream"});
+}
+
+// Sube los archivos adjuntados durante la charla con el agente de cursos al curso recién creado
+async function _subirArchivosIAAlCurso(cursoId){
+  const archivos=cursoIAArchivos.slice();
+  let ok=0;
+  for(const a of archivos){
+    try{
+      const esPdf=a.tipo==="application/pdf"||/\.pdf$/i.test(a.nombre);
+      const esTextoExtraido=a.tipo==="text/plain"&&!/\.txt$/i.test(a.nombre);
+      const tipo=esPdf?"pdf":"otro";
+      const nombreFinal=esTextoExtraido?a.nombre+".txt":a.nombre;
+      const blob=_base64ToBlob(a.base64,a.tipo);
+      await _guardarArchivoEnCurso(cursoId,blob,nombreFinal,tipo,false,true);
+      ok++;
+    }catch(e){console.error("Error subiendo archivo adjunto del chat IA:",e);}
+  }
+  if(ok){
+    toast(`${ok} archivo${ok>1?"s":""} de la charla con la IA guardado${ok>1?"s":""} en el curso`,"ok");
+    cursoIAArchivos=[];
+    const adjDiv=document.getElementById("curso-ia-adjuntos");
+    if(adjDiv)adjDiv.innerHTML="";
+  }
 }
 
 // ── COLA DE EDICIÓN DE VIDEO ──────────────────────────────────────────────────
@@ -8064,9 +8137,9 @@ async function crearCursoDesdeIA(){
   const btn=document.getElementById("btn-crear-desde-ia");
   if(btn){btn.disabled=true;btn.textContent="Extrayendo datos...";}
   try{
-    const extractPrompt=`Basándote en toda la conversación, extraé los datos del curso en formato JSON. Devolvé SOLO el JSON sin texto adicional, sin markdown, sin bloques de código. Campos a completar (dejá null si no se mencionó):
+    const extractPrompt=`Basándote en toda la conversación, extraé los datos del curso en formato JSON. Devolvé SOLO el JSON sin texto adicional, sin markdown, sin bloques de código. Campos a completar (dejá null si no se mencionó, EXCEPTO "nombre" que nunca puede ir null):
 {
-  "nombre": "Nombre completo del curso",
+  "nombre": "Nombre del curso. Si no se definió un nombre explícito en la charla, inferí uno descriptivo a partir del tema/dominio clínico discutido, siguiendo el formato [Tipo] de [Dominio clínico] [(Nivel X)] — nunca dejar este campo vacío o null.",
   "tipo": "Mixto|Teórico|Práctico|Educación médica continua",
   "modalidad": "Presencial|Virtual|Híbrido",
   "linea_negocio": "MSP / Convenio|Colmedsa|Comercial|EMC / Gratuito o null",
@@ -8083,8 +8156,10 @@ async function crearCursoDesdeIA(){
     const data=await res.json();
     let texto=data.respuesta||"{}";
     texto=texto.replace(/```json?/gi,"").replace(/```/g,"").trim();
+    const jsonMatch=texto.match(/\{[\s\S]*\}/);
     let curso={};
-    try{curso=JSON.parse(texto);}catch(e){toast("No pude extraer los datos — completá el formulario manualmente","inf");}
+    try{curso=JSON.parse(jsonMatch?.[0]||texto);}catch(e){toast("No pude extraer los datos — completá el formulario manualmente","inf");}
+    if(!curso.nombre&&cursoIAChatNombre)curso.nombre=cursoIAChatNombre;
 
     // Limpiar y pre-llenar el formulario
     ["c-nombre","c-instructor","c-respaldo","c-desc","c-desc-clases","c-inicio","c-fin","c-after-desc","c-cotizacion-id"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
@@ -8138,6 +8213,7 @@ async function crearCursoDesdeIA(){
     }
 
     closeModal("modal-curso-ia");
+    _cursoDesdeIA=true;
     openModal("modal-curso");
     if(avisos.length){
       setTimeout(()=>avisos.forEach(a=>toast(a,"inf")),300);
@@ -8508,6 +8584,7 @@ function _generarPDFCurso(content,tipo,cursoId=null){
 // ── CREAR CURSO CON IA ────────────────────────────────────────────────────────
 let cursoIAHistorial=[];
 let cursoIAArchivos=[];  // [{nombre, tipo, base64}]
+let _cursoDesdeIA=false;  // true si el modal-curso se abrió desde "Crear curso" del chat IA
 
 async function _loadMammoth(){
   if(window.mammoth)return;
@@ -8587,6 +8664,76 @@ async function adjuntarArchivoCursoIA(input){
     toast(`✅ ${file.name} adjuntado`,"ok");
   }
   input.value="";
+}
+
+// ── Grabación de audio para el chat con el agente de cursos ──
+let _cursoIARecorder=null;
+let _cursoIAChunks=[];
+let _cursoIAStream=null;
+
+async function toggleGrabacionCursoIA(){
+  if(_cursoIARecorder&&_cursoIARecorder.state==="recording"){
+    _cursoIARecorder.stop();
+    return;
+  }
+  if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==="undefined"){
+    toast("Tu navegador no soporta grabación de audio","err");
+    return;
+  }
+  try{
+    _cursoIAStream=await navigator.mediaDevices.getUserMedia({audio:true});
+  }catch(e){
+    toast("No se pudo acceder al micrófono: "+e.message,"err");
+    return;
+  }
+  _cursoIAChunks=[];
+  const mimeType=MediaRecorder.isTypeSupported("audio/webm")?"audio/webm":(MediaRecorder.isTypeSupported("audio/mp4")?"audio/mp4":"");
+  _cursoIARecorder=mimeType?new MediaRecorder(_cursoIAStream,{mimeType}):new MediaRecorder(_cursoIAStream);
+  _cursoIARecorder.ondataavailable=e=>{if(e.data.size>0)_cursoIAChunks.push(e.data);};
+  _cursoIARecorder.onstop=async()=>{
+    _cursoIAStream?.getTracks().forEach(t=>t.stop());
+    _setGrabandoCursoIAUI(false);
+    const blob=new Blob(_cursoIAChunks,{type:_cursoIARecorder.mimeType||"audio/webm"});
+    if(blob.size<1000){toast("Audio muy corto, intentá de nuevo","inf");return;}
+    await _transcribirAudioCursoIA(blob);
+  };
+  _cursoIARecorder.start();
+  _setGrabandoCursoIAUI(true);
+}
+
+function _setGrabandoCursoIAUI(on){
+  const btn=document.getElementById("btn-curso-ia-mic");
+  const input=document.getElementById("curso-ia-input");
+  if(btn){
+    btn.textContent=on?"⏹":"🎤";
+    btn.style.color=on?"#EF4444":"";
+    btn.style.borderColor=on?"#EF4444":"";
+    btn.title=on?"Detener grabación":"Grabar audio";
+  }
+  if(input)input.placeholder=on?"Grabando... tocá ⏹ cuando termines":"Describí tu idea o preguntá sobre los archivos adjuntos...";
+}
+
+async function _transcribirAudioCursoIA(blob){
+  const input=document.getElementById("curso-ia-input");
+  toast("Transcribiendo audio...","inf");
+  try{
+    const base64=await new Promise((res,rej)=>{
+      const rd=new FileReader();
+      rd.onload=e=>res(e.target.result.split(",")[1]);
+      rd.onerror=rej;
+      rd.readAsDataURL(blob);
+    });
+    const res=await fetchEdge("transcribir-audio",{audio_base64:base64,mime_type:blob.type});
+    const data=await res.json();
+    if(data.error){toast(data.error,"err");return;}
+    if(input){
+      input.value=(input.value.trim()?input.value.trim()+" ":"")+data.text;
+      input.focus();
+    }
+    toast("Audio transcripto ✓ revisá y enviá","ok");
+  }catch(e){
+    toast("Error transcribiendo audio: "+e.message,"err");
+  }
 }
 
 function openCrearCursoIA(){
@@ -10471,8 +10618,9 @@ async function abrirConversacion(userId,nombre,el){
   _mensConvActiva={userId,nombre};
   document.querySelectorAll(".conv-item").forEach(i=>i.style.background="");
   if(el)el.style.background="var(--surf2)";
-  const header=document.getElementById("msgs-thread-header");
-  if(header)header.textContent=nombre;
+  const headerTxt=document.getElementById("msgs-thread-header-txt");
+  if(headerTxt)headerTxt.textContent=nombre;
+  document.getElementById("msgs-layout")?.classList.add("thread-open");
   const inputDiv=document.getElementById("msgs-thread-input");
   if(inputDiv)inputDiv.style.display="flex";
   const msgCont=document.getElementById("msgs-thread-msgs");
@@ -10526,6 +10674,10 @@ async function enviarMensajeInterno(){
     renderMensajesThread();
     await createNotif(_mensConvActiva.userId,"mensaje_interno",null,`${loggedUser.nombre||"Alguien"}: ${contenido.substring(0,60)}${contenido.length>60?"...":""}`);
   }catch(e){toast("Error enviando mensaje: "+e.message,"err");input.value=contenido;}
+}
+
+function cerrarConversacionMobile(){
+  document.getElementById("msgs-layout")?.classList.remove("thread-open");
 }
 
 async function nuevaConversacion(){
@@ -10685,7 +10837,7 @@ function rutinaCard(r){
       <span class="tog-sl"></span>
     </label>
   </div>
-  <div style="padding:6px 13px 10px;border-top:1px solid var(--b);display:flex;gap:6px;background:var(--bg3)">
+  <div style="padding:6px 13px 10px;border-top:1px solid var(--b);display:flex;gap:6px;background:var(--bg3);flex-wrap:wrap">
     <button class="btn sm" onclick="openEditRutina('${r.id}')">Editar</button>
     <button class="btn sm" onclick="generarRutinaUnica('${r.id}')">Generar tarea ahora</button>
     <button class="btn sm danger" onclick="confirmDel2('rutina','${r.id}','${esc(r.nombre)}')">Eliminar</button>
@@ -16482,7 +16634,7 @@ function verDetalleReunion(id){
       <div><span style="font-size:11px;color:var(--tx3)">Sociedad</span><div style="font-size:13px;font-weight:600">${r.sociedad||"—"}</div></div>
       <div><span style="font-size:11px;color:var(--tx3)">Participantes</span><div style="font-size:13px;font-weight:600">${partic}</div></div>
     </div>
-    <div style="display:flex;gap:6px;flex-shrink:0;align-items:flex-start">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start">
       ${r.estado==="listo"?`
       <button class="btn" style="font-size:11px" onclick="mrExportarPDF('${r.id}')">📄 PDF</button>
       <button class="btn" style="font-size:11px" onclick="mrExportarWord('${r.id}')">📝 Word</button>`:""}
@@ -17429,6 +17581,9 @@ function buildEventos(){
       if(t.fecha_vencimiento&&t.status!=="Listo"){
         const hora=t.hora_inicio?t.hora_inicio.slice(0,5):null;
         addEvento(t.fecha_vencimiento,{tipo:"ev-venc",dot:"#EF4444",nombre:t.nombre,sub:"Vencimiento de tarea"+(hora?" — "+hora:""),hora:hora||"23:59",id:t.id});
+        if(t.fecha_inicio&&t.fecha_inicio!==t.fecha_vencimiento){
+          addEvento(t.fecha_inicio,{tipo:"ev-ini",dot:"#7C3AED",nombre:t.nombre,sub:"Inicio de tarea (varios días)",id:t.id});
+        }
       }
     });
   }
@@ -21906,8 +22061,8 @@ async function renderMsgDetalle(fromId,plataforma){
                 </div>
                 ${m.feedback?(m.feedback_comentario?
                   `<div style="font-size:11px;color:var(--tx3);background:var(--surf2);border-radius:8px;padding:5px 8px;font-style:italic">"${esc(m.feedback_comentario)}"</div>`:
-                  `<div style="display:flex;gap:6px;align-items:flex-start" id="fb-comment-${m.id}">
-                    <textarea id="fb-txt-${m.id}" placeholder="${m.feedback==="dislike"?"¿Qué mejorarías?":"¿Qué estuvo bien?"}" rows="2" style="font-size:11px;padding:5px 8px;border:1px solid var(--b);border-radius:8px;background:var(--surf);color:var(--tx);resize:none;width:200px;font-family:inherit"></textarea>
+                  `<div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap" id="fb-comment-${m.id}">
+                    <textarea id="fb-txt-${m.id}" placeholder="${m.feedback==="dislike"?"¿Qué mejorarías?":"¿Qué estuvo bien?"}" rows="2" style="font-size:11px;padding:5px 8px;border:1px solid var(--b);border-radius:8px;background:var(--surf);color:var(--tx);resize:none;flex:1;min-width:120px;font-family:inherit"></textarea>
                     <button onclick="msgFeedbackComentario('${m.id}')" style="background:var(--primary);border:none;border-radius:8px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap">Guardar</button>
                   </div>`
                 ):""}
@@ -23452,7 +23607,7 @@ function renderPevBlocks(){
         <div style="font-size:12px;font-weight:700;color:var(--tx2)">${bloque.icon} ${bloque.label}</div>
         <div style="font-size:12px;color:var(--tx3)">USD ${bloqueTotal.toFixed(2)}</div>
       </div>
-      ${items.length?`<table style="width:100%;border-collapse:collapse;margin-bottom:6px">
+      ${items.length?`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;min-width:420px;border-collapse:collapse;margin-bottom:6px">
         <thead><tr>
           <th style="text-align:left;font-size:11px;color:var(--tx3);padding:2px 4px;font-weight:500">Descripción</th>
           <th style="text-align:right;font-size:11px;color:var(--tx3);padding:2px 4px;font-weight:500;width:70px">Cant/h</th>
@@ -23467,7 +23622,7 @@ function renderPevBlocks(){
           <td style="padding:2px 4px;text-align:right;font-size:12px;font-weight:600;color:var(--tx)">$${((parseFloat(it.cantidad)||0)*(parseFloat(it.precio)||0)).toFixed(2)}</td>
           <td style="padding:2px 4px;text-align:center"><button onclick="cotizPevRemoveItem(${it._idx})" style="background:none;border:none;cursor:pointer;color:var(--re);font-size:13px;padding:0 2px" title="Eliminar">✕</button></td>
         </tr>`).join("")}</tbody>
-      </table>`:""}
+      </table></div>`:""}
       <button class="btn sm sec" onclick="cotizPevAddItem('${bloque.key}')" style="font-size:11px;padding:3px 10px">+ Ítem</button>
     </div>`;
   }).join("");
@@ -23824,6 +23979,7 @@ function cotizAbrirCrearCurso(cotizId){
   if(part)document.getElementById("c-cupos").value=part;
   // Estado borrador
   const estSel=document.getElementById("c-estado");if(estSel)estSel.value="Borrador";
+  _cursoDesdeIA=false;
   openModal("modal-curso");
 }
 
@@ -24165,10 +24321,10 @@ function renderCofradiaBorradores(){
             <button class="btn sm" style="color:var(--re);border-color:var(--re)" onclick="eliminarBorrador('${bid}')">🗑</button>
           </div>
         </div>
-        <div style="display:flex;gap:2px;border-bottom:1px solid var(--b);margin-bottom:14px">
-          <button onclick="setCofradiaSubtab('${bid}','texto')" id="cst-texto-${bid}" style="font-size:12px;padding:6px 12px;border:none;background:none;color:var(--tx2);cursor:pointer;border-bottom:2px solid var(--ac);font-weight:600">📝 Texto</button>
-          <button onclick="setCofradiaSubtab('${bid}','redes')" id="cst-redes-${bid}" style="font-size:12px;padding:6px 12px;border:none;background:none;color:var(--tx3);cursor:pointer;border-bottom:2px solid transparent">📱 Redes</button>
-          <button onclick="setCofradiaSubtab('${bid}','revision')" id="cst-revision-${bid}" style="font-size:12px;padding:6px 12px;border:none;background:none;color:var(--tx3);cursor:pointer;border-bottom:2px solid transparent">🔬 Revisión</button>
+        <div style="display:flex;gap:2px;border-bottom:1px solid var(--b);margin-bottom:14px;overflow-x:auto;-webkit-overflow-scrolling:touch">
+          <button onclick="setCofradiaSubtab('${bid}','texto')" id="cst-texto-${bid}" style="font-size:12px;padding:6px 12px;border:none;background:none;color:var(--tx2);cursor:pointer;border-bottom:2px solid var(--ac);font-weight:600;white-space:nowrap;flex-shrink:0">📝 Texto</button>
+          <button onclick="setCofradiaSubtab('${bid}','redes')" id="cst-redes-${bid}" style="font-size:12px;padding:6px 12px;border:none;background:none;color:var(--tx3);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;flex-shrink:0">📱 Redes</button>
+          <button onclick="setCofradiaSubtab('${bid}','revision')" id="cst-revision-${bid}" style="font-size:12px;padding:6px 12px;border:none;background:none;color:var(--tx3);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;flex-shrink:0">🔬 Revisión</button>
         </div>
         <div id="csp-texto-${bid}">
           <div class="form-grid">
@@ -24721,7 +24877,7 @@ if('serviceWorker' in navigator){
         La IA genera el video desde cero usando el prompt de texto y las fotos de referencia.
       </div>
     </div>
-    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap">
       <button id="video-btn-del" class="btn" style="color:var(--re);border-color:var(--re);display:none" onclick="deleteVideoIA()">Eliminar</button>
       <button class="btn sec" id="btn-gen-prompt" onclick="comGenerarPrompt()" style="margin-right:auto">✨ Generar prompt con IA</button>
       <button class="btn pri" onclick="saveVideoIA()">Guardar</button>

@@ -19,7 +19,7 @@ const DOCS_NORMATIVOS = `
 
 Compromisos institucionales obligatorios:
 - Autoridad clínico-editorial: la Dirección Médica define el contenido. Industria y patrocinadores acompañan pero NO definen.
-- Todo contenido pasa por curaduría obligatoria y proceso PEV antes de usarse o comercializarse.
+- Todo contenido pasa por curaduría obligatoria y proceso PEV antes de usarse o implementarse.
 - Declaración de Conflictos de Interés requerida para instructores, curadores y referentes.
 - Seguridad psicológica: el error en simulación es oportunidad de aprendizaje, NUNCA motivo de humillación o sanción.
 - Confidencialidad: grabaciones requieren consentimiento informado específico (formulario Metanoia v1.0).
@@ -302,15 +302,15 @@ const SKILL_CURSOS = `
 ## Marco institucional
 Metanoia SMX es un centro de simulación médica en Salta, Argentina. Opera bajo SUDES S.A.S.
 Línea C (Cursos comerciales): motor real de autonomía financiera. Meta: 4 cursos/mes para 2027.
-PRINCIPIO CLAVE: Ningún curso puede comercializarse sin estado PROTOTIPO o APROBADO en PEV.
+PRINCIPIO CLAVE: Ningún curso puede implementarse sin estado PROTOTIPO o APROBADO en PEV.
 
 ## Identidad pedagógica — DISTINCIÓN CRÍTICA
-NUNCA usar: "formación", "formar profesionales", "capacitación".
-SIEMPRE usar: "entrenamiento", "práctica", "entrenamos habilidades", "practicamos con simulación".
+NUNCA usar: "formación", "formar profesionales", "capacitación", "comercializarse", "comercialización" (referido a habilitar un curso).
+SIEMPRE usar: "entrenamiento", "práctica", "entrenamos habilidades", "practicamos con simulación", "implementarse", "implementación".
 
 ## Metodología PEV (Kaizen-PDCA)
 PEV1 — Prototipo: borrador testeable. PEV2 — Escala: piloto condiciones reales. PEV3 — Valida: aprobación plenaria.
-Solo PROTOTIPO/APROBADO habilita comercialización.
+Solo PROTOTIPO/APROBADO habilita implementación.
 
 ## 7 Niveles de simulación
 1-Básica: fundamentos/familiarización | 2-Procedural: habilidades con task trainers | 3-Casos clínicos: razonamiento clínico
