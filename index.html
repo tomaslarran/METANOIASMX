@@ -539,6 +539,13 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   #ch-filtros{grid-template-columns:1fr 1fr!important}
   /* Sueldos / historial filtros flex → wrap */
   .hist-filtros{flex-wrap:wrap}
+  /* Mensajes internos: lista y conversación apiladas, tipo WhatsApp */
+  #msgs-layout{height:calc(100vh - 220px);min-height:320px}
+  #msgs-conv-list{width:100%!important;min-width:0!important}
+  #msgs-thread-panel{display:none}
+  #msgs-layout.thread-open #msgs-conv-list{display:none}
+  #msgs-layout.thread-open #msgs-thread-panel{display:flex!important}
+  #msgs-back-btn{display:inline-block!important}
 }
 @media(max-width:400px){
   .stats{grid-template-columns:1fr}
@@ -1488,13 +1495,13 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div><div class="pg-title">💬 Mensajes</div><div class="pg-title-sub">Conversaciones internas del equipo</div></div>
     <button class="btn pri" onclick="nuevaConversacion()">+ Nueva conversación</button>
   </div>
-  <div style="display:flex;gap:14px;height:calc(100vh - 160px);min-height:400px">
+  <div id="msgs-layout" style="display:flex;gap:14px;height:calc(100vh - 160px);min-height:400px">
     <div id="msgs-conv-list" style="width:260px;min-width:200px;border:1px solid var(--b);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;flex-shrink:0">
       <div style="padding:12px 14px;font-size:11px;font-weight:700;color:var(--tx3);border-bottom:1px solid var(--b);text-transform:uppercase;letter-spacing:.5px">Conversaciones</div>
       <div id="msgs-conv-items" style="flex:1;overflow-y:auto"><div style="padding:16px;font-size:12px;color:var(--tx3);text-align:center">Cargando...</div></div>
     </div>
-    <div style="flex:1;display:flex;flex-direction:column;border:1px solid var(--b);border-radius:12px;overflow:hidden">
-      <div id="msgs-thread-header" style="padding:12px 16px;border-bottom:1px solid var(--b);font-size:13px;font-weight:600;color:var(--tx)">Seleccioná una conversación</div>
+    <div id="msgs-thread-panel" style="flex:1;display:flex;flex-direction:column;border:1px solid var(--b);border-radius:12px;overflow:hidden;min-width:0">
+      <div id="msgs-thread-header" style="padding:12px 16px;border-bottom:1px solid var(--b);font-size:13px;font-weight:600;color:var(--tx);display:flex;align-items:center;gap:6px"><button id="msgs-back-btn" onclick="cerrarConversacionMobile()" style="display:none;background:none;border:none;color:var(--tx);font-size:16px;cursor:pointer;padding:0 4px 0 0;line-height:1">←</button><span id="msgs-thread-header-txt">Seleccioná una conversación</span></div>
       <div id="msgs-thread-msgs" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px"><div style="text-align:center;color:var(--tx3);font-size:12px;margin-top:40px">Seleccioná una conversación para ver los mensajes</div></div>
       <div id="msgs-thread-input" style="display:none;padding:10px 12px;border-top:1px solid var(--b);display:flex;gap:8px">
         <textarea id="msgs-msg-input" placeholder="Escribí un mensaje..." rows="2" style="flex:1;resize:none;border:1px solid var(--b);border-radius:8px;padding:8px;font-size:13px;background:var(--surf);color:var(--tx);font-family:inherit" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarMensajeInterno()}"></textarea>
@@ -5440,7 +5447,7 @@ function goPage(name,el){
   if(name==="sueldos"){const load=cfEmpleados.length?Promise.resolve():loadCF().catch(()=>{});load.then(renderSueldos);}
   if(name==="cashflow")loadCF().then(()=>setCFTab(cfTab||"resumen"));
   if(name==="instructores")renderInstructores();
-  if(name==="mensajes"){loadMensajesInternos();renderConvList();}
+  if(name==="mensajes"){document.getElementById("msgs-layout")?.classList.remove("thread-open");loadMensajesInternos();renderConvList();}
   if(name==="inventario")loadInventario();
   if(name==="planes")loadPlanes();
   if(name==="comprobantes")loadComprobantes();
@@ -10471,8 +10478,9 @@ async function abrirConversacion(userId,nombre,el){
   _mensConvActiva={userId,nombre};
   document.querySelectorAll(".conv-item").forEach(i=>i.style.background="");
   if(el)el.style.background="var(--surf2)";
-  const header=document.getElementById("msgs-thread-header");
-  if(header)header.textContent=nombre;
+  const headerTxt=document.getElementById("msgs-thread-header-txt");
+  if(headerTxt)headerTxt.textContent=nombre;
+  document.getElementById("msgs-layout")?.classList.add("thread-open");
   const inputDiv=document.getElementById("msgs-thread-input");
   if(inputDiv)inputDiv.style.display="flex";
   const msgCont=document.getElementById("msgs-thread-msgs");
@@ -10526,6 +10534,10 @@ async function enviarMensajeInterno(){
     renderMensajesThread();
     await createNotif(_mensConvActiva.userId,"mensaje_interno",null,`${loggedUser.nombre||"Alguien"}: ${contenido.substring(0,60)}${contenido.length>60?"...":""}`);
   }catch(e){toast("Error enviando mensaje: "+e.message,"err");input.value=contenido;}
+}
+
+function cerrarConversacionMobile(){
+  document.getElementById("msgs-layout")?.classList.remove("thread-open");
 }
 
 async function nuevaConversacion(){
@@ -16482,7 +16494,7 @@ function verDetalleReunion(id){
       <div><span style="font-size:11px;color:var(--tx3)">Sociedad</span><div style="font-size:13px;font-weight:600">${r.sociedad||"—"}</div></div>
       <div><span style="font-size:11px;color:var(--tx3)">Participantes</span><div style="font-size:13px;font-weight:600">${partic}</div></div>
     </div>
-    <div style="display:flex;gap:6px;flex-shrink:0;align-items:flex-start">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start">
       ${r.estado==="listo"?`
       <button class="btn" style="font-size:11px" onclick="mrExportarPDF('${r.id}')">📄 PDF</button>
       <button class="btn" style="font-size:11px" onclick="mrExportarWord('${r.id}')">📝 Word</button>`:""}
