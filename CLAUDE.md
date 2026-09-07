@@ -687,6 +687,91 @@ ALTER TABLE mensajes_publico ADD COLUMN IF NOT EXISTS imagen_url text;
 
 ---
 
+## En desarrollo (7 Sep 2026) — Integración E-learning bidireccional
+
+**Plataforma e-learning:** https://plataforma.metanoiasmx.com — Laravel + Livewire + Flux, desarrollada por técnico externo con acceso al código.
+
+**Arquitectura:** Panel ↔ e-learning bidireccional vía API REST (Sanctum) + webhook de inscripciones en tiempo real.
+
+**Spec para el técnico Laravel:** `spec_api_elearning_laravel.md` — 5 endpoints + webhook + variables de entorno.
+
+**Edge Function `sync-elearning`** creada en `supabase/functions/sync-elearning/index.ts`:
+- `action=sync_cursos` — trae cursos de e-learning → `elearning_cursos`
+- `action=sync_inscripciones` — trae inscripciones → `elearning_inscripciones`
+- `action=sync_all` — ambas en una sola llamada
+- `action=publish_curso` — envía un curso del panel → e-learning (POST /api/cursos)
+- `source=webhook&action=webhook_inscripcion` — recibe notificación de nueva inscripción en tiempo real (sin JWT, con X-Webhook-Secret)
+
+**Secrets a agregar en Supabase:**
+- `ELEARNING_URL` = `https://plataforma.metanoiasmx.com`
+- `ELEARNING_API_TOKEN` = personal access token de Sanctum (el técnico lo genera)
+- `ELEARNING_WEBHOOK_SECRET` = secreto compartido para validar webhooks (acordar con el técnico)
+
+**SQL a correr en Supabase:**
+```sql
+-- Tabla espejo de cursos del e-learning
+CREATE TABLE IF NOT EXISTS elearning_cursos (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  elearning_id text UNIQUE NOT NULL,
+  nombre text,
+  descripcion text,
+  estado text,
+  fecha_inicio date,
+  fecha_fin date,
+  cupos_max int,
+  cupos_inscriptos int DEFAULT 0,
+  precio numeric,
+  panel_curso_id uuid REFERENCES cursos(id),
+  raw jsonb,
+  synced_at timestamptz DEFAULT now(),
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE elearning_cursos ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Solo autenticados" ON elearning_cursos FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- Tabla espejo de inscripciones del e-learning
+CREATE TABLE IF NOT EXISTS elearning_inscripciones (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  elearning_id text UNIQUE NOT NULL,
+  elearning_curso_id text,
+  alumno_nombre text,
+  alumno_email text,
+  alumno_cuit text,
+  alumno_telefono text,
+  fecha_inscripcion timestamptz,
+  estado text DEFAULT 'inscripto',
+  monto_pagado numeric,
+  raw jsonb,
+  synced_at timestamptz DEFAULT now(),
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE elearning_inscripciones ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Solo autenticados" ON elearning_inscripciones FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- Log de sincronizaciones
+CREATE TABLE IF NOT EXISTS elearning_sync_log (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  tipo text,
+  registros_synced int DEFAULT 0,
+  errores int DEFAULT 0,
+  detalle text,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE elearning_sync_log ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Solo autenticados" ON elearning_sync_log FOR ALL TO authenticated USING (true) WITH CHECK (true);
+```
+
+**Pendiente:**
+- [ ] Técnico Laravel implementa los 5 endpoints + webhook (entregar `spec_api_elearning_laravel.md`)
+- [ ] Correr SQL en Supabase
+- [ ] Deployar `sync-elearning` en Supabase Dashboard
+- [ ] Agregar secrets `ELEARNING_URL`, `ELEARNING_API_TOKEN`, `ELEARNING_WEBHOOK_SECRET`
+- [ ] Tab "E-learning" en el panel (sync manual, estado, últimas inscripciones)
+- [ ] Botón "Publicar en e-learning" en detalle de curso del panel
+- [ ] `agente-mensajes` lee `elearning_cursos` para responder preguntas de fechas/cupos/precios en tiempo real
+
+---
+
 ## Implementado (23 Jun 2026) — Agente mensajes y mejoras continuas
 - ✅ agente-mensajes: bot 24/7 para IG DM / FB Messenger / WhatsApp — Claude Haiku, escalación al equipo vía WA, transcripción de audio con Groq/Whisper, visión para imágenes
 - ✅ agente-mensajes: detecta y descarta respuestas automáticas (`{"ignorar":true}`), manejo de etiquetas/shares, tono mejorado
