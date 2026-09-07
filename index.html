@@ -4119,6 +4119,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         📎
         <input type="file" multiple accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.xlsx,.xls" style="display:none" onchange="adjuntarArchivoCursoIA(this)">
       </label>
+      <button type="button" id="btn-curso-ia-mic" class="btn sm sec" style="padding:7px 10px" title="Grabar audio" onclick="toggleGrabacionCursoIA()">🎤</button>
       <input id="curso-ia-input" class="fi" type="text" placeholder="Describí tu idea o preguntá sobre los archivos adjuntos..." style="flex:1"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendCursoIA()}">
       <button class="btn pri" onclick="sendCursoIA()" id="btn-curso-ia-send" style="padding:8px 16px">Enviar</button>
@@ -8594,6 +8595,76 @@ async function adjuntarArchivoCursoIA(input){
     toast(`✅ ${file.name} adjuntado`,"ok");
   }
   input.value="";
+}
+
+// ── Grabación de audio para el chat con el agente de cursos ──
+let _cursoIARecorder=null;
+let _cursoIAChunks=[];
+let _cursoIAStream=null;
+
+async function toggleGrabacionCursoIA(){
+  if(_cursoIARecorder&&_cursoIARecorder.state==="recording"){
+    _cursoIARecorder.stop();
+    return;
+  }
+  if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==="undefined"){
+    toast("Tu navegador no soporta grabación de audio","err");
+    return;
+  }
+  try{
+    _cursoIAStream=await navigator.mediaDevices.getUserMedia({audio:true});
+  }catch(e){
+    toast("No se pudo acceder al micrófono: "+e.message,"err");
+    return;
+  }
+  _cursoIAChunks=[];
+  const mimeType=MediaRecorder.isTypeSupported("audio/webm")?"audio/webm":(MediaRecorder.isTypeSupported("audio/mp4")?"audio/mp4":"");
+  _cursoIARecorder=mimeType?new MediaRecorder(_cursoIAStream,{mimeType}):new MediaRecorder(_cursoIAStream);
+  _cursoIARecorder.ondataavailable=e=>{if(e.data.size>0)_cursoIAChunks.push(e.data);};
+  _cursoIARecorder.onstop=async()=>{
+    _cursoIAStream?.getTracks().forEach(t=>t.stop());
+    _setGrabandoCursoIAUI(false);
+    const blob=new Blob(_cursoIAChunks,{type:_cursoIARecorder.mimeType||"audio/webm"});
+    if(blob.size<1000){toast("Audio muy corto, intentá de nuevo","inf");return;}
+    await _transcribirAudioCursoIA(blob);
+  };
+  _cursoIARecorder.start();
+  _setGrabandoCursoIAUI(true);
+}
+
+function _setGrabandoCursoIAUI(on){
+  const btn=document.getElementById("btn-curso-ia-mic");
+  const input=document.getElementById("curso-ia-input");
+  if(btn){
+    btn.textContent=on?"⏹":"🎤";
+    btn.style.color=on?"#EF4444":"";
+    btn.style.borderColor=on?"#EF4444":"";
+    btn.title=on?"Detener grabación":"Grabar audio";
+  }
+  if(input)input.placeholder=on?"Grabando... tocá ⏹ cuando termines":"Describí tu idea o preguntá sobre los archivos adjuntos...";
+}
+
+async function _transcribirAudioCursoIA(blob){
+  const input=document.getElementById("curso-ia-input");
+  toast("Transcribiendo audio...","inf");
+  try{
+    const base64=await new Promise((res,rej)=>{
+      const rd=new FileReader();
+      rd.onload=e=>res(e.target.result.split(",")[1]);
+      rd.onerror=rej;
+      rd.readAsDataURL(blob);
+    });
+    const res=await fetchEdge("transcribir-audio",{audio_base64:base64,mime_type:blob.type});
+    const data=await res.json();
+    if(data.error){toast(data.error,"err");return;}
+    if(input){
+      input.value=(input.value.trim()?input.value.trim()+" ":"")+data.text;
+      input.focus();
+    }
+    toast("Audio transcripto ✓ revisá y enviá","ok");
+  }catch(e){
+    toast("Error transcribiendo audio: "+e.message,"err");
+  }
 }
 
 function openCrearCursoIA(){
