@@ -4026,12 +4026,15 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
   <div class="fg" style="margin-bottom:12px"><label class="fl">Responsables</label><div class="user-checks" id="modalUserChecks" style="display:flex;flex-wrap:wrap;gap:5px;padding:6px 0"></div></div>
   <div class="form-grid-2">
+    <div class="fg"><label class="fl">Fecha inicio <span style="color:var(--tx3);font-weight:400">(opcional, para varios días)</span></label><input class="fi" id="mfi" type="date" style="padding:7px 10px"></div>
     <div class="fg"><label class="fl">Vencimiento</label><input class="fi" id="md" type="date" style="padding:7px 10px" onchange="checkTareaConflicto()"></div>
-    <div class="fg"><label class="fl">Hora</label><input class="fi" id="mhora" type="time" style="padding:7px 10px" placeholder="Sin hora específica"></div>
   </div>
   <div class="form-grid-2">
+    <div class="fg"><label class="fl">Hora</label><input class="fi" id="mhora" type="time" style="padding:7px 10px" placeholder="Sin hora específica"></div>
     <div class="fg"><label class="fl">Categoría</label><select class="fs" id="mcat"><option value="">Sin categoría</option><option>Administración</option><option>Finanzas</option><option>Operaciones</option><option>Cursos</option><option>RRHH</option><option>Legal/Impositivo</option><option>Marketing</option><option>General</option></select></div>
-    <div class="fg"><label class="fl">Descripción</label><input class="fi" id="mdesc" type="text" placeholder="Notas..."></div>
+  </div>
+  <div class="form-grid-2">
+    <div class="fg form-full"><label class="fl">Descripción</label><input class="fi" id="mdesc" type="text" placeholder="Notas..."></div>
   </div>
   <div id="tarea-conflicto-aviso" style="display:none;margin-top:8px;padding:8px 12px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);border-radius:6px;font-size:12px;color:#FCD34D"></div>
   <div class="ma"><button class="bc" onclick="closeModal('modal-tarea')">Cancelar</button><button class="bk" id="mbtn" onclick="createTask()">Crear tarea</button></div>
@@ -4650,6 +4653,7 @@ async function sb(path,opts={},retry=2){
 
 // ── STATE ──
 let tasks=[],users=[],cursos=[],alumnos=[],proveedores=[],instructores=[],plantillas=[],notifConfigs=[],oportunidades=[];
+let _misCursoIdsInstructor=null;  // Set de curso_id donde el instructor logueado participa (curso_instructores), o null si no aplica
 let _cursoDetalleId=null;
 let oportFilter='all', oportSearch="", oportArchivosTemp=[], oportChatHistorial=[];
 let inventario=[],invFilter="all",invSearch="",editInvId=null;
@@ -4729,6 +4733,7 @@ async function loadAll(){
       sb("plan_cuentas?select=*&order=codigo").catch(()=>[])
     ]);
     fillGlobal();
+    if(loggedUser?.rol==="instructor")await loadMisCursosInstructor();
     renderTareas();
     renderCursos();
     renderAlumnos();
@@ -5491,6 +5496,7 @@ function openNewModal(){
     const dw=document.getElementById("c-desc-clases-wrap");if(dw)dw.style.display="block";
     const dw2=document.getElementById("c-desc-wrap");if(dw2)dw2.style.display="block";
     document.getElementById("c-after-desc-wrap").style.display="none";
+    _cursoDesdeIA=false;
     openModal("modal-curso");
   }
   else if(curPage==="alumnos"){document.getElementById("alum-edit-id").value="";document.getElementById("modal-alum-title").textContent="Nuevo Alumno";["a-nombre","a-apellido","a-dni","a-cuit","a-matricula","a-esp","a-inst","a-email","a-tel","a-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("alum-cursos-section").style.display="none";openModal("modal-alumno")}
@@ -5528,7 +5534,7 @@ function vis(){
   });
 }
 function base(){
-  const pool=(loggedUser?.rol==="logistica"||loggedUser?.rol==="instructor")?tasks.filter(t=>(t.assignees||[]).includes(loggedUser.id)):tasks;
+  const pool=(loggedUser?.rol==="logistica"||loggedUser?.rol==="instructor"||loggedUser?.rol==="comunicaciones")?tasks.filter(t=>(t.assignees||[]).includes(loggedUser.id)):tasks;
   return!curUser?pool:pool.filter(t=>(t.assignees||[]).includes(curUser));
 }
 function renderTareas(){updStats();updCounts();renderTaskList(vis())}
@@ -5577,12 +5583,13 @@ function taskCard(t){
   const pc=PC[t.prioridad];
   const ass=t.assignees||[];
   const d=days(t.fecha_vencimiento);
+  const esRango=t.fecha_inicio&&t.fecha_vencimiento&&t.fecha_inicio!==t.fecha_vencimiento;
   let dueHtml="";
   if(t.fecha_vencimiento&&t.status!=="Listo"){
     if(d<0)dueHtml=`<span class="due ov">⚠ Venció hace ${Math.abs(d)}d</span>`;
-    else if(d===0)dueHtml=`<span class="due sn">⏰ Vence hoy</span>`;
-    else if(d<=3)dueHtml=`<span class="due sn">⏰ ${d}d</span>`;
-    else dueHtml=`<span class="due ok">📅 ${fmt(t.fecha_vencimiento)}</span>`;
+    else if(d===0)dueHtml=`<span class="due sn">⏰ Vence hoy${esRango?` (desde ${fmt(t.fecha_inicio)})`:""}</span>`;
+    else if(d<=3)dueHtml=`<span class="due sn">⏰ ${d}d${esRango?` (desde ${fmt(t.fecha_inicio)})`:""}</span>`;
+    else dueHtml=`<span class="due ok">📅 ${esRango?`${fmt(t.fecha_inicio)} → ${fmt(t.fecha_vencimiento)}`:fmt(t.fecha_vencimiento)}</span>`;
   }
   const assHtml=ass.map(id=>{const n=uName(id);const c2=uColor(id);return n?`<span class="apill" style="background:${c2}18;border-color:${c2}40;color:${c2}">${n}</span>`:""}).join("");
   const sBtns=Object.entries(BC).map(([s,b])=>`<button class="sb ${b.cls}${s===t.status?" cur":""}" onclick="event.stopPropagation();chgTaskStatus('${t.id}','${s}',this)">${b.label}</button>`).join("");
@@ -5605,6 +5612,7 @@ function taskCard(t){
     <div class="tea-row"><span class="al">Categoría</span><select class="mini-sel" id="cat-${t.id}" onchange="saveCategoria('${t.id}')"><option value="">Sin categoría</option>${["Administración","Finanzas","Operaciones","Cursos","RRHH","Legal/Impositivo","Marketing","General"].map(c=>`<option${t.categoria===c?" selected":""}>${c}</option>`).join("")}</select></div>
     <div class="tea-row"><span class="al">Estado</span>${sBtns}</div>
     <div class="tea-row"><span class="al">Prioridad</span><select class="mini-sel" onchange="chgPrio('${t.id}',this.value)">${prioOpts}</select></div>
+    <div class="tea-row"><span class="al">Fecha inicio</span><input class="di" type="date" value="${t.fecha_inicio||""}" id="fi-${t.id}"><button class="sdb" onclick="saveFechaInicio('${t.id}')">Guardar</button></div>
     <div class="tea-row"><span class="al">Vencimiento</span><input class="di" type="date" value="${t.fecha_vencimiento||""}" id="d-${t.id}"><button class="sdb" onclick="saveDate('${t.id}')">Guardar</button></div>
     <div class="tea-row"><span class="al">Responsables</span><div style="display:flex;flex-wrap:wrap;gap:5px">${assChecks}</div></div>
     <div class="tea-row"><span class="al">Nombre</span><input class="desc-inp" style="font-size:13px;font-weight:600" id="tname-inp-${t.id}" value="${esc(t.nombre||"")}" onblur="saveTNameDirect(this,'${t.id}')" onkeydown="if(event.key==='Enter')this.blur()"></div>
@@ -5657,6 +5665,13 @@ async function saveDate(id){
   try{await sb(`tareas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({fecha_vencimiento:val||null,updated_at:new Date().toISOString()})});
     const t=tasks.find(t=>t.id===id);if(t)t.fecha_vencimiento=val||null;toast("Fecha guardada","ok");renderTareas();
     if(t)notifyAssignees(t,"modificacion",`${loggedUser?.nombre||"Alguien"} cambió la fecha de vencimiento de "${t.nombre}"${val?` al ${val}`:""}`,loggedUser?.id);}catch(e){toast("Error","err")}
+}
+async function saveFechaInicio(id){
+  const val=document.getElementById("fi-"+id)?.value;
+  const t=tasks.find(t=>t.id===id);
+  if(val&&t?.fecha_vencimiento&&val>t.fecha_vencimiento){toast("La fecha de inicio no puede ser posterior al vencimiento","err");return}
+  try{await sb(`tareas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({fecha_inicio:val||null,updated_at:new Date().toISOString()})});
+    if(t)t.fecha_inicio=val||null;toast("Fecha guardada","ok");renderTareas();}catch(e){toast("Error","err")}
 }
 function editTName(id){document.getElementById("tn-"+id).classList.add("hide");const inp=document.getElementById("tni-"+id);inp.classList.add("show");inp.focus();inp.select()}
 function nameKey(e,id){if(e.key==="Enter")document.getElementById("tni-"+id).blur();if(e.key==="Escape"){document.getElementById("tni-"+id).classList.remove("show");document.getElementById("tn-"+id).classList.remove("hide")}}
@@ -5761,16 +5776,18 @@ function checkTareaConflicto(){
 async function createTask(){
   const nombre=document.getElementById("mn").value.trim();if(!nombre){toast("Escribí un nombre","err");return}
   const prioridad=document.getElementById("mp").value||null;const status=document.getElementById("ms").value;
+  const fechaInicio=document.getElementById("mfi").value||null;
   const fecha=document.getElementById("md").value||null;
+  if(fechaInicio&&fecha&&fechaInicio>fecha){toast("La fecha de inicio no puede ser posterior al vencimiento","err");return}
   const hora=document.getElementById("mhora").value||null;
   const desc=document.getElementById("mdesc").value.trim()||null;
   const cat=document.getElementById("mcat").value||null;
   const assignees=[...document.querySelectorAll("#modalUserChecks input:checked")].map(i=>i.value);
   const mbtn=document.getElementById("mbtn");mbtn.disabled=true;mbtn.textContent="Creando...";
   try{
-    const [created]=await sb("tareas",{method:"POST",body:JSON.stringify({nombre,status,prioridad,assignees,fecha_vencimiento:fecha,hora_inicio:hora,notas:desc||null,categoria:cat,updated_at:new Date().toISOString()})});
+    const [created]=await sb("tareas",{method:"POST",body:JSON.stringify({nombre,status,prioridad,assignees,fecha_inicio:fechaInicio,fecha_vencimiento:fecha,hora_inicio:hora,notas:desc||null,categoria:cat,updated_at:new Date().toISOString()})});
     tasks.unshift(created);closeModal("modal-tarea");
-    ["mn","mp","md","mhora","mdesc","mcat"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+    ["mn","mp","mfi","md","mhora","mdesc","mcat"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
     document.getElementById("ms").value="Por Hacer";
     document.querySelectorAll("#modalUserChecks input").forEach(i=>{i.checked=false;i.closest(".uc").classList.remove("sel2")});
     const aviso=document.getElementById("tarea-conflicto-aviso");if(aviso)aviso.style.display="none";
@@ -5783,14 +5800,29 @@ async function createTask(){
 function estadoBadge(e){const m={"Borrador":"est-borrador","Convocatoria":"est-convocatoria","Inscripciones":"est-inscripciones","En curso":"est-en curso","Completado":"est-completado","Cancelado":"est-cancelado","Educación médica continua":"est-emc"};return`<span class="cc-estado ${m[e]||"est-borrador"}">${e}</span>`}
 function lineaBadge(l){if(!l)return"";const m={"MSP / Convenio":"lnb-msp","Colmedsa":"lnb-col","Comercial":"lnb-com","EMC / Gratuito":"lnb-emc"};return`<span class="lnb ${m[l]||"lnb-def"}">${esc(l)}</span>`}
 
+async function loadMisCursosInstructor(){
+  try{
+    const email=(loggedUser.email||"").trim().toLowerCase();
+    const miInstructor=instructores.find(i=>(i.email||"").trim().toLowerCase()===email);
+    if(!miInstructor){_misCursoIdsInstructor=new Set();return;}
+    const rows=await sb(`curso_instructores?instructor_id=eq.${miInstructor.id}&select=curso_id`);
+    _misCursoIdsInstructor=new Set(rows.map(r=>r.curso_id));
+  }catch(e){_misCursoIdsInstructor=new Set();}
+}
+// Cursos donde el instructor logueado está asignado (curso_instructores) o coincide como instructor_nombre (dato legado)
+function _filtrarCursosInstructor(list){
+  const miNombre=(loggedUser?.nombre||"").trim().toLowerCase();
+  return list.filter(c=>(_misCursoIdsInstructor&&_misCursoIdsInstructor.has(c.id))||(miNombre&&(c.instructor_nombre||"").toLowerCase().includes(miNombre)));
+}
 function renderCursos(){
   const c=document.getElementById("curso-grid-container");
-  const realizados=cursos.filter(x=>x.estado==="Completado");
-  let list=cursos;
-  if(cursoFilter==="activos")list=cursos.filter(x=>["Convocatoria","Inscripciones","En curso"].includes(x.estado));
-  else if(cursoFilter==="borrador")list=cursos.filter(x=>x.estado==="Borrador");
+  const cursosVisibles=loggedUser?.rol==="instructor"?_filtrarCursosInstructor(cursos):cursos;
+  const realizados=cursosVisibles.filter(x=>x.estado==="Completado");
+  let list=cursosVisibles;
+  if(cursoFilter==="activos")list=cursosVisibles.filter(x=>["Convocatoria","Inscripciones","En curso"].includes(x.estado));
+  else if(cursoFilter==="borrador")list=cursosVisibles.filter(x=>x.estado==="Borrador");
   else if(cursoFilter==="completados")list=realizados;
-  else list=cursos.filter(x=>x.estado!=="Completado"); // vista "all": oculta completados
+  else list=cursosVisibles.filter(x=>x.estado!=="Completado"); // vista "all": oculta completados
   if(cursoLinea) list=list.filter(x=>x.linea_negocio===cursoLinea);
   if(cursoSearch){const Q=cursoSearch.toLowerCase();list=list.filter(x=>(x.nombre||"").toLowerCase().includes(Q)||(x.estado||"").toLowerCase().includes(Q)||(x.linea_negocio||"").toLowerCase().includes(Q));}
   // Ordenar
@@ -5803,9 +5835,9 @@ function renderCursos(){
   const btnReal=document.getElementById("btn-realizados");
   if(btnReal){btnReal.textContent=`🏁 Realizados (${realizados.length})`;btnReal.style.opacity=cursoFilter==="completados"?"1":".75";btnReal.style.fontWeight=cursoFilter==="completados"?"700":"400";}
   // Stats
-  document.getElementById("cT").textContent=cursos.length;
-  document.getElementById("cA").textContent=cursos.filter(x=>["Convocatoria","Inscripciones","En curso"].includes(x.estado)).length;
-  document.getElementById("cI").textContent=cursos.reduce((a,x)=>a+(x.cupos_inscriptos||0),0);
+  document.getElementById("cT").textContent=cursosVisibles.length;
+  document.getElementById("cA").textContent=cursosVisibles.filter(x=>["Convocatoria","Inscripciones","En curso"].includes(x.estado)).length;
+  document.getElementById("cI").textContent=cursosVisibles.reduce((a,x)=>a+(x.cupos_inscriptos||0),0);
   document.getElementById("cC").textContent=realizados.length;
   if(!list.length){
     const colabPre=cursoFilter==="borrador"?`<div id="colab-ideas-section" style="margin-bottom:20px"></div>`:"";
@@ -7628,6 +7660,8 @@ async function createCurso(){
     }
     closeModal("modal-curso");renderCursos();updateSideBadges();toast(`"${nombre}" creado`,"ok");
     await selectCurso(created.id);
+    if(_cursoDesdeIA&&cursoIAArchivos.length)await _subirArchivosIAAlCurso(created.id);
+    _cursoDesdeIA=false;
     const tieneCls=document.getElementById("c-tiene-clases")?.checked;
     if(tieneCls){
       const clasesTab=document.querySelector(`[onclick*="cd-clases-${created.id}"]`);
@@ -7881,7 +7915,7 @@ async function loadCursoArchivos(cursoId){
   }catch(e){cont.innerHTML=`<div style="color:var(--re);padding:20px">Error: ${esc(e.message)}</div>`;}
 }
 
-async function _guardarArchivoEnCurso(cursoId,blob,nombre,tipo,generadoIA=false){
+async function _guardarArchivoEnCurso(cursoId,blob,nombre,tipo,generadoIA=false,silencioso=false){
   try{
     const safe=nombre.replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,80);
     const path=`${cursoId}/${tipo}/${Date.now()}_${safe}`;
@@ -7893,10 +7927,40 @@ async function _guardarArchivoEnCurso(cursoId,blob,nombre,tipo,generadoIA=false)
     if(!upRes.ok){const t=await upRes.text();throw new Error(t);}
     const sess=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
     await sb("curso_archivos",{method:"POST",body:JSON.stringify({curso_id:cursoId,tipo,nombre,storage_path:path,size_bytes:blob.size,subido_por:sess.id||null,generado_ia:generadoIA})});
-    toast(`Guardado en el curso: ${nombre}`,"ok");
+    if(!silencioso)toast(`Guardado en el curso: ${nombre}`,"ok");
     const cont=document.getElementById(`archivos-content-${cursoId}`);
     if(cont&&cont.parentElement&&cont.parentElement.style.display!=="none")loadCursoArchivos(cursoId);
   }catch(e){console.error("Error guardando archivo en curso:",e);}
+}
+
+function _base64ToBlob(base64,mime){
+  const bin=atob(base64);
+  const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  return new Blob([bytes],{type:mime||"application/octet-stream"});
+}
+
+// Sube los archivos adjuntados durante la charla con el agente de cursos al curso recién creado
+async function _subirArchivosIAAlCurso(cursoId){
+  const archivos=cursoIAArchivos.slice();
+  let ok=0;
+  for(const a of archivos){
+    try{
+      const esPdf=a.tipo==="application/pdf"||/\.pdf$/i.test(a.nombre);
+      const esTextoExtraido=a.tipo==="text/plain"&&!/\.txt$/i.test(a.nombre);
+      const tipo=esPdf?"pdf":"otro";
+      const nombreFinal=esTextoExtraido?a.nombre+".txt":a.nombre;
+      const blob=_base64ToBlob(a.base64,a.tipo);
+      await _guardarArchivoEnCurso(cursoId,blob,nombreFinal,tipo,false,true);
+      ok++;
+    }catch(e){console.error("Error subiendo archivo adjunto del chat IA:",e);}
+  }
+  if(ok){
+    toast(`${ok} archivo${ok>1?"s":""} de la charla con la IA guardado${ok>1?"s":""} en el curso`,"ok");
+    cursoIAArchivos=[];
+    const adjDiv=document.getElementById("curso-ia-adjuntos");
+    if(adjDiv)adjDiv.innerHTML="";
+  }
 }
 
 // ── COLA DE EDICIÓN DE VIDEO ──────────────────────────────────────────────────
@@ -8072,9 +8136,9 @@ async function crearCursoDesdeIA(){
   const btn=document.getElementById("btn-crear-desde-ia");
   if(btn){btn.disabled=true;btn.textContent="Extrayendo datos...";}
   try{
-    const extractPrompt=`Basándote en toda la conversación, extraé los datos del curso en formato JSON. Devolvé SOLO el JSON sin texto adicional, sin markdown, sin bloques de código. Campos a completar (dejá null si no se mencionó):
+    const extractPrompt=`Basándote en toda la conversación, extraé los datos del curso en formato JSON. Devolvé SOLO el JSON sin texto adicional, sin markdown, sin bloques de código. Campos a completar (dejá null si no se mencionó, EXCEPTO "nombre" que nunca puede ir null):
 {
-  "nombre": "Nombre completo del curso",
+  "nombre": "Nombre del curso. Si no se definió un nombre explícito en la charla, inferí uno descriptivo a partir del tema/dominio clínico discutido, siguiendo el formato [Tipo] de [Dominio clínico] [(Nivel X)] — nunca dejar este campo vacío o null.",
   "tipo": "Mixto|Teórico|Práctico|Educación médica continua",
   "modalidad": "Presencial|Virtual|Híbrido",
   "linea_negocio": "MSP / Convenio|Colmedsa|Comercial|EMC / Gratuito o null",
@@ -8091,8 +8155,10 @@ async function crearCursoDesdeIA(){
     const data=await res.json();
     let texto=data.respuesta||"{}";
     texto=texto.replace(/```json?/gi,"").replace(/```/g,"").trim();
+    const jsonMatch=texto.match(/\{[\s\S]*\}/);
     let curso={};
-    try{curso=JSON.parse(texto);}catch(e){toast("No pude extraer los datos — completá el formulario manualmente","inf");}
+    try{curso=JSON.parse(jsonMatch?.[0]||texto);}catch(e){toast("No pude extraer los datos — completá el formulario manualmente","inf");}
+    if(!curso.nombre&&cursoIAChatNombre)curso.nombre=cursoIAChatNombre;
 
     // Limpiar y pre-llenar el formulario
     ["c-nombre","c-instructor","c-respaldo","c-desc","c-desc-clases","c-inicio","c-fin","c-after-desc","c-cotizacion-id"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
@@ -8146,6 +8212,7 @@ async function crearCursoDesdeIA(){
     }
 
     closeModal("modal-curso-ia");
+    _cursoDesdeIA=true;
     openModal("modal-curso");
     if(avisos.length){
       setTimeout(()=>avisos.forEach(a=>toast(a,"inf")),300);
@@ -8516,6 +8583,7 @@ function _generarPDFCurso(content,tipo,cursoId=null){
 // ── CREAR CURSO CON IA ────────────────────────────────────────────────────────
 let cursoIAHistorial=[];
 let cursoIAArchivos=[];  // [{nombre, tipo, base64}]
+let _cursoDesdeIA=false;  // true si el modal-curso se abrió desde "Crear curso" del chat IA
 
 async function _loadMammoth(){
   if(window.mammoth)return;
@@ -17512,6 +17580,9 @@ function buildEventos(){
       if(t.fecha_vencimiento&&t.status!=="Listo"){
         const hora=t.hora_inicio?t.hora_inicio.slice(0,5):null;
         addEvento(t.fecha_vencimiento,{tipo:"ev-venc",dot:"#EF4444",nombre:t.nombre,sub:"Vencimiento de tarea"+(hora?" — "+hora:""),hora:hora||"23:59",id:t.id});
+        if(t.fecha_inicio&&t.fecha_inicio!==t.fecha_vencimiento){
+          addEvento(t.fecha_inicio,{tipo:"ev-ini",dot:"#7C3AED",nombre:t.nombre,sub:"Inicio de tarea (varios días)",id:t.id});
+        }
       }
     });
   }
@@ -23907,6 +23978,7 @@ function cotizAbrirCrearCurso(cotizId){
   if(part)document.getElementById("c-cupos").value=part;
   // Estado borrador
   const estSel=document.getElementById("c-estado");if(estSel)estSel.value="Borrador";
+  _cursoDesdeIA=false;
   openModal("modal-curso");
 }
 

@@ -696,6 +696,39 @@ ALTER TABLE mensajes_publico ADD COLUMN IF NOT EXISTS imagen_url text;
 
 ---
 
+## Implementado (7 Sep 2026) — Audio en agente de cursos, mobile, tareas multi-día, permisos
+
+### Agente de cursos — audio
+- ✅ Botón 🎤 en el chat "Crear curso con IA" — graba audio con MediaRecorder y lo transcribe
+- ✅ Edge Function `transcribir-audio` — usa AssemblyAI (mismo proveedor y secret `ASSEMBLYAI_API_KEY` que Reuniones, no depende de Groq)
+- ✅ Extracción de nombre de curso más robusta al crear desde IA — si la charla no definió un nombre explícito, el agente infiere uno siguiendo la nomenclatura estándar; fallback al nombre del chat guardado; parseo de JSON tolerante a texto extra
+- ✅ Archivos adjuntados durante la charla con el agente se suben automáticamente a la tab Archivos del curso al crearlo (bucket `curso-archivos`)
+- ✅ Wording: agente de cursos ya no usa "comercializarse/comercialización" — usa "implementarse/implementación"
+
+### Mobile
+- ✅ Modal de detalle de reunión — fila de botones (PDF/Word/Agregar audio/Re-analizar/Eliminar) hace wrap en vez de desbordar la pantalla
+- ✅ Mensajes internos — en mobile se muestra una pantalla a la vez (lista o conversación) con botón "←" para volver, en vez de layout de 2 columnas fijas
+
+### Tareas
+- ✅ Campo `fecha_inicio` en tareas — permite que una tarea abarque varios días (ej. un congreso). Se edita en el modal de creación y en la tarjeta expandida. En el Kanban se muestra como rango "dd/mm → dd/mm"; en Calendario aparece un evento de inicio además del de vencimiento
+- ✅ Filtro "solo mis tareas" (antes solo `instructor`/`logistica`) ahora también aplica a `comunicaciones`, según el cuadro de roles de este documento
+
+### Permisos — Cursos para instructores
+- ✅ El módulo Cursos filtra la grilla y los KPIs para el rol `instructor`: solo ve cursos donde está asignado en `curso_instructores` (match por `instructores.email` = email de su usuario) o donde su nombre coincide con el campo legado `instructor_nombre`
+- ⚠️ **Es un filtro de frontend, no una política RLS** — las tablas `cursos`/`curso_instructores` siguen con policy `{authenticated} USING (true)`, por lo que un instructor que inspeccione las llamadas REST podría seguir leyendo cursos ajenos. Si se necesita un límite real a nivel de datos, hay que sumar una policy RLS específica para el rol instructor (pendiente, requiere decidir cómo exponer el rol al motor de RLS — hoy el rol vive en la tabla `usuarios`, no en un claim de JWT).
+- ⚠️ **Riesgo de datos:** si el registro del instructor en la tabla `instructores` no tiene cargado el mismo email que su usuario de login, o el curso no está vinculado ni por `curso_instructores` ni por `instructor_nombre`, ese instructor va a ver la grilla de Cursos vacía. Antes de dar por cerrado este punto, verificar/completar el email en Instructores y los vínculos en `curso_instructores` para Derlin (único instructor activo al momento de este cambio).
+
+**SQL pendiente (correr en Supabase SQL editor):**
+```sql
+ALTER TABLE tareas ADD COLUMN IF NOT EXISTS fecha_inicio date;
+```
+
+**Deploy pendiente (Supabase Dashboard → Edge Functions):**
+- `transcribir-audio` (nueva)
+- `agente-cursos` (cambio de wording comercializarse → implementarse, y extracción de nombre más robusta)
+
+---
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:
