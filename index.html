@@ -8722,7 +8722,7 @@ async function _transcribirAudioCursoIA(blob){
       rd.onerror=rej;
       rd.readAsDataURL(blob);
     });
-    const res=await fetchEdge("transcribir-audio",{audio_base64:base64});
+    const res=await fetchEdge("transcribir-audio",{audio_base64:base64,mime_type:blob.type});
     const data=await res.json();
     if(data.error){toast(data.error,"err");return;}
     if(input){
