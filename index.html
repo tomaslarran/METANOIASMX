@@ -18014,7 +18014,7 @@ function renderCalendario(){
       const rl=b.pos==="start"||b.pos==="single"?"7px":"0";
       const rr=b.pos==="end"||b.pos==="single"?"7px":"0";
       const pl=b.pos==="start"||b.pos==="single"?"7px":"3px";
-      return `<div style="position:absolute;top:${top}px;left:${ml};right:${mr};height:16px;background:${b.color};border-radius:${rl} ${rr} ${rr} ${rl};display:flex;align-items:center;padding-left:${pl};font-size:10px;font-weight:600;color:#fff;overflow:hidden;white-space:nowrap;opacity:.9;">${b.label}</div>`;
+      return `<div style="position:absolute;top:${top}px;left:${ml};right:${mr};height:16px;background:${b.color}30;border-left:${b.pos==='start'||b.pos==='single'?`2px solid ${b.color}`:'none'};border-radius:${rl} ${rr} ${rr} ${rl};display:flex;align-items:center;padding-left:${pl};font-size:10px;font-weight:600;color:${b.color};overflow:hidden;white-space:nowrap;">${b.label}</div>`;
     }).join("");
 
     const evs=(eventos[fechaStr]||[]).filter(ev=>ev.tipo!=="ev-evento"&&ev.tipo!=="ev-evento-fin");
