@@ -17959,6 +17959,43 @@ function renderCalendario(){
   let totalCeldas=Math.ceil((primerDia+diasMes)/7)*7;
   if(totalCeldas<35)totalCeldas=35;
 
+  // ── Pre-calcular barras de eventos ──
+  const EV_COLORS=["#00B5A3","#7C3AED","#3B82F6","#F59E0B","#EC4899","#10B981","#F97316"];
+  const mostrarEventos=calFiltro==="todo"||calFiltro==="tareas"||calFiltro==="venc"||calFiltro==="eventos";
+  const evTasks=mostrarEventos?tasks.filter(t=>esEvento(t)&&t.fecha_inicio):[];
+  evTasks.sort((a,b)=>(a.fecha_inicio||"").localeCompare(b.fecha_inicio||""));
+  const rowEnds={};
+  evTasks.forEach((t,i)=>{
+    t._evColor=EV_COLORS[i%EV_COLORS.length];
+    const start=t.fecha_inicio.slice(0,10);
+    const end=(t.fecha_vencimiento||t.fecha_inicio).slice(0,10);
+    let row=0;
+    while(rowEnds[row]&&rowEnds[row]>=start)row++;
+    rowEnds[row]=end;
+    t._evRow=row;
+  });
+  const evBars={};
+  evTasks.forEach(t=>{
+    const start=t.fecha_inicio.slice(0,10);
+    const end=(t.fecha_vencimiento||t.fecha_inicio).slice(0,10);
+    const startD=new Date(start+"T00:00:00"),endD=new Date(end+"T00:00:00");
+    let cur=new Date(startD);
+    while(cur<=endD){
+      const k=cur.toISOString().slice(0,10);
+      if(!evBars[k])evBars[k]=[];
+      const isS=k===start,isE=k===end;
+      const dow=cur.getDay();
+      let pos;
+      if(isS&&isE)pos="single";
+      else if(isS||dow===0)pos="start";
+      else if(isE||dow===6)pos="end";
+      else pos="mid";
+      const showLabel=pos==="start"||pos==="single";
+      evBars[k].push({color:t._evColor,row:t._evRow,pos,label:showLabel?escHtml(t.nombre):""});
+      cur.setDate(cur.getDate()+1);
+    }
+  });
+
   for(let i=0;i<totalCeldas;i++){
     let dia,mes,año,otherMonth=false;
     if(i<primerDia){dia=diasMesAnterior-(primerDia-1-i);mes=calMonth-1;año=calYear;if(mes<0){mes=11;año--}otherMonth=true}
@@ -17967,16 +18004,30 @@ function renderCalendario(){
     const fechaStr=`${año}-${String(mes+1).padStart(2,"0")}-${String(dia).padStart(2,"0")}`;
     const isHoy=fechaStr===hoy;
     const isSel=fechaStr===calSelectedDay;
-    const evs=eventos[fechaStr]||[];
+
+    const bars=evBars[fechaStr]||[];
+    const numBarRows=bars.length?Math.max(...bars.map(b=>b.row))+1:0;
+    const barsHtml=bars.map(b=>{
+      const top=26+b.row*18;
+      const ml=b.pos==="start"||b.pos==="single"?"4px":"0";
+      const mr=b.pos==="end"||b.pos==="single"?"4px":"0";
+      const rl=b.pos==="start"||b.pos==="single"?"7px":"0";
+      const rr=b.pos==="end"||b.pos==="single"?"7px":"0";
+      const pl=b.pos==="start"||b.pos==="single"?"7px":"3px";
+      return `<div style="position:absolute;top:${top}px;left:${ml};right:${mr};height:16px;background:${b.color};border-radius:${rl} ${rr} ${rr} ${rl};display:flex;align-items:center;padding-left:${pl};font-size:10px;font-weight:600;color:#fff;overflow:hidden;white-space:nowrap;opacity:.9;">${b.label}</div>`;
+    }).join("");
+
+    const evs=(eventos[fechaStr]||[]).filter(ev=>ev.tipo!=="ev-evento"&&ev.tipo!=="ev-evento-fin");
     const maxShow=3;
-    const evHtml=evs.slice(0,maxShow).map(ev=>`<div class="cal-event ${ev.tipo}${ev.pos?" "+ev.pos:""}" title="${escHtml(ev.nombre)}">${escHtml(ev.nombre)}</div>`).join("");
+    const topPad=numBarRows>0?numBarRows*18:0;
+    const evHtml=evs.slice(0,maxShow).map(ev=>`<div class="cal-event ${ev.tipo}" title="${escHtml(ev.nombre)}">${escHtml(ev.nombre)}</div>`).join("");
     const more=evs.length>maxShow?`<div class="cal-more">+${evs.length-maxShow} más</div>`:"";
     html+=`<div class="cal-cell${otherMonth?" other-month":""}${isHoy?" today":""}${isSel?" selected":""}" onclick="calClickDay('${fechaStr}')">
       <div class="cal-day-num">${dia}</div>
-      ${evHtml}${more}
+      ${barsHtml}
+      ${topPad>0?`<div style="margin-top:${topPad}px">${evHtml}${more}</div>`:evHtml+more}
     </div>`;
   }
-  // Inyectar celdas en el único grid compartido (después de las 7 celdas de cabecera)
   const calGridEl=document.getElementById("cal-grid");
   while(calGridEl.children.length>7)calGridEl.removeChild(calGridEl.lastChild);
   calGridEl.insertAdjacentHTML("beforeend",html);
