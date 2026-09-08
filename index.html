@@ -7127,76 +7127,30 @@ async function generarCertificado(inscId,cursoId){
       if(ci[0]){const inst=ci[0].instructores;instructorNombre=`${inst.nombre||""} ${inst.apellido||""}`.trim();}
     }catch(e){}
 
-    // ── Generar diploma HTML con coordenadas exactas del DIPLOMA EDITABLE.docx ──
-    // Margen Word: left=25mm, top=30mm. Conversión: 1pt = 0.3528mm
+    // ── Diploma generado con el mismo canvas que se usa para el envío por email ──
+    // (antes esta función tenía su propio layout en mm, desincronizado del fondo real — unificado para que ambos caminos siempre coincidan)
     const nombreAlumno=`${a.nombre||""} ${a.apellido||""}`.trim();
     const fecha=new Date().toLocaleDateString("es-AR",{day:"2-digit",month:"long",year:"numeric"});
-    // Precargar imagen como base64 para que funcione en ventana nueva
-    let bgDataUrl="";
-    try{
-      const r=await fetch("./diploma-fondo.png");
-      const blob=await r.blob();
-      bgDataUrl=await new Promise(res=>{const rd=new FileReader();rd.onload=()=>res(rd.result);rd.readAsDataURL(blob);});
-    }catch(e){console.warn("No se pudo cargar diploma-fondo.png",e);}
+    const base64=await diplomaCanvasBase64({
+      nombre:nombreAlumno,dni:a.dni||"",matricula:a.matricula||"",
+      curso:(curso.nombre||"").toUpperCase(),instructores:instructorNombre,fecha,
+      numero:inscId.slice(-8).toUpperCase()
+    });
 
     const html=`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
     <title>Certificado - ${nombreAlumno}</title>
     <style>
       *{margin:0;padding:0;box-sizing:border-box}
       html,body{width:297mm;height:210mm;overflow:hidden;background:white}
-      .diploma{width:297mm;height:210mm;position:relative;overflow:hidden}
-      /* Fondo: imagen a 50% opacidad igual que el Word */
-      .bg{position:absolute;left:-8mm;top:-2.5mm;width:303.5mm;height:218.7mm;opacity:.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-      /* Texto dinámico */
-      .tb{position:absolute;font-family:'Arial Rounded MT Bold',Arial,sans-serif;color:#2E2860;line-height:1.15;white-space:nowrap}
+      img{width:297mm;height:210mm;display:block;object-fit:contain}
       @media print{
         html,body{width:297mm;height:210mm}
         @page{size:A4 landscape;margin:0}
       }
     </style>
-    </head><body><div class="diploma">
-      ${bgDataUrl?`<img class="bg" src="${bgDataUrl}">`:`<div class="bg" style="background:#C4C1D7"></div>`}
-
-      <!-- NOMBRE — box1: posV=81.5pt→58.75mm desde page, centrado, 89.15mm ancho, 25pt -->
-      <div class="tb" style="top:58.75mm;left:0;right:0;text-align:center;font-size:25pt;font-weight:bold">
-        ${nombreAlumno}
-      </div>
-
-      <!-- DNI — box3: posH=86.9mm, posV=75.9mm, 20pt -->
-      <div class="tb" style="top:75.9mm;left:86.9mm;font-size:20pt">
-        ${a.dni||""}
-      </div>
-
-      <!-- MATRÍCULA — box4: posH=167.4mm, posV=76.7mm, 20pt -->
-      <div class="tb" style="top:76.7mm;left:167.4mm;font-size:20pt">
-        ${a.matricula||""}
-      </div>
-
-      <!-- CURSO — box2: posV=98.2mm, centrado, 22pt -->
-      <div class="tb" style="top:98.2mm;left:0;right:0;text-align:center;font-size:22pt;font-weight:bold;white-space:normal;padding:0 30mm">
-        ${(curso.nombre||"").toUpperCase()}
-      </div>
-
-      <!-- INSTRUCTOR — box5: posH=39.84mm, posV=127mm, centrado, 19pt -->
-      <div class="tb" style="top:127mm;left:39.84mm;width:220.1mm;text-align:center;font-size:19pt">
-        ${instructorNombre||""}
-      </div>
-
-      <!-- FECHA — estimada cerca del área "Fecha" del fondo -->
-      <div class="tb" style="top:156mm;right:28mm;text-align:right;font-size:11pt">
-        ${fecha}
-      </div>
-
-      <!-- FIRMA DER — box7: posH=167.2mm, posV=185mm -->
-      <div class="tb" style="top:185mm;left:167.2mm;font-size:9pt">
-        MARIO LARRÁN – CEO METANOIA
-      </div>
-
-      <!-- N° certificado -->
-      <div style="position:absolute;bottom:3mm;right:6mm;font-size:6pt;color:#9088c0;font-family:Arial,sans-serif">
-        N° ${inscId.slice(-8).toUpperCase()}
-      </div>
-    </div></body></html>`;
+    </head><body>
+      <img src="${base64}">
+    </body></html>`;
 
     const w=window.open("","_blank","width=1200,height=900");
     w.document.write(html);
@@ -7236,38 +7190,67 @@ async function diplomaCanvasBase64(datos){
       ctx.fillStyle="rgb(52,48,90)";
       const CAR=s(50);
 
-      // Todas las coordenadas escaladas al 50%
+      // Coordenadas medidas directamente sobre diploma-fondo.png (3508×2480), luego escaladas con s()
       ctx.font=`bold ${s(105)}px Arial,sans-serif`;
       ctx.textAlign="center";ctx.textBaseline="middle";
-      ctx.fillText(datos.nombre,s(1748),s(760));
+      ctx.fillText(datos.nombre,s(1748),s(850)); // línea en blanco "certifica que:"
 
       ctx.font=`${s(80)}px Arial,sans-serif`;
       ctx.textAlign="left";ctx.textBaseline="middle";
-      ctx.fillText(datos.dni||"",s(954),s(960)+CAR);
-      ctx.fillText(datos.matricula||"",s(2004),s(960)+CAR);
+      ctx.fillText(datos.dni||"",s(1000),s(1010)); // después de "D.N.I" (label termina ~x935)
+      ctx.fillText(datos.matricula||"",s(2004),s(1010)); // después de "M.P. Nº" (label termina ~x1900)
 
-      ctx.font=`bold ${s(82)}px Arial,sans-serif`;
+      // Título del curso: centrado en la línea en blanco (y=1310), con auto-ajuste de tamaño si no entra en 2 líneas
       ctx.textAlign="center";
+      const cursoTexto=datos.curso||"";
       const maxW=s(2200);
-      const words=(datos.curso||"").split(" ");
-      let line="",lines=[];
-      words.forEach(w=>{
-        const test=line+(line?" ":"")+w;
-        if(ctx.measureText(test).width>maxW&&line){lines.push(line);line=w;}
-        else line=test;
-      });
-      lines.push(line);
-      const cursoY=s(1250)+CAR;
-      lines.forEach((l,i)=>ctx.fillText(l,s(1748),cursoY+i*s(95)));
+      let fontSizeCurso=82,lines=[];
+      for(const trySize of [82,72,64]){
+        ctx.font=`bold ${s(trySize)}px Arial,sans-serif`;
+        const words=cursoTexto.split(" ");
+        let line="",testLines=[];
+        words.forEach(w=>{
+          const test=line+(line?" ":"")+w;
+          if(ctx.measureText(test).width>maxW&&line){testLines.push(line);line=w;}
+          else line=test;
+        });
+        testLines.push(line);
+        fontSizeCurso=trySize;lines=testLines;
+        if(lines.length<=2)break; // entra en 2 líneas, no hace falta achicar más
+      }
+      ctx.font=`bold ${s(fontSizeCurso)}px Arial,sans-serif`;
+      const lineGap=s(fontSizeCurso+6);
+      const cursoStartY=s(1310)-((lines.length-1)*lineGap)/2;
+      lines.forEach((l,i)=>ctx.fillText(l,s(1748),cursoStartY+i*lineGap));
 
       ctx.font=`${s(80)}px Arial,sans-serif`;
-      ctx.fillText(datos.instructores||"",s(1748),s(1590));
+      ctx.fillText(datos.instructores||"",s(1748),s(1650)); // línea en blanco bajo "dictada por"
 
       ctx.textAlign="left";
       ctx.font=`${s(72)}px Arial,sans-serif`;
-      ctx.fillText(datos.fecha,s(2740),s(1810));
+      ctx.fillText(datos.fecha,s(2740),s(1845)); // a la derecha de "Fecha"
 
-      resolve(canvas.toDataURL("image/png",0.85));
+      // Nombre bajo la línea de firma derecha (x centro≈2350, línea en y≈2210)
+      ctx.textAlign="center";
+      ctx.font=`${s(38)}px Arial,sans-serif`;
+      ctx.fillText("MARIO LARRÁN – CEO METANOIA",s(2350),s(2270));
+
+      if(datos.numero){
+        ctx.textAlign="right";
+        ctx.fillStyle="rgb(144,136,192)";
+        ctx.font=`${s(28)}px Arial,sans-serif`;
+        ctx.fillText("N° "+datos.numero,s(3440),s(2445));
+      }
+
+      // Firma escaneada de Mario, apoyada sobre la línea (opcional — si falta el archivo, se omite sin romper el diploma)
+      const firmaImg=new Image();
+      firmaImg.onload=()=>{
+        const fw=s(340),fh=fw*(firmaImg.height/firmaImg.width);
+        ctx.drawImage(firmaImg,s(2350)-fw/2,s(2210)-fh,fw,fh);
+        resolve(canvas.toDataURL("image/png",0.85));
+      };
+      firmaImg.onerror=()=>resolve(canvas.toDataURL("image/png",0.85)); // sin firma cargada, el diploma sigue siendo válido
+      firmaImg.src="./firma-mario.png";
     }catch(err){reject(err);}};
     img.onerror=()=>reject(new Error("Error al cargar imagen de fondo del diploma"));
     img.src=bgDataUrl;
@@ -7286,7 +7269,7 @@ async function enviarDiplomaEmail(inscId,cursoId,btnEl){
     const fecha=new Date().toLocaleDateString("es-AR",{day:"numeric",month:"long",year:"numeric"});
     const nombre=`${a.nombre||""} ${a.apellido||""}`.trim();
     toast("Generando diploma...","inf");
-    const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha});
+    const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha,numero:inscId.slice(-8).toUpperCase()});
     toast("Enviando email...","inf");
     const res=await fetch(`${SB}/functions/v1/enviar-diplomas`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},body:JSON.stringify({email:a.email,nombre,curso:curso.nombre||"",instructores:instructor,fecha,diploma_base64:base64})});
     const data=await res.json();
@@ -7316,7 +7299,7 @@ async function enviarTodosLosDiplomas(cursoId){
         const a=i.alumnos;
         const nombre=`${a.nombre||""} ${a.apellido||""}`.trim();
         if(btn)btn.textContent=`Enviando ${enviados+1}/${conEmail.length}...`;
-        const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha});
+        const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha,numero:i.id.slice(-8).toUpperCase()});
         const res=await fetch(`${SB}/functions/v1/enviar-diplomas`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},body:JSON.stringify({email:a.email,nombre,curso:curso.nombre,instructores:instructor,fecha,diploma_base64:base64})});
         const data=await res.json();
         if(!data.error){
