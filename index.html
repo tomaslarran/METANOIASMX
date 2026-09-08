@@ -4190,7 +4190,9 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg"><label class="fl">Desc. Colegio Médicos (%)</label><input class="fi" id="c-descuento" type="number" placeholder="0" min="0" max="100"></div>
     <div class="fg"><label class="fl">Línea de negocio</label><select class="fs" id="c-linea"><option value="">Sin asignar</option><option value="MSP / Convenio">MSP / Convenio</option><option value="Colmedsa">Colmedsa</option><option value="Comercial">Comercial</option><option value="EMC / Gratuito">EMC / Gratuito</option></select></div>
     <div class="fg"><label class="fl">Recurrencia</label><select class="fs" id="c-recurrencia"><option value="">Única vez</option><option value="Mensual">Mensual</option><option value="Cuatrimestral">Cuatrimestral</option><option value="Semestral">Semestral</option><option value="Anual">Anual</option></select></div>
-    <div class="fg"><label class="fl">Instructor</label><input class="fi" id="c-instructor" type="text" placeholder="Nombre del instructor"></div>
+    <div class="fg"><label class="fl">Instructor</label><input class="fi" id="c-instructor" type="text" list="instructores-datalist" placeholder="Elegí un instructor o escribí uno nuevo" autocomplete="off">
+      <datalist id="instructores-datalist"></datalist>
+    </div>
     <div class="fg"><label class="fl">Proveedor</label><select class="fs" id="c-proveedor"><option value="">Sin proveedor</option></select></div>
     <div class="fg form-full"><label class="fl">Respaldo institucional</label><input class="fi" id="c-respaldo" type="text" placeholder="Ej: Colegio de Médicos de Salta"></div>
     <div class="fg form-full" id="c-desc-wrap"><label class="fl">Descripción del curso</label><textarea class="fta" id="c-desc" placeholder="Descripción del curso, objetivos, contenido..."></textarea></div>
@@ -4836,6 +4838,15 @@ function fillGlobal(){
   // Selector de responsable para rutinas
   const ra=document.getElementById("r-assignee");
   if(ra){ra.innerHTML='<option value="">Sin asignar</option>';users.forEach(u=>{const o=document.createElement("option");o.value=u.id;o.textContent=u.nombre;ra.appendChild(o)})}
+
+  fillInstructoresDatalist();
+}
+
+// Lista de sugerencias de instructores (datalist) — permite elegir uno existente o escribir uno nuevo
+function fillInstructoresDatalist(){
+  const dl=document.getElementById("instructores-datalist");
+  if(!dl)return;
+  dl.innerHTML=instructores.filter(i=>i.activo!==false).map(i=>`<option value="${esc(`${i.nombre||""} ${i.apellido||""}`.trim())}">`).join("");
 }
 
 function toggleSidebar(){
@@ -6113,7 +6124,7 @@ async function selectCurso(id){
           <div class="fg"><label class="fl">Cupos máx.</label><input class="fi" type="number" value="${curso.cupos_max||""}" onchange="updateCursoField('${id}','cupos_max',this.value)"></div>
           <div class="fg"><label class="fl">Inscriptos</label><input class="fi" type="number" value="${curso.cupos_inscriptos||0}" onchange="updateCursoField('${id}','cupos_inscriptos',this.value)"></div>
           <div class="fg"><label class="fl">Arancel ($)</label><input class="fi" type="number" value="${curso.arancel||""}" onchange="updateCursoField('${id}','arancel',this.value)"></div>
-          <div class="fg"><label class="fl">Instructor</label><input class="fi" value="${esc(curso.instructor_nombre||"")}" onchange="updateCursoField('${id}','instructor_nombre',this.value)"></div>
+          <div class="fg"><label class="fl">Instructor</label><input class="fi" value="${esc(curso.instructor_nombre||"")}" list="instructores-datalist" autocomplete="off" onchange="updateCursoField('${id}','instructor_nombre',this.value)"></div>
           <div class="fg"><label class="fl">Proveedor</label><select class="fs" onchange="updateCursoField('${id}','proveedor_id',this.value)"><option value="">Sin proveedor</option>${proveedores.map(p=>`<option value="${p.id}"${p.id===curso.proveedor_id?" selected":""}>${p.nombre}</option>`).join("")}</select></div>
           <div class="fg"><label class="fl">Recurrencia</label><select class="fs" onchange="updateCursoField('${id}','recurrencia',this.value||null)"><option value="">Única vez</option>${["Mensual","Cuatrimestral","Semestral","Anual"].map(r=>`<option value="${r}"${curso.recurrencia===r?" selected":""}>${r}</option>`).join("")}</select></div>
           <div class="fg form-full"><label class="fl">Respaldo institucional</label><input class="fi" value="${esc(curso.respaldo_institucional||"")}" onchange="updateCursoField('${id}','respaldo_institucional',this.value)"></div>
@@ -9844,7 +9855,7 @@ async function saveInstructor(){
   try{
     if(id){await sb(`instructores?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(data)});const i=instructores.findIndex(x=>x.id===id);if(i>=0)instructores[i]={...instructores[i],...data};}
     else{const [created]=await sb("instructores",{method:"POST",body:JSON.stringify(data)});instructores.push(created);}
-    closeModal("modal-instructor");renderInstructores();updateSideBadges();
+    closeModal("modal-instructor");renderInstructores();updateSideBadges();fillInstructoresDatalist();
     toast("Instructor guardado","ok");
   }catch(e){toast("Error al guardar","err")}
   finally{ibtn.disabled=false;ibtn.textContent="Guardar"}
@@ -9852,7 +9863,7 @@ async function saveInstructor(){
 
 function delInstructor(id,nombre){
   confirmDel(`¿Eliminar al instructor "${nombre}"? Esta acción no se puede deshacer.`,async()=>{
-    try{await sb(`instructores?id=eq.${id}`,{method:"DELETE"});instructores=instructores.filter(i=>i.id!==id);closeModal("modal-instructor");renderInstructores();updateSideBadges();toast("Instructor eliminado","ok")}
+    try{await sb(`instructores?id=eq.${id}`,{method:"DELETE"});instructores=instructores.filter(i=>i.id!==id);closeModal("modal-instructor");renderInstructores();updateSideBadges();fillInstructoresDatalist();toast("Instructor eliminado","ok")}
     catch(e){toast("Error al eliminar","err")}
   })
 }
