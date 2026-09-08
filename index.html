@@ -4184,11 +4184,12 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg"><label class="fl">Estado</label><select class="fs" id="c-estado"><option value="Borrador">Borrador</option><option value="Convocatoria">Convocatoria</option><option value="Inscripciones">Inscripciones</option><option value="En curso">En curso</option><option value="Educación médica continua">Educación médica continua</option></select></div>
     <div class="fg"><label class="fl">Fecha inicio</label><input class="fi" id="c-inicio" type="date"></div>
     <div class="fg"><label class="fl">Fecha fin</label><input class="fi" id="c-fin" type="date"></div>
-    <div class="fg"><label class="fl">Duración (horas)</label><input class="fi" id="c-horas" type="number" placeholder="8"></div>
+    <div class="fg"><label class="fl">Duración (horas cátedra)</label><input class="fi" id="c-horas" type="number" placeholder="8"></div>
     <div class="fg"><label class="fl">Cupos máximos</label><input class="fi" id="c-cupos" type="number" placeholder="20"></div>
     <div class="fg"><label class="fl">Arancel ($)</label><input class="fi" id="c-arancel" type="number" placeholder="0"></div>
-    <div class="fg"><label class="fl">Desc. Colegio Médicos (%)</label><input class="fi" id="c-descuento" type="number" placeholder="0" min="0" max="100"></div>
-    <div class="fg"><label class="fl">Línea de negocio</label><select class="fs" id="c-linea"><option value="">Sin asignar</option><option value="MSP / Convenio">MSP / Convenio</option><option value="Colmedsa">Colmedsa</option><option value="Comercial">Comercial</option><option value="EMC / Gratuito">EMC / Gratuito</option></select></div>
+    <!-- Línea de negocio y Desc. Colegio se editan en la tab Presupuesto del curso ya creado -->
+    <input type="hidden" id="c-descuento" value="">
+    <input type="hidden" id="c-linea" value="">
     <div class="fg"><label class="fl">Recurrencia</label><select class="fs" id="c-recurrencia"><option value="">Única vez</option><option value="Mensual">Mensual</option><option value="Cuatrimestral">Cuatrimestral</option><option value="Semestral">Semestral</option><option value="Anual">Anual</option></select></div>
     <div class="fg"><label class="fl">Instructor</label><input class="fi" id="c-instructor" type="text" list="instructores-datalist" placeholder="Elegí un instructor o escribí uno nuevo" autocomplete="off">
       <datalist id="instructores-datalist"></datalist>
@@ -6090,7 +6091,7 @@ async function selectCurso(id){
       <div>
         ${estadoBadge(curso.estado)}
         <div class="cd-title">${esc(curso.nombre)}</div>
-        <div style="font-size:12px;color:var(--tx2);margin-top:4px">${curso.tipo||""} · ${curso.modalidad||""}${curso.duracion_horas?` · ${curso.duracion_horas}hs`:""}${curso.instructor_nombre?` · Instructor: ${esc(curso.instructor_nombre)}`:""}</div>
+        <div style="font-size:12px;color:var(--tx2);margin-top:4px">${curso.tipo||""} · ${curso.modalidad||""}${curso.duracion_horas?` · ${curso.duracion_horas}hs cátedra`:""}${curso.instructor_nombre?` · Instructor: ${esc(curso.instructor_nombre)}`:""}</div>
         <div style="font-size:11px;color:var(--tx3);margin-top:3px">${curso.creado_por?`👤 Cargado por <strong style="color:var(--tx2)">${esc(curso.creado_por)}</strong>`:"👤 Sin registro de autor"}${curso.created_at?` · ${new Date(curso.created_at).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"})}`:""}</div>
       </div>
       <div style="display:flex;gap:6px">
@@ -17627,7 +17628,7 @@ function exportReporteAlumnos(){
 
 function exportReporteCursos(){
   if(!cursos.length){toast("No hay cursos cargados","err");return;}
-  const header=["Nombre","Tipo","Modalidad","Estado","Línea de negocio","Fecha inicio","Fecha fin","Duración (hs)","Cupos máx","Precio ($)","Lugar","Instructor","Descripción del curso","Descripción de clases","Descripción catering"];
+  const header=["Nombre","Tipo","Modalidad","Estado","Línea de negocio","Fecha inicio","Fecha fin","Duración (hs cátedra)","Cupos máx","Precio ($)","Lugar","Instructor","Descripción del curso","Descripción de clases","Descripción catering"];
   const rows=cursos.map(c=>[
     c.nombre||"",c.tipo||"",c.modalidad||"",c.estado||"",c.linea_negocio||"",
     c.fecha_inicio||"",c.fecha_fin||"",
