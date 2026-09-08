@@ -7116,6 +7116,13 @@ async function guardarNuevoInstrumento(){
   }catch(e){toast('Error: '+e.message,'err');}
 }
 
+// Fecha que se imprime en el diploma: la de finalización del curso, no la del día en que se genera/envía el certificado
+function fechaCertificadoCurso(curso){
+  const f=curso?.fecha_fin||curso?.fecha_inicio;
+  const d=f?new Date(f+"T12:00:00"):new Date();
+  return d.toLocaleDateString("es-AR",{day:"2-digit",month:"long",year:"numeric"});
+}
+
 async function generarCertificado(inscId,cursoId){
   try{
     const [insc]=await sb(`inscripciones?id=eq.${inscId}&select=*,alumnos(id,nombre,apellido,dni,matricula)`);
@@ -7130,7 +7137,7 @@ async function generarCertificado(inscId,cursoId){
     // ── Diploma generado con el mismo canvas que se usa para el envío por email ──
     // (antes esta función tenía su propio layout en mm, desincronizado del fondo real — unificado para que ambos caminos siempre coincidan)
     const nombreAlumno=`${a.nombre||""} ${a.apellido||""}`.trim();
-    const fecha=new Date().toLocaleDateString("es-AR",{day:"2-digit",month:"long",year:"numeric"});
+    const fecha=fechaCertificadoCurso(curso);
     const base64=await diplomaCanvasBase64({
       nombre:nombreAlumno,dni:a.dni||"",matricula:a.matricula||"",
       curso:(curso.nombre||"").toUpperCase(),instructores:instructorNombre,fecha,
@@ -7191,9 +7198,10 @@ async function diplomaCanvasBase64(datos){
       const CAR=s(50);
 
       // Coordenadas medidas directamente sobre diploma-fondo.png (3508×2480), luego escaladas con s()
+      // textBaseline="alphabetic" para que el texto se apoye SOBRE la línea en blanco (no que la línea lo atraviese por el medio)
       ctx.font=`bold ${s(105)}px Arial,sans-serif`;
-      ctx.textAlign="center";ctx.textBaseline="middle";
-      ctx.fillText(datos.nombre,s(1748),s(850)); // línea en blanco "certifica que:"
+      ctx.textAlign="center";ctx.textBaseline="alphabetic";
+      ctx.fillText(datos.nombre,s(1748),s(852)); // línea en blanco "certifica que:"
 
       ctx.font=`${s(80)}px Arial,sans-serif`;
       ctx.textAlign="left";ctx.textBaseline="middle";
@@ -7224,9 +7232,10 @@ async function diplomaCanvasBase64(datos){
       lines.forEach((l,i)=>ctx.fillText(l,s(1748),cursoStartY+i*lineGap));
 
       ctx.font=`${s(80)}px Arial,sans-serif`;
-      ctx.fillText(datos.instructores||"",s(1748),s(1650)); // línea en blanco bajo "dictada por"
+      ctx.textBaseline="alphabetic"; // apoyado sobre la línea en blanco, igual que el nombre
+      ctx.fillText(datos.instructores||"",s(1748),s(1652));
 
-      ctx.textAlign="left";
+      ctx.textAlign="left";ctx.textBaseline="middle";
       ctx.font=`${s(72)}px Arial,sans-serif`;
       ctx.fillText(datos.fecha,s(2740),s(1845)); // a la derecha de "Fecha"
 
@@ -7266,7 +7275,7 @@ async function enviarDiplomaEmail(inscId,cursoId,btnEl){
     if(!a.email)throw new Error(`${a.nombre} ${a.apellido} no tiene email registrado`);
     let instructor=curso.instructor_nombre||"";
     try{const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(nombre,apellido)&limit=1`);if(ci[0]){const ins=ci[0].instructores;instructor=`${ins.nombre||""} ${ins.apellido||""}`.trim();}}catch(_){}
-    const fecha=new Date().toLocaleDateString("es-AR",{day:"numeric",month:"long",year:"numeric"});
+    const fecha=fechaCertificadoCurso(curso);
     const nombre=`${a.nombre||""} ${a.apellido||""}`.trim();
     toast("Generando diploma...","inf");
     const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha,numero:inscId.slice(-8).toUpperCase()});
@@ -7292,7 +7301,7 @@ async function enviarTodosLosDiplomas(cursoId){
     const sinEmail=insc.filter(i=>!i.alumnos?.email);
     if(!conEmail.length){toast("Ningún inscripto tiene email registrado","err");return;}
     let instructor=curso.instructor_nombre||"";
-    const fecha=new Date().toLocaleDateString("es-AR",{day:"numeric",month:"long",year:"numeric"});
+    const fecha=fechaCertificadoCurso(curso);
     let enviados=0;
     for(const i of conEmail){
       try{
