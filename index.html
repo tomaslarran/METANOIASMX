@@ -6095,7 +6095,7 @@ async function selectCurso(id){
     <div class="cd-tabs">
       <div class="cd-tab on" onclick="showCdTab(this,'cd-info-${id}')">Información</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-tareas-${id}')">Checklist (${tareasCurso.length})</div>
-      <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-costos-${id}')">💰 Costos (${costosCurso.filter(c=>c.aplica).length})</div>
+      <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-costos-${id}')">💰 Presupuesto (${costosCurso.filter(c=>c.aplica).length})</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-instmat-${id}');loadInstMat('${id}')">👥 Instructores y materiales</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-inscriptos-${id}');loadInscriptos('${id}')">📋 Inscriptos</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-eval-${id}');loadEvaluaciones('${id}')">📊 Evaluar</div>
@@ -6113,10 +6113,8 @@ async function selectCurso(id){
           <div class="fg"><label class="fl">Cupos máx.</label><input class="fi" type="number" value="${curso.cupos_max||""}" onchange="updateCursoField('${id}','cupos_max',this.value)"></div>
           <div class="fg"><label class="fl">Inscriptos</label><input class="fi" type="number" value="${curso.cupos_inscriptos||0}" onchange="updateCursoField('${id}','cupos_inscriptos',this.value)"></div>
           <div class="fg"><label class="fl">Arancel ($)</label><input class="fi" type="number" value="${curso.arancel||""}" onchange="updateCursoField('${id}','arancel',this.value)"></div>
-          <div class="fg"><label class="fl">Desc. Colegio (%)</label><input class="fi" type="number" value="${curso.descuento_colegio||""}" onchange="updateCursoField('${id}','descuento_colegio',this.value)"></div>
           <div class="fg"><label class="fl">Instructor</label><input class="fi" value="${esc(curso.instructor_nombre||"")}" onchange="updateCursoField('${id}','instructor_nombre',this.value)"></div>
           <div class="fg"><label class="fl">Proveedor</label><select class="fs" onchange="updateCursoField('${id}','proveedor_id',this.value)"><option value="">Sin proveedor</option>${proveedores.map(p=>`<option value="${p.id}"${p.id===curso.proveedor_id?" selected":""}>${p.nombre}</option>`).join("")}</select></div>
-          <div class="fg"><label class="fl">Línea de negocio</label><select class="fs" onchange="updateCursoField('${id}','linea_negocio',this.value||null)"><option value="">Sin asignar</option>${["MSP / Convenio","Colmedsa","Comercial","EMC / Gratuito"].map(l=>`<option value="${l}"${curso.linea_negocio===l?" selected":""}>${l}</option>`).join("")}</select></div>
           <div class="fg"><label class="fl">Recurrencia</label><select class="fs" onchange="updateCursoField('${id}','recurrencia',this.value||null)"><option value="">Única vez</option>${["Mensual","Cuatrimestral","Semestral","Anual"].map(r=>`<option value="${r}"${curso.recurrencia===r?" selected":""}>${r}</option>`).join("")}</select></div>
           <div class="fg form-full"><label class="fl">Respaldo institucional</label><input class="fi" value="${esc(curso.respaldo_institucional||"")}" onchange="updateCursoField('${id}','respaldo_institucional',this.value)"></div>
           <div class="fg form-full"><label class="fl">Descripción del curso</label><textarea class="fta" onchange="updateCursoField('${id}','descripcion',this.value)">${esc(curso.descripcion||"")}</textarea></div>
@@ -6165,7 +6163,15 @@ async function selectCurso(id){
               <div class="fg">
                 <label class="fl">Costo estimado ($)</label>
                 <input class="fi" type="number" id="curso-cos-${id}" value="${cosDisplay||""}" placeholder="${costoSugerido||0}" oninput="recalcCursoMargen('${id}')" onchange="updateCursoField('${id}','costo_estimado',this.value);recalcCursoMargen('${id}')">
-                <div id="curso-cos-hint-${id}" style="font-size:10px;color:var(--tx3);margin-top:3px;line-height:1.6">${totalCostos?`📋 Suma de ítems en Costos: $${Math.round(totalCostos).toLocaleString("es-AR")}<br>Sugerido por ${(tasa*100).toFixed(0)}%: $${costoSugerido.toLocaleString("es-AR")}`:ingDisplay?`Auto-calculado: $${costoSugerido.toLocaleString("es-AR")} (${(tasa*100).toFixed(0)}% del ingreso)`:""}</div>
+                <div id="curso-cos-hint-${id}" style="font-size:10px;color:var(--tx3);margin-top:3px;line-height:1.6">${totalCostos?`📋 Suma de ítems del presupuesto: $${Math.round(totalCostos).toLocaleString("es-AR")}<br>Sugerido por ${(tasa*100).toFixed(0)}%: $${costoSugerido.toLocaleString("es-AR")}`:ingDisplay?`Auto-calculado: $${costoSugerido.toLocaleString("es-AR")} (${(tasa*100).toFixed(0)}% del ingreso)`:""}</div>
+              </div>
+              <div class="fg">
+                <label class="fl">Línea de negocio</label>
+                <select class="fs" onchange="updateCursoField('${id}','linea_negocio',this.value||null)"><option value="">Sin asignar</option>${["MSP / Convenio","Colmedsa","Comercial","EMC / Gratuito"].map(l=>`<option value="${l}"${curso.linea_negocio===l?" selected":""}>${l}</option>`).join("")}</select>
+              </div>
+              <div class="fg">
+                <label class="fl">Desc. Colegio Médicos (%)</label>
+                <input class="fi" type="number" min="0" max="100" value="${curso.descuento_colegio||""}" onchange="updateCursoField('${id}','descuento_colegio',this.value)">
               </div>
             </div>
             <div id="curso-margen-${id}" style="display:flex;gap:16px;margin-top:8px;font-size:12px;flex-wrap:wrap">
