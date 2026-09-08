@@ -901,8 +901,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
           <div style="font-size:12px;font-weight:600;color:var(--tx)" id="umenu-nombre">—</div>
           <div style="font-size:11px;color:var(--tx3)" id="umenu-email">—</div>
         </div>
-        <button id="mi-firma-btn" onclick="abrirMiFirma();toggleUserMenu()" style="display:none;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;color:var(--tx);font-size:13px;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">🖊️ Mi firma</button>
-        <button onclick="openCambiarClave();toggleUserMenu()" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;color:var(--tx);font-size:13px;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">🔑 Cambiar contraseña</button>
+        <button onclick="abrirPerfil();toggleUserMenu()" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;color:var(--tx);font-size:13px;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">👤 Mi Perfil</button>
         <button onclick="logout()" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;color:var(--re);font-size:13px;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">🚪 Cerrar sesión</button>
       </div>
     </div>
@@ -3889,37 +3888,52 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 </div>
 
-<div class="mov" id="modal-cambiar-clave" onclick="if(event.target===this&&_movDown===this)closeModal('modal-cambiar-clave')">
-  <div class="modal" style="max-width:380px">
-    <div class="mt"><span>🔑 Cambiar contraseña</span><button class="mt-close" onclick="closeModal('modal-cambiar-clave')">✕</button></div>
-    <div style="padding:0 20px 20px;display:flex;flex-direction:column;gap:14px">
-      <div class="fg">
-        <label class="fl">Nueva contraseña</label>
-        <input type="password" id="cp-pass1" class="fi" placeholder="Mínimo 8 caracteres" autocomplete="new-password" onkeydown="if(event.key==='Enter')document.getElementById('cp-pass2').focus()">
-      </div>
-      <div class="fg">
-        <label class="fl">Confirmá la contraseña</label>
-        <input type="password" id="cp-pass2" class="fi" placeholder="Repetí la contraseña" autocomplete="new-password" onkeydown="if(event.key==='Enter')doChangePassword()">
-      </div>
-      <div id="cp-totp-row" style="display:none" class="fg">
-        <label class="fl">Código 2FA (Authenticator)</label>
-        <input type="text" id="cp-totp-code" class="fi" maxlength="6" placeholder="000000" autocomplete="one-time-code" style="letter-spacing:4px;font-family:monospace;font-size:16px;text-align:center" oninput="this.value=this.value.replace(/\D/g,'')" onkeydown="if(event.key==='Enter')doChangePassword()">
-        <div style="font-size:11px;color:var(--tx3);margin-top:4px">Tu cuenta tiene 2FA activado. Ingresá el código de tu app de autenticación.</div>
-      </div>
-      <div id="cp-error" style="display:none;color:var(--re);font-size:12px;text-align:center"></div>
-      <div style="display:flex;gap:8px;padding-top:4px">
-        <button class="bc" onclick="closeModal('modal-cambiar-clave')" style="flex:1">Cancelar</button>
-        <button class="bk" onclick="doChangePassword()" style="flex:1" id="cp-btn">Guardar</button>
-      </div>
+<!-- ══ MODAL PERFIL (unifica Datos, Firma, Seguridad y Preferencias) ══ -->
+<div class="mov" id="modal-perfil" onclick="if(event.target===this&&_movDown===this)closeModal('modal-perfil')">
+  <div class="modal" style="max-width:480px;max-height:90vh;overflow-y:auto">
+    <div class="mt"><span>👤 Mi Perfil</span><button class="mt-close" onclick="closeModal('modal-perfil')">✕</button></div>
+    <div class="cd-tabs" style="margin-bottom:12px">
+      <div class="cd-tab on" id="perfil-tab-datos" onclick="mostrarPerfilTab('datos')">Datos</div>
+      <div class="cd-tab" id="perfil-tab-firma" onclick="mostrarPerfilTab('firma')">🖊️ Firma</div>
+      <div class="cd-tab" id="perfil-tab-seguridad" onclick="mostrarPerfilTab('seguridad')">🔑 Seguridad</div>
+      <div class="cd-tab" id="perfil-tab-prefs" onclick="mostrarPerfilTab('prefs')">⚙️ Preferencias</div>
     </div>
-  </div>
-</div>
 
-<!-- ══ MODAL MI FIRMA ══ -->
-<div class="mov" id="modal-mi-firma" onclick="if(event.target===this&&_movDown===this)closeModal('modal-mi-firma')">
-  <div class="modal" style="max-width:460px">
-    <div class="mt"><span>🖊️ Mi firma</span><button class="mt-close" onclick="closeModal('modal-mi-firma')">✕</button></div>
-    <div style="padding:0 20px 20px;display:flex;flex-direction:column;gap:12px">
+    <!-- TAB: DATOS -->
+    <div id="perfil-panel-datos" style="padding:0 20px 20px;display:flex;flex-direction:column;gap:14px">
+      <div class="fg">
+        <label class="fl">Nombre</label>
+        <input class="fi" id="pf-nombre">
+      </div>
+      <div class="fg">
+        <label class="fl">Email <span style="color:var(--tx3);font-weight:400">(de acceso, no editable acá)</span></label>
+        <input class="fi" id="pf-email" disabled style="opacity:.6">
+      </div>
+      <div class="fg">
+        <label class="fl">Teléfono</label>
+        <input class="fi" id="pf-telefono" placeholder="Ej: 387 5551234">
+      </div>
+      <div id="pf-instructor-wrap" style="display:none;border-top:1px solid var(--b);padding-top:14px;display:flex;flex-direction:column;gap:14px">
+        <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px">Ficha de instructor</div>
+        <div class="form-grid-2">
+          <div class="fg"><label class="fl">Especialidad</label><input class="fi" id="pf-esp"></div>
+          <div class="fg"><label class="fl">Matrícula</label><input class="fi" id="pf-matricula"></div>
+        </div>
+        <div class="fg"><label class="fl">Institución</label><input class="fi" id="pf-institucion"></div>
+        <div class="fg"><label class="fl">Género <span style="color:var(--tx3);font-weight:400">(para Dr./Dra. en el diploma)</span></label>
+          <select class="sel" id="pf-genero">
+            <option value="">Sin especificar</option>
+            <option value="M">Masculino (Dr.)</option>
+            <option value="F">Femenino (Dra.)</option>
+          </select>
+        </div>
+      </div>
+      <div id="pf-error" style="display:none;color:var(--re);font-size:12px;text-align:center"></div>
+      <button class="bk" onclick="guardarPerfilDatos()" id="pf-btn">Guardar datos</button>
+    </div>
+
+    <!-- TAB: FIRMA -->
+    <div id="perfil-panel-firma" style="display:none;padding:0 20px 20px;flex-direction:column;gap:12px">
       <div style="font-size:12px;color:var(--tx3)">
         Dibujá tu firma acá abajo. Se va a usar automáticamente en los diplomas de los cursos donde figurás como instructor.
       </div>
@@ -3939,9 +3953,38 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         </label>
       </div>
       <div id="mifirma-error" style="display:none;color:var(--re);font-size:12px;text-align:center"></div>
-      <div style="display:flex;gap:8px;padding-top:4px">
-        <button class="bc" onclick="closeModal('modal-mi-firma')" style="flex:1">Cancelar</button>
-        <button class="bk" onclick="guardarMiFirma()" style="flex:1" id="mifirma-btn">Guardar firma</button>
+      <button class="bk" onclick="guardarMiFirma()" id="mifirma-btn">Guardar firma</button>
+    </div>
+
+    <!-- TAB: SEGURIDAD -->
+    <div id="perfil-panel-seguridad" style="display:none;padding:0 20px 20px;flex-direction:column;gap:14px">
+      <div class="fg">
+        <label class="fl">Nueva contraseña</label>
+        <input type="password" id="cp-pass1" class="fi" placeholder="Mínimo 8 caracteres" autocomplete="new-password" onkeydown="if(event.key==='Enter')document.getElementById('cp-pass2').focus()">
+      </div>
+      <div class="fg">
+        <label class="fl">Confirmá la contraseña</label>
+        <input type="password" id="cp-pass2" class="fi" placeholder="Repetí la contraseña" autocomplete="new-password" onkeydown="if(event.key==='Enter')doChangePassword()">
+      </div>
+      <div id="cp-totp-row" style="display:none" class="fg">
+        <label class="fl">Código 2FA (Authenticator)</label>
+        <input type="text" id="cp-totp-code" class="fi" maxlength="6" placeholder="000000" autocomplete="one-time-code" style="letter-spacing:4px;font-family:monospace;font-size:16px;text-align:center" oninput="this.value=this.value.replace(/\D/g,'')" onkeydown="if(event.key==='Enter')doChangePassword()">
+        <div style="font-size:11px;color:var(--tx3);margin-top:4px">Tu cuenta tiene 2FA activado. Ingresá el código de tu app de autenticación.</div>
+      </div>
+      <div id="cp-error" style="display:none;color:var(--re);font-size:12px;text-align:center"></div>
+      <button class="bk" onclick="doChangePassword()" id="cp-btn">Cambiar contraseña</button>
+      <div style="font-size:11px;color:var(--tx3);text-align:center">El 2FA (activar/desactivar) se maneja desde Notificaciones.</div>
+    </div>
+
+    <!-- TAB: PREFERENCIAS -->
+    <div id="perfil-panel-prefs" style="display:none;padding:0 20px 20px;flex-direction:column;gap:14px">
+      <div class="fg" style="display:flex;align-items:center;justify-content:space-between">
+        <label class="fl" style="margin:0">Tema</label>
+        <button class="bc" onclick="toggleTheme()">🌙 Cambiar tema</button>
+      </div>
+      <div class="fg" style="display:flex;align-items:center;justify-content:space-between">
+        <label class="fl" style="margin:0">Notificaciones y 2FA</label>
+        <button class="bc" onclick="closeModal('modal-perfil');goPage('notif',document.getElementById('nav-notif'))">🔔 Abrir</button>
       </div>
     </div>
   </div>
@@ -4525,6 +4568,13 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg"><label class="fl">Apellido *</label><input class="fi" id="i-apellido" type="text" placeholder="Apellido"></div>
     <div class="fg"><label class="fl">Especialidad</label><input class="fi" id="i-esp" type="text" placeholder="Ej: ACLS, RCP, Trauma"></div>
     <div class="fg"><label class="fl">Matrícula</label><input class="fi" id="i-matricula" type="text" placeholder="Nro. matrícula profesional"></div>
+    <div class="fg"><label class="fl">Género <span style="color:var(--tx3);font-weight:400">(para Dr./Dra. en el diploma)</span></label>
+      <select class="sel" id="i-genero">
+        <option value="">Sin especificar</option>
+        <option value="M">Masculino (Dr.)</option>
+        <option value="F">Femenino (Dra.)</option>
+      </select>
+    </div>
     <div class="fg"><label class="fl">Email</label><input class="fi" id="i-email" type="email" placeholder="correo@ejemplo.com"></div>
     <div class="fg"><label class="fl">Teléfono</label><input class="fi" id="i-tel" type="text" placeholder="+54 387..."></div>
     <div class="fg form-full"><label class="fl">Institución</label><input class="fi" id="i-inst" type="text" placeholder="Hospital, clínica u organización"></div>
@@ -5587,7 +5637,7 @@ function openNewModal(){
   }
   else if(curPage==="alumnos"){document.getElementById("alum-edit-id").value="";document.getElementById("modal-alum-title").textContent="Nuevo Alumno";["a-nombre","a-apellido","a-dni","a-cuit","a-matricula","a-esp","a-inst","a-email","a-tel","a-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("alum-cursos-section").style.display="none";openModal("modal-alumno")}
   else if(curPage==="proveedores"){document.getElementById("prov-edit-id").value="";document.getElementById("modal-prov-title").textContent="Nuevo Proveedor";["p-nombre","p-email","p-tel","p-esp","p-notas","p-cuit","p-domicilio","p-cp"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("p-tipo").value="Empresa";document.getElementById("p-condicion-iva").value="";document.getElementById("p-provincia").value="";document.getElementById("p-situacion-iibb").value="";document.getElementById("p-revisado").checked=false;openModal("modal-proveedor")}
-  else if(curPage==="instructores"){document.getElementById("inst-edit-id").value="";document.getElementById("modal-inst-title").textContent="Nuevo Instructor";["i-nombre","i-apellido","i-esp","i-matricula","i-email","i-tel","i-inst","i-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("i-activo").checked=true;document.getElementById("ibtn-del").style.display="none";openModal("modal-instructor")}
+  else if(curPage==="instructores"){document.getElementById("inst-edit-id").value="";document.getElementById("modal-inst-title").textContent="Nuevo Instructor";["i-nombre","i-apellido","i-esp","i-matricula","i-email","i-tel","i-inst","i-notas","i-genero"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("i-activo").checked=true;document.getElementById("ibtn-del").style.display="none";openModal("modal-instructor")}
   else if(curPage==="comunicaciones")openModalNuevoPost();
 }
 function openModal(id){const el=document.getElementById(id);el.style.display="flex";el.classList.add("on")}
@@ -7162,10 +7212,13 @@ async function generarCertificado(inscId,cursoId){
     const curso=cursos.find(c=>c.id===cursoId)||{};
     const a=insc?.alumnos||{};
     let instructorNombre=curso.instructor_nombre||"";
-    let instructorFirmaUrl=null;
+    let instructorFirmaUrl=null,instructorGenero=null;
     try{
-      const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(nombre,apellido,firma_url)&limit=1`);
-      if(ci[0]){const inst=ci[0].instructores;instructorNombre=`${inst.nombre||""} ${inst.apellido||""}`.trim();instructorFirmaUrl=inst.firma_url||null;}
+      const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(id,nombre,apellido,firma_url)&limit=1`);
+      if(ci[0]){
+        const inst=ci[0].instructores;instructorNombre=`${inst.nombre||""} ${inst.apellido||""}`.trim();instructorFirmaUrl=inst.firma_url||null;
+        try{const [ig]=await sb(`instructores?id=eq.${inst.id}&select=genero`);instructorGenero=ig?.genero||null;}catch(e){}
+      }
     }catch(e){}
 
     // ── Diploma generado con el mismo canvas que se usa para el envío por email ──
@@ -7175,7 +7228,7 @@ async function generarCertificado(inscId,cursoId){
     const base64=await diplomaCanvasBase64({
       nombre:nombreAlumno,dni:a.dni||"",matricula:a.matricula||"",
       curso:(curso.nombre||"").toUpperCase(),instructores:instructorNombre,fecha,
-      firmaInstructorUrl:instructorFirmaUrl,
+      firmaInstructorUrl:instructorFirmaUrl,instructorGenero,
       numero:inscId.slice(-8).toUpperCase()
     });
 
@@ -7277,12 +7330,21 @@ async function diplomaCanvasBase64(datos){
       const cursoStartY=s(1310)-((lines.length-1)*lineGap)/2;
       lines.forEach((l,i)=>ctx.fillText(l,s(1748),cursoStartY+i*lineGap));
 
+      const tituloInst=datos.instructorGenero==="F"?"Dra. ":(datos.instructorGenero==="M"?"Dr. ":"");
       ctx.font=`${s(80)}px Arial,sans-serif`;
       ctx.textBaseline="alphabetic"; // apoyado sobre la línea en blanco, igual que el nombre
-      ctx.fillText(datos.instructores||"",s(1748),s(1652));
+      ctx.fillText(datos.instructores?tituloInst+datos.instructores:"",s(1748),s(1652));
 
       ctx.textAlign="left";ctx.textBaseline="middle";
-      ctx.font=`${s(72)}px Arial,sans-serif`;
+      // Auto-ajuste de tamaño: fechas largas ("dd de septiembre de aaaa") se salían del margen derecho de la página
+      const fechaMaxW=s(700);
+      let fechaFont=72;
+      for(const trySize of [72,64,58,52,46,40]){
+        ctx.font=`${s(trySize)}px Arial,sans-serif`;
+        fechaFont=trySize;
+        if(ctx.measureText(datos.fecha||"").width<=fechaMaxW)break;
+      }
+      ctx.font=`${s(fechaFont)}px Arial,sans-serif`;
       ctx.fillText(datos.fecha,s(2740),s(1845)); // a la derecha de "Fecha"
 
       // Nombre bajo la línea de firma derecha (x centro≈2230 — corrido a la izquierda para no chocar con "Fecha", línea en y≈2205)
@@ -7302,7 +7364,7 @@ async function diplomaCanvasBase64(datos){
         ctx.fillStyle="rgb(52,48,90)"; // el bloque "N°" de arriba cambia el color, hay que restaurarlo
         ctx.textAlign="center";
         ctx.font=`${s(38)}px Arial,sans-serif`;
-        ctx.fillText(`${datos.instructores.toUpperCase()} – INSTRUCTOR`,s(1067),s(2270));
+        ctx.fillText(`${tituloInst.toUpperCase()}${datos.instructores.toUpperCase()} – INSTRUCTOR`,s(1067),s(2270));
       }
 
       // Carga opcional de una imagen y la dibuja apoyada sobre una línea de firma (si falla o no hay imagen, no rompe el diploma)
@@ -7336,12 +7398,12 @@ async function enviarDiplomaEmail(inscId,cursoId,btnEl){
     const a=insc?.alumnos||{};
     if(!a.email)throw new Error(`${a.nombre} ${a.apellido} no tiene email registrado`);
     let instructor=curso.instructor_nombre||"";
-    let instructorFirmaUrl=null;
-    try{const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(nombre,apellido,firma_url)&limit=1`);if(ci[0]){const ins=ci[0].instructores;instructor=`${ins.nombre||""} ${ins.apellido||""}`.trim();instructorFirmaUrl=ins.firma_url||null;}}catch(_){}
+    let instructorFirmaUrl=null,instructorGenero=null;
+    try{const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(id,nombre,apellido,firma_url)&limit=1`);if(ci[0]){const ins=ci[0].instructores;instructor=`${ins.nombre||""} ${ins.apellido||""}`.trim();instructorFirmaUrl=ins.firma_url||null;try{const [ig]=await sb(`instructores?id=eq.${ins.id}&select=genero`);instructorGenero=ig?.genero||null;}catch(e){}}}catch(_){}
     const fecha=fechaCertificadoCurso(curso);
     const nombre=`${a.nombre||""} ${a.apellido||""}`.trim();
     toast("Generando diploma...","inf");
-    const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha,firmaInstructorUrl:instructorFirmaUrl,numero:inscId.slice(-8).toUpperCase()});
+    const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha,firmaInstructorUrl:instructorFirmaUrl,instructorGenero,numero:inscId.slice(-8).toUpperCase()});
     toast("Enviando email...","inf");
     const res=await fetch(`${SB}/functions/v1/enviar-diplomas`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},body:JSON.stringify({email:a.email,nombre,curso:curso.nombre||"",instructores:instructor,fecha,diploma_base64:base64})});
     const data=await res.json();
@@ -7364,8 +7426,8 @@ async function enviarTodosLosDiplomas(cursoId){
     const sinEmail=insc.filter(i=>!i.alumnos?.email);
     if(!conEmail.length){toast("Ningún inscripto tiene email registrado","err");return;}
     let instructor=curso.instructor_nombre||"";
-    let instructorFirmaUrl=null;
-    try{const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(nombre,apellido,firma_url)&limit=1`);if(ci[0]){const ins=ci[0].instructores;instructor=`${ins.nombre||""} ${ins.apellido||""}`.trim();instructorFirmaUrl=ins.firma_url||null;}}catch(_){}
+    let instructorFirmaUrl=null,instructorGenero=null;
+    try{const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(id,nombre,apellido,firma_url)&limit=1`);if(ci[0]){const ins=ci[0].instructores;instructor=`${ins.nombre||""} ${ins.apellido||""}`.trim();instructorFirmaUrl=ins.firma_url||null;try{const [ig]=await sb(`instructores?id=eq.${ins.id}&select=genero`);instructorGenero=ig?.genero||null;}catch(e){}}}catch(_){}
     const fecha=fechaCertificadoCurso(curso);
     let enviados=0;
     for(const i of conEmail){
@@ -7373,7 +7435,7 @@ async function enviarTodosLosDiplomas(cursoId){
         const a=i.alumnos;
         const nombre=`${a.nombre||""} ${a.apellido||""}`.trim();
         if(btn)btn.textContent=`Enviando ${enviados+1}/${conEmail.length}...`;
-        const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha,firmaInstructorUrl:instructorFirmaUrl,numero:i.id.slice(-8).toUpperCase()});
+        const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha,firmaInstructorUrl:instructorFirmaUrl,instructorGenero,numero:i.id.slice(-8).toUpperCase()});
         const res=await fetch(`${SB}/functions/v1/enviar-diplomas`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},body:JSON.stringify({email:a.email,nombre,curso:curso.nombre,instructores:instructor,fecha,diploma_base64:base64})});
         const data=await res.json();
         if(!data.error){
@@ -9901,6 +9963,7 @@ function editInstructor(id){
   document.getElementById("i-email").value=p.email||"";
   document.getElementById("i-tel").value=p.telefono||"";
   document.getElementById("i-inst").value=p.institucion||"";
+  document.getElementById("i-genero").value=p.genero||"";
   document.getElementById("i-activo").checked=p.activo!==false;
   document.getElementById("i-notas").value=p.notas||"";
   document.getElementById("ibtn-del").style.display="inline-flex";
@@ -9912,7 +9975,7 @@ async function saveInstructor(){
   const apellido=document.getElementById("i-apellido").value.trim();
   if(!nombre||!apellido){toast("Nombre y apellido son obligatorios","err");return}
   const id=document.getElementById("inst-edit-id").value;
-  const data={nombre,apellido,especialidad:document.getElementById("i-esp").value||null,matricula:document.getElementById("i-matricula").value||null,email:document.getElementById("i-email").value||null,telefono:document.getElementById("i-tel").value||null,institucion:document.getElementById("i-inst").value||null,activo:document.getElementById("i-activo").checked,notas:document.getElementById("i-notas").value||null,updated_at:new Date().toISOString()};
+  const data={nombre,apellido,especialidad:document.getElementById("i-esp").value||null,matricula:document.getElementById("i-matricula").value||null,email:document.getElementById("i-email").value||null,telefono:document.getElementById("i-tel").value||null,institucion:document.getElementById("i-inst").value||null,genero:document.getElementById("i-genero").value||null,activo:document.getElementById("i-activo").checked,notas:document.getElementById("i-notas").value||null,updated_at:new Date().toISOString()};
   const ibtn=document.getElementById("ibtn");ibtn.disabled=true;ibtn.textContent="Guardando...";
   try{
     if(id){await sb(`instructores?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(data)});const i=instructores.findIndex(x=>x.id===id);if(i>=0)instructores[i]={...instructores[i],...data};}
@@ -18703,8 +18766,6 @@ function enterPanel(user,isNewLogin){
   document.getElementById("topbar-avatar").style.background=color;
   document.getElementById("topbar-avatar").textContent=initials;
   document.getElementById("topbar-username").textContent=user.nombre;
-  const miFirmaBtn=document.getElementById("mi-firma-btn");
-  if(miFirmaBtn)miFirmaBtn.style.display=(rol==="instructor"||rol==="admin")?"flex":"none";
 
   applyRoleUI(rol);
   initSGroups();
@@ -18832,7 +18893,6 @@ function openCambiarClave(){
   const totpRow=document.getElementById("cp-totp-row");
   if(totpRow)totpRow.style.display=mfaFactorId?"":"none";
   document.getElementById("cp-error").style.display="none";
-  openModal("modal-cambiar-clave");
 }
 
 async function doChangePassword(){
@@ -18900,13 +18960,74 @@ async function doChangePassword(){
       }
       throw new Error(data.msg||data.error_description||"Error al cambiar la contraseña");
     }
-    closeModal("modal-cambiar-clave");
+    closeModal("modal-perfil");
     document.getElementById("cp-pass1").value="";
     document.getElementById("cp-pass2").value="";
     if(document.getElementById("cp-totp-code"))document.getElementById("cp-totp-code").value="";
     toast("Contraseña actualizada correctamente","ok");
   }catch(e){showErr(e.message);}
   finally{btn.disabled=false;btn.textContent="Guardar";}
+}
+
+// ── PERFIL (unifica Datos, Firma, Seguridad y Preferencias) ─────────────────
+async function abrirPerfil(){
+  document.getElementById("pf-nombre").value=loggedUser?.nombre||"";
+  document.getElementById("pf-email").value=loggedUser?.email||"";
+  document.getElementById("pf-telefono").value=loggedUser?.telefono||"";
+  const wrap=document.getElementById("pf-instructor-wrap");
+  _miInstructorRow=await _buscarMiInstructor();
+  if(_miInstructorRow){
+    wrap.style.display="flex";
+    document.getElementById("pf-esp").value=_miInstructorRow.especialidad||"";
+    document.getElementById("pf-matricula").value=_miInstructorRow.matricula||"";
+    document.getElementById("pf-institucion").value=_miInstructorRow.institucion||"";
+    document.getElementById("pf-genero").value=_miInstructorRow.genero||"";
+  }else{
+    wrap.style.display="none";
+  }
+  document.getElementById("pf-error").style.display="none";
+  mostrarPerfilTab("datos");
+  openModal("modal-perfil");
+}
+
+function mostrarPerfilTab(tab){
+  ["datos","firma","seguridad","prefs"].forEach(t=>{
+    document.getElementById(`perfil-tab-${t}`).classList.toggle("on",t===tab);
+    document.getElementById(`perfil-panel-${t}`).style.display=t===tab?"flex":"none";
+  });
+  if(tab==="firma")abrirMiFirma();
+  else if(tab==="seguridad")openCambiarClave();
+}
+
+async function guardarPerfilDatos(){
+  const btn=document.getElementById("pf-btn");
+  const errEl=document.getElementById("pf-error");
+  errEl.style.display="none";
+  const nombre=document.getElementById("pf-nombre").value.trim();
+  const telefono=document.getElementById("pf-telefono").value.trim();
+  if(!nombre){errEl.textContent="El nombre no puede quedar vacío.";errEl.style.display="block";return;}
+  btn.disabled=true;btn.textContent="Guardando...";
+  try{
+    if(loggedUser?.id){
+      await sb(`usuarios?id=eq.${loggedUser.id}`,{method:"PATCH",body:JSON.stringify({nombre,telefono:telefono||null})});
+      loggedUser.nombre=nombre;loggedUser.telefono=telefono||null;
+      const un=document.getElementById("umenu-nombre");if(un)un.textContent=nombre;
+      const tn=document.getElementById("topbar-user-nombre");if(tn)tn.textContent=nombre;
+    }
+    if(_miInstructorRow){
+      const upd={
+        especialidad:document.getElementById("pf-esp").value.trim()||null,
+        matricula:document.getElementById("pf-matricula").value.trim()||null,
+        institucion:document.getElementById("pf-institucion").value.trim()||null,
+        genero:document.getElementById("pf-genero").value||null
+      };
+      await sb(`instructores?id=eq.${_miInstructorRow.id}`,{method:"PATCH",body:JSON.stringify(upd)});
+      const idx=instructores.findIndex(i=>i.id===_miInstructorRow.id);
+      if(idx>=0)instructores[idx]={...instructores[idx],...upd};
+    }
+    toast("Datos guardados ✓","ok");
+  }catch(e){errEl.textContent="Error: "+e.message;errEl.style.display="block";}
+  finally{btn.disabled=false;btn.textContent="Guardar datos";}
 }
 
 // ── MI FIRMA (instructores) ────────────────────────────────────────────────
@@ -18935,7 +19056,6 @@ async function abrirMiFirma(){
   }else{
     actualWrap.style.display="none";
   }
-  openModal("modal-mi-firma");
   setTimeout(_initMiFirmaCanvas,50);
   if(!_miInstructorRow){
     if(errEl){errEl.textContent="No encontramos tu ficha en el módulo Instructores (buscamos por tu email de login). Pedile a un admin que la cree o le cargue tu email.";errEl.style.display="block";}
@@ -19008,7 +19128,7 @@ async function guardarMiFirma(){
     await sb(`instructores?id=eq.${_miInstructorRow.id}`,{method:"PATCH",body:JSON.stringify({firma_url:firmaUrl})});
     const idx=instructores.findIndex(i=>i.id===_miInstructorRow.id);
     if(idx>=0)instructores[idx].firma_url=firmaUrl;
-    closeModal("modal-mi-firma");
+    closeModal("modal-perfil");
     toast("Firma guardada ✓ se va a usar en tus próximos diplomas","ok");
   }catch(e){if(errEl){errEl.textContent="Error: "+e.message;errEl.style.display="block";}}
   finally{btn.disabled=false;btn.textContent="Guardar firma";}

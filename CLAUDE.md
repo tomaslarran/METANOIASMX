@@ -845,6 +845,28 @@ ALTER TABLE instructores ADD COLUMN IF NOT EXISTS firma_url text;
 
 ---
 
+## Implementado (8 Sep 2026) — Perfil unificado + fix fecha diploma + Dr./Dra.
+
+### Botón "👤 Mi Perfil"
+- ✅ Unifica en un solo modal (`modal-perfil`, 4 tabs) lo que antes eran 2 modales sueltos (Cambiar contraseña, Mi firma) + agrega edición de datos personales y preferencias
+- ✅ Tabs: **Datos** (nombre, teléfono, y si es instructor: especialidad/matrícula/institución/género) · **🖊️ Firma** (mismo pad de firma de antes) · **🔑 Seguridad** (cambio de contraseña + 2FA, mismo flujo de antes) · **⚙️ Preferencias** (tema claro/oscuro, acceso directo a Notificaciones)
+- ✅ `abrirPerfil()` precarga los datos del usuario logueado y de su ficha de instructor (si existe, por email); `guardarPerfilDatos()` hace PATCH a `usuarios` y, si corresponde, a `instructores`
+- ✅ Reemplazadas las 2 entradas del dropdown del topbar por una sola: "👤 Mi Perfil"
+
+### Fix fecha del diploma
+- ✅ La fecha larga en español ("08 de septiembre de 2026") se salía del margen derecho de la página en algunos casos — ahora tiene auto-ajuste de tamaño de fuente igual que el título del curso
+
+### Dr. / Dra. en el diploma según género del instructor
+- ✅ Nuevo campo **Género** en la ficha de instructor (modal Instructores y tab Datos de Mi Perfil) — Masculino/Femenino/Sin especificar
+- ✅ Si está cargado, el diploma antepone automáticamente "Dr." o "Dra." al nombre del instructor (línea "dictada por" y línea de firma) en las 3 funciones de diploma
+
+**SQL pendiente (correr en Supabase SQL editor — sin esto, guardar un instructor o generar/enviar diplomas puede fallar):**
+```sql
+ALTER TABLE instructores ADD COLUMN IF NOT EXISTS genero text CHECK (genero IN ('M','F'));
+```
+
+---
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:
