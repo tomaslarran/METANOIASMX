@@ -1178,6 +1178,14 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </select>
   </div>
   <div id="container"><div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div></div>
+  <!-- Sección eventos -->
+  <div id="eventos-section" style="margin-top:24px;display:none">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span style="font-size:13px;font-weight:700;color:var(--tx)">📅 Eventos</span>
+      <span id="eventos-count" style="font-size:11px;background:rgba(0,181,163,.15);color:#00B5A3;border-radius:20px;padding:1px 8px;font-weight:600"></span>
+    </div>
+    <div id="eventos-list" style="display:flex;flex-direction:column;gap:8px"></div>
+  </div>
 </div>
 
 <!-- ══ REUNIONES ══ -->
@@ -4038,18 +4046,24 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 <div class="mov" id="modal-tarea" onclick="if(event.target===this&&_movDown===this)closeModal('modal-tarea')">
 <div class="modal">
   <div class="mt" id="modal-tarea-title">Nueva Tarea</div>
-  <div class="form-grid-2">
-    <div class="fg form-full"><label class="fl">Nombre *</label><input class="fi" id="mn" type="text" placeholder="Nombre de la tarea"></div>
-    <div class="fg"><label class="fl">Prioridad</label><select class="fs" id="mp"><option value="">Sin prioridad</option><option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option></select></div>
-    <div class="fg"><label class="fl">Estado</label><select class="fs" id="ms"><option value="Por Hacer">Por hacer</option><option value="En Progreso">En progreso</option></select></div>
+  <!-- tipo toggle -->
+  <div style="display:flex;gap:0;border:1px solid var(--b);border-radius:8px;overflow:hidden;margin-bottom:14px">
+    <button id="mt-btn-tarea" onclick="setModalTipo('tarea')" style="flex:1;padding:7px 0;font-size:12px;font-weight:600;border:none;cursor:pointer;background:var(--pu);color:#fff">✅ Tarea</button>
+    <button id="mt-btn-evento" onclick="setModalTipo('evento')" style="flex:1;padding:7px 0;font-size:12px;font-weight:600;border:none;cursor:pointer;background:transparent;color:var(--tx3)">📅 Evento</button>
   </div>
-  <div class="fg" style="margin-bottom:12px"><label class="fl">Responsables</label><div class="user-checks" id="modalUserChecks" style="display:flex;flex-wrap:wrap;gap:5px;padding:6px 0"></div></div>
+  <input type="hidden" id="mt-tipo" value="tarea">
   <div class="form-grid-2">
-    <div class="fg"><label class="fl">Fecha inicio <span style="color:var(--tx3);font-weight:400">(opcional, para varios días)</span></label><input class="fi" id="mfi" type="date" style="padding:7px 10px"></div>
-    <div class="fg"><label class="fl">Vencimiento</label><input class="fi" id="md" type="date" style="padding:7px 10px" onchange="checkTareaConflicto()"></div>
+    <div class="fg form-full"><label class="fl" id="mt-nombre-lbl">Nombre *</label><input class="fi" id="mn" type="text" placeholder="Nombre de la tarea"></div>
+    <div class="fg" id="mt-prio-row"><label class="fl">Prioridad</label><select class="fs" id="mp"><option value="">Sin prioridad</option><option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option></select></div>
+    <div class="fg" id="mt-status-row"><label class="fl">Estado</label><select class="fs" id="ms"><option value="Por Hacer">Por hacer</option><option value="En Progreso">En progreso</option></select></div>
+  </div>
+  <div class="fg" style="margin-bottom:12px"><label class="fl">Responsables <span style="color:var(--tx3);font-weight:400" id="mt-resp-note"></span></label><div class="user-checks" id="modalUserChecks" style="display:flex;flex-wrap:wrap;gap:5px;padding:6px 0"></div></div>
+  <div class="form-grid-2">
+    <div class="fg"><label class="fl" id="mt-fi-lbl">Fecha inicio <span style="color:var(--tx3);font-weight:400">(opcional, para varios días)</span></label><input class="fi" id="mfi" type="date" style="padding:7px 10px"></div>
+    <div class="fg"><label class="fl" id="mt-fv-lbl">Vencimiento</label><input class="fi" id="md" type="date" style="padding:7px 10px" onchange="checkTareaConflicto()"></div>
   </div>
   <div class="form-grid-2">
-    <div class="fg"><label class="fl">Hora</label><input class="fi" id="mhora" type="time" style="padding:7px 10px" placeholder="Sin hora específica"></div>
+    <div class="fg" id="mt-hora-row"><label class="fl">Hora</label><input class="fi" id="mhora" type="time" style="padding:7px 10px" placeholder="Sin hora específica"></div>
     <div class="fg"><label class="fl">Categoría</label><select class="fs" id="mcat"><option value="">Sin categoría</option><option>Administración</option><option>Finanzas</option><option>Operaciones</option><option>Cursos</option><option>RRHH</option><option>Legal/Impositivo</option><option>Marketing</option><option>General</option></select></div>
   </div>
   <div class="form-grid-2">
@@ -4967,7 +4981,7 @@ async function renderAlertas(){
   // ── Recolectar alertas ──
   const alertas=[];
 
-  tasks.filter(t=>t.status!=="Listo"&&t.fecha_vencimiento).forEach(t=>{
+  tasks.filter(t=>!esEvento(t)&&t.status!=="Listo"&&t.fecha_vencimiento).forEach(t=>{
     const d=days(t.fecha_vencimiento);
     if(d===null||d>30)return;
     const resp=users.filter(u=>(t.assignees||[]).includes(u.id)).map(u=>u.nombre).join(", ")||"Sin asignar";
@@ -5158,7 +5172,7 @@ async function renderAlertas(){
 
   // ── Stats ──
   const tareasActivas=tasks.filter(t=>t.status!=="Listo").length;
-  const tareasVenc=tasks.filter(t=>t.status!=="Listo"&&t.fecha_vencimiento&&days(t.fecha_vencimiento)<0).length;
+  const tareasVenc=tasks.filter(t=>!esEvento(t)&&t.status!=="Listo"&&t.fecha_vencimiento&&days(t.fecha_vencimiento)<0).length;
   const cuotasSem=cfPrestCuotas.filter(c=>!c.pagada&&c.fecha&&(days(c.fecha)??99)>=0&&(days(c.fecha)??99)<=7).length;
   const cuotasMonto=cfPrestCuotas.filter(c=>!c.pagada&&c.fecha&&(days(c.fecha)??99)>=0&&(days(c.fecha)??99)<=7).reduce((s,c)=>s+(parseFloat(c.monto_total)||0),0);
   const cobPend=cfCobranzas.filter(c=>c.estado==="Pendiente");
@@ -5539,8 +5553,28 @@ const SC={"Por Hacer":{cls:"btd",label:"Por hacer"},"En Progreso":{cls:"bpr",lab
 const PC={"Alta":{stripe:"str-a",dot:"da"},"Media":{stripe:"str-m",dot:"dm"},"Baja":{stripe:"str-b2",dot:"db"}};
 const BC={"Por Hacer":{cls:"st",label:"Por hacer"},"En Progreso":{cls:"sp",label:"En progreso"},"Listo":{cls:"sd",label:"Listo"},"Bloqueado":{cls:"sbl",label:"Bloqueado"}};
 
+function esEvento(t){return t.tipo==="evento";}
+
+function setModalTipo(tipo){
+  document.getElementById("mt-tipo").value=tipo;
+  const esEv=tipo==="evento";
+  document.getElementById("mt-btn-tarea").style.background=esEv?"transparent":"var(--pu)";
+  document.getElementById("mt-btn-tarea").style.color=esEv?"var(--tx3)":"#fff";
+  document.getElementById("mt-btn-evento").style.background=esEv?"#00B5A3":"transparent";
+  document.getElementById("mt-btn-evento").style.color=esEv?"#fff":"var(--tx3)";
+  document.getElementById("mt-prio-row").style.display=esEv?"none":"";
+  document.getElementById("mt-status-row").style.display=esEv?"none":"";
+  document.getElementById("mt-hora-row").style.display=esEv?"none":"";
+  document.getElementById("mt-fi-lbl").innerHTML=esEv?"Fecha inicio *":"Fecha inicio <span style='color:var(--tx3);font-weight:400'>(opcional, para varios días)</span>";
+  document.getElementById("mt-fv-lbl").textContent=esEv?"Fecha fin *":"Vencimiento";
+  document.getElementById("mt-resp-note").textContent=esEv?"(opcional)":"";
+  document.getElementById("modal-tarea-title").textContent=esEv?"Nuevo Evento":"Nueva Tarea";
+  document.getElementById("mbtn").textContent=esEv?"Crear evento":"Crear tarea";
+}
+
 function vis(){
   return tasks.filter(t=>{
+    if(esEvento(t))return false; // eventos van aparte
     const ass=t.assignees||[];
     const efectiveUser=(loggedUser?.rol&&loggedUser.rol!=="admin")?loggedUser.id:curUser;
     const byU=!efectiveUser||ass.includes(efectiveUser);
@@ -5554,9 +5588,40 @@ function vis(){
 }
 function base(){
   const pool=(loggedUser?.rol==="logistica"||loggedUser?.rol==="instructor"||loggedUser?.rol==="comunicaciones")?tasks.filter(t=>(t.assignees||[]).includes(loggedUser.id)):tasks;
-  return!curUser?pool:pool.filter(t=>(t.assignees||[]).includes(curUser));
+  const soloTareas=(!curUser?pool:pool.filter(t=>(t.assignees||[]).includes(curUser))).filter(t=>!esEvento(t));
+  return soloTareas;
 }
-function renderTareas(){updStats();updCounts();renderTaskList(vis())}
+function renderEventosSection(){
+  const sec=document.getElementById("eventos-section");
+  const lst=document.getElementById("eventos-list");
+  if(!sec||!lst)return;
+  const evs=tasks.filter(t=>esEvento(t)&&(!q||t.nombre.toLowerCase().includes(q.toLowerCase()))).sort((a,b)=>(a.fecha_inicio||a.fecha_vencimiento||"").localeCompare(b.fecha_inicio||b.fecha_vencimiento||""));
+  if(!evs.length){sec.style.display="none";return;}
+  sec.style.display="";
+  document.getElementById("eventos-count").textContent=evs.length;
+  lst.innerHTML=evs.map(t=>{
+    const inicio=t.fecha_inicio||t.fecha_vencimiento;
+    const fin=t.fecha_vencimiento;
+    const rango=(inicio&&fin&&inicio!==fin)?`${fmt(inicio)} → ${fmt(fin)}`:(inicio?fmt(inicio):"Sin fecha");
+    const hoy=today();
+    const enCurso=inicio<=hoy&&(!fin||fin>=hoy);
+    const futuro=inicio>hoy;
+    const pasado=fin&&fin<hoy;
+    const badge=pasado?`<span style="font-size:10px;background:var(--surf2);color:var(--tx3);border-radius:4px;padding:1px 6px">Finalizado</span>`:enCurso?`<span style="font-size:10px;background:rgba(0,181,163,.15);color:#00B5A3;border-radius:4px;padding:1px 6px;font-weight:600">En curso</span>`:`<span style="font-size:10px;background:rgba(124,58,237,.1);color:var(--pu);border-radius:4px;padding:1px 6px">Próximo</span>`;
+    const catBadge=t.categoria?`<span style="font-size:10px;color:var(--tx3);background:var(--surf2);border:1px solid var(--b);border-radius:4px;padding:1px 6px">${esc(t.categoria)}</span>`:"";
+    return`<div style="background:var(--surf);border:1px solid var(--b);border-left:3px solid #00B5A3;border-radius:var(--r);padding:10px 14px;display:flex;align-items:center;gap:12px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:4px">${esc(t.nombre)}</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--tx3)">📅 ${rango}</span>${badge}${catBadge}
+          ${t.notas?`<span style="font-size:11px;color:var(--tx3)">· ${esc(t.notas)}</span>`:""}
+        </div>
+      </div>
+      <button onclick="eliminarTarea('${t.id}')" style="flex-shrink:0;background:none;border:none;color:var(--tx3);cursor:pointer;font-size:14px;padding:4px" title="Eliminar">🗑</button>
+    </div>`;
+  }).join("");
+}
+function renderTareas(){updStats();updCounts();renderTaskList(vis());renderEventosSection();}
 
 function updStats(){
   const b=base();
@@ -5794,25 +5859,31 @@ function checkTareaConflicto(){
 }
 async function createTask(){
   const nombre=document.getElementById("mn").value.trim();if(!nombre){toast("Escribí un nombre","err");return}
-  const prioridad=document.getElementById("mp").value||null;const status=document.getElementById("ms").value;
+  const tipo=document.getElementById("mt-tipo").value||"tarea";
+  const esEv=tipo==="evento";
+  const prioridad=esEv?null:document.getElementById("mp").value||null;
+  const status=esEv?"Por Hacer":document.getElementById("ms").value;
   const fechaInicio=document.getElementById("mfi").value||null;
   const fecha=document.getElementById("md").value||null;
+  if(esEv&&!fechaInicio){toast("Un evento requiere fecha de inicio","err");return}
+  if(esEv&&!fecha){toast("Un evento requiere fecha de fin","err");return}
   if(fechaInicio&&fecha&&fechaInicio>fecha){toast("La fecha de inicio no puede ser posterior al vencimiento","err");return}
-  const hora=document.getElementById("mhora").value||null;
+  const hora=esEv?null:document.getElementById("mhora").value||null;
   const desc=document.getElementById("mdesc").value.trim()||null;
   const cat=document.getElementById("mcat").value||null;
   const assignees=[...document.querySelectorAll("#modalUserChecks input:checked")].map(i=>i.value);
   const mbtn=document.getElementById("mbtn");mbtn.disabled=true;mbtn.textContent="Creando...";
   try{
-    const [created]=await sb("tareas",{method:"POST",body:JSON.stringify({nombre,status,prioridad,assignees,fecha_inicio:fechaInicio,fecha_vencimiento:fecha,hora_inicio:hora,notas:desc||null,categoria:cat,updated_at:new Date().toISOString()})});
+    const [created]=await sb("tareas",{method:"POST",body:JSON.stringify({nombre,tipo,status,prioridad,assignees,fecha_inicio:fechaInicio,fecha_vencimiento:fecha,hora_inicio:hora,notas:desc||null,categoria:cat,updated_at:new Date().toISOString()})});
     tasks.unshift(created);closeModal("modal-tarea");
     ["mn","mp","mfi","md","mhora","mdesc","mcat"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
     document.getElementById("ms").value="Por Hacer";
     document.querySelectorAll("#modalUserChecks input").forEach(i=>{i.checked=false;i.closest(".uc").classList.remove("sel2")});
     const aviso=document.getElementById("tarea-conflicto-aviso");if(aviso)aviso.style.display="none";
-    renderTareas();updateSideBadges();toast(`"${nombre}" creada`,"ok");
+    setModalTipo("tarea"); // resetear a tarea por defecto
+    renderTareas();updateSideBadges();toast(`"${nombre}" ${esEv?"creado":"creada"}`,"ok");
   }catch(e){toast("Error: "+e.message,"err")}
-  finally{mbtn.disabled=false;mbtn.textContent="Crear tarea"}
+  finally{mbtn.disabled=false;mbtn.textContent=tipo==="evento"?"Crear evento":"Crear tarea"}
 }
 
 // ── CURSOS ──
@@ -17717,7 +17788,11 @@ function buildEventos(){
 
   if(calFiltro==="todo"||calFiltro==="tareas"||calFiltro==="venc"){
     tasks.forEach(t=>{
-      if(t.fecha_vencimiento&&t.status!=="Listo"){
+      if(esEvento(t)){
+        // Eventos: aparecen en inicio y fin con dot teal
+        if(t.fecha_inicio)addEvento(t.fecha_inicio,{tipo:"ev-evento",dot:"#00B5A3",nombre:t.nombre,sub:`📅 Evento${t.fecha_vencimiento&&t.fecha_vencimiento!==t.fecha_inicio?" → "+fmt(t.fecha_vencimiento):""}`,hora:"00:00",id:t.id});
+        if(t.fecha_vencimiento&&t.fecha_vencimiento!==t.fecha_inicio)addEvento(t.fecha_vencimiento,{tipo:"ev-evento-fin",dot:"#00B5A3",nombre:t.nombre,sub:"📅 Fin de evento",hora:"23:59",id:t.id});
+      } else if(t.fecha_vencimiento&&t.status!=="Listo"){
         const hora=t.hora_inicio?t.hora_inicio.slice(0,5):null;
         addEvento(t.fecha_vencimiento,{tipo:"ev-venc",dot:"#EF4444",nombre:t.nombre,sub:"Vencimiento de tarea"+(hora?" — "+hora:""),hora:hora||"23:59",id:t.id});
         if(t.fecha_inicio&&t.fecha_inicio!==t.fecha_vencimiento){
