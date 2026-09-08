@@ -3839,6 +3839,23 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 </div>
 
+<!-- ══ MODAL CUENTAS FALTANTES ══ -->
+<div class="mov" id="modal-cuentas-faltantes" onclick="if(event.target===this)closeM('modal-cuentas-faltantes')">
+  <div class="modal" style="max-width:500px">
+    <div class="mt"><span>⚠️ Cuentas contables faltantes</span><button class="mt-close" onclick="closeM('modal-cuentas-faltantes')">✕</button></div>
+    <div style="padding:0 20px 20px;display:flex;flex-direction:column;gap:14px">
+      <div style="font-size:12px;color:var(--tx3);background:var(--surf2);padding:10px 12px;border-radius:8px;border:1px solid var(--b)">
+        Estas cuentas no existen en tu plan de cuentas. Completá el nombre y tipo para crearlas, o asignalas a una cuenta existente.
+      </div>
+      <div id="mcf-lista" style="display:flex;flex-direction:column;gap:10px"></div>
+      <div style="display:flex;gap:8px;padding-top:4px">
+        <button class="bc" onclick="closeM('modal-cuentas-faltantes')" style="flex:1">Cancelar</button>
+        <button class="bk" id="mcf-save-btn" onclick="mcfConfirmar()" style="flex:1">✓ Guardar y generar asiento</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ MODAL CONFIRMAR PAGO CUOTA ══ -->
 <div class="mov" id="modal-pago-cuota" onclick="if(event.target===this)closeM('modal-pago-cuota')">
   <div class="modal" style="max-width:380px">
@@ -3846,7 +3863,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div style="padding:0 20px 20px;display:flex;flex-direction:column;gap:14px">
       <div id="mpc-resumen" style="background:var(--surf2);border-radius:var(--r);padding:12px 14px;font-size:13px;border:1px solid var(--b)"></div>
       <div class="fg"><label class="fl">Fecha de pago</label><input type="date" id="mpc-fecha" class="fi"></div>
-      <div class="fg"><label class="fl">Monto abonado</label><input type="number" id="mpc-monto" class="fi" placeholder="0" step="0.01"></div>
+      <div class="fg"><label class="fl">Monto abonado</label><input type="number" id="mpc-monto" class="fi" placeholder="0" step="0.01" oninput="mpcMostrarDif()"></div>
+      <div id="mpc-dif-note" style="display:none;font-size:11px;padding:6px 10px;border-radius:6px;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.3);color:#D97706"></div>
       <div class="fg"><label class="fl">Medio de pago</label><select id="mpc-medio" class="fi sel"></select></div>
       <div style="display:flex;gap:8px;padding-top:4px">
         <button class="bc" onclick="closeM('modal-pago-cuota')" style="flex:1">Cancelar</button>
@@ -14380,10 +14398,11 @@ async function confirmarPagoEmpleado(){
       const soc=emp.sociedad||"SUDES";
       const bancoCod=getBancoCodigoPorMedio(medio||"",soc);
       const desc=`Sueldo: ${emp.nombre||""} — ${_mpePeriodo||""}`;
-      generarAsiento({fecha,sociedad:soc,tipo:"pago_sueldo",origen:"pago_empleado",origen_id:pagoId,descripcion:desc,lineas:[
+      const _adS={fecha,sociedad:soc,tipo:"pago_sueldo",origen:"pago_empleado",origen_id:pagoId,descripcion:desc,lineas:[
         {codigo:"4.2.01.001",debe:monto,desc:`Sueldo ${emp.nombre||""}`},
         {codigo:bancoCod,haber:monto,desc:`Pago ${medio||"sueldo"}`},
-      ]}).then(a=>{if(!a)toast("⚠️ Asiento sueldo no generado — verificá Plan de Cuentas","err");}).catch(()=>{});
+      ]};
+      generarAsiento(_adS).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adS);else if(!a)toast("⚠️ Asiento sueldo no generado","err");}).catch(()=>{});
     }
     closeM("modal-pago-empleado");
     toast(`✓ ${emp?.nombre||"Empleado"} — pago registrado`,"ok");
@@ -15957,7 +15976,122 @@ function togglePrestCuotas(id){
   if(el)el.style.display=el.style.display==="none"?"":"none";
 }
 
+// ── MODAL CUENTAS FALTANTES ─────────────────────────────────────────
+let _pendingAsientoData=null;
+const _MCF_META={
+  "1.1.01.001":{nombre:"Caja ARS",tipo:"activo"},
+  "1.1.01.002":{nombre:"Banco Macro SUDES",tipo:"activo"},
+  "1.1.01.003":{nombre:"Banco Macro POINTERS",tipo:"activo"},
+  "1.1.01.004":{nombre:"Mercado Pago",tipo:"activo"},
+  "2.1.01.001":{nombre:"Proveedores a pagar",tipo:"pasivo"},
+  "2.1.02.001":{nombre:"Préstamos bancarios — capital",tipo:"pasivo"},
+  "2.1.03.001":{nombre:"Ret. IIBB a depositar",tipo:"pasivo"},
+  "2.1.03.002":{nombre:"Ret. SICORE / Ganancias a depositar",tipo:"pasivo"},
+  "3.1.01.001":{nombre:"Capital social",tipo:"patrimonio"},
+  "4.1.01.001":{nombre:"Compras / insumos",tipo:"gasto"},
+  "4.1.02.001":{nombre:"IVA crédito fiscal",tipo:"activo"},
+  "4.2.01.001":{nombre:"Sueldos y honorarios",tipo:"gasto"},
+  "4.2.03.001":{nombre:"Intereses y gastos financieros",tipo:"gasto"},
+  "5.1.01.001":{nombre:"Ingresos por cursos",tipo:"ingreso"},
+  "5.1.02.001":{nombre:"Ingresos por suscripciones",tipo:"ingreso"},
+};
+function _mcfTipoByCode(codigo){
+  const p=parseInt(codigo.charAt(0));
+  return p===1?"activo":p===2?"pasivo":p===3?"patrimonio":p===4?"gasto":"ingreso";
+}
+function _mcfNaturaleza(tipo){return["activo","gasto"].includes(tipo)?"deudora":"acreedora";}
+function mcfAbrir(faltantes,asientoData){
+  _pendingAsientoData={...asientoData,_faltantes:faltantes};
+  const lista=document.getElementById("mcf-lista");
+  const existentes=planCuentas.filter(c=>c.activa&&c.imputable).sort((a,b)=>a.codigo.localeCompare(b.codigo));
+  lista.innerHTML=faltantes.map(codigo=>{
+    const meta=_MCF_META[codigo]||{};
+    const tipoSug=meta.tipo||_mcfTipoByCode(codigo);
+    const nombreSug=meta.nombre||"";
+    const tipoOpts=["activo","pasivo","patrimonio","gasto","ingreso"].map(t=>`<option value="${t}"${t===tipoSug?" selected":""}>${t.charAt(0).toUpperCase()+t.slice(1)}</option>`).join("");
+    const existSel=existentes.length?`<div id="mcf-panel-usar-${codigo}" style="display:none">
+      <select id="mcf-existente-${codigo}" class="fi sel">
+        ${existentes.map(c=>`<option value="${esc(c.codigo)}">${esc(c.codigo)} — ${esc(c.nombre)}</option>`).join("")}
+      </select></div>`:"";
+    const btnUsar=existentes.length?`<button onclick="mcfToggle('${esc(codigo)}','usar')" id="mcf-tab-usar-${codigo}" style="font-size:11px;padding:3px 10px;border-radius:5px;border:1px solid var(--b);cursor:pointer;background:transparent;color:var(--tx3)">Usar existente</button>`:"";
+    return`<div style="background:var(--surf2);border-radius:8px;padding:12px;border:1px solid var(--b)">
+      <div style="font-family:monospace;font-size:11px;color:var(--tx3);margin-bottom:8px">📌 ${esc(codigo)}</div>
+      <div style="display:flex;gap:4px;margin-bottom:8px">
+        <button onclick="mcfToggle('${esc(codigo)}','crear')" id="mcf-tab-crear-${codigo}" style="font-size:11px;padding:3px 10px;border-radius:5px;border:1px solid var(--pu);cursor:pointer;background:var(--pu);color:#fff">+ Crear</button>
+        ${btnUsar}
+      </div>
+      <div id="mcf-panel-crear-${codigo}" style="display:flex;gap:8px">
+        <input id="mcf-nombre-${codigo}" class="fi" placeholder="Nombre de la cuenta" value="${esc(nombreSug)}" style="flex:1">
+        <select id="mcf-tipo-${codigo}" class="fi sel" style="width:130px">${tipoOpts}</select>
+      </div>
+      ${existSel}
+    </div>`;
+  }).join("");
+  openM("modal-cuentas-faltantes");
+}
+function mcfToggle(codigo,tab){
+  const pC=document.getElementById(`mcf-panel-crear-${codigo}`);
+  const pU=document.getElementById(`mcf-panel-usar-${codigo}`);
+  const tC=document.getElementById(`mcf-tab-crear-${codigo}`);
+  const tU=document.getElementById(`mcf-tab-usar-${codigo}`);
+  if(pC)pC.style.display=tab==="crear"?"flex":"none";
+  if(pU)pU.style.display=tab==="usar"?"":"none";
+  if(tC){tC.style.background=tab==="crear"?"var(--pu)":"transparent";tC.style.color=tab==="crear"?"#fff":"var(--tx3)";}
+  if(tU){tU.style.background=tab==="usar"?"var(--pu)":"transparent";tU.style.color=tab==="usar"?"#fff":"var(--tx3)";}
+}
+async function mcfConfirmar(){
+  if(!_pendingAsientoData)return;
+  const btn=document.getElementById("mcf-save-btn");
+  btn.disabled=true;btn.textContent="Guardando...";
+  try{
+    const faltantes=_pendingAsientoData._faltantes||[];
+    const codigoMap={};
+    for(const codigo of faltantes){
+      const pU=document.getElementById(`mcf-panel-usar-${codigo}`);
+      if(pU&&pU.style.display!=="none"){
+        const mapped=document.getElementById(`mcf-existente-${codigo}`)?.value;
+        if(mapped)codigoMap[codigo]=mapped;
+      }else{
+        const nombre=(document.getElementById(`mcf-nombre-${codigo}`)?.value||"").trim();
+        const tipo=document.getElementById(`mcf-tipo-${codigo}`)?.value||"activo";
+        if(!nombre){toast(`Completá el nombre para ${codigo}`,"err");return;}
+        const nivel=(codigo.match(/\./g)||[]).length+1;
+        const naturaleza=_mcfNaturaleza(tipo);
+        const parentCodigo=codigo.split(".").slice(0,-1).join(".");
+        const padre=planCuentas.find(c=>c.codigo===parentCodigo);
+        const[nueva]=await sb("plan_cuentas",{method:"POST",body:JSON.stringify({codigo,nombre,tipo,nivel,imputable:true,activa:true,naturaleza,cuenta_padre_id:padre?.id||null})});
+        if(nueva){planCuentas.push(nueva);codigoMap[codigo]=codigo;}
+        else{toast(`Error creando cuenta ${codigo}`,"err");return;}
+      }
+    }
+    const lineasRemapped=_pendingAsientoData.lineas.map(l=>{
+      const m=codigoMap[l.codigo];
+      return m&&m!==l.codigo?{...l,codigo:m}:l;
+    });
+    closeM("modal-cuentas-faltantes");
+    const {_faltantes:_,...asientoClean}=_pendingAsientoData;
+    const asiento=await generarAsiento({...asientoClean,lineas:lineasRemapped});
+    if(!asiento)toast("⚠️ Asiento no generado — verificá las cuentas","err");
+    else if(asiento._faltantes)toast(`⚠️ Aún faltan cuentas: ${asiento._faltantes.join(", ")}`,"err");
+    else toast("✓ Asiento generado correctamente","ok");
+  }catch(e){toast("Error: "+e.message,"err");}
+  finally{btn.disabled=false;btn.textContent="✓ Guardar y generar asiento";_pendingAsientoData=null;}
+}
+
 let _mpcCuotaId=null,_mpcPrestId=null;
+function mpcMostrarDif(){
+  const el=document.getElementById("mpc-monto");
+  const note=document.getElementById("mpc-dif-note");
+  const sched=parseFloat(el.dataset.scheduled)||0;
+  const actual=parseFloat(el.value)||0;
+  const dif=Math.round((actual-sched)*100)/100;
+  if(Math.abs(dif)>0.01&&sched>0){
+    note.style.display="";
+    note.textContent=dif>0
+      ?`⚠️ Diferencia +${fmtNum(dif,true)} — se imputará como intereses adicionales por demora`
+      :`⚠️ Diferencia ${fmtNum(dif,true)} — pago parcial`;
+  }else{note.style.display="none";}
+}
 function marcarCuotaPagada(cuotaId,prestId){abrirModalPago(cuotaId,prestId)}
 
 function abrirModalPago(cuotaId,prestId){
@@ -15983,7 +16117,10 @@ function abrirModalPago(cuotaId,prestId){
       <span style="color:var(--tx)">${fmt(c.fecha)}</span>
     </div>`;
   document.getElementById("mpc-fecha").value=today();
-  document.getElementById("mpc-monto").value=c.monto_total!=null?parseFloat(c.monto_total).toFixed(2):"";
+  const mpcMontoEl=document.getElementById("mpc-monto");
+  mpcMontoEl.value=c.monto_total!=null?parseFloat(c.monto_total).toFixed(2):"";
+  mpcMontoEl.dataset.scheduled=c.monto_total!=null?parseFloat(c.monto_total):"";
+  document.getElementById("mpc-dif-note").style.display="none";
   openM("modal-pago-cuota");
   setTimeout(()=>document.getElementById("mpc-fecha").focus(),80);
 }
@@ -16008,18 +16145,20 @@ async function confirmarPagoCuota(){
     // Asiento cuota préstamo
     if(c&&prest){
       const capital=Math.round((parseFloat(c.capital)||0)*100)/100;
-      const intereses=Math.round((parseFloat(c.intereses)||0)*100)/100;
       const total=Math.round((parseFloat(document.getElementById("mpc-monto").value)||parseFloat(c.monto_total)||0)*100)/100;
       const medio=document.getElementById("mpc-medio")?.value||"";
       const soc=prest.sociedad||"SUDES";
       if(total>0){
         const lineas=[];
-        const cap=capital>0?capital:total-intereses;
+        // Capital fijo del cronograma; intereses = total - capital (absorbe cualquier diferencia por demora)
+        const cap=capital>0?capital:0;
+        const intereses=Math.max(0,Math.round((total-cap)*100)/100);
         if(cap>0)lineas.push({codigo:"2.1.02.001",debe:cap,desc:"Capital cuota"});
-        if(intereses>0)lineas.push({codigo:"4.2.03.001",debe:intereses,desc:"Intereses"});
+        if(intereses>0)lineas.push({codigo:"4.2.03.001",debe:intereses,desc:cap>0&&Math.abs(total-(cap+(parseFloat(c.intereses)||0)))>1?"Intereses (ajustado por demora)":"Intereses"});
         lineas.push({codigo:getBancoCodigoPorMedio(medio,soc),haber:total,desc:`Pago ${medio||"cuota"}`});
         const desc=`Cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${prest.nombre||"Préstamo"}`;
-        generarAsiento({fecha,sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:cuotaId,descripcion:desc,lineas}).then(a=>{if(!a)toast("⚠️ Asiento no generado — Plan de Cuentas vacío","err");else if(a?._faltantes)toast(`⚠️ Asiento no generado — faltan cuentas: ${a._faltantes.join(", ")}`,"err");}).catch(()=>{});
+        const _adC={fecha,sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:cuotaId,descripcion:desc,lineas};
+        generarAsiento(_adC).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adC);else if(!a)toast("⚠️ Asiento no generado","err");}).catch(()=>{});
       }
     }
     closeM("modal-pago-cuota");
@@ -19919,7 +20058,10 @@ function getBancoCodigoPorMedio(medio,sociedad){
   return"1.1.01.001";
 }
 async function generarAsiento({fecha,sociedad,tipo,origen,origen_id,descripcion,lineas}){
-  if(!planCuentas.length){console.warn("generarAsiento: planCuentas vacío");return null;}
+  if(!planCuentas.length){
+    try{const r=await sb("plan_cuentas?select=*&order=codigo").catch(()=>[]);if(r.length)planCuentas=r;}catch(e){}
+    if(!planCuentas.length){console.warn("generarAsiento: planCuentas vacío");return{_faltantes:lineas.map(l=>l.codigo)};}
+  }
   const totalD=Math.round(lineas.reduce((s,l)=>s+(l.debe||0),0)*100)/100;
   const totalH=Math.round(lineas.reduce((s,l)=>s+(l.haber||0),0)*100)/100;
   if(Math.abs(totalD-totalH)>0.02){console.warn("Asiento desbalanceado",totalD,totalH);return null;}
@@ -20906,7 +21048,8 @@ async function marcarEstadoComp(id,estado){
         if(iva>0)lineas.push({codigo:"1.1.03.001",debe:iva,desc:"IVA CF"});
         lineas.push({codigo:"2.1.01.001",haber:total,desc:"Proveedores"});
         const desc=`Devengado: Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||""}`;
-        generarAsiento({fecha:c.fecha||today(),sociedad:c.sociedad||"SUDES",tipo:"devengado_compra",origen:"comprobante",origen_id:id,descripcion:desc,lineas}).then(a=>{if(!a)toast("⚠️ Asiento devengado no generado — verificá el Plan de Cuentas","err");}).catch(e=>toast("⚠️ Error al generar asiento devengado: "+e.message.slice(0,60),"err"));
+        const _adDev={fecha:c.fecha||today(),sociedad:c.sociedad||"SUDES",tipo:"devengado_compra",origen:"comprobante",origen_id:id,descripcion:desc,lineas};
+        generarAsiento(_adDev).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adDev);else if(!a)toast("⚠️ Asiento devengado no generado","err");}).catch(e=>toast("⚠️ Error asiento devengado: "+e.message.slice(0,50),"err"));
       }
     }
   }catch(e){toast("Error","err")}
@@ -21090,7 +21233,8 @@ async function confirmarOrdenPago(pagarTambien){
       ];
       if(ret>0)lineasPago.push({codigo:"2.1.03.002",haber:ret,desc:`Ret. SICORE ${cod||""}`});
       const descPagoAsiento=`Pago: ${c.proveedor||""} — ${numero}`;
-      generarAsiento({fecha,sociedad:c.sociedad||"SUDES",tipo:"pago_compra",origen:"orden_pago",origen_id:op?.id,descripcion:descPagoAsiento,lineas:lineasPago}).then(a=>{if(!a)toast("⚠️ Asiento de pago no generado — verificá el Plan de Cuentas","err");}).catch(e=>toast("⚠️ Error al generar asiento de pago: "+e.message.slice(0,60),"err"));
+      const _adPago={fecha,sociedad:c.sociedad||"SUDES",tipo:"pago_compra",origen:"orden_pago",origen_id:op?.id,descripcion:descPagoAsiento,lineas:lineasPago};
+      generarAsiento(_adPago).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adPago);else if(!a)toast("⚠️ Asiento de pago no generado","err");}).catch(e=>toast("⚠️ Error asiento pago: "+e.message.slice(0,50),"err"));
     }
     generarPDFOrdenPago({...opData,id:op?.id,numero_comp:c.numero});
     closeModal("modal-orden-pago");
