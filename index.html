@@ -901,6 +901,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
           <div style="font-size:12px;font-weight:600;color:var(--tx)" id="umenu-nombre">—</div>
           <div style="font-size:11px;color:var(--tx3)" id="umenu-email">—</div>
         </div>
+        <button id="mi-firma-btn" onclick="abrirMiFirma();toggleUserMenu()" style="display:none;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;color:var(--tx);font-size:13px;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">🖊️ Mi firma</button>
         <button onclick="openCambiarClave();toggleUserMenu()" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;color:var(--tx);font-size:13px;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">🔑 Cambiar contraseña</button>
         <button onclick="logout()" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;color:var(--re);font-size:13px;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">🚪 Cerrar sesión</button>
       </div>
@@ -3909,6 +3910,38 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div style="display:flex;gap:8px;padding-top:4px">
         <button class="bc" onclick="closeModal('modal-cambiar-clave')" style="flex:1">Cancelar</button>
         <button class="bk" onclick="doChangePassword()" style="flex:1" id="cp-btn">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL MI FIRMA ══ -->
+<div class="mov" id="modal-mi-firma" onclick="if(event.target===this&&_movDown===this)closeModal('modal-mi-firma')">
+  <div class="modal" style="max-width:460px">
+    <div class="mt"><span>🖊️ Mi firma</span><button class="mt-close" onclick="closeModal('modal-mi-firma')">✕</button></div>
+    <div style="padding:0 20px 20px;display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:12px;color:var(--tx3)">
+        Dibujá tu firma acá abajo. Se va a usar automáticamente en los diplomas de los cursos donde figurás como instructor.
+      </div>
+      <div id="mifirma-actual-wrap" style="display:none">
+        <div style="font-size:11px;color:var(--tx3);margin-bottom:4px">Firma guardada actualmente:</div>
+        <img id="mifirma-actual-img" style="max-width:220px;max-height:90px;background:var(--surf2);border:1px solid var(--b);border-radius:6px;padding:6px">
+      </div>
+      <div>
+        <canvas id="mifirma-canvas" width="420" height="180" style="width:100%;height:180px;background:#fff;border:1px solid var(--b2);border-radius:8px;touch-action:none;cursor:crosshair"></canvas>
+        <div style="font-size:11px;color:var(--tx3);margin-top:4px">Con el mouse o el dedo (en el celular)</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="bc" onclick="miFirmaClear()" style="flex:1">🗑 Limpiar</button>
+        <label class="bc" style="flex:1;text-align:center;cursor:pointer">
+          📎 Subir imagen
+          <input type="file" accept="image/*" style="display:none" onchange="miFirmaSubirArchivo(this)">
+        </label>
+      </div>
+      <div id="mifirma-error" style="display:none;color:var(--re);font-size:12px;text-align:center"></div>
+      <div style="display:flex;gap:8px;padding-top:4px">
+        <button class="bc" onclick="closeModal('modal-mi-firma')" style="flex:1">Cancelar</button>
+        <button class="bk" onclick="guardarMiFirma()" style="flex:1" id="mifirma-btn">Guardar firma</button>
       </div>
     </div>
   </div>
@@ -7129,9 +7162,10 @@ async function generarCertificado(inscId,cursoId){
     const curso=cursos.find(c=>c.id===cursoId)||{};
     const a=insc?.alumnos||{};
     let instructorNombre=curso.instructor_nombre||"";
+    let instructorFirmaUrl=null;
     try{
-      const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(nombre,apellido)&limit=1`);
-      if(ci[0]){const inst=ci[0].instructores;instructorNombre=`${inst.nombre||""} ${inst.apellido||""}`.trim();}
+      const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(nombre,apellido,firma_url)&limit=1`);
+      if(ci[0]){const inst=ci[0].instructores;instructorNombre=`${inst.nombre||""} ${inst.apellido||""}`.trim();instructorFirmaUrl=inst.firma_url||null;}
     }catch(e){}
 
     // ── Diploma generado con el mismo canvas que se usa para el envío por email ──
@@ -7141,6 +7175,7 @@ async function generarCertificado(inscId,cursoId){
     const base64=await diplomaCanvasBase64({
       nombre:nombreAlumno,dni:a.dni||"",matricula:a.matricula||"",
       curso:(curso.nombre||"").toUpperCase(),instructores:instructorNombre,fecha,
+      firmaInstructorUrl:instructorFirmaUrl,
       numero:inscId.slice(-8).toUpperCase()
     });
 
@@ -7183,9 +7218,20 @@ async function diplomaCanvasBase64(datos){
   }catch(e){
     throw new Error("No se pudo cargar el fondo del diploma: "+e.message);
   }
+  // Firma del instructor (si tiene una guardada en "Mi firma") — se trae como dataURL para no tainted el canvas por CORS
+  let firmaInstructorDataUrl="";
+  if(datos.firmaInstructorUrl){
+    try{
+      const fr=await fetch(datos.firmaInstructorUrl);
+      if(fr.ok){
+        const fblob=await fr.blob();
+        firmaInstructorDataUrl=await new Promise(res=>{const rd=new FileReader();rd.onload=()=>res(rd.result);rd.readAsDataURL(fblob);});
+      }
+    }catch(e){} // sin firma del instructor, el diploma sigue siendo válido
+  }
   return new Promise((resolve,reject)=>{
     const img=new Image();
-    img.onload=()=>{try{
+    img.onload=async()=>{try{
       // Canvas al 50%: todas las coordenadas multiplicadas por SCALE
       const SCALE=0.5;
       const s=v=>Math.round(v*SCALE);
@@ -7251,15 +7297,31 @@ async function diplomaCanvasBase64(datos){
         ctx.fillText("N° "+datos.numero,s(3440),s(2445));
       }
 
-      // Firma escaneada de Mario, apoyada sobre la línea (opcional — si falta el archivo, se omite sin romper el diploma)
-      const firmaImg=new Image();
-      firmaImg.onload=()=>{
-        const fw=s(260),fh=fw*(firmaImg.height/firmaImg.width);
-        ctx.drawImage(firmaImg,s(2230)-fw/2,s(2205)-fh+s(30),fw,fh);
-        resolve(canvas.toDataURL("image/png",0.85));
-      };
-      firmaImg.onerror=()=>resolve(canvas.toDataURL("image/png",0.85)); // sin firma cargada, el diploma sigue siendo válido
-      firmaImg.src="./firma-mario.png";
+      // Nombre del instructor bajo la línea de firma izquierda (x centro≈1067, línea en y≈2210)
+      if(datos.instructores){
+        ctx.fillStyle="rgb(52,48,90)"; // el bloque "N°" de arriba cambia el color, hay que restaurarlo
+        ctx.textAlign="center";
+        ctx.font=`${s(38)}px Arial,sans-serif`;
+        ctx.fillText(`${datos.instructores.toUpperCase()} – INSTRUCTOR`,s(1067),s(2270));
+      }
+
+      // Carga opcional de una imagen y la dibuja apoyada sobre una línea de firma (si falla o no hay imagen, no rompe el diploma)
+      const dibujarFirmaOpt=(src,cx,lineY)=>new Promise(res=>{
+        if(!src){res();return;}
+        const im=new Image();
+        im.onload=()=>{
+          const fw=s(260),fh=fw*(im.height/im.width);
+          ctx.drawImage(im,s(cx)-fw/2,s(lineY)-fh+s(30),fw,fh);
+          res();
+        };
+        im.onerror=()=>res();
+        im.src=src;
+      });
+
+      await dibujarFirmaOpt(firmaInstructorDataUrl,1067,2205); // firma del instructor, línea izquierda
+      await dibujarFirmaOpt("./firma-mario.png",2230,2205); // firma de Mario, línea derecha
+
+      resolve(canvas.toDataURL("image/png",0.85));
     }catch(err){reject(err);}};
     img.onerror=()=>reject(new Error("Error al cargar imagen de fondo del diploma"));
     img.src=bgDataUrl;
@@ -7274,11 +7336,12 @@ async function enviarDiplomaEmail(inscId,cursoId,btnEl){
     const a=insc?.alumnos||{};
     if(!a.email)throw new Error(`${a.nombre} ${a.apellido} no tiene email registrado`);
     let instructor=curso.instructor_nombre||"";
-    try{const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(nombre,apellido)&limit=1`);if(ci[0]){const ins=ci[0].instructores;instructor=`${ins.nombre||""} ${ins.apellido||""}`.trim();}}catch(_){}
+    let instructorFirmaUrl=null;
+    try{const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(nombre,apellido,firma_url)&limit=1`);if(ci[0]){const ins=ci[0].instructores;instructor=`${ins.nombre||""} ${ins.apellido||""}`.trim();instructorFirmaUrl=ins.firma_url||null;}}catch(_){}
     const fecha=fechaCertificadoCurso(curso);
     const nombre=`${a.nombre||""} ${a.apellido||""}`.trim();
     toast("Generando diploma...","inf");
-    const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha,numero:inscId.slice(-8).toUpperCase()});
+    const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha,firmaInstructorUrl:instructorFirmaUrl,numero:inscId.slice(-8).toUpperCase()});
     toast("Enviando email...","inf");
     const res=await fetch(`${SB}/functions/v1/enviar-diplomas`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},body:JSON.stringify({email:a.email,nombre,curso:curso.nombre||"",instructores:instructor,fecha,diploma_base64:base64})});
     const data=await res.json();
@@ -7301,6 +7364,8 @@ async function enviarTodosLosDiplomas(cursoId){
     const sinEmail=insc.filter(i=>!i.alumnos?.email);
     if(!conEmail.length){toast("Ningún inscripto tiene email registrado","err");return;}
     let instructor=curso.instructor_nombre||"";
+    let instructorFirmaUrl=null;
+    try{const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(nombre,apellido,firma_url)&limit=1`);if(ci[0]){const ins=ci[0].instructores;instructor=`${ins.nombre||""} ${ins.apellido||""}`.trim();instructorFirmaUrl=ins.firma_url||null;}}catch(_){}
     const fecha=fechaCertificadoCurso(curso);
     let enviados=0;
     for(const i of conEmail){
@@ -7308,7 +7373,7 @@ async function enviarTodosLosDiplomas(cursoId){
         const a=i.alumnos;
         const nombre=`${a.nombre||""} ${a.apellido||""}`.trim();
         if(btn)btn.textContent=`Enviando ${enviados+1}/${conEmail.length}...`;
-        const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha,numero:i.id.slice(-8).toUpperCase()});
+        const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha,firmaInstructorUrl:instructorFirmaUrl,numero:i.id.slice(-8).toUpperCase()});
         const res=await fetch(`${SB}/functions/v1/enviar-diplomas`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},body:JSON.stringify({email:a.email,nombre,curso:curso.nombre,instructores:instructor,fecha,diploma_base64:base64})});
         const data=await res.json();
         if(!data.error){
@@ -18638,6 +18703,8 @@ function enterPanel(user,isNewLogin){
   document.getElementById("topbar-avatar").style.background=color;
   document.getElementById("topbar-avatar").textContent=initials;
   document.getElementById("topbar-username").textContent=user.nombre;
+  const miFirmaBtn=document.getElementById("mi-firma-btn");
+  if(miFirmaBtn)miFirmaBtn.style.display=(rol==="instructor"||rol==="admin")?"flex":"none";
 
   applyRoleUI(rol);
   initSGroups();
@@ -18840,6 +18907,111 @@ async function doChangePassword(){
     toast("Contraseña actualizada correctamente","ok");
   }catch(e){showErr(e.message);}
   finally{btn.disabled=false;btn.textContent="Guardar";}
+}
+
+// ── MI FIRMA (instructores) ────────────────────────────────────────────────
+let _miInstructorRow=null;
+let _miFirmaDrawing=false;
+let _miFirmaUploadedBlob=null;
+let _miFirmaCtx=null;
+
+async function _buscarMiInstructor(){
+  const email=(loggedUser?.email||"").trim().toLowerCase();
+  if(!email)return null;
+  if(!instructores?.length){try{instructores=await sb("instructores?select=*");}catch(e){instructores=instructores||[];}}
+  return instructores.find(i=>(i.email||"").trim().toLowerCase()===email)||null;
+}
+
+async function abrirMiFirma(){
+  const errEl=document.getElementById("mifirma-error");
+  if(errEl)errEl.style.display="none";
+  _miFirmaUploadedBlob=null;
+  _miInstructorRow=await _buscarMiInstructor();
+  const actualWrap=document.getElementById("mifirma-actual-wrap");
+  const actualImg=document.getElementById("mifirma-actual-img");
+  if(_miInstructorRow?.firma_url){
+    actualImg.src=_miInstructorRow.firma_url;
+    actualWrap.style.display="";
+  }else{
+    actualWrap.style.display="none";
+  }
+  openModal("modal-mi-firma");
+  setTimeout(_initMiFirmaCanvas,50);
+  if(!_miInstructorRow){
+    if(errEl){errEl.textContent="No encontramos tu ficha en el módulo Instructores (buscamos por tu email de login). Pedile a un admin que la cree o le cargue tu email.";errEl.style.display="block";}
+  }
+}
+
+function _initMiFirmaCanvas(){
+  const canvas=document.getElementById("mifirma-canvas");
+  if(!canvas)return;
+  const ctx=canvas.getContext("2d");
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle="rgb(52,48,90)";
+  ctx.lineWidth=3;
+  ctx.lineCap="round";
+  ctx.lineJoin="round";
+  _miFirmaCtx=ctx;
+  _miFirmaUploadedBlob=null;
+  let drawing=false;
+  const pos=e=>{
+    const r=canvas.getBoundingClientRect();
+    const scaleX=canvas.width/r.width,scaleY=canvas.height/r.height;
+    return [(e.clientX-r.left)*scaleX,(e.clientY-r.top)*scaleY];
+  };
+  canvas.onpointerdown=e=>{drawing=true;const[x,y]=pos(e);ctx.beginPath();ctx.moveTo(x,y);canvas.setPointerCapture(e.pointerId);};
+  canvas.onpointermove=e=>{if(!drawing)return;const[x,y]=pos(e);ctx.lineTo(x,y);ctx.stroke();};
+  canvas.onpointerup=()=>{drawing=false;};
+  canvas.onpointerleave=()=>{drawing=false;};
+}
+
+function miFirmaClear(){
+  _miFirmaUploadedBlob=null;
+  const canvas=document.getElementById("mifirma-canvas");
+  if(canvas&&_miFirmaCtx)_miFirmaCtx.clearRect(0,0,canvas.width,canvas.height);
+}
+
+function miFirmaSubirArchivo(input){
+  const file=input.files?.[0];
+  if(!file)return;
+  _miFirmaUploadedBlob=file;
+  const canvas=document.getElementById("mifirma-canvas");
+  const img=new Image();
+  img.onload=()=>{
+    _miFirmaCtx.clearRect(0,0,canvas.width,canvas.height);
+    const ratio=Math.min(canvas.width/img.width,canvas.height/img.height);
+    const w=img.width*ratio,h=img.height*ratio;
+    _miFirmaCtx.drawImage(img,(canvas.width-w)/2,(canvas.height-h)/2,w,h);
+  };
+  img.src=URL.createObjectURL(file);
+  input.value="";
+}
+
+async function guardarMiFirma(){
+  const btn=document.getElementById("mifirma-btn");
+  const errEl=document.getElementById("mifirma-error");
+  if(errEl)errEl.style.display="none";
+  if(!_miInstructorRow){if(errEl){errEl.textContent="No se encontró tu ficha de instructor — no se puede guardar.";errEl.style.display="block";}return;}
+  const canvas=document.getElementById("mifirma-canvas");
+  btn.disabled=true;btn.textContent="Guardando...";
+  try{
+    const blob=_miFirmaUploadedBlob||await new Promise(res=>canvas.toBlob(res,"image/png"));
+    if(!blob||blob.size<50)throw new Error("Dibujá tu firma o subí una imagen antes de guardar");
+    const path=`${_miInstructorRow.id}.png`;
+    const upRes=await fetch(`${SB}/storage/v1/object/firmas-instructores/${path}`,{
+      method:"POST",
+      headers:{"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":blob.type||"image/png","x-upsert":"true"},
+      body:blob
+    });
+    if(!upRes.ok){const t=await upRes.text();throw new Error(t);}
+    const firmaUrl=`${SB}/storage/v1/object/public/firmas-instructores/${path}?t=${Date.now()}`;
+    await sb(`instructores?id=eq.${_miInstructorRow.id}`,{method:"PATCH",body:JSON.stringify({firma_url:firmaUrl})});
+    const idx=instructores.findIndex(i=>i.id===_miInstructorRow.id);
+    if(idx>=0)instructores[idx].firma_url=firmaUrl;
+    closeModal("modal-mi-firma");
+    toast("Firma guardada ✓ se va a usar en tus próximos diplomas","ok");
+  }catch(e){if(errEl){errEl.textContent="Error: "+e.message;errEl.style.display="block";}}
+  finally{btn.disabled=false;btn.textContent="Guardar firma";}
 }
 
 function logout(){

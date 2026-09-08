@@ -814,6 +814,37 @@ ALTER TABLE tareas ADD COLUMN IF NOT EXISTS fecha_inicio date;
 
 ---
 
+## Implementado (8 Sep 2026) — Diploma: coordenadas, fecha, y firma digital de instructores
+
+### Fixes de layout (arrastraban desde que se actualizó diploma-fondo.png)
+- ✅ Recalculadas a mano todas las coordenadas de texto del diploma (nombre, DNI, curso, instructor, fecha) contra el fondo actual — antes quedaban superpuestas con las etiquetas del molde
+- ✅ Unificado el generador de impresión (botón "Generar diploma") con el de email — antes tenía su propio layout en mm, desincronizado
+- ✅ Nombre del alumno e instructor: `textBaseline` cambiado de `middle` a `alphabetic` — antes la línea en blanco atravesaba el texto por el medio en vez de quedar como un renglón normal
+- ✅ Fecha del certificado: ahora usa `fecha_fin` del curso (o `fecha_inicio` si no hay fin) en vez de la fecha del día en que se genera/envía el diploma — función `fechaCertificadoCurso(curso)`
+
+### Firma de Mario (CEO)
+- ✅ `firma-mario.png` — firma procesada desde una foto (fondo de papel eliminado con máscara de alpha por diferencia de luminosidad local + limpieza de ruido por componentes conexas, tinta coloreada para matchear el resto del texto)
+- ✅ Se dibuja apoyada sobre la línea de firma derecha, con "MARIO LARRÁN – CEO METANOIA" debajo
+
+### Firma digital de instructores ("Mi firma")
+- ✅ Botón **"🖊️ Mi firma"** en el dropdown del usuario (topbar) — visible solo para roles `instructor` y `admin`
+- ✅ Modal con **pad de firma** (canvas + eventos pointer, dibuja con mouse/dedo) + opción de subir una imagen en su lugar
+- ✅ Al guardar: sube la firma a Storage (`firmas-instructores/<instructor_id>.png`, upsert) y actualiza `instructores.firma_url`. Matchea al instructor por email (mismo criterio que el filtro de Cursos para el rol instructor)
+- ✅ La firma se dibuja automáticamente en el diploma (línea izquierda, con "{NOMBRE} – INSTRUCTOR" debajo) cuando se genera o envía el certificado — se trae el `firma_url` en las 3 funciones de diploma (`generarCertificado`, `enviarDiplomaEmail`, `enviarTodosLosDiplomas`) vía el join `curso_instructores→instructores`
+- ✅ Si el instructor no cargó firma todavía, el diploma sigue funcionando igual — solo queda el renglón en blanco con su nombre debajo, sin romper nada
+
+Todo validado con Playwright (renderizando el canvas real contra el fondo real) antes de subir, en varios escenarios: con firma de instructor, sin firma de instructor, título de curso a 1 y 2 líneas.
+
+**SQL pendiente (correr en Supabase SQL editor):**
+```sql
+ALTER TABLE instructores ADD COLUMN IF NOT EXISTS firma_url text;
+```
+
+**Storage pendiente (Supabase Dashboard → Storage):**
+- Crear bucket **`firmas-instructores`** → Public (mismo tipo que `curso-archivos`, `mensajes-media`)
+
+---
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:
