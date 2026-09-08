@@ -595,6 +595,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 .cal-event.ev-cobr{background:rgba(16,185,129,.15);color:#6EE7B7;border-left:2px solid #10B981}
 .cal-event.ev-prest{background:rgba(239,68,68,.15);color:#FCA5A5;border-left:2px solid #EF4444}
 .cal-event.ev-inv{background:rgba(245,158,11,.15);color:#FCD34D;border-left:2px solid #F59E0B}
+.cal-event.ev-evento{background:rgba(0,181,163,.25);color:#5EEAD4;border-left:2px solid #00B5A3;border-radius:3px}
+.cal-event.ev-evento.ep-start{margin-right:-4px;border-radius:3px 0 0 3px}
+.cal-event.ev-evento.ep-mid{margin:0 -4px;border-radius:0;border-left:none;font-size:0;padding:3px 0}
+.cal-event.ev-evento.ep-end{margin-left:-4px;border-radius:0 3px 3px 0;border-left:none;font-size:0;padding:3px 0}
 .cal-more{font-size:10px;color:var(--tx3);padding:1px 4px;cursor:pointer}
 .cal-more:hover{color:var(--tx2)}
 .day-event-item{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);margin-bottom:6px}
@@ -1646,6 +1650,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="fb" id="cal-btn-cursos" onclick="calSetFiltro('cursos',this)">Solo cursos</button>
     <button class="fb" id="cal-btn-venc" onclick="calSetFiltro('venc',this)">Solo vencimientos</button>
     <button class="fb" id="cal-btn-finanzas" onclick="calSetFiltro('finanzas',this)">💰 Finanzas</button>
+    <button class="fb" id="cal-btn-eventos" onclick="calSetFiltro('eventos',this)">📅 Eventos</button>
   </div>
 
   <!-- GRID DEL CALENDARIO — un único grid para header + body -->
@@ -17837,12 +17842,35 @@ function buildEventos(){
   const eventos={};
   const addEvento=(fecha,ev)=>{if(!fecha)return;const k=fecha.slice(0,10);if(!eventos[k])eventos[k]=[];eventos[k].push(ev)};
 
+  const _addEventoSpan=(t)=>{
+    if(!t.fecha_inicio)return;
+    const start=t.fecha_inicio.slice(0,10);
+    const end=(t.fecha_vencimiento||t.fecha_inicio).slice(0,10);
+    if(start===end){
+      addEvento(start,{tipo:"ev-evento",pos:"ep-single",dot:"#00B5A3",nombre:t.nombre,sub:"📅 Evento",hora:"00:00",id:t.id});
+      return;
+    }
+    const startD=new Date(start+"T00:00:00");
+    const endD=new Date(end+"T00:00:00");
+    let cur=new Date(startD);
+    while(cur<=endD){
+      const k=cur.toISOString().slice(0,10);
+      const isStart=k===start;const isEnd=k===end;
+      const dow=cur.getDay();
+      let pos;
+      if(isStart&&isEnd)pos="ep-single";
+      else if(isStart||dow===0)pos="ep-start";
+      else if(isEnd||dow===6)pos="ep-end";
+      else pos="ep-mid";
+      addEvento(k,{tipo:"ev-evento",pos,dot:"#00B5A3",nombre:t.nombre,sub:`📅 Evento → ${fmt(end)}`,hora:"00:00",id:t.id});
+      cur.setDate(cur.getDate()+1);
+    }
+  };
+
   if(calFiltro==="todo"||calFiltro==="tareas"||calFiltro==="venc"){
     tasks.forEach(t=>{
       if(esEvento(t)){
-        // Eventos: aparecen en inicio y fin con dot teal
-        if(t.fecha_inicio)addEvento(t.fecha_inicio,{tipo:"ev-evento",dot:"#00B5A3",nombre:t.nombre,sub:`📅 Evento${t.fecha_vencimiento&&t.fecha_vencimiento!==t.fecha_inicio?" → "+fmt(t.fecha_vencimiento):""}`,hora:"00:00",id:t.id});
-        if(t.fecha_vencimiento&&t.fecha_vencimiento!==t.fecha_inicio)addEvento(t.fecha_vencimiento,{tipo:"ev-evento-fin",dot:"#00B5A3",nombre:t.nombre,sub:"📅 Fin de evento",hora:"23:59",id:t.id});
+        _addEventoSpan(t);
       } else if(t.fecha_vencimiento&&t.status!=="Listo"){
         const hora=t.hora_inicio?t.hora_inicio.slice(0,5):null;
         addEvento(t.fecha_vencimiento,{tipo:"ev-venc",dot:"#EF4444",nombre:t.nombre,sub:"Vencimiento de tarea"+(hora?" — "+hora:""),hora:hora||"23:59",id:t.id});
@@ -17909,6 +17937,10 @@ function buildEventos(){
     });
   }
 
+  if(calFiltro==="eventos"){
+    tasks.filter(t=>esEvento(t)).forEach(t=>_addEventoSpan(t));
+  }
+
   return eventos;
 }
 
@@ -17933,7 +17965,7 @@ function renderCalendario(){
     const isSel=fechaStr===calSelectedDay;
     const evs=eventos[fechaStr]||[];
     const maxShow=3;
-    const evHtml=evs.slice(0,maxShow).map(ev=>`<div class="cal-event ${ev.tipo}" title="${escHtml(ev.nombre)}">${escHtml(ev.nombre)}</div>`).join("");
+    const evHtml=evs.slice(0,maxShow).map(ev=>`<div class="cal-event ${ev.tipo}${ev.pos?" "+ev.pos:""}" title="${escHtml(ev.nombre)}">${escHtml(ev.nombre)}</div>`).join("");
     const more=evs.length>maxShow?`<div class="cal-more">+${evs.length-maxShow} más</div>`:"";
     html+=`<div class="cal-cell${otherMonth?" other-month":""}${isHoy?" today":""}${isSel?" selected":""}" onclick="calClickDay('${fechaStr}')">
       <div class="cal-day-num">${dia}</div>
