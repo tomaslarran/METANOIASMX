@@ -5691,7 +5691,25 @@ function renderTaskList(list){
     return a.fecha_vencimiento.localeCompare(b.fecha_vencimiento);
   });
   let html="";
-  ORD.forEach(s=>{if(!g[s].length)return;html+=`<div class="sl">${LBL[s]} · ${g[s].length}</div><div class="tlist">`;sortByDue(g[s]).forEach(t=>html+=taskCard(t));html+=`</div>`});
+  ORD.forEach(s=>{
+    if(!g[s].length)return;
+    if(s==="Listo"){
+      // Completadas: colapsadas por defecto
+      const id="tlist-completadas";
+      html+=`<details id="det-completadas" style="margin-top:8px" ontoggle="(function(d){var sv=d.querySelector('#chev-completadas');if(sv)sv.style.transform=d.open?'rotate(180deg)':'rotate(0deg)';})(this)">
+        <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;padding:8px 4px;user-select:none">
+          <svg id="chev-completadas" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .2s;color:var(--tx3)"><polyline points="6 9 12 15 18 9"/></svg>
+          <span class="sl" style="margin:0;border:none;padding:0">${LBL[s]} · ${g[s].length}</span>
+        </summary>
+        <div class="tlist" id="${id}">`;
+      sortByDue(g[s]).forEach(t=>html+=taskCard(t));
+      html+=`</div></details>`;
+    }else{
+      html+=`<div class="sl">${LBL[s]} · ${g[s].length}</div><div class="tlist">`;
+      sortByDue(g[s]).forEach(t=>html+=taskCard(t));
+      html+=`</div>`;
+    }
+  });
   c.innerHTML=html;
 }
 
