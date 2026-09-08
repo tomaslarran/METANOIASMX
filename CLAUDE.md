@@ -865,6 +865,17 @@ ALTER TABLE instructores ADD COLUMN IF NOT EXISTS firma_url text;
 ALTER TABLE instructores ADD COLUMN IF NOT EXISTS genero text CHECK (genero IN ('M','F'));
 ```
 
+**Fix RLS bucket `firmas-instructores` (8 Sep 2026):** marcar el bucket como Public solo habilita lectura pública — hacía falta política explícita para que un `authenticated` pueda subir/actualizar su firma (daba `403 new row violates row-level security policy`):
+```sql
+CREATE POLICY "Autenticados pueden subir firmas" ON storage.objects
+  FOR INSERT TO authenticated
+  WITH CHECK (bucket_id = 'firmas-instructores');
+
+CREATE POLICY "Autenticados pueden actualizar firmas" ON storage.objects
+  FOR UPDATE TO authenticated
+  USING (bucket_id = 'firmas-instructores');
+```
+
 ---
 
 ## Notas técnicas críticas
