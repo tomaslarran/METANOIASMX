@@ -595,6 +595,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 .cal-event.ev-cobr{background:rgba(16,185,129,.15);color:#6EE7B7;border-left:2px solid #10B981}
 .cal-event.ev-prest{background:rgba(239,68,68,.15);color:#FCA5A5;border-left:2px solid #EF4444}
 .cal-event.ev-inv{background:rgba(245,158,11,.15);color:#FCD34D;border-left:2px solid #F59E0B}
+.cal-event.ev-evento{background:rgba(0,181,163,.25);color:#5EEAD4;border-left:2px solid #00B5A3;border-radius:3px}
+.cal-event.ev-evento.ep-start{margin-right:-4px;border-radius:3px 0 0 3px}
+.cal-event.ev-evento.ep-mid{margin:0 -4px;border-radius:0;border-left:none;font-size:0;padding:3px 0}
+.cal-event.ev-evento.ep-end{margin-left:-4px;border-radius:0 3px 3px 0;border-left:none;font-size:0;padding:3px 0}
 .cal-more{font-size:10px;color:var(--tx3);padding:1px 4px;cursor:pointer}
 .cal-more:hover{color:var(--tx2)}
 .day-event-item{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);margin-bottom:6px}
@@ -1167,6 +1171,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="fsep"></div>
       <button class="fb" onclick="setF('Alta',this)">🔴 Alta prioridad <span class="fc2" id="fc-hi">—</span></button>
       <button class="fb" onclick="setF('venc',this)">⚠ Vencidas <span class="fc2" id="fc-ve">—</span></button>
+      <button class="fb" onclick="setF('eventos',this)" id="fc-btn-eventos">📅 Eventos <span class="fc2" id="fc-ev">—</span></button>
     </div>
   </div>
   <div style="margin-bottom:10px">
@@ -1178,6 +1183,14 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </select>
   </div>
   <div id="container"><div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div></div>
+  <!-- Sección eventos -->
+  <div id="eventos-section" style="margin-top:24px;display:none">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span style="font-size:13px;font-weight:700;color:var(--tx)">📅 Eventos</span>
+      <span id="eventos-count" style="font-size:11px;background:rgba(0,181,163,.15);color:#00B5A3;border-radius:20px;padding:1px 8px;font-weight:600"></span>
+    </div>
+    <div id="eventos-list" style="display:flex;flex-direction:column;gap:8px"></div>
+  </div>
 </div>
 
 <!-- ══ REUNIONES ══ -->
@@ -1637,6 +1650,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="fb" id="cal-btn-cursos" onclick="calSetFiltro('cursos',this)">Solo cursos</button>
     <button class="fb" id="cal-btn-venc" onclick="calSetFiltro('venc',this)">Solo vencimientos</button>
     <button class="fb" id="cal-btn-finanzas" onclick="calSetFiltro('finanzas',this)">💰 Finanzas</button>
+    <button class="fb" id="cal-btn-eventos" onclick="calSetFiltro('eventos',this)">📅 Eventos</button>
   </div>
 
   <!-- GRID DEL CALENDARIO — un único grid para header + body -->
@@ -3839,6 +3853,23 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 </div>
 
+<!-- ══ MODAL CUENTAS FALTANTES ══ -->
+<div class="mov" id="modal-cuentas-faltantes" onclick="if(event.target===this)closeM('modal-cuentas-faltantes')">
+  <div class="modal" style="max-width:500px">
+    <div class="mt"><span>⚠️ Cuentas contables faltantes</span><button class="mt-close" onclick="closeM('modal-cuentas-faltantes')">✕</button></div>
+    <div style="padding:0 20px 20px;display:flex;flex-direction:column;gap:14px">
+      <div style="font-size:12px;color:var(--tx3);background:var(--surf2);padding:10px 12px;border-radius:8px;border:1px solid var(--b)">
+        Estas cuentas no existen en tu plan de cuentas. Completá el nombre y tipo para crearlas, o asignalas a una cuenta existente.
+      </div>
+      <div id="mcf-lista" style="display:flex;flex-direction:column;gap:10px"></div>
+      <div style="display:flex;gap:8px;padding-top:4px">
+        <button class="bc" onclick="closeM('modal-cuentas-faltantes')" style="flex:1">Cancelar</button>
+        <button class="bk" id="mcf-save-btn" onclick="mcfConfirmar()" style="flex:1">✓ Guardar y generar asiento</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ MODAL CONFIRMAR PAGO CUOTA ══ -->
 <div class="mov" id="modal-pago-cuota" onclick="if(event.target===this)closeM('modal-pago-cuota')">
   <div class="modal" style="max-width:380px">
@@ -3846,7 +3877,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div style="padding:0 20px 20px;display:flex;flex-direction:column;gap:14px">
       <div id="mpc-resumen" style="background:var(--surf2);border-radius:var(--r);padding:12px 14px;font-size:13px;border:1px solid var(--b)"></div>
       <div class="fg"><label class="fl">Fecha de pago</label><input type="date" id="mpc-fecha" class="fi"></div>
-      <div class="fg"><label class="fl">Monto abonado</label><input type="number" id="mpc-monto" class="fi" placeholder="0" step="0.01"></div>
+      <div class="fg"><label class="fl">Monto abonado</label><input type="number" id="mpc-monto" class="fi" placeholder="0" step="0.01" oninput="mpcMostrarDif()"></div>
+      <div id="mpc-dif-note" style="display:none;font-size:11px;padding:6px 10px;border-radius:6px;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.3);color:#D97706"></div>
       <div class="fg"><label class="fl">Medio de pago</label><select id="mpc-medio" class="fi sel"></select></div>
       <div style="display:flex;gap:8px;padding-top:4px">
         <button class="bc" onclick="closeM('modal-pago-cuota')" style="flex:1">Cancelar</button>
@@ -4020,18 +4052,24 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 <div class="mov" id="modal-tarea" onclick="if(event.target===this&&_movDown===this)closeModal('modal-tarea')">
 <div class="modal">
   <div class="mt" id="modal-tarea-title">Nueva Tarea</div>
-  <div class="form-grid-2">
-    <div class="fg form-full"><label class="fl">Nombre *</label><input class="fi" id="mn" type="text" placeholder="Nombre de la tarea"></div>
-    <div class="fg"><label class="fl">Prioridad</label><select class="fs" id="mp"><option value="">Sin prioridad</option><option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option></select></div>
-    <div class="fg"><label class="fl">Estado</label><select class="fs" id="ms"><option value="Por Hacer">Por hacer</option><option value="En Progreso">En progreso</option></select></div>
+  <!-- tipo toggle -->
+  <div style="display:flex;gap:0;border:1px solid var(--b);border-radius:8px;overflow:hidden;margin-bottom:14px">
+    <button id="mt-btn-tarea" onclick="setModalTipo('tarea')" style="flex:1;padding:7px 0;font-size:12px;font-weight:600;border:none;cursor:pointer;background:var(--pu);color:#fff">✅ Tarea</button>
+    <button id="mt-btn-evento" onclick="setModalTipo('evento')" style="flex:1;padding:7px 0;font-size:12px;font-weight:600;border:none;cursor:pointer;background:transparent;color:var(--tx3)">📅 Evento</button>
   </div>
-  <div class="fg" style="margin-bottom:12px"><label class="fl">Responsables</label><div class="user-checks" id="modalUserChecks" style="display:flex;flex-wrap:wrap;gap:5px;padding:6px 0"></div></div>
+  <input type="hidden" id="mt-tipo" value="tarea">
   <div class="form-grid-2">
-    <div class="fg"><label class="fl">Fecha inicio <span style="color:var(--tx3);font-weight:400">(opcional, para varios días)</span></label><input class="fi" id="mfi" type="date" style="padding:7px 10px"></div>
-    <div class="fg"><label class="fl">Vencimiento</label><input class="fi" id="md" type="date" style="padding:7px 10px" onchange="checkTareaConflicto()"></div>
+    <div class="fg form-full"><label class="fl" id="mt-nombre-lbl">Nombre *</label><input class="fi" id="mn" type="text" placeholder="Nombre de la tarea"></div>
+    <div class="fg" id="mt-prio-row"><label class="fl">Prioridad</label><select class="fs" id="mp"><option value="">Sin prioridad</option><option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option></select></div>
+    <div class="fg" id="mt-status-row"><label class="fl">Estado</label><select class="fs" id="ms"><option value="Por Hacer">Por hacer</option><option value="En Progreso">En progreso</option></select></div>
+  </div>
+  <div class="fg" style="margin-bottom:12px"><label class="fl">Responsables <span style="color:var(--tx3);font-weight:400" id="mt-resp-note"></span></label><div class="user-checks" id="modalUserChecks" style="display:flex;flex-wrap:wrap;gap:5px;padding:6px 0"></div></div>
+  <div class="form-grid-2">
+    <div class="fg"><label class="fl" id="mt-fi-lbl">Fecha inicio <span style="color:var(--tx3);font-weight:400">(opcional, para varios días)</span></label><input class="fi" id="mfi" type="date" style="padding:7px 10px"></div>
+    <div class="fg"><label class="fl" id="mt-fv-lbl">Vencimiento</label><input class="fi" id="md" type="date" style="padding:7px 10px" onchange="checkTareaConflicto()"></div>
   </div>
   <div class="form-grid-2">
-    <div class="fg"><label class="fl">Hora</label><input class="fi" id="mhora" type="time" style="padding:7px 10px" placeholder="Sin hora específica"></div>
+    <div class="fg" id="mt-hora-row"><label class="fl">Hora</label><input class="fi" id="mhora" type="time" style="padding:7px 10px" placeholder="Sin hora específica"></div>
     <div class="fg"><label class="fl">Categoría</label><select class="fs" id="mcat"><option value="">Sin categoría</option><option>Administración</option><option>Finanzas</option><option>Operaciones</option><option>Cursos</option><option>RRHH</option><option>Legal/Impositivo</option><option>Marketing</option><option>General</option></select></div>
   </div>
   <div class="form-grid-2">
@@ -4950,7 +4988,7 @@ async function renderAlertas(){
   // ── Recolectar alertas ──
   const alertas=[];
 
-  tasks.filter(t=>t.status!=="Listo"&&t.fecha_vencimiento).forEach(t=>{
+  tasks.filter(t=>!esEvento(t)&&t.status!=="Listo"&&t.fecha_vencimiento).forEach(t=>{
     const d=days(t.fecha_vencimiento);
     if(d===null||d>30)return;
     const resp=users.filter(u=>(t.assignees||[]).includes(u.id)).map(u=>u.nombre).join(", ")||"Sin asignar";
@@ -5141,7 +5179,7 @@ async function renderAlertas(){
 
   // ── Stats ──
   const tareasActivas=tasks.filter(t=>t.status!=="Listo").length;
-  const tareasVenc=tasks.filter(t=>t.status!=="Listo"&&t.fecha_vencimiento&&days(t.fecha_vencimiento)<0).length;
+  const tareasVenc=tasks.filter(t=>!esEvento(t)&&t.status!=="Listo"&&t.fecha_vencimiento&&days(t.fecha_vencimiento)<0).length;
   const cuotasSem=cfPrestCuotas.filter(c=>!c.pagada&&c.fecha&&(days(c.fecha)??99)>=0&&(days(c.fecha)??99)<=7).length;
   const cuotasMonto=cfPrestCuotas.filter(c=>!c.pagada&&c.fecha&&(days(c.fecha)??99)>=0&&(days(c.fecha)??99)<=7).reduce((s,c)=>s+(parseFloat(c.monto_total)||0),0);
   const cobPend=cfCobranzas.filter(c=>c.estado==="Pendiente");
@@ -5522,8 +5560,29 @@ const SC={"Por Hacer":{cls:"btd",label:"Por hacer"},"En Progreso":{cls:"bpr",lab
 const PC={"Alta":{stripe:"str-a",dot:"da"},"Media":{stripe:"str-m",dot:"dm"},"Baja":{stripe:"str-b2",dot:"db"}};
 const BC={"Por Hacer":{cls:"st",label:"Por hacer"},"En Progreso":{cls:"sp",label:"En progreso"},"Listo":{cls:"sd",label:"Listo"},"Bloqueado":{cls:"sbl",label:"Bloqueado"}};
 
+function esEvento(t){return t.tipo==="evento";}
+
+function setModalTipo(tipo){
+  document.getElementById("mt-tipo").value=tipo;
+  const esEv=tipo==="evento";
+  document.getElementById("mt-btn-tarea").style.background=esEv?"transparent":"var(--pu)";
+  document.getElementById("mt-btn-tarea").style.color=esEv?"var(--tx3)":"#fff";
+  document.getElementById("mt-btn-evento").style.background=esEv?"#00B5A3":"transparent";
+  document.getElementById("mt-btn-evento").style.color=esEv?"#fff":"var(--tx3)";
+  document.getElementById("mt-prio-row").style.display=esEv?"none":"";
+  document.getElementById("mt-status-row").style.display=esEv?"none":"";
+  document.getElementById("mt-hora-row").style.display=esEv?"none":"";
+  document.getElementById("mt-fi-lbl").innerHTML=esEv?"Fecha inicio *":"Fecha inicio <span style='color:var(--tx3);font-weight:400'>(opcional, para varios días)</span>";
+  document.getElementById("mt-fv-lbl").textContent=esEv?"Fecha fin *":"Vencimiento";
+  document.getElementById("mt-resp-note").textContent=esEv?"(opcional)":"";
+  document.getElementById("modal-tarea-title").textContent=esEv?"Nuevo Evento":"Nueva Tarea";
+  document.getElementById("mbtn").textContent=esEv?"Crear evento":"Crear tarea";
+}
+
 function vis(){
+  if(curF==="eventos")return tasks.filter(t=>esEvento(t)&&(!q||t.nombre.toLowerCase().includes(q.toLowerCase())));
   return tasks.filter(t=>{
+    if(esEvento(t))return false; // eventos van aparte
     const ass=t.assignees||[];
     const efectiveUser=(loggedUser?.rol&&loggedUser.rol!=="admin")?loggedUser.id:curUser;
     const byU=!efectiveUser||ass.includes(efectiveUser);
@@ -5537,9 +5596,40 @@ function vis(){
 }
 function base(){
   const pool=(loggedUser?.rol==="logistica"||loggedUser?.rol==="instructor"||loggedUser?.rol==="comunicaciones")?tasks.filter(t=>(t.assignees||[]).includes(loggedUser.id)):tasks;
-  return!curUser?pool:pool.filter(t=>(t.assignees||[]).includes(curUser));
+  const soloTareas=(!curUser?pool:pool.filter(t=>(t.assignees||[]).includes(curUser))).filter(t=>!esEvento(t));
+  return soloTareas;
 }
-function renderTareas(){updStats();updCounts();renderTaskList(vis())}
+function renderEventosSection(){
+  const sec=document.getElementById("eventos-section");
+  const lst=document.getElementById("eventos-list");
+  if(!sec||!lst)return;
+  const evs=tasks.filter(t=>esEvento(t)&&(!q||t.nombre.toLowerCase().includes(q.toLowerCase()))).sort((a,b)=>(a.fecha_inicio||a.fecha_vencimiento||"").localeCompare(b.fecha_inicio||b.fecha_vencimiento||""));
+  if(!evs.length){sec.style.display="none";return;}
+  sec.style.display="";
+  document.getElementById("eventos-count").textContent=evs.length;
+  lst.innerHTML=evs.map(t=>{
+    const inicio=t.fecha_inicio||t.fecha_vencimiento;
+    const fin=t.fecha_vencimiento;
+    const rango=(inicio&&fin&&inicio!==fin)?`${fmt(inicio)} → ${fmt(fin)}`:(inicio?fmt(inicio):"Sin fecha");
+    const hoy=today();
+    const enCurso=inicio<=hoy&&(!fin||fin>=hoy);
+    const futuro=inicio>hoy;
+    const pasado=fin&&fin<hoy;
+    const badge=pasado?`<span style="font-size:10px;background:var(--surf2);color:var(--tx3);border-radius:4px;padding:1px 6px">Finalizado</span>`:enCurso?`<span style="font-size:10px;background:rgba(0,181,163,.15);color:#00B5A3;border-radius:4px;padding:1px 6px;font-weight:600">En curso</span>`:`<span style="font-size:10px;background:rgba(124,58,237,.1);color:var(--pu);border-radius:4px;padding:1px 6px">Próximo</span>`;
+    const catBadge=t.categoria?`<span style="font-size:10px;color:var(--tx3);background:var(--surf2);border:1px solid var(--b);border-radius:4px;padding:1px 6px">${esc(t.categoria)}</span>`:"";
+    return`<div style="background:var(--surf);border:1px solid var(--b);border-left:3px solid #00B5A3;border-radius:var(--r);padding:10px 14px;display:flex;align-items:center;gap:12px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:4px">${esc(t.nombre)}</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--tx3)">📅 ${rango}</span>${badge}${catBadge}
+          ${t.notas?`<span style="font-size:11px;color:var(--tx3)">· ${esc(t.notas)}</span>`:""}
+        </div>
+      </div>
+      <button onclick="eliminarTarea('${t.id}')" style="flex-shrink:0;background:none;border:none;color:var(--tx3);cursor:pointer;font-size:14px;padding:4px" title="Eliminar">🗑</button>
+    </div>`;
+  }).join("");
+}
+function renderTareas(){updStats();updCounts();renderTaskList(vis());if(curF!=="eventos")renderEventosSection();}
 
 function updStats(){
   const b=base();
@@ -5559,10 +5649,41 @@ function updCounts(){
   document.getElementById("fc-bl").textContent=b.filter(t=>t.status==="Bloqueado").length;
   document.getElementById("fc-hi").textContent=b.filter(t=>t.prioridad==="Alta").length;
   document.getElementById("fc-ve").textContent=b.filter(t=>days(t.fecha_vencimiento)!==null&&days(t.fecha_vencimiento)<0&&t.status!=="Listo").length;
+  const evCount=tasks.filter(t=>esEvento(t)).length;
+  document.getElementById("fc-ev").textContent=evCount;
+  const btnEv=document.getElementById("fc-btn-eventos");
+  if(btnEv)btnEv.style.display=evCount>0?"":"none";
 }
 
 function renderTaskList(list){
   const c=document.getElementById("container");
+  // Ocultar sección eventos de abajo cuando el filtro ES eventos (ya se muestra en container)
+  const secEv=document.getElementById("eventos-section");
+  if(curF==="eventos"){
+    if(secEv)secEv.style.display="none";
+    if(!list.length){c.innerHTML=`<div class="empty"><div class="ei">📅</div>No hay eventos cargados.</div>`;return}
+    c.innerHTML=`<div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">EVENTOS · ${list.length}</div>`+list.sort((a,b)=>(a.fecha_inicio||a.fecha_vencimiento||"").localeCompare(b.fecha_inicio||b.fecha_vencimiento||"")).map(t=>{
+      const inicio=t.fecha_inicio||t.fecha_vencimiento;
+      const fin=t.fecha_vencimiento;
+      const rango=(inicio&&fin&&inicio!==fin)?`${fmt(inicio)} → ${fmt(fin)}`:(inicio?fmt(inicio):"Sin fecha");
+      const hoy=today();
+      const enCurso=inicio<=hoy&&(!fin||fin>=hoy);
+      const futuro=inicio>hoy;
+      const badge=fin&&fin<hoy?`<span style="font-size:10px;background:var(--surf2);color:var(--tx3);border-radius:4px;padding:1px 6px">Finalizado</span>`:enCurso?`<span style="font-size:10px;background:rgba(0,181,163,.15);color:#00B5A3;border-radius:4px;padding:1px 6px;font-weight:600">En curso</span>`:`<span style="font-size:10px;background:rgba(124,58,237,.1);color:var(--pu);border-radius:4px;padding:1px 6px">Próximo</span>`;
+      const catBadge=t.categoria?`<span style="font-size:10px;color:var(--tx3);background:var(--surf2);border:1px solid var(--b);border-radius:4px;padding:1px 6px">${esc(t.categoria)}</span>`:"";
+      return`<div style="background:var(--surf);border:1px solid var(--b);border-left:3px solid #00B5A3;border-radius:var(--r);padding:10px 14px;display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:4px">${esc(t.nombre)}</div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--tx3)">📅 ${rango}</span>${badge}${catBadge}
+            ${t.notas?`<span style="font-size:11px;color:var(--tx3)">· ${esc(t.notas)}</span>`:""}
+          </div>
+        </div>
+        <button onclick="eliminarTarea('${t.id}')" style="flex-shrink:0;background:none;border:none;color:var(--tx3);cursor:pointer;font-size:14px;padding:4px" title="Eliminar">🗑</button>
+      </div>`;
+    }).join("");
+    return;
+  }
   if(!list.length){c.innerHTML=`<div class="empty"><div class="ei">✓</div>${q?"Sin resultados":"No hay tareas en esta vista."}</div>`;return}
   const ORD=["Bloqueado","Por Hacer","En Progreso","Listo"];
   const LBL={"Bloqueado":"Bloqueadas","Por Hacer":"Por hacer","En Progreso":"En progreso","Listo":"Completadas"};
@@ -5576,7 +5697,25 @@ function renderTaskList(list){
     return a.fecha_vencimiento.localeCompare(b.fecha_vencimiento);
   });
   let html="";
-  ORD.forEach(s=>{if(!g[s].length)return;html+=`<div class="sl">${LBL[s]} · ${g[s].length}</div><div class="tlist">`;sortByDue(g[s]).forEach(t=>html+=taskCard(t));html+=`</div>`});
+  ORD.forEach(s=>{
+    if(!g[s].length)return;
+    if(s==="Listo"){
+      // Completadas: colapsadas por defecto
+      const id="tlist-completadas";
+      html+=`<details id="det-completadas" style="margin-top:8px" ontoggle="(function(d){var sv=d.querySelector('#chev-completadas');if(sv)sv.style.transform=d.open?'rotate(180deg)':'rotate(0deg)';})(this)">
+        <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;padding:8px 4px;user-select:none">
+          <svg id="chev-completadas" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .2s;color:var(--tx3)"><polyline points="6 9 12 15 18 9"/></svg>
+          <span class="sl" style="margin:0;border:none;padding:0">${LBL[s]} · ${g[s].length}</span>
+        </summary>
+        <div class="tlist" id="${id}">`;
+      sortByDue(g[s]).forEach(t=>html+=taskCard(t));
+      html+=`</div></details>`;
+    }else{
+      html+=`<div class="sl">${LBL[s]} · ${g[s].length}</div><div class="tlist">`;
+      sortByDue(g[s]).forEach(t=>html+=taskCard(t));
+      html+=`</div>`;
+    }
+  });
   c.innerHTML=html;
 }
 
@@ -5777,25 +5916,31 @@ function checkTareaConflicto(){
 }
 async function createTask(){
   const nombre=document.getElementById("mn").value.trim();if(!nombre){toast("Escribí un nombre","err");return}
-  const prioridad=document.getElementById("mp").value||null;const status=document.getElementById("ms").value;
+  const tipo=document.getElementById("mt-tipo").value||"tarea";
+  const esEv=tipo==="evento";
+  const prioridad=esEv?null:document.getElementById("mp").value||null;
+  const status=esEv?"Por Hacer":document.getElementById("ms").value;
   const fechaInicio=document.getElementById("mfi").value||null;
   const fecha=document.getElementById("md").value||null;
+  if(esEv&&!fechaInicio){toast("Un evento requiere fecha de inicio","err");return}
+  if(esEv&&!fecha){toast("Un evento requiere fecha de fin","err");return}
   if(fechaInicio&&fecha&&fechaInicio>fecha){toast("La fecha de inicio no puede ser posterior al vencimiento","err");return}
-  const hora=document.getElementById("mhora").value||null;
+  const hora=esEv?null:document.getElementById("mhora").value||null;
   const desc=document.getElementById("mdesc").value.trim()||null;
   const cat=document.getElementById("mcat").value||null;
   const assignees=[...document.querySelectorAll("#modalUserChecks input:checked")].map(i=>i.value);
   const mbtn=document.getElementById("mbtn");mbtn.disabled=true;mbtn.textContent="Creando...";
   try{
-    const [created]=await sb("tareas",{method:"POST",body:JSON.stringify({nombre,status,prioridad,assignees,fecha_inicio:fechaInicio,fecha_vencimiento:fecha,hora_inicio:hora,notas:desc||null,categoria:cat,updated_at:new Date().toISOString()})});
+    const [created]=await sb("tareas",{method:"POST",body:JSON.stringify({nombre,tipo,status,prioridad,assignees,fecha_inicio:fechaInicio,fecha_vencimiento:fecha,hora_inicio:hora,notas:desc||null,categoria:cat,updated_at:new Date().toISOString()})});
     tasks.unshift(created);closeModal("modal-tarea");
     ["mn","mp","mfi","md","mhora","mdesc","mcat"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
     document.getElementById("ms").value="Por Hacer";
     document.querySelectorAll("#modalUserChecks input").forEach(i=>{i.checked=false;i.closest(".uc").classList.remove("sel2")});
     const aviso=document.getElementById("tarea-conflicto-aviso");if(aviso)aviso.style.display="none";
-    renderTareas();updateSideBadges();toast(`"${nombre}" creada`,"ok");
+    setModalTipo("tarea"); // resetear a tarea por defecto
+    renderTareas();updateSideBadges();toast(`"${nombre}" ${esEv?"creado":"creada"}`,"ok");
   }catch(e){toast("Error: "+e.message,"err")}
-  finally{mbtn.disabled=false;mbtn.textContent="Crear tarea"}
+  finally{mbtn.disabled=false;mbtn.textContent=tipo==="evento"?"Crear evento":"Crear tarea"}
 }
 
 // ── CURSOS ──
@@ -14384,10 +14529,11 @@ async function confirmarPagoEmpleado(){
       const soc=emp.sociedad||"SUDES";
       const bancoCod=getBancoCodigoPorMedio(medio||"",soc);
       const desc=`Sueldo: ${emp.nombre||""} — ${_mpePeriodo||""}`;
-      generarAsiento({fecha,sociedad:soc,tipo:"pago_sueldo",origen:"pago_empleado",origen_id:pagoId,descripcion:desc,lineas:[
+      const _adS={fecha,sociedad:soc,tipo:"pago_sueldo",origen:"pago_empleado",origen_id:pagoId,descripcion:desc,lineas:[
         {codigo:"4.2.01.001",debe:monto,desc:`Sueldo ${emp.nombre||""}`},
         {codigo:bancoCod,haber:monto,desc:`Pago ${medio||"sueldo"}`},
-      ]}).then(a=>{if(!a)toast("⚠️ Asiento sueldo no generado — verificá Plan de Cuentas","err");}).catch(()=>{});
+      ]};
+      generarAsiento(_adS).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adS);else if(!a)toast("⚠️ Asiento sueldo no generado","err");}).catch(()=>{});
     }
     closeM("modal-pago-empleado");
     toast(`✓ ${emp?.nombre||"Empleado"} — pago registrado`,"ok");
@@ -15961,7 +16107,122 @@ function togglePrestCuotas(id){
   if(el)el.style.display=el.style.display==="none"?"":"none";
 }
 
+// ── MODAL CUENTAS FALTANTES ─────────────────────────────────────────
+let _pendingAsientoData=null;
+const _MCF_META={
+  "1.1.01.001":{nombre:"Caja ARS",tipo:"activo"},
+  "1.1.01.002":{nombre:"Banco Macro SUDES",tipo:"activo"},
+  "1.1.01.003":{nombre:"Banco Macro POINTERS",tipo:"activo"},
+  "1.1.01.004":{nombre:"Mercado Pago",tipo:"activo"},
+  "2.1.01.001":{nombre:"Proveedores a pagar",tipo:"pasivo"},
+  "2.1.02.001":{nombre:"Préstamos bancarios — capital",tipo:"pasivo"},
+  "2.1.03.001":{nombre:"Ret. IIBB a depositar",tipo:"pasivo"},
+  "2.1.03.002":{nombre:"Ret. SICORE / Ganancias a depositar",tipo:"pasivo"},
+  "3.1.01.001":{nombre:"Capital social",tipo:"patrimonio"},
+  "4.1.01.001":{nombre:"Compras / insumos",tipo:"gasto"},
+  "4.1.02.001":{nombre:"IVA crédito fiscal",tipo:"activo"},
+  "4.2.01.001":{nombre:"Sueldos y honorarios",tipo:"gasto"},
+  "4.2.03.001":{nombre:"Intereses y gastos financieros",tipo:"gasto"},
+  "5.1.01.001":{nombre:"Ingresos por cursos",tipo:"ingreso"},
+  "5.1.02.001":{nombre:"Ingresos por suscripciones",tipo:"ingreso"},
+};
+function _mcfTipoByCode(codigo){
+  const p=parseInt(codigo.charAt(0));
+  return p===1?"activo":p===2?"pasivo":p===3?"patrimonio":p===4?"gasto":"ingreso";
+}
+function _mcfNaturaleza(tipo){return["activo","gasto"].includes(tipo)?"deudora":"acreedora";}
+function mcfAbrir(faltantes,asientoData){
+  _pendingAsientoData={...asientoData,_faltantes:faltantes};
+  const lista=document.getElementById("mcf-lista");
+  const existentes=planCuentas.filter(c=>c.activa&&c.imputable).sort((a,b)=>a.codigo.localeCompare(b.codigo));
+  lista.innerHTML=faltantes.map(codigo=>{
+    const meta=_MCF_META[codigo]||{};
+    const tipoSug=meta.tipo||_mcfTipoByCode(codigo);
+    const nombreSug=meta.nombre||"";
+    const tipoOpts=["activo","pasivo","patrimonio","gasto","ingreso"].map(t=>`<option value="${t}"${t===tipoSug?" selected":""}>${t.charAt(0).toUpperCase()+t.slice(1)}</option>`).join("");
+    const existSel=existentes.length?`<div id="mcf-panel-usar-${codigo}" style="display:none">
+      <select id="mcf-existente-${codigo}" class="fi sel">
+        ${existentes.map(c=>`<option value="${esc(c.codigo)}">${esc(c.codigo)} — ${esc(c.nombre)}</option>`).join("")}
+      </select></div>`:"";
+    const btnUsar=existentes.length?`<button onclick="mcfToggle('${esc(codigo)}','usar')" id="mcf-tab-usar-${codigo}" style="font-size:11px;padding:3px 10px;border-radius:5px;border:1px solid var(--b);cursor:pointer;background:transparent;color:var(--tx3)">Usar existente</button>`:"";
+    return`<div style="background:var(--surf2);border-radius:8px;padding:12px;border:1px solid var(--b)">
+      <div style="font-family:monospace;font-size:11px;color:var(--tx3);margin-bottom:8px">📌 ${esc(codigo)}</div>
+      <div style="display:flex;gap:4px;margin-bottom:8px">
+        <button onclick="mcfToggle('${esc(codigo)}','crear')" id="mcf-tab-crear-${codigo}" style="font-size:11px;padding:3px 10px;border-radius:5px;border:1px solid var(--pu);cursor:pointer;background:var(--pu);color:#fff">+ Crear</button>
+        ${btnUsar}
+      </div>
+      <div id="mcf-panel-crear-${codigo}" style="display:flex;gap:8px">
+        <input id="mcf-nombre-${codigo}" class="fi" placeholder="Nombre de la cuenta" value="${esc(nombreSug)}" style="flex:1">
+        <select id="mcf-tipo-${codigo}" class="fi sel" style="width:130px">${tipoOpts}</select>
+      </div>
+      ${existSel}
+    </div>`;
+  }).join("");
+  openM("modal-cuentas-faltantes");
+}
+function mcfToggle(codigo,tab){
+  const pC=document.getElementById(`mcf-panel-crear-${codigo}`);
+  const pU=document.getElementById(`mcf-panel-usar-${codigo}`);
+  const tC=document.getElementById(`mcf-tab-crear-${codigo}`);
+  const tU=document.getElementById(`mcf-tab-usar-${codigo}`);
+  if(pC)pC.style.display=tab==="crear"?"flex":"none";
+  if(pU)pU.style.display=tab==="usar"?"":"none";
+  if(tC){tC.style.background=tab==="crear"?"var(--pu)":"transparent";tC.style.color=tab==="crear"?"#fff":"var(--tx3)";}
+  if(tU){tU.style.background=tab==="usar"?"var(--pu)":"transparent";tU.style.color=tab==="usar"?"#fff":"var(--tx3)";}
+}
+async function mcfConfirmar(){
+  if(!_pendingAsientoData)return;
+  const btn=document.getElementById("mcf-save-btn");
+  btn.disabled=true;btn.textContent="Guardando...";
+  try{
+    const faltantes=_pendingAsientoData._faltantes||[];
+    const codigoMap={};
+    for(const codigo of faltantes){
+      const pU=document.getElementById(`mcf-panel-usar-${codigo}`);
+      if(pU&&pU.style.display!=="none"){
+        const mapped=document.getElementById(`mcf-existente-${codigo}`)?.value;
+        if(mapped)codigoMap[codigo]=mapped;
+      }else{
+        const nombre=(document.getElementById(`mcf-nombre-${codigo}`)?.value||"").trim();
+        const tipo=document.getElementById(`mcf-tipo-${codigo}`)?.value||"activo";
+        if(!nombre){toast(`Completá el nombre para ${codigo}`,"err");return;}
+        const nivel=(codigo.match(/\./g)||[]).length+1;
+        const naturaleza=_mcfNaturaleza(tipo);
+        const parentCodigo=codigo.split(".").slice(0,-1).join(".");
+        const padre=planCuentas.find(c=>c.codigo===parentCodigo);
+        const[nueva]=await sb("plan_cuentas",{method:"POST",body:JSON.stringify({codigo,nombre,tipo,nivel,imputable:true,activa:true,naturaleza,cuenta_padre_id:padre?.id||null})});
+        if(nueva){planCuentas.push(nueva);codigoMap[codigo]=codigo;}
+        else{toast(`Error creando cuenta ${codigo}`,"err");return;}
+      }
+    }
+    const lineasRemapped=_pendingAsientoData.lineas.map(l=>{
+      const m=codigoMap[l.codigo];
+      return m&&m!==l.codigo?{...l,codigo:m}:l;
+    });
+    closeM("modal-cuentas-faltantes");
+    const {_faltantes:_,...asientoClean}=_pendingAsientoData;
+    const asiento=await generarAsiento({...asientoClean,lineas:lineasRemapped});
+    if(!asiento)toast("⚠️ Asiento no generado — verificá las cuentas","err");
+    else if(asiento._faltantes)toast(`⚠️ Aún faltan cuentas: ${asiento._faltantes.join(", ")}`,"err");
+    else toast("✓ Asiento generado correctamente","ok");
+  }catch(e){toast("Error: "+e.message,"err");}
+  finally{btn.disabled=false;btn.textContent="✓ Guardar y generar asiento";_pendingAsientoData=null;}
+}
+
 let _mpcCuotaId=null,_mpcPrestId=null;
+function mpcMostrarDif(){
+  const el=document.getElementById("mpc-monto");
+  const note=document.getElementById("mpc-dif-note");
+  const sched=parseFloat(el.dataset.scheduled)||0;
+  const actual=parseFloat(el.value)||0;
+  const dif=Math.round((actual-sched)*100)/100;
+  if(Math.abs(dif)>0.01&&sched>0){
+    note.style.display="";
+    note.textContent=dif>0
+      ?`⚠️ Diferencia +${fmtNum(dif,true)} — se imputará como intereses adicionales por demora`
+      :`⚠️ Diferencia ${fmtNum(dif,true)} — pago parcial`;
+  }else{note.style.display="none";}
+}
 function marcarCuotaPagada(cuotaId,prestId){abrirModalPago(cuotaId,prestId)}
 
 function abrirModalPago(cuotaId,prestId){
@@ -15987,7 +16248,10 @@ function abrirModalPago(cuotaId,prestId){
       <span style="color:var(--tx)">${fmt(c.fecha)}</span>
     </div>`;
   document.getElementById("mpc-fecha").value=today();
-  document.getElementById("mpc-monto").value=c.monto_total!=null?parseFloat(c.monto_total).toFixed(2):"";
+  const mpcMontoEl=document.getElementById("mpc-monto");
+  mpcMontoEl.value=c.monto_total!=null?parseFloat(c.monto_total).toFixed(2):"";
+  mpcMontoEl.dataset.scheduled=c.monto_total!=null?parseFloat(c.monto_total):"";
+  document.getElementById("mpc-dif-note").style.display="none";
   openM("modal-pago-cuota");
   setTimeout(()=>document.getElementById("mpc-fecha").focus(),80);
 }
@@ -16012,18 +16276,20 @@ async function confirmarPagoCuota(){
     // Asiento cuota préstamo
     if(c&&prest){
       const capital=Math.round((parseFloat(c.capital)||0)*100)/100;
-      const intereses=Math.round((parseFloat(c.intereses)||0)*100)/100;
       const total=Math.round((parseFloat(document.getElementById("mpc-monto").value)||parseFloat(c.monto_total)||0)*100)/100;
       const medio=document.getElementById("mpc-medio")?.value||"";
       const soc=prest.sociedad||"SUDES";
       if(total>0){
         const lineas=[];
-        const cap=capital>0?capital:total-intereses;
+        // Capital fijo del cronograma; intereses = total - capital (absorbe cualquier diferencia por demora)
+        const cap=capital>0?capital:0;
+        const intereses=Math.max(0,Math.round((total-cap)*100)/100);
         if(cap>0)lineas.push({codigo:"2.1.02.001",debe:cap,desc:"Capital cuota"});
-        if(intereses>0)lineas.push({codigo:"4.2.03.001",debe:intereses,desc:"Intereses"});
+        if(intereses>0)lineas.push({codigo:"4.2.03.001",debe:intereses,desc:cap>0&&Math.abs(total-(cap+(parseFloat(c.intereses)||0)))>1?"Intereses (ajustado por demora)":"Intereses"});
         lineas.push({codigo:getBancoCodigoPorMedio(medio,soc),haber:total,desc:`Pago ${medio||"cuota"}`});
         const desc=`Cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${prest.nombre||"Préstamo"}`;
-        generarAsiento({fecha,sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:cuotaId,descripcion:desc,lineas}).then(a=>{if(!a)toast("⚠️ Asiento no generado — Plan de Cuentas vacío","err");else if(a?._faltantes)toast(`⚠️ Asiento no generado — faltan cuentas: ${a._faltantes.join(", ")}`,"err");}).catch(()=>{});
+        const _adC={fecha,sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:cuotaId,descripcion:desc,lineas};
+        generarAsiento(_adC).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adC);else if(!a)toast("⚠️ Asiento no generado","err");}).catch(()=>{});
       }
     }
     closeM("modal-pago-cuota");
@@ -17580,9 +17846,36 @@ function buildEventos(){
   const eventos={};
   const addEvento=(fecha,ev)=>{if(!fecha)return;const k=fecha.slice(0,10);if(!eventos[k])eventos[k]=[];eventos[k].push(ev)};
 
+  const _addEventoSpan=(t)=>{
+    if(!t.fecha_inicio)return;
+    const start=t.fecha_inicio.slice(0,10);
+    const end=(t.fecha_vencimiento||t.fecha_inicio).slice(0,10);
+    if(start===end){
+      addEvento(start,{tipo:"ev-evento",pos:"ep-single",dot:"#00B5A3",nombre:t.nombre,sub:"📅 Evento",hora:"00:00",id:t.id});
+      return;
+    }
+    const startD=new Date(start+"T00:00:00");
+    const endD=new Date(end+"T00:00:00");
+    let cur=new Date(startD);
+    while(cur<=endD){
+      const k=cur.toISOString().slice(0,10);
+      const isStart=k===start;const isEnd=k===end;
+      const dow=cur.getDay();
+      let pos;
+      if(isStart&&isEnd)pos="ep-single";
+      else if(isStart||dow===0)pos="ep-start";
+      else if(isEnd||dow===6)pos="ep-end";
+      else pos="ep-mid";
+      addEvento(k,{tipo:"ev-evento",pos,dot:"#00B5A3",nombre:t.nombre,sub:`📅 Evento → ${fmt(end)}`,hora:"00:00",id:t.id});
+      cur.setDate(cur.getDate()+1);
+    }
+  };
+
   if(calFiltro==="todo"||calFiltro==="tareas"||calFiltro==="venc"){
     tasks.forEach(t=>{
-      if(t.fecha_vencimiento&&t.status!=="Listo"){
+      if(esEvento(t)){
+        _addEventoSpan(t);
+      } else if(t.fecha_vencimiento&&t.status!=="Listo"){
         const hora=t.hora_inicio?t.hora_inicio.slice(0,5):null;
         addEvento(t.fecha_vencimiento,{tipo:"ev-venc",dot:"#EF4444",nombre:t.nombre,sub:"Vencimiento de tarea"+(hora?" — "+hora:""),hora:hora||"23:59",id:t.id});
         if(t.fecha_inicio&&t.fecha_inicio!==t.fecha_vencimiento){
@@ -17648,6 +17941,10 @@ function buildEventos(){
     });
   }
 
+  if(calFiltro==="eventos"){
+    tasks.filter(t=>esEvento(t)).forEach(t=>_addEventoSpan(t));
+  }
+
   return eventos;
 }
 
@@ -17672,7 +17969,7 @@ function renderCalendario(){
     const isSel=fechaStr===calSelectedDay;
     const evs=eventos[fechaStr]||[];
     const maxShow=3;
-    const evHtml=evs.slice(0,maxShow).map(ev=>`<div class="cal-event ${ev.tipo}" title="${escHtml(ev.nombre)}">${escHtml(ev.nombre)}</div>`).join("");
+    const evHtml=evs.slice(0,maxShow).map(ev=>`<div class="cal-event ${ev.tipo}${ev.pos?" "+ev.pos:""}" title="${escHtml(ev.nombre)}">${escHtml(ev.nombre)}</div>`).join("");
     const more=evs.length>maxShow?`<div class="cal-more">+${evs.length-maxShow} más</div>`:"";
     html+=`<div class="cal-cell${otherMonth?" other-month":""}${isHoy?" today":""}${isSel?" selected":""}" onclick="calClickDay('${fechaStr}')">
       <div class="cal-day-num">${dia}</div>
@@ -19923,7 +20220,10 @@ function getBancoCodigoPorMedio(medio,sociedad){
   return"1.1.01.001";
 }
 async function generarAsiento({fecha,sociedad,tipo,origen,origen_id,descripcion,lineas}){
-  if(!planCuentas.length){console.warn("generarAsiento: planCuentas vacío");return null;}
+  if(!planCuentas.length){
+    try{const r=await sb("plan_cuentas?select=*&order=codigo").catch(()=>[]);if(r.length)planCuentas=r;}catch(e){}
+    if(!planCuentas.length){console.warn("generarAsiento: planCuentas vacío");return{_faltantes:lineas.map(l=>l.codigo)};}
+  }
   const totalD=Math.round(lineas.reduce((s,l)=>s+(l.debe||0),0)*100)/100;
   const totalH=Math.round(lineas.reduce((s,l)=>s+(l.haber||0),0)*100)/100;
   if(Math.abs(totalD-totalH)>0.02){console.warn("Asiento desbalanceado",totalD,totalH);return null;}
@@ -20910,7 +21210,8 @@ async function marcarEstadoComp(id,estado){
         if(iva>0)lineas.push({codigo:"1.1.03.001",debe:iva,desc:"IVA CF"});
         lineas.push({codigo:"2.1.01.001",haber:total,desc:"Proveedores"});
         const desc=`Devengado: Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||""}`;
-        generarAsiento({fecha:c.fecha||today(),sociedad:c.sociedad||"SUDES",tipo:"devengado_compra",origen:"comprobante",origen_id:id,descripcion:desc,lineas}).then(a=>{if(!a)toast("⚠️ Asiento devengado no generado — verificá el Plan de Cuentas","err");}).catch(e=>toast("⚠️ Error al generar asiento devengado: "+e.message.slice(0,60),"err"));
+        const _adDev={fecha:c.fecha||today(),sociedad:c.sociedad||"SUDES",tipo:"devengado_compra",origen:"comprobante",origen_id:id,descripcion:desc,lineas};
+        generarAsiento(_adDev).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adDev);else if(!a)toast("⚠️ Asiento devengado no generado","err");}).catch(e=>toast("⚠️ Error asiento devengado: "+e.message.slice(0,50),"err"));
       }
     }
   }catch(e){toast("Error","err")}
@@ -21094,7 +21395,8 @@ async function confirmarOrdenPago(pagarTambien){
       ];
       if(ret>0)lineasPago.push({codigo:"2.1.03.002",haber:ret,desc:`Ret. SICORE ${cod||""}`});
       const descPagoAsiento=`Pago: ${c.proveedor||""} — ${numero}`;
-      generarAsiento({fecha,sociedad:c.sociedad||"SUDES",tipo:"pago_compra",origen:"orden_pago",origen_id:op?.id,descripcion:descPagoAsiento,lineas:lineasPago}).then(a=>{if(!a)toast("⚠️ Asiento de pago no generado — verificá el Plan de Cuentas","err");}).catch(e=>toast("⚠️ Error al generar asiento de pago: "+e.message.slice(0,60),"err"));
+      const _adPago={fecha,sociedad:c.sociedad||"SUDES",tipo:"pago_compra",origen:"orden_pago",origen_id:op?.id,descripcion:descPagoAsiento,lineas:lineasPago};
+      generarAsiento(_adPago).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adPago);else if(!a)toast("⚠️ Asiento de pago no generado","err");}).catch(e=>toast("⚠️ Error asiento pago: "+e.message.slice(0,50),"err"));
     }
     generarPDFOrdenPago({...opData,id:op?.id,numero_comp:c.numero});
     closeModal("modal-orden-pago");
