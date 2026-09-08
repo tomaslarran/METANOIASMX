@@ -1167,6 +1167,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="fsep"></div>
       <button class="fb" onclick="setF('Alta',this)">🔴 Alta prioridad <span class="fc2" id="fc-hi">—</span></button>
       <button class="fb" onclick="setF('venc',this)">⚠ Vencidas <span class="fc2" id="fc-ve">—</span></button>
+      <button class="fb" onclick="setF('eventos',this)" id="fc-btn-eventos">📅 Eventos <span class="fc2" id="fc-ev">—</span></button>
     </div>
   </div>
   <div style="margin-bottom:10px">
@@ -5573,6 +5574,7 @@ function setModalTipo(tipo){
 }
 
 function vis(){
+  if(curF==="eventos")return tasks.filter(t=>esEvento(t)&&(!q||t.nombre.toLowerCase().includes(q.toLowerCase())));
   return tasks.filter(t=>{
     if(esEvento(t))return false; // eventos van aparte
     const ass=t.assignees||[];
@@ -5621,7 +5623,7 @@ function renderEventosSection(){
     </div>`;
   }).join("");
 }
-function renderTareas(){updStats();updCounts();renderTaskList(vis());renderEventosSection();}
+function renderTareas(){updStats();updCounts();renderTaskList(vis());if(curF!=="eventos")renderEventosSection();}
 
 function updStats(){
   const b=base();
@@ -5641,10 +5643,41 @@ function updCounts(){
   document.getElementById("fc-bl").textContent=b.filter(t=>t.status==="Bloqueado").length;
   document.getElementById("fc-hi").textContent=b.filter(t=>t.prioridad==="Alta").length;
   document.getElementById("fc-ve").textContent=b.filter(t=>days(t.fecha_vencimiento)!==null&&days(t.fecha_vencimiento)<0&&t.status!=="Listo").length;
+  const evCount=tasks.filter(t=>esEvento(t)).length;
+  document.getElementById("fc-ev").textContent=evCount;
+  const btnEv=document.getElementById("fc-btn-eventos");
+  if(btnEv)btnEv.style.display=evCount>0?"":"none";
 }
 
 function renderTaskList(list){
   const c=document.getElementById("container");
+  // Ocultar sección eventos de abajo cuando el filtro ES eventos (ya se muestra en container)
+  const secEv=document.getElementById("eventos-section");
+  if(curF==="eventos"){
+    if(secEv)secEv.style.display="none";
+    if(!list.length){c.innerHTML=`<div class="empty"><div class="ei">📅</div>No hay eventos cargados.</div>`;return}
+    c.innerHTML=`<div style="font-size:12px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">EVENTOS · ${list.length}</div>`+list.sort((a,b)=>(a.fecha_inicio||a.fecha_vencimiento||"").localeCompare(b.fecha_inicio||b.fecha_vencimiento||"")).map(t=>{
+      const inicio=t.fecha_inicio||t.fecha_vencimiento;
+      const fin=t.fecha_vencimiento;
+      const rango=(inicio&&fin&&inicio!==fin)?`${fmt(inicio)} → ${fmt(fin)}`:(inicio?fmt(inicio):"Sin fecha");
+      const hoy=today();
+      const enCurso=inicio<=hoy&&(!fin||fin>=hoy);
+      const futuro=inicio>hoy;
+      const badge=fin&&fin<hoy?`<span style="font-size:10px;background:var(--surf2);color:var(--tx3);border-radius:4px;padding:1px 6px">Finalizado</span>`:enCurso?`<span style="font-size:10px;background:rgba(0,181,163,.15);color:#00B5A3;border-radius:4px;padding:1px 6px;font-weight:600">En curso</span>`:`<span style="font-size:10px;background:rgba(124,58,237,.1);color:var(--pu);border-radius:4px;padding:1px 6px">Próximo</span>`;
+      const catBadge=t.categoria?`<span style="font-size:10px;color:var(--tx3);background:var(--surf2);border:1px solid var(--b);border-radius:4px;padding:1px 6px">${esc(t.categoria)}</span>`:"";
+      return`<div style="background:var(--surf);border:1px solid var(--b);border-left:3px solid #00B5A3;border-radius:var(--r);padding:10px 14px;display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:4px">${esc(t.nombre)}</div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--tx3)">📅 ${rango}</span>${badge}${catBadge}
+            ${t.notas?`<span style="font-size:11px;color:var(--tx3)">· ${esc(t.notas)}</span>`:""}
+          </div>
+        </div>
+        <button onclick="eliminarTarea('${t.id}')" style="flex-shrink:0;background:none;border:none;color:var(--tx3);cursor:pointer;font-size:14px;padding:4px" title="Eliminar">🗑</button>
+      </div>`;
+    }).join("");
+    return;
+  }
   if(!list.length){c.innerHTML=`<div class="empty"><div class="ei">✓</div>${q?"Sin resultados":"No hay tareas en esta vista."}</div>`;return}
   const ORD=["Bloqueado","Por Hacer","En Progreso","Listo"];
   const LBL={"Bloqueado":"Bloqueadas","Por Hacer":"Por hacer","En Progreso":"En progreso","Listo":"Completadas"};
