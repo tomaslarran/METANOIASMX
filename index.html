@@ -8207,11 +8207,13 @@ async function _guardarArchivoEnCurso(cursoId,blob,nombre,tipo,generadoIA=false,
   try{
     const safe=nombre.replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,80);
     const path=`${cursoId}/${tipo}/${Date.now()}_${safe}`;
-    const upRes=await fetch(`${SB}/storage/v1/object/curso-archivos/${path}`,{
+    const subirArchivo=()=>fetch(`${SB}/storage/v1/object/curso-archivos/${path}`,{
       method:"POST",
       headers:{"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":blob.type||"application/octet-stream","x-upsert":"false"},
       body:blob
     });
+    let upRes=await subirArchivo();
+    if(!upRes.ok&&(upRes.status===401||upRes.status===403)&&await sbRefreshToken())upRes=await subirArchivo();
     if(!upRes.ok){const t=await upRes.text();throw new Error(t);}
     const sess=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
     await sb("curso_archivos",{method:"POST",body:JSON.stringify({curso_id:cursoId,tipo,nombre,storage_path:path,size_bytes:blob.size,subido_por:sess.id||null,generado_ia:generadoIA})});
@@ -16516,11 +16518,13 @@ async function apAnalizar(){
     const urls=await Promise.all(files.map(async(f,i)=>{
       const ext=f.name.split(".").pop()||"jpg";
       const fname=`prestamos_${ts}_${i}.${ext}`;
-      const upRes=await fetch(`${SB}/storage/v1/object/Facturas/${fname}`,{
+      const subir=()=>fetch(`${SB}/storage/v1/object/Facturas/${fname}`,{
         method:"POST",
         headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":f.type,"x-upsert":"true"},
         body:f
       });
+      let upRes=await subir();
+      if(!upRes.ok&&(upRes.status===401||upRes.status===403)&&await sbRefreshToken())upRes=await subir();
       if(!upRes.ok){const t=await upRes.text();throw new Error("Upload: "+t.slice(0,80));}
       return `${SB}/storage/v1/object/public/Facturas/${fname}`;
     }));
@@ -18591,11 +18595,13 @@ async function handlePFFile(input){
     const fname=`${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
     const sessPF=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
     const authTokenPF=sessPF.token||KEY;
-    const res=await fetch(`${SB}/storage/v1/object/Facturas/${fname}`,{
+    const subirPF=(tok)=>fetch(`${SB}/storage/v1/object/Facturas/${fname}`,{
       method:"POST",
-      headers:{"apikey":KEY,"Authorization":"Bearer "+authTokenPF,"Content-Type":file.type,"x-upsert":"true"},
+      headers:{"apikey":KEY,"Authorization":"Bearer "+tok,"Content-Type":file.type,"x-upsert":"true"},
       body:file
     });
+    let res=await subirPF(authTokenPF);
+    if(!res.ok&&(res.status===401||res.status===403)&&await sbRefreshToken())res=await subirPF(authToken);
     if(!res.ok){const t=await res.text();throw new Error(t);}
     pfArchivoUrl=`${SB}/storage/v1/object/public/Facturas/${fname}`;
     area.innerHTML=`<div style="font-size:28px;margin-bottom:6px">✅</div><div style="font-size:13px;color:#10B981;font-weight:600">${esc(file.name||"Archivo cargado")}</div><div style="font-size:11px;color:var(--tx3);margin-top:4px">Archivo listo · tocá para cambiar</div>`;
@@ -19118,11 +19124,16 @@ async function guardarMiFirma(){
     const blob=_miFirmaUploadedBlob||await new Promise(res=>canvas.toBlob(res,"image/png"));
     if(!blob||blob.size<50)throw new Error("Dibujá tu firma o subí una imagen antes de guardar");
     const path=`${_miInstructorRow.id}.png`;
-    const upRes=await fetch(`${SB}/storage/v1/object/firmas-instructores/${path}`,{
+    const subirFirma=()=>fetch(`${SB}/storage/v1/object/firmas-instructores/${path}`,{
       method:"POST",
       headers:{"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":blob.type||"image/png","x-upsert":"true"},
       body:blob
     });
+    let upRes=await subirFirma();
+    if(!upRes.ok&&(upRes.status===401||upRes.status===403)){
+      // El token puede haber vencido — esta llamada no pasa por sb(), así que forzamos un refresh manual y reintentamos una vez
+      if(await sbRefreshToken())upRes=await subirFirma();
+    }
     if(!upRes.ok){const t=await upRes.text();throw new Error(t);}
     const firmaUrl=`${SB}/storage/v1/object/public/firmas-instructores/${path}?t=${Date.now()}`;
     await sb(`instructores?id=eq.${_miInstructorRow.id}`,{method:"PATCH",body:JSON.stringify({firma_url:firmaUrl})});
@@ -19911,11 +19922,13 @@ async function vepSeleccionarArchivo(input){
     const fname=`vep_${Date.now()}.${ext}`;
     const {createClient}=window.supabase||{};
     // Upload directo a storage via REST
-    const uploadRes=await fetch(`${SB}/storage/v1/object/impuestos-vep/${fname}`,{
+    const subirVep=()=>fetch(`${SB}/storage/v1/object/impuestos-vep/${fname}`,{
       method:"POST",
       headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":file.type,"x-upsert":"true"},
       body:file
     });
+    let uploadRes=await subirVep();
+    if(!uploadRes.ok&&(uploadRes.status===401||uploadRes.status===403)&&await sbRefreshToken())uploadRes=await subirVep();
     if(!uploadRes.ok)throw new Error(await uploadRes.text());
     vepArchivoPath=fname;
     vepArchivoUrl=`${SB}/storage/v1/object/public/impuestos-vep/${fname}`;
@@ -21998,12 +22011,17 @@ async function handleCompFile(file){
     const SUPA_URL="https://jppxmdvddvbsvymogvcp.supabase.co";
     const KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwcHhtZHZkZHZic3Z5bW9ndmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMjcyODAsImV4cCI6MjA5MDgwMzI4MH0.KPAqCKfUteE3XK9QFqb_44Hm8jYQxfjVLkrlyGvaMhE";
     const sess=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
-    const authToken=sess.token||KEY;
-    const res=await fetch(`${SUPA_URL}/storage/v1/object/Facturas/${fname}`,{
+    const tokComp=sess.token||KEY;
+    const subirComp=(tok)=>fetch(`${SUPA_URL}/storage/v1/object/Facturas/${fname}`,{
       method:"POST",
-      headers:{"apikey":KEY,"Authorization":"Bearer "+authToken,"Content-Type":file.type,"x-upsert":"true"},
+      headers:{"apikey":KEY,"Authorization":"Bearer "+tok,"Content-Type":file.type,"x-upsert":"true"},
       body:file
     });
+    let res=await subirComp(tokComp);
+    if(!res.ok&&(res.status===401||res.status===403)&&await sbRefreshToken()){
+      const sess2=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
+      res=await subirComp(sess2.token||KEY);
+    }
     if(!res.ok){const t=await res.text();throw new Error(t);}
     compArchivoUrl=`${SUPA_URL}/storage/v1/object/public/Facturas/${fname}`;
     document.getElementById("comp-upload-content").innerHTML=`<div style="font-size:24px">✅</div><div style="font-size:12px;color:var(--gr);margin-top:4px">${file.name}</div><div style="font-size:10px;color:var(--tx3)">Tocá para reemplazar</div>`;
@@ -23751,11 +23769,13 @@ async function oportSubirArchivos(oportId){
   for(const a of nuevos){
     try{
       const path=`${oportId}/${Date.now()}_${a.nombre}`;
-      const resp=await fetch(`${window.SUPA_URL||'https://jppxmdvddvbsvymogvcp.supabase.co'}/storage/v1/object/oportunidades/${path}`,{
+      const subirOport=()=>fetch(`${window.SUPA_URL||'https://jppxmdvddvbsvymogvcp.supabase.co'}/storage/v1/object/oportunidades/${path}`,{
         method:"POST",
         headers:{"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":a.tipo||"application/octet-stream","x-upsert":"true"},
         body:a.file,
       });
+      let resp=await subirOport();
+      if(!resp.ok&&(resp.status===401||resp.status===403)&&await sbRefreshToken())resp=await subirOport();
       if(resp.ok){
         const url=`https://jppxmdvddvbsvymogvcp.supabase.co/storage/v1/object/oportunidades/${path}`;
         subidos.push({nombre:a.nombre,tipo:a.tipo,tamaño:a.tamaño,url});
