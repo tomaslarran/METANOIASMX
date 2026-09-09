@@ -876,6 +876,15 @@ CREATE POLICY "Autenticados pueden actualizar firmas" ON storage.objects
   USING (bucket_id = 'firmas-instructores');
 ```
 
+**⚠️ Bug de plataforma sin resolver (9 Sep 2026) — uploads directos del navegador a Storage rechazados por RLS pese a policy y JWT correctos:** con Derlin (instructor) el upload de la firma seguía dando `403/400 "new row violates row-level security policy"` incluso después de: confirmar por SQL (`pg_policies`) que las policies de `firmas-instructores` son correctas y sin restrictivas en conflicto, agregar el header `apikey`, y verificar el JWT del usuario decodificado (`role: "authenticated"`, `aud: "authenticated"`, no vencido). Es decir: policy bien, token bien, y aun así falla — algo en cómo el servicio de Storage de este proyecto resuelve el rol no está funcionando como debería. **No investigar más por ese lado sin soporte de Supabase.**
+
+**Workaround aplicado:** subir la firma vía Edge Function `subir-firma-instructor` (usa `service_role`, que no depende de esa RLS) en vez de `fetch()` directo del navegador a `/storage/v1/object/...`. Mismo patrón de JWT validation que el resto de las funciones.
+
+**Riesgo:** los demás uploads directos a Storage desde el frontend (`curso-archivos`, `Facturas`, `impuestos-vep`, `oportunidades`) usan el mismo mecanismo roto y podrían fallar igual en cualquier momento para cualquier usuario no-admin. Si aparece el mismo error en esos módulos, aplicar el mismo workaround (Edge Function + service_role) en vez de perder tiempo con las policies.
+
+**Deploy pendiente (Supabase Dashboard → Edge Functions):**
+- `subir-firma-instructor` (nueva)
+
 ---
 
 ## Notas técnicas críticas
