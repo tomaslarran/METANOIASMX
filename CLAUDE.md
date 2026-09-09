@@ -899,8 +899,7 @@ CREATE POLICY "Autenticados pueden actualizar firmas" ON storage.objects
 - ✅ Probado con Playwright contra el archivo real (bypaseando el login solo para inspección visual, sin credenciales): layout desktop de dos columnas, panel oculto por defecto en mobile, overlay fullscreen y su cierre — todo verificado antes de este commit
 - ✅ Backup de `index.html` y `agente-cursos/index.ts` previos al cambio en `backups/pre_rediseno_cursos_ia_20260909/` (también recuperable con `git checkout 094d5dd -- index.html supabase/functions/agente-cursos/index.ts`)
 
-**Deploy pendiente (Supabase Dashboard → Edge Functions):**
-- `agente-cursos` (nueva sección PROGRESO_JSON en el system prompt)
+**Deploy realizado (9 Sep 2026):** `agente-cursos` (nueva sección PROGRESO_JSON en el system prompt) — deployado en Supabase Dashboard.
 
 **Pendiente de decisión (no bloqueante):** si el panel de progreso resulta útil en la práctica, evaluar extraerlo de la ficha `ficha_diseno` en vez de un JSON paralelo, y unificar el render de burbujas (hoy sigue duplicado en 3 lugares: `sendCursoIA`, `cargarChatCurso`, mensaje de bienvenida) — no se tocó en este cambio para no ampliar el alcance.
 
@@ -935,7 +934,7 @@ CREATE POLICY "Autenticados pueden actualizar firmas" ON storage.objects
 - ✅ Si el curso no tiene instructor vinculado en `curso_instructores`, no aplica el gate (se puede emitir igual, no hay firma de terceros en juego)
 - ✅ **Backfill obligatorio en el SQL de abajo:** los cursos ya existentes se marcan como aprobados automáticamente para no bloquear diplomas de cursos ya cerrados/en curso — el gate rige desde ahora en adelante para certificados nuevos
 
-**SQL pendiente (correr en Supabase SQL editor):**
+**SQL corrido (9 Sep 2026):**
 ```sql
 ALTER TABLE cursos ADD COLUMN IF NOT EXISTS certificados_aprobados boolean DEFAULT false;
 ALTER TABLE cursos ADD COLUMN IF NOT EXISTS certificados_aprobados_por text;
