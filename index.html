@@ -5675,8 +5675,12 @@ function setModalTipo(tipo){
   document.getElementById("mbtn").textContent=esEv?"Crear evento":"Crear tarea";
 }
 
+function visEventos(aplicarBusqueda){
+  const efectiveUser=(loggedUser?.rol&&loggedUser.rol!=="admin")?loggedUser.id:curUser;
+  return tasks.filter(t=>esEvento(t)&&(!efectiveUser||(t.assignees||[]).includes(efectiveUser))&&(!aplicarBusqueda||!q||t.nombre.toLowerCase().includes(q.toLowerCase())));
+}
 function vis(){
-  if(curF==="eventos")return tasks.filter(t=>esEvento(t)&&(!q||t.nombre.toLowerCase().includes(q.toLowerCase())));
+  if(curF==="eventos")return visEventos(true);
   return tasks.filter(t=>{
     if(esEvento(t))return false; // eventos van aparte
     const ass=t.assignees||[];
@@ -5699,7 +5703,7 @@ function renderEventosSection(){
   const sec=document.getElementById("eventos-section");
   const lst=document.getElementById("eventos-list");
   if(!sec||!lst)return;
-  const evs=tasks.filter(t=>esEvento(t)&&(!q||t.nombre.toLowerCase().includes(q.toLowerCase()))).sort((a,b)=>(a.fecha_inicio||a.fecha_vencimiento||"").localeCompare(b.fecha_inicio||b.fecha_vencimiento||""));
+  const evs=visEventos(true).sort((a,b)=>(a.fecha_inicio||a.fecha_vencimiento||"").localeCompare(b.fecha_inicio||b.fecha_vencimiento||""));
   if(!evs.length){sec.style.display="none";return;}
   sec.style.display="";
   document.getElementById("eventos-count").textContent=evs.length;
@@ -5745,7 +5749,7 @@ function updCounts(){
   document.getElementById("fc-bl").textContent=b.filter(t=>t.status==="Bloqueado").length;
   document.getElementById("fc-hi").textContent=b.filter(t=>t.prioridad==="Alta").length;
   document.getElementById("fc-ve").textContent=b.filter(t=>days(t.fecha_vencimiento)!==null&&days(t.fecha_vencimiento)<0&&t.status!=="Listo").length;
-  const evCount=tasks.filter(t=>esEvento(t)).length;
+  const evCount=visEventos().length;
   document.getElementById("fc-ev").textContent=evCount;
   const btnEv=document.getElementById("fc-btn-eventos");
   if(btnEv)btnEv.style.display=evCount>0?"":"none";
@@ -18001,6 +18005,8 @@ function buildEventos(){
 
   const _addEventoSpan=(t)=>{
     if(!t.fecha_inicio)return;
+    const _efU=(loggedUser?.rol&&loggedUser.rol!=="admin")?loggedUser.id:null;
+    if(_efU&&!(t.assignees||[]).includes(_efU))return;
     const start=t.fecha_inicio.slice(0,10);
     const end=(t.fecha_vencimiento||t.fecha_inicio).slice(0,10);
     if(start===end){
@@ -18115,7 +18121,8 @@ function renderCalendario(){
   // ── Pre-calcular barras de eventos ──
   const EV_COLORS=["#00B5A3","#7C3AED","#3B82F6","#F59E0B","#EC4899","#10B981","#F97316"];
   const mostrarEventos=calFiltro==="todo"||calFiltro==="tareas"||calFiltro==="venc"||calFiltro==="eventos";
-  const evTasks=mostrarEventos?tasks.filter(t=>esEvento(t)&&t.fecha_inicio):[];
+  const _calEfUser=(loggedUser?.rol&&loggedUser.rol!=="admin")?loggedUser.id:null;
+  const evTasks=mostrarEventos?tasks.filter(t=>esEvento(t)&&t.fecha_inicio&&(!_calEfUser||(t.assignees||[]).includes(_calEfUser))):[];
   evTasks.sort((a,b)=>(a.fecha_inicio||"").localeCompare(b.fecha_inicio||""));
   const rowEnds={};
   evTasks.forEach((t,i)=>{
