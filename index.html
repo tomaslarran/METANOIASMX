@@ -7865,6 +7865,21 @@ function _sincronizarCostoPresup(cursoId,costos){
   if(hint)hint.textContent=total?`📋 Suma de ítems en Costos: $${Math.round(total).toLocaleString("es-AR")}`:hint.textContent;
 }
 
+// Si el texto de "Instructor" coincide con un instructor cargado, vincularlo automáticamente
+// en curso_instructores — así el instructor ve el curso sin necesitar el paso manual en la tab
+// "Instructores y materiales". Si no coincide con ninguno, se deja solo como texto libre.
+async function _autoLinkInstructorCurso(cursoId,nombreTexto){
+  if(!cursoId||!nombreTexto)return;
+  const nombreN=_normTxt(nombreTexto);
+  const inst=instructores.find(i=>_normTxt(`${i.nombre||""} ${i.apellido||""}`)===nombreN);
+  if(!inst)return;
+  try{
+    const existentes=await sb(`curso_instructores?curso_id=eq.${cursoId}&instructor_id=eq.${inst.id}&select=id`);
+    if(existentes.length)return;
+    await sb("curso_instructores",{method:"POST",body:JSON.stringify({curso_id:cursoId,instructor_id:inst.id,rol:"titular"})});
+  }catch(e){} // vínculo automático es un extra — si falla no bloquea el guardado del campo de texto
+}
+
 async function updateCursoField(id,field,val){
   try{
     const body={updated_at:new Date().toISOString()};
@@ -7878,6 +7893,7 @@ async function updateCursoField(id,field,val){
         createNotif(cfg.usuario_id,"curso_sin_resp",null,`⚠️ "${nombre}" quedó sin instructor asignado`);
       });
     }
+    if(field==="instructor_nombre"&&val)_autoLinkInstructorCurso(id,val);
     toast("Guardado","ok");
   }catch(e){toast("Error","err")}
 }
@@ -7941,6 +7957,7 @@ async function createCurso(){
   try{
     const [created]=await sb("cursos",{method:"POST",body:JSON.stringify(data)});
     cursos.unshift(created);
+    if(data.instructor_nombre)_autoLinkInstructorCurso(created.id,data.instructor_nombre);
     if(plantillaId){
       const plt=plantillas.find(p=>p.id===plantillaId);
       if(plt&&plt.pasos){
