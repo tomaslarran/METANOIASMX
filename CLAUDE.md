@@ -887,6 +887,35 @@ CREATE POLICY "Autenticados pueden actualizar firmas" ON storage.objects
 
 ---
 
+## Implementado (9 Sep 2026) — Diploma: firma en 2 líneas, Coordinador, carga horaria + permisos instructor + aprobación de certificados
+
+### Diploma
+- ✅ Nombre y cargo bajo cada firma separados en dos renglones (antes "NOMBRE – CARGO" en una sola línea)
+- ✅ "INSTRUCTOR" renombrado a "COORDINADOR"
+- ✅ Nueva línea "Carga horaria: X hs cátedra" en el espacio libre junto a "Fecha", usando `cursos.duracion_horas` (se omite si no está cargada)
+
+### Permisos — más tabs de curso visibles para el rol instructor
+- ✅ El rol `instructor` ahora también ve las tabs **Instructores y materiales**, **Inscriptos**, **Evaluar**, **Debriefing** y **NPS** del detalle de curso (antes solo veía Información y Archivos) — mismo mecanismo CSS que ya se usaba para desbloquear Archivos/Clases (`body.rol-instructor .cd-tab-adm[onclick*="cd-..."]`). Checklist, Presupuesto y Cotizaciones siguen ocultos (son de gestión interna/admin).
+- ⚠️ Sigue siendo un desbloqueo de frontend, no una policy RLS nueva — mismo caveat ya documentado para el filtro de "mis cursos" del rol instructor.
+
+### Aprobación de certificados por el instructor (nuevo)
+- ✅ Antes de emitir/enviar diplomas de un curso, si el curso tiene un instructor vinculado (`curso_instructores`) y todavía no aprobó, aparece un banner en la tab Inscriptos: **"⏳ Pendiente de aprobación de {instructor}"** con botón **"✅ Aprobar y firmar certificados"**, visible solo para ese instructor (matcheado por email, mismo criterio que el resto del panel) o un admin
+- ✅ Al aprobar, se graban `cursos.certificados_aprobados=true`, `certificados_aprobados_por`, `certificados_aprobados_en`, y recién ahí se habilitan los botones de Imprimir/Enviar/Enviar a todos (antes muestran "🔒 Pendiente")
+- ✅ Doble gate: además de ocultar los botones, `generarCertificado`/`enviarDiplomaEmail`/`enviarTodosLosDiplomas` verifican la aprobación del lado del cliente antes de ejecutar (`_certificadosAprobadosOk`) — sigue siendo un chequeo de frontend, no reemplaza una policy RLS
+- ✅ Si el curso no tiene instructor vinculado en `curso_instructores`, no aplica el gate (se puede emitir igual, no hay firma de terceros en juego)
+- ✅ **Backfill obligatorio en el SQL de abajo:** los cursos ya existentes se marcan como aprobados automáticamente para no bloquear diplomas de cursos ya cerrados/en curso — el gate rige desde ahora en adelante para certificados nuevos
+
+**SQL pendiente (correr en Supabase SQL editor):**
+```sql
+ALTER TABLE cursos ADD COLUMN IF NOT EXISTS certificados_aprobados boolean DEFAULT false;
+ALTER TABLE cursos ADD COLUMN IF NOT EXISTS certificados_aprobados_por text;
+ALTER TABLE cursos ADD COLUMN IF NOT EXISTS certificados_aprobados_en timestamptz;
+-- Backfill: no bloquear cursos que ya venían funcionando antes de este cambio
+UPDATE cursos SET certificados_aprobados = true WHERE certificados_aprobados IS NOT true;
+```
+
+---
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:
