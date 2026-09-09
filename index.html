@@ -19097,19 +19097,82 @@ function miFirmaClear(){
   if(canvas&&_miFirmaCtx)_miFirmaCtx.clearRect(0,0,canvas.width,canvas.height);
 }
 
-function miFirmaSubirArchivo(input){
+// Convierte una foto de firma en papel a PNG transparente: recorta el fondo por contraste
+// local (aprox. de un blur de radio grande vía downscale+upscale barato) y recolorea la
+// tinta detectada al mismo tono oscuro del resto del diploma, para que quede prolija y
+// consistente sin importar si el médico firmó con birome azul, negra, etc.
+function _procesarFirmaFoto(file){
+  return new Promise((resolve)=>{
+    const img=new Image();
+    img.onload=()=>{
+      try{
+        const maxW=900;
+        const scale=Math.min(1,maxW/img.width);
+        const W=Math.max(1,Math.round(img.width*scale)),H=Math.max(1,Math.round(img.height*scale));
+        const c=document.createElement("canvas");c.width=W;c.height=H;
+        const ctx=c.getContext("2d");
+        ctx.drawImage(img,0,0,W,H);
+        const src=ctx.getImageData(0,0,W,H);
+
+        // Fondo local aproximado: reducir mucho y volver a agrandar actúa como un blur grande y barato
+        const bw=Math.max(6,Math.round(W/50)),bh=Math.max(6,Math.round(H/50));
+        const bc=document.createElement("canvas");bc.width=bw;bc.height=bh;
+        bc.getContext("2d").drawImage(c,0,0,bw,bh);
+        const bg=document.createElement("canvas");bg.width=W;bg.height=H;
+        const bgctx=bg.getContext("2d");
+        bgctx.imageSmoothingEnabled=true;
+        bgctx.drawImage(bc,0,0,W,H);
+        const bgData=bgctx.getImageData(0,0,W,H);
+
+        const out=ctx.createImageData(W,H);
+        const INK=[52,48,90];
+        let minX=W,minY=H,maxX=-1,maxY=-1;
+        for(let i=0;i<src.data.length;i+=4){
+          const lum=0.299*src.data[i]+0.587*src.data[i+1]+0.114*src.data[i+2];
+          const bgLum=0.299*bgData.data[i]+0.587*bgData.data[i+1]+0.114*bgData.data[i+2];
+          const diff=bgLum-lum; // positivo = más oscuro que el papel a su alrededor (tinta)
+          const alpha=Math.max(0,Math.min(255,(diff-15)*6));
+          out.data[i]=INK[0];out.data[i+1]=INK[1];out.data[i+2]=INK[2];out.data[i+3]=alpha;
+          if(alpha>25){
+            const p=i/4,px=p%W,py=Math.floor(p/W);
+            if(px<minX)minX=px;if(px>maxX)maxX=px;
+            if(py<minY)minY=py;if(py>maxY)maxY=py;
+          }
+        }
+        ctx.putImageData(out,0,0);
+
+        if(maxX<minX||maxY<minY){c.toBlob(b=>resolve(b),"image/png");return;} // no se detectó tinta: devolver tal cual
+        const pad=12;
+        minX=Math.max(0,minX-pad);minY=Math.max(0,minY-pad);
+        maxX=Math.min(W-1,maxX+pad);maxY=Math.min(H-1,maxY+pad);
+        const cw=maxX-minX+1,ch=maxY-minY+1;
+        const fc=document.createElement("canvas");fc.width=cw;fc.height=ch;
+        fc.getContext("2d").drawImage(c,minX,minY,cw,ch,0,0,cw,ch);
+        fc.toBlob(b=>resolve(b),"image/png");
+      }catch(e){resolve(null);}
+    };
+    img.onerror=()=>resolve(null);
+    img.src=URL.createObjectURL(file);
+  });
+}
+
+async function miFirmaSubirArchivo(input){
   const file=input.files?.[0];
   if(!file)return;
-  _miFirmaUploadedBlob=file;
   const canvas=document.getElementById("mifirma-canvas");
-  const img=new Image();
-  img.onload=()=>{
-    _miFirmaCtx.clearRect(0,0,canvas.width,canvas.height);
-    const ratio=Math.min(canvas.width/img.width,canvas.height/img.height);
-    const w=img.width*ratio,h=img.height*ratio;
-    _miFirmaCtx.drawImage(img,(canvas.width-w)/2,(canvas.height-h)/2,w,h);
+  const dibujar=blob=>{
+    const img=new Image();
+    img.onload=()=>{
+      _miFirmaCtx.clearRect(0,0,canvas.width,canvas.height);
+      const ratio=Math.min(canvas.width/img.width,canvas.height/img.height);
+      const w=img.width*ratio,h=img.height*ratio;
+      _miFirmaCtx.drawImage(img,(canvas.width-w)/2,(canvas.height-h)/2,w,h);
+    };
+    img.src=URL.createObjectURL(blob);
   };
-  img.src=URL.createObjectURL(file);
+  const procesado=await _procesarFirmaFoto(file);
+  _miFirmaUploadedBlob=procesado||file; // si el procesamiento falla, subimos la foto tal cual antes que nada
+  dibujar(_miFirmaUploadedBlob);
   input.value="";
 }
 
