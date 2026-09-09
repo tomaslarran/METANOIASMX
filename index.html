@@ -8209,7 +8209,7 @@ async function _guardarArchivoEnCurso(cursoId,blob,nombre,tipo,generadoIA=false,
     const path=`${cursoId}/${tipo}/${Date.now()}_${safe}`;
     const subirArchivo=()=>fetch(`${SB}/storage/v1/object/curso-archivos/${path}`,{
       method:"POST",
-      headers:{"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":blob.type||"application/octet-stream","x-upsert":"false"},
+      headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":blob.type||"application/octet-stream","x-upsert":"false"},
       body:blob
     });
     let upRes=await subirArchivo();
@@ -19126,7 +19126,7 @@ async function guardarMiFirma(){
     const path=`${_miInstructorRow.id}.png`;
     const subirFirma=()=>fetch(`${SB}/storage/v1/object/firmas-instructores/${path}`,{
       method:"POST",
-      headers:{"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":blob.type||"image/png","x-upsert":"true"},
+      headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":blob.type||"image/png","x-upsert":"true"},
       body:blob
     });
     let upRes=await subirFirma();
@@ -23771,7 +23771,7 @@ async function oportSubirArchivos(oportId){
       const path=`${oportId}/${Date.now()}_${a.nombre}`;
       const subirOport=()=>fetch(`${window.SUPA_URL||'https://jppxmdvddvbsvymogvcp.supabase.co'}/storage/v1/object/oportunidades/${path}`,{
         method:"POST",
-        headers:{"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":a.tipo||"application/octet-stream","x-upsert":"true"},
+        headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":a.tipo||"application/octet-stream","x-upsert":"true"},
         body:a.file,
       });
       let resp=await subirOport();
