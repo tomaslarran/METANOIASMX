@@ -887,6 +887,36 @@ CREATE POLICY "Autenticados pueden actualizar firmas" ON storage.objects
 
 ---
 
+## Implementado (9 Sep 2026) — Agente de cursos: panel de progreso del proyecto
+
+**Motivación:** el chat de "Crear curso con IA" ya genera el contenido y arma el curso completo (no es un simple auxiliar), pero al vivir como un chat genérico sin indicador de avance, el equipo no lo estaba tomando en serio como herramienta de trabajo. Se rediseñó el modal para que se sienta como el espacio donde se arma el proyecto del curso, no una conversación descartable.
+
+- ✅ Modal renombrado "✨ Crear curso con IA" → **"🎓 Proyecto de curso — Asistente IA"**, ensanchado a `max-width:920px` con layout de dos columnas: chat a la izquierda, panel **"📋 Proyecto del curso"** fijo a la derecha
+- ✅ Panel de progreso muestra en vivo los 10 bloques (A→J) de la Plantilla de Diseño Guiado ya existente en `agente-cursos` (necesidad educativa, destinatarios, objetivos, nivel/modalidad, recursos, estructura, evaluación, consideraciones especiales, ética/datos, ruta PEV) — cada uno con ⚪ pendiente / 🟡 en curso / ✅ completo + resumen de una línea con el dato confirmado
+- ✅ Edge function `agente-cursos`: nueva sección "7. PROGRESO DEL PROYECTO" en el system prompt — durante el modo INTAKE GUIADO, el agente emite `<PROGRESO_JSON>` en cada respuesta (acumulativo) con el estado de los bloques tocados hasta el momento
+- ✅ Frontend parsea `<PROGRESO_JSON>` igual que `<ESCENARIO_JSON>`/`<DOCUMENTO_JSON>`; el progreso queda guardado por mensaje en `agente_cursos_chats.historial` y se reconstruye al retomar un chat guardado (`cargarChatCurso`)
+- ✅ Botón "📋 Progreso" en el header para mostrar/ocultar el panel; en mobile el panel pasa a overlay a pantalla completa con su propio botón de cierre (sin depender del ancho de ventana para volver al chat)
+- ✅ Probado con Playwright contra el archivo real (bypaseando el login solo para inspección visual, sin credenciales): layout desktop de dos columnas, panel oculto por defecto en mobile, overlay fullscreen y su cierre — todo verificado antes de este commit
+- ✅ Backup de `index.html` y `agente-cursos/index.ts` previos al cambio en `backups/pre_rediseno_cursos_ia_20260909/` (también recuperable con `git checkout 094d5dd -- index.html supabase/functions/agente-cursos/index.ts`)
+
+**Deploy pendiente (Supabase Dashboard → Edge Functions):**
+- `agente-cursos` (nueva sección PROGRESO_JSON en el system prompt)
+
+**Pendiente de decisión (no bloqueante):** si el panel de progreso resulta útil en la práctica, evaluar extraerlo de la ficha `ficha_diseno` en vez de un JSON paralelo, y unificar el render de burbujas (hoy sigue duplicado en 3 lugares: `sendCursoIA`, `cargarChatCurso`, mensaje de bienvenida) — no se tocó en este cambio para no ampliar el alcance.
+
+---
+
+## Implementado (9 Sep 2026) — Fix: no se podía cambiar el nombre de un curso ya creado
+
+**Motivación:** el modal de curso (`modal-curso`) solo tenía flujo de creación (`createCurso()`) — no existía ningún `editCurso()` ni forma de hacer PATCH del campo `nombre` una vez creado el curso. Detectado al pedir cambiar el nombre de un curso ya cargado (REPA).
+
+- ✅ Ícono ✎ al lado del título en el detalle de curso (`.cd-title`, `selectCurso()`) — click activa edición inline
+- ✅ `renombrarCurso(id)` reemplaza el título por un input pre-cargado con el nombre actual (autoseleccionado) + botones "✓ Guardar" / "Cancelar"; Enter guarda, Escape cancela
+- ✅ `guardarNombreCurso(id)` hace `PATCH cursos?id=eq.${id}` con el nombre nuevo, actualiza el array `cursos` en memoria y refresca el detalle + la grilla
+- ✅ Probado con Playwright contra el archivo real (sin login): el input aparece con el texto completo seleccionado y los botones funcionan
+
+---
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:
