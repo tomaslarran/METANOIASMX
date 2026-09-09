@@ -19186,20 +19186,23 @@ async function guardarMiFirma(){
   try{
     const blob=_miFirmaUploadedBlob||await new Promise(res=>canvas.toBlob(res,"image/png"));
     if(!blob||blob.size<50)throw new Error("Dibujá tu firma o subí una imagen antes de guardar");
-    const path=`${_miInstructorRow.id}.png`;
-    const subirFirma=()=>fetch(`${SB}/storage/v1/object/firmas-instructores/${path}`,{
-      method:"POST",
-      headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":blob.type||"image/png","x-upsert":"true"},
-      body:blob
+    // Sube vía Edge Function con service_role — el upload directo a Storage RLS falla de forma
+    // intermitente en este proyecto (rol authenticated no resuelve bien la policy pese a estar
+    // correctamente configurada); el service_role del lado del servidor la esquiva del todo.
+    const content_base64=await new Promise((res,rej)=>{
+      const rd=new FileReader();
+      rd.onload=()=>res(String(rd.result).split(",")[1]);
+      rd.onerror=()=>rej(new Error("No se pudo leer la firma"));
+      rd.readAsDataURL(blob);
     });
-    let upRes=await subirFirma();
-    if(!upRes.ok&&(upRes.status===401||upRes.status===403)){
-      // El token puede haber vencido — esta llamada no pasa por sb(), así que forzamos un refresh manual y reintentamos una vez
-      if(await sbRefreshToken())upRes=await subirFirma();
-    }
-    if(!upRes.ok){const t=await upRes.text();throw new Error(t);}
-    const firmaUrl=`${SB}/storage/v1/object/public/firmas-instructores/${path}?t=${Date.now()}`;
-    await sb(`instructores?id=eq.${_miInstructorRow.id}`,{method:"PATCH",body:JSON.stringify({firma_url:firmaUrl})});
+    const upRes=await fetch(`${SB}/functions/v1/subir-firma-instructor`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
+      body:JSON.stringify({content_base64,content_type:blob.type||"image/png"})
+    });
+    const upData=await upRes.json();
+    if(upData.error)throw new Error(upData.error);
+    const firmaUrl=upData.firma_url;
     const idx=instructores.findIndex(i=>i.id===_miInstructorRow.id);
     if(idx>=0)instructores[idx].firma_url=firmaUrl;
     closeModal("modal-perfil");
