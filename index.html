@@ -7239,7 +7239,7 @@ async function generarCertificado(inscId,cursoId){
     const base64=await diplomaCanvasBase64({
       nombre:nombreAlumno,dni:a.dni||"",matricula:a.matricula||"",
       curso:(curso.nombre||"").toUpperCase(),instructores:instructorNombre,fecha,
-      firmaInstructorUrl:instructorFirmaUrl,instructorGenero,
+      firmaInstructorUrl:instructorFirmaUrl,instructorGenero,duracionHoras:curso.duracion_horas,
       numero:inscId.slice(-8).toUpperCase()
     });
 
@@ -7358,10 +7358,19 @@ async function diplomaCanvasBase64(datos){
       ctx.font=`${s(fechaFont)}px Arial,sans-serif`;
       ctx.fillText(datos.fecha,s(2740),s(1845)); // a la derecha de "Fecha"
 
-      // Nombre bajo la línea de firma derecha (x centro≈2230 — corrido a la izquierda para no chocar con "Fecha", línea en y≈2205)
+      // Carga horaria — espacio libre a la izquierda del bloque "Fecha / Salta, Argentina"
+      if(datos.duracionHoras){
+        ctx.textAlign="left";
+        ctx.font=`${s(60)}px Arial,sans-serif`;
+        ctx.fillText(`Carga horaria: ${datos.duracionHoras} hs cátedra`,s(760),s(1845));
+      }
+
+      // Nombre y cargo separados en dos líneas, bajo cada línea de firma
       ctx.textAlign="center";
-      ctx.font=`${s(38)}px Arial,sans-serif`;
-      ctx.fillText("MARIO LARRÁN – CEO METANOIA",s(2230),s(2270));
+      ctx.font=`bold ${s(40)}px Arial,sans-serif`;
+      ctx.fillText("MARIO LARRÁN",s(2230),s(2270));
+      ctx.font=`${s(28)}px Arial,sans-serif`;
+      ctx.fillText("CEO METANOIA",s(2230),s(2312));
 
       if(datos.numero){
         ctx.textAlign="right";
@@ -7370,12 +7379,14 @@ async function diplomaCanvasBase64(datos){
         ctx.fillText("N° "+datos.numero,s(3440),s(2445));
       }
 
-      // Nombre del instructor bajo la línea de firma izquierda (x centro≈1067, línea en y≈2210)
+      // Nombre y cargo del instructor, separados en dos líneas, bajo la línea de firma izquierda
       if(datos.instructores){
         ctx.fillStyle="rgb(52,48,90)"; // el bloque "N°" de arriba cambia el color, hay que restaurarlo
         ctx.textAlign="center";
-        ctx.font=`${s(38)}px Arial,sans-serif`;
-        ctx.fillText(`${tituloInst.toUpperCase()}${datos.instructores.toUpperCase()} – INSTRUCTOR`,s(1067),s(2270));
+        ctx.font=`bold ${s(40)}px Arial,sans-serif`;
+        ctx.fillText(`${tituloInst.toUpperCase()}${datos.instructores.toUpperCase()}`,s(1067),s(2270));
+        ctx.font=`${s(28)}px Arial,sans-serif`;
+        ctx.fillText("COORDINADOR",s(1067),s(2312));
       }
 
       // Carga opcional de una imagen y la dibuja apoyada sobre una línea de firma (si falla o no hay imagen, no rompe el diploma)
@@ -7414,7 +7425,7 @@ async function enviarDiplomaEmail(inscId,cursoId,btnEl){
     const fecha=fechaCertificadoCurso(curso);
     const nombre=`${a.nombre||""} ${a.apellido||""}`.trim();
     toast("Generando diploma...","inf");
-    const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha,firmaInstructorUrl:instructorFirmaUrl,instructorGenero,numero:inscId.slice(-8).toUpperCase()});
+    const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha,firmaInstructorUrl:instructorFirmaUrl,instructorGenero,duracionHoras:curso.duracion_horas,numero:inscId.slice(-8).toUpperCase()});
     toast("Enviando email...","inf");
     const res=await fetch(`${SB}/functions/v1/enviar-diplomas`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},body:JSON.stringify({email:a.email,nombre,curso:curso.nombre||"",instructores:instructor,fecha,diploma_base64:base64})});
     const data=await res.json();
@@ -7446,7 +7457,7 @@ async function enviarTodosLosDiplomas(cursoId){
         const a=i.alumnos;
         const nombre=`${a.nombre||""} ${a.apellido||""}`.trim();
         if(btn)btn.textContent=`Enviando ${enviados+1}/${conEmail.length}...`;
-        const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha,firmaInstructorUrl:instructorFirmaUrl,instructorGenero,numero:i.id.slice(-8).toUpperCase()});
+        const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha,firmaInstructorUrl:instructorFirmaUrl,instructorGenero,duracionHoras:curso.duracion_horas,numero:i.id.slice(-8).toUpperCase()});
         const res=await fetch(`${SB}/functions/v1/enviar-diplomas`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},body:JSON.stringify({email:a.email,nombre,curso:curso.nombre,instructores:instructor,fecha,diploma_base64:base64})});
         const data=await res.json();
         if(!data.error){
