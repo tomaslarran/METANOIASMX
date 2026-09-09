@@ -6052,10 +6052,17 @@ async function loadMisCursosInstructor(){
     _misCursoIdsInstructor=new Set(rows.map(r=>r.curso_id));
   }catch(e){_misCursoIdsInstructor=new Set();}
 }
+// Normaliza para comparar nombres sin que tildes/mayúsculas rompan el match (ej: "Juárez" vs "Juarez")
+function _normTxt(s){return(s||"").toString().normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();}
 // Cursos donde el instructor logueado está asignado (curso_instructores) o coincide como instructor_nombre (dato legado)
 function _filtrarCursosInstructor(list){
-  const miNombre=(loggedUser?.nombre||"").trim().toLowerCase();
-  return list.filter(c=>(_misCursoIdsInstructor&&_misCursoIdsInstructor.has(c.id))||(miNombre&&(c.instructor_nombre||"").toLowerCase().includes(miNombre)));
+  const miPalabras=_normTxt(loggedUser?.nombre).split(/\s+/).filter(w=>w.length>2);
+  return list.filter(c=>{
+    if(_misCursoIdsInstructor&&_misCursoIdsInstructor.has(c.id))return true;
+    if(!miPalabras.length)return false;
+    const instN=_normTxt(c.instructor_nombre);
+    return miPalabras.every(w=>instN.includes(w));
+  });
 }
 function renderCursos(){
   const c=document.getElementById("curso-grid-container");
