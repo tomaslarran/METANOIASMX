@@ -100,6 +100,7 @@ Panel web interno para **Metanoia SMX**, empresa de capacitación médica en sim
 | `leer-factura` | Lee facturas con visión de Claude |
 | `whatsapp-agente` | Carga de facturas por WhatsApp via Twilio (flujo conversacional multi-paso) |
 | `enviar-diplomas` | Envío automático de diplomas por email (SMTP) al finalizar curso |
+| `agente-promociones` | Busca promociones de medios de pago (Viumi, Payway, Banco Macro, Mercado Pago, ICBC) con Tavily + Claude, semanal via pg_cron, requiere aprobación manual antes de contar como vigente |
 
 **Secrets de Supabase:**
 - `ANTHROPIC_API_KEY` — Claude API
@@ -110,7 +111,8 @@ Panel web interno para **Metanoia SMX**, empresa de capacitación médica en sim
 - `META_WA_TOKEN` — WhatsApp Business API token
 - `WA_PHONE_NUMBER_ID` — ID del número de WhatsApp Business
 - `WA_AMPARO`, `WA_VALENTINA`, `WA_DANI`, `WA_FLOR` — números WA del equipo para escalación
-- `TAVILY_API_KEY` — búsqueda web para agente comunicaciones
+- `TAVILY_API_KEY` — búsqueda web para agente comunicaciones (reutilizado también por `agente-promociones`)
+- `CRON_SECRET` — autentica llamadas programadas (pg_cron) a edge functions sin sesión de usuario (`check-alertas-pagos`, `agente-promociones`)
 - `LINKEDIN_ACCESS_TOKEN` — LinkedIn OAuth token (app "Panel Metanoia", vence cada 2 meses)
 - `GROQ_API_KEY` — transcripción de audio (Whisper) en agente-mensajes
 - `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` — integración WhatsApp via Twilio (whatsapp-agente)
@@ -148,6 +150,7 @@ Panel web interno para **Metanoia SMX**, empresa de capacitación médica en sim
 - `inflacion_mensual` — inflación mensual
 - `banco_movimientos` — movimientos del Banco Macro para conciliación (sociedad, fecha, concepto, importe, saldo, conciliado, match_*)
 - `caja_movimientos` — movimientos diarios de caja (sociedad, fecha, tipo, concepto, categoria, monto, observaciones)
+- `promociones_pago` — promociones de medios de pago (fuente, título, descuento/cuotas, vigencia, estado pendiente/aprobada/rechazada)
 - `comprobantes_compra` — facturas de proveedores (cargado_por, proveedor, total, fecha, sociedad, estado)
 - `cuenta_corriente` — cuentas corrientes de proveedores
 
@@ -942,6 +945,71 @@ ALTER TABLE cursos ADD COLUMN IF NOT EXISTS certificados_aprobados_en timestampt
 -- Backfill: no bloquear cursos que ya venían funcionando antes de este cambio
 UPDATE cursos SET certificados_aprobados = true WHERE certificados_aprobados IS NOT true;
 ```
+
+---
+
+## Implementado (9 Sep 2026) — Agente de promociones de medios de pago
+
+**Motivación:** pedido de Tomás para tener un radar semanal de promociones de tarjetas/bancos (cuotas sin interés, descuentos) para ofrecer a los clientes al cobrar cursos.
+
+**Diseño acordado:** búsqueda web automática (Tavily) + revisión manual antes de que la promo cuente como vigente (mismo patrón que `agente_mejoras` en Comunicaciones) — no se publica nada sin que un admin la apruebe. Frecuencia: semanal.
+
+- ✅ Edge Function `agente-promociones` — busca con Tavily promociones de **Viumi, Payway, Banco Macro, Mercado Pago e ICBC**, le pasa los resultados a Claude Haiku para estructurarlos, borra los pendientes previos (evita acumulación de duplicados semana a semana) y carga los hallazgos nuevos como `estado='pendiente'`
+- ✅ Acepta autenticación por JWT de usuario (disparo manual) O por header `x-cron-secret` (disparo programado) — mismo patrón que `check-alertas-pagos`
+- ✅ Tabla `promociones_pago` — fuente, título, descripción, % descuento, cuotas sin interés, vigencia, url, estado (pendiente/aprobada/rechazada)
+- ✅ Nuevo tab **"🎁 Promociones"** en Cash Flow — sección "⏳ Pendientes de revisión" con botones Aprobar/Rechazar, sección "✅ Vigentes" con las aprobadas, botón "🔄 Buscar ahora" para disparo manual sin esperar al cron
+- ✅ Probado con Playwright contra el archivo real (datos simulados, sin backend): layout de dos secciones, botones funcionando
+
+**⚠️ Hallazgo importante durante la implementación:** `check-alertas-pagos` (función existente) tiene el soporte de `CRON_SECRET` en el código pero **nunca tuvo un disparador automático real** — ni pg_cron, ni GitHub Action, ni tarea programada. Hoy solo se ejecuta si alguien aprieta el botón manual del panel. Para que "semanal" sea real acá, se agrega `pg_cron` + `pg_net` (ver SQL abajo) — es la primera vez que este proyecto tiene un cron real corriendo del lado de Supabase.
+
+**Secrets nuevos a agregar en Supabase → Edge Functions → Secrets:**
+- `CRON_SECRET` = `8c41426e297656f051a3a69cf07fbab32ff734694890b1fd8533631399940187`
+  (ya existe `TAVILY_API_KEY` de agente-comunicaciones, se reutiliza — no hace falta agregarlo de nuevo)
+
+**SQL pendiente (correr en Supabase SQL editor):**
+```sql
+-- Tabla de promociones
+CREATE TABLE IF NOT EXISTS promociones_pago (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  fuente text NOT NULL,
+  titulo text NOT NULL,
+  descripcion text,
+  descuento_pct numeric,
+  cuotas_sin_interes int,
+  vigencia_desde date,
+  vigencia_hasta date,
+  url_fuente text,
+  estado text DEFAULT 'pendiente' CHECK (estado IN ('pendiente','aprobada','rechazada')),
+  revisado_por text,
+  revisado_en timestamptz,
+  raw jsonb,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE promociones_pago ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Solo autenticados" ON promociones_pago FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- Cron semanal (lunes 09:00 hora Salta = 12:00 UTC)
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+
+SELECT cron.schedule(
+  'agente-promociones-semanal',
+  '0 12 * * 1',
+  $$
+  SELECT net.http_post(
+    url := 'https://jppxmdvddvbsvymogvcp.supabase.co/functions/v1/agente-promociones',
+    headers := jsonb_build_object('Content-Type','application/json','x-cron-secret','8c41426e297656f051a3a69cf07fbab32ff734694890b1fd8533631399940187'),
+    body := '{}'::jsonb
+  );
+  $$
+);
+```
+Si `CREATE EXTENSION pg_cron` / `pg_net` da error de permisos, activarlas primero desde Supabase Dashboard → Database → Extensions, y después correr el resto.
+
+**Deploy pendiente (Supabase Dashboard → Edge Functions):**
+- `agente-promociones` (nueva)
+
+**Pendiente de decisión (no bloqueante):** si Viumi/Payway/ICBC no tienen suficiente presencia web indexada, la búsqueda puede volver vacía seguido para esas fuentes — si pasa varias semanas, evaluar si conviene cargar esas promos a mano en vez de por búsqueda.
 
 ---
 
