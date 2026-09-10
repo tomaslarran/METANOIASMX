@@ -6826,8 +6826,12 @@ async function enviarNPSWhatsApp(cursoId){
     const data=await res.json();
     if(!res.ok)throw new Error(data.error||'Error');
     const msg=`Enviados: ${data.sent} · Fallidos: ${data.failed} · Sin teléfono: ${data.sin_telefono}`;
-    toast(msg,'ok');
-    if(data.errors?.length)console.warn('NPS WA errors:',data.errors);
+    if(data.errors?.length){
+      console.warn('NPS WA errors:',data.errors);
+      toast(msg+' — '+data.errors[0],'err');
+    }else{
+      toast(msg,'ok');
+    }
     loadNPS(cursoId);
   }catch(e){toast('Error: '+e.message,'err');}
   finally{btn.disabled=false;btn.textContent='📤 Enviar encuesta WA';}
