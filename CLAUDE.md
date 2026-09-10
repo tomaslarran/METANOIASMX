@@ -962,11 +962,11 @@ UPDATE cursos SET certificados_aprobados = true WHERE certificados_aprobados IS 
 
 **⚠️ Hallazgo importante durante la implementación:** `check-alertas-pagos` (función existente) tiene el soporte de `CRON_SECRET` en el código pero **nunca tuvo un disparador automático real** — ni pg_cron, ni GitHub Action, ni tarea programada. Hoy solo se ejecuta si alguien aprieta el botón manual del panel. Para que "semanal" sea real acá, se agrega `pg_cron` + `pg_net` (ver SQL abajo) — es la primera vez que este proyecto tiene un cron real corriendo del lado de Supabase.
 
-**Secrets nuevos a agregar en Supabase → Edge Functions → Secrets:**
+**Secret agregado en Supabase → Edge Functions → Secrets:**
 - `CRON_SECRET` = `8c41426e297656f051a3a69cf07fbab32ff734694890b1fd8533631399940187`
-  (ya existe `TAVILY_API_KEY` de agente-comunicaciones, se reutiliza — no hace falta agregarlo de nuevo)
+  (ya existe `TAVILY_API_KEY` de agente-comunicaciones, se reutiliza)
 
-**SQL pendiente (correr en Supabase SQL editor):**
+**SQL corrido (9 Sep 2026)** — tabla creada, extensiones `pg_cron`/`pg_net` activadas, job `agente-promociones-semanal` registrado (id 5, corre lunes 09:00 hora Salta):
 ```sql
 -- Tabla de promociones
 CREATE TABLE IF NOT EXISTS promociones_pago (
@@ -1004,10 +1004,7 @@ SELECT cron.schedule(
   $$
 );
 ```
-Si `CREATE EXTENSION pg_cron` / `pg_net` da error de permisos, activarlas primero desde Supabase Dashboard → Database → Extensions, y después correr el resto.
-
-**Deploy pendiente (Supabase Dashboard → Edge Functions):**
-- `agente-promociones` (nueva)
+**Deploy realizado (9 Sep 2026):** `agente-promociones` deployado en Supabase Dashboard. Los 3 pasos (SQL + cron, secret, deploy) están completos — el flujo automático semanal ya está activo. Pendiente: probar "🔄 Buscar ahora" en el panel para validar el circuito end-to-end antes de esperar al primer disparo del cron.
 
 **Pendiente de decisión (no bloqueante):** si Viumi/Payway/ICBC no tienen suficiente presencia web indexada, la búsqueda puede volver vacía seguido para esas fuentes — si pasa varias semanas, evaluar si conviene cargar esas promos a mano en vez de por búsqueda.
 
