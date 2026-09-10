@@ -329,12 +329,6 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 - Libro IVA digital en formato legal
 - Validación con contador externo (al menos un cierre mensual completo con el sistema nuevo)
 
-### Cursos — simuladores/materiales desde el agente IA (surgido en congreso, 10 Sep 2026)
-- [ ] Cuando se crea un curso con el agente IA (`agente-cursos`), el agente sí identifica/nombra qué simulador hace falta en la charla, pero eso no baja como ítem real a la tab "Instructores y materiales" — hoy queda solo mencionado en el texto de la conversación, no se auto-carga en `curso_materiales`/inventario. Habría que:
-  - Que el agente extraiga el/los simulador(es) necesarios de forma estructurada (similar a como ya arma `<ESCENARIO_JSON>` para escenarios clínicos) y el panel los auto-agregue en Instructores y materiales al crear el curso.
-  - Cruzar contra el calendario/inventario para mostrar disponibilidad real del simulador en las fechas del curso (si ya está reservado por otro curso en simultáneo), estado/condición del equipo, y qué haría falta (mantenimiento, insumos) — no solo si existe.
-  - No es urgente implementarlo ahora — anotado para ir sumando de a poco.
-
 ### Convertir el panel en producto SaaS vendible (visión, surgida en congreso, 10 Sep 2026)
 - [ ] Empezar a preparar el panel para venderlo como plataforma a terceros (otras instituciones/centros de simulación) — suscripciones, gestión de usuarios por organización. Ya existe una base de multi-tenancy arrancada (`organizaciones`, `organizacion_id` en `usuarios` y `agente_cursos_chats`, ver sección "Implementado 3 Sep 2026 — Multi-tenancy foundation") pero falta:
   - Definir el modelo comercial (planes, precios, qué incluye cada uno)
@@ -1022,6 +1016,26 @@ SELECT cron.schedule(
 **Deploy realizado (9 Sep 2026):** `agente-promociones` deployado en Supabase Dashboard. Los 3 pasos (SQL + cron, secret, deploy) están completos — el flujo automático semanal ya está activo. Pendiente: probar "🔄 Buscar ahora" en el panel para validar el circuito end-to-end antes de esperar al primer disparo del cron.
 
 **Pendiente de decisión (no bloqueante):** si Viumi/Payway/ICBC no tienen suficiente presencia web indexada, la búsqueda puede volver vacía seguido para esas fuentes — si pasa varias semanas, evaluar si conviene cargar esas promos a mano en vez de por búsqueda.
+
+---
+
+## Implementado (10 Sep 2026) — Simuladores/materiales: auto-detección desde el agente IA + disponibilidad en calendario
+
+**Motivación:** surgido en congreso — el agente de cursos ya menciona qué simulador hace falta durante la charla de diseño, pero eso quedaba solo como texto de conversación; nunca bajaba como ítem real a la tab "Instructores y materiales", y no había forma de ver si ese simulador ya estaba comprometido por otro curso en fechas superpuestas.
+
+### Auto-detección al crear curso con IA
+- ✅ El prompt de extracción de `crearCursoDesdeIA()` ahora también pide `materiales_necesarios: []` — simuladores/maniquíes/equipos mencionados en la charla
+- ✅ Cada nombre se matchea contra `inventario` (comparación normalizada sin tildes/mayúsculas, mismo criterio que el match de instructor por nombre — `_normTxt`)
+- ✅ Si matchea: se guarda en `_cursoIAMaterialesDetectados` y al confirmar el curso (`createCurso()`) se inserta solo en `curso_materiales` (cantidad estimada 1, editable después a mano)
+- ✅ Si NO matchea contra ningún ítem del Inventario: aviso `🔧 Mencionaron "X" pero no está en el Inventario` — no bloquea la creación, solo informa
+- ✅ Si matchea pero esas fechas ya están reservadas por otro curso: aviso `⚠️ "X" ya está reservado en "Y" en fechas superpuestas` **antes** de crear el curso
+
+### Disponibilidad persistente en "Instructores y materiales"
+- ✅ `loadInstMat()` ahora cruza cada material ya asignado al curso contra `curso_materiales` de TODOS los demás cursos (mismo `item_id`) y compara fechas — si hay superposición (y el otro curso no está Cancelado), muestra debajo del ítem: `⚠️ También reservado en "Curso Y" (dd/mm → dd/mm)`. Aplica a cualquier curso, no solo a los creados por IA
+- ✅ Se muestra también el campo `inventario.observaciones` (si tiene algo cargado) como nota de condición/mantenimiento del equipo debajo del ítem — reutiliza el campo existente en vez de agregar uno nuevo
+- ⚠️ No hay campo dedicado de "condición del equipo" en `inventario` — por ahora se resuelve con `observaciones` (texto libre). Si hace falta algo más estructurado (ej. estado operativo/en mantenimiento con opciones fijas), es un paso siguiente, no incluido acá.
+
+**Sin SQL pendiente** — usa columnas y tablas que ya existían (`inventario.observaciones`, `curso_materiales`).
 
 ---
 

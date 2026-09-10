@@ -6416,14 +6416,31 @@ async function loadInstMat(cursoId){
   if(!el)return;
   el.innerHTML=`<div style="padding:16px;text-align:center;color:var(--tx3);font-size:13px">Cargando...</div>`;
   try{
+    const curso=cursos.find(c=>c.id===cursoId)||{};
     const [asignados,materiales,todosInst,todosItems]=await Promise.all([
       sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(id,nombre,apellido,especialidad)`),
-      sb(`curso_materiales?curso_id=eq.${cursoId}&select=*,inventario(id,nombre,stock_actual,stock_disponible)`),
+      sb(`curso_materiales?curso_id=eq.${cursoId}&select=*,inventario(id,nombre,stock_actual,stock_disponible,observaciones)`),
       sb(`instructores?select=id,nombre,apellido&activo=eq.true&order=apellido`),
       sb(`inventario?select=id,nombre,stock_actual,stock_disponible&order=nombre`)
     ]);
     const instDisp=todosInst.filter(i=>!asignados.some(a=>a.instructor_id===i.id));
     const itemsDisp=todosItems.filter(i=>!materiales.some(m=>m.item_id===i.id));
+
+    // Disponibilidad: ¿alguno de estos materiales está reservado por OTRO curso en fechas superpuestas?
+    let conflictosPorItem={};
+    if(materiales.length&&curso.fecha_inicio){
+      try{
+        const itemIds=[...new Set(materiales.map(m=>m.item_id))];
+        const otros=await sb(`curso_materiales?item_id=in.(${itemIds.join(",")})&curso_id=neq.${cursoId}&select=item_id,cursos(nombre,fecha_inicio,fecha_fin,estado)`);
+        const ini=new Date(curso.fecha_inicio),fin=curso.fecha_fin?new Date(curso.fecha_fin):ini;
+        otros.forEach(o=>{
+          const c2=o.cursos;
+          if(!c2||!c2.fecha_inicio||c2.estado==="Cancelado")return;
+          const ci=new Date(c2.fecha_inicio),cf=c2.fecha_fin?new Date(c2.fecha_fin):ci;
+          if(ini<=cf&&fin>=ci)(conflictosPorItem[o.item_id]=conflictosPorItem[o.item_id]||[]).push(c2);
+        });
+      }catch(e){}
+    }
     const rolBadge=r=>{const c={titular:"var(--pu)",asistente:"var(--bl)",invitado:"var(--tx3)"};return`<span style="font-size:10px;padding:1px 7px;border-radius:8px;background:${c[r]||"var(--tx3)"}22;color:${c[r]||"var(--tx3)"};border:1px solid ${c[r]||"var(--tx3)"}40">${r}</span>`;};
     let h=``;
     // ── Instructores ──
@@ -6471,7 +6488,8 @@ async function loadInstMat(cursoId){
     }else{
       materiales.forEach(m=>{
         const insuf=m.inventario&&Number(m.inventario.stock_actual)<Number(m.cantidad_estimada);
-        h+=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:var(--bg3);border:1px solid ${insuf?"rgba(239,68,68,.35)":"var(--b)"};border-radius:var(--r);margin-bottom:6px">
+        const conflictos=conflictosPorItem[m.item_id]||[];
+        h+=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:var(--bg3);border:1px solid ${conflictos.length?"rgba(245,158,11,.4)":insuf?"rgba(239,68,68,.35)":"var(--b)"};border-radius:var(--r);margin-bottom:6px">
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:500">${esc(m.inventario?.nombre||"")}</div>
             <div style="font-size:11px;color:var(--tx3);margin-top:3px">
@@ -6479,6 +6497,8 @@ async function loadInstMat(cursoId){
               &nbsp;·&nbsp;Stock disponible: <span style="font-weight:600;color:${insuf?"var(--re)":"var(--tx2)"}">${Number(m.inventario?.stock_disponible??m.inventario?.stock_actual??0)}</span>
               ${insuf?`&nbsp;<span style="color:var(--re);font-size:10px">⚠ stock insuficiente</span>`:""}
             </div>
+            ${m.inventario?.observaciones?`<div style="font-size:11px;color:var(--tx3);margin-top:2px;font-style:italic">📝 ${esc(m.inventario.observaciones)}</div>`:""}
+            ${conflictos.length?`<div style="font-size:11px;color:var(--al);margin-top:3px">⚠️ También reservado en ${conflictos.map(c=>`"${esc(c.nombre)}" (${fmt(c.fecha_inicio)}${c.fecha_fin&&c.fecha_fin!==c.fecha_inicio?" → "+fmt(c.fecha_fin):""})`).join(", ")}</div>`:""}
           </div>
           <button class="btn" onclick="removeCursoMaterial('${m.id}','${cursoId}')" style="padding:3px 8px;color:var(--re);font-size:11px">✕</button>
         </div>`;
@@ -8089,6 +8109,12 @@ async function createCurso(){
     const [created]=await sb("cursos",{method:"POST",body:JSON.stringify(data)});
     cursos.unshift(created);
     if(data.instructor_nombre)_autoLinkInstructorCurso(created.id,data.instructor_nombre);
+    if(_cursoIAMaterialesDetectados.length){
+      for(const m of _cursoIAMaterialesDetectados){
+        try{await sb("curso_materiales",{method:"POST",body:JSON.stringify({curso_id:created.id,item_id:m.item_id,cantidad_estimada:1})});}catch(e){}
+      }
+      _cursoIAMaterialesDetectados=[];
+    }
     if(plantillaId){
       const plt=plantillas.find(p=>p.id===plantillaId);
       if(plt&&plt.pasos){
@@ -8598,8 +8624,10 @@ async function crearCursoDesdeIA(){
   "arancel": número en pesos argentinos o null,
   "instructor_nombre": "nombre o null",
   "respaldo_institucional": "institución o null",
-  "descripcion": "Descripción completa del curso: objetivos de aprendizaje, público objetivo, contenido temático principal, metodología de enseñanza, nivel de simulación, requisitos previos y competencias que se desarrollan. Máximo 400 palabras. Sin markdown."
-}`;
+  "descripcion": "Descripción completa del curso: objetivos de aprendizaje, público objetivo, contenido temático principal, metodología de enseñanza, nivel de simulación, requisitos previos y competencias que se desarrollan. Máximo 400 palabras. Sin markdown.",
+  "materiales_necesarios": ["nombre del simulador/maniquí/equipo 1", "nombre del simulador/maniquí/equipo 2"] o []
+}
+Para "materiales_necesarios": lista los simuladores, maniquíes o equipos de simulación específicos que se mencionaron en la charla como necesarios para este curso (ej: "simulador de vía aérea", "maniquí de RCP adulto", "brazo de punción venosa"). Array vacío si no se mencionó ningún equipo puntual.`;
     const res=await fetchEdge("agente-cursos",{message:extractPrompt,historial:cursoIAHistorial.slice(-20),canal:"generacion"});
     const data=await res.json();
     let texto=data.respuesta||"{}";
@@ -8658,6 +8686,37 @@ async function crearCursoDesdeIA(){
         return ini<=cf&&fin>=ci&&c.estado!=="Completado";
       });
       if(conflictos.length) avisos.push(`📅 Hay ${conflictos.length} curso(s) en esas fechas: ${conflictos.map(c=>c.nombre).join(", ")}`);
+    }
+
+    // Materiales/simuladores mencionados en la charla — matchear contra Inventario y avisar disponibilidad
+    _cursoIAMaterialesDetectados=[];
+    if(Array.isArray(curso.materiales_necesarios)&&curso.materiales_necesarios.length){
+      if(!inventario.length){try{inventario=await sb("inventario?select=*");}catch(e){}}
+      const iniM=curso.fecha_inicio?new Date(curso.fecha_inicio):null;
+      const finM=iniM?(curso.fecha_fin?new Date(curso.fecha_fin):iniM):null;
+      for(const nombreMat of curso.materiales_necesarios){
+        const nMat=_normTxt(nombreMat);
+        const match=inventario.find(i=>{const nInv=_normTxt(i.nombre);return nInv.includes(nMat)||nMat.includes(nInv);});
+        if(!match){
+          avisos.push(`🔧 Mencionaron "${nombreMat}" pero no está en el Inventario — agregalo a mano en Instructores y materiales si corresponde`);
+          continue;
+        }
+        _cursoIAMaterialesDetectados.push({item_id:match.id,nombre:match.nombre});
+        let avisoMat=`🎯 Material detectado: "${match.nombre}" — se va a agregar a Instructores y materiales`;
+        if(iniM){
+          try{
+            const otros=await sb(`curso_materiales?item_id=eq.${match.id}&select=cursos(nombre,fecha_inicio,fecha_fin,estado)`);
+            const conflicto=otros.find(o=>{
+              const c2=o.cursos;
+              if(!c2||!c2.fecha_inicio||c2.estado==="Cancelado")return false;
+              const ci=new Date(c2.fecha_inicio),cf=c2.fecha_fin?new Date(c2.fecha_fin):ci;
+              return iniM<=cf&&finM>=ci;
+            });
+            if(conflicto)avisoMat=`⚠️ "${match.nombre}" ya está reservado en "${conflicto.cursos.nombre}" en fechas superpuestas`;
+          }catch(e){}
+        }
+        avisos.push(avisoMat);
+      }
     }
 
     closeModal("modal-curso-ia");
@@ -9034,6 +9093,7 @@ let cursoIAHistorial=[];
 let cursoIAArchivos=[];  // [{nombre, tipo, base64}]
 let _cursoDesdeIA=false;  // true si el modal-curso se abrió desde "Crear curso" del chat IA
 let cursoIAProgreso=null;  // {A:{estado,resumen}, B:{...}, ...} — avance del intake guiado (bloques A→J)
+let _cursoIAMaterialesDetectados=[];  // [{item_id,nombre}] — simuladores/equipos que el agente mencionó y matchean con el Inventario, para auto-agregar a curso_materiales al crear el curso
 
 const BLOQUES_INTAKE_CURSO=[
   ['A','Necesidad educativa'],
