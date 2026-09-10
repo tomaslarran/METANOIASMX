@@ -326,6 +326,19 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 - Libro IVA digital en formato legal
 - Validación con contador externo (al menos un cierre mensual completo con el sistema nuevo)
 
+### Cursos — simuladores/materiales desde el agente IA (surgido en congreso, 10 Sep 2026)
+- [ ] Cuando se crea un curso con el agente IA (`agente-cursos`), el agente sí identifica/nombra qué simulador hace falta en la charla, pero eso no baja como ítem real a la tab "Instructores y materiales" — hoy queda solo mencionado en el texto de la conversación, no se auto-carga en `curso_materiales`/inventario. Habría que:
+  - Que el agente extraiga el/los simulador(es) necesarios de forma estructurada (similar a como ya arma `<ESCENARIO_JSON>` para escenarios clínicos) y el panel los auto-agregue en Instructores y materiales al crear el curso.
+  - Cruzar contra el calendario/inventario para mostrar disponibilidad real del simulador en las fechas del curso (si ya está reservado por otro curso en simultáneo), estado/condición del equipo, y qué haría falta (mantenimiento, insumos) — no solo si existe.
+  - No es urgente implementarlo ahora — anotado para ir sumando de a poco.
+
+### Convertir el panel en producto SaaS vendible (visión, surgida en congreso, 10 Sep 2026)
+- [ ] Empezar a preparar el panel para venderlo como plataforma a terceros (otras instituciones/centros de simulación) — suscripciones, gestión de usuarios por organización. Ya existe una base de multi-tenancy arrancada (`organizaciones`, `organizacion_id` en `usuarios` y `agente_cursos_chats`, ver sección "Implementado 3 Sep 2026 — Multi-tenancy foundation") pero falta:
+  - Definir el modelo comercial (planes, precios, qué incluye cada uno)
+  - Extender `organizacion_id` a las tablas que todavía no lo tienen (cursos, alumnos, instructores, finanzas, etc.) y todas las policies RLS filtrando por organización, no solo por `authenticated`
+  - Onboarding de una organización nueva (alta de org + admin inicial)
+- [ ] **Análisis de costo de tokens de IA por organización/curso** — antes de vender, calcular: cuánto consume en tokens (Claude API) operar un curso típico de punta a punta (crear con IA, chat, escenarios clínicos, agente-mensajes, etc.) vs. cuánto se cobraría por suscripción/usuario, para que el pricing no quede regalado. Referencia: skill `claude-api` de este mismo Claude Code tiene precios y modelos actualizados para hacer la cuenta cuando se retome esto.
+
 ### Producto (baja prioridad)
 - [ ] Módulo COFRADIA — gestión de planes, suscriptores y contenido (Línea D)
 - [ ] Agentes cloud autónomos para automatizaciones (gstack instalado en `~/.claude/skills/gstack/`)
