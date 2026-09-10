@@ -6426,18 +6426,18 @@ async function loadInstMat(cursoId){
     const instDisp=todosInst.filter(i=>!asignados.some(a=>a.instructor_id===i.id));
     const itemsDisp=todosItems.filter(i=>!materiales.some(m=>m.item_id===i.id));
 
-    // Disponibilidad: ¿alguno de estos materiales está reservado por OTRO curso en fechas superpuestas?
+    // Disponibilidad: ¿alguno de estos materiales lo usa OTRO curso en fechas superpuestas, y si es así, alcanza el stock para la suma de todos?
     let conflictosPorItem={};
     if(materiales.length&&curso.fecha_inicio){
       try{
         const itemIds=[...new Set(materiales.map(m=>m.item_id))];
-        const otros=await sb(`curso_materiales?item_id=in.(${itemIds.join(",")})&curso_id=neq.${cursoId}&select=item_id,cursos(nombre,fecha_inicio,fecha_fin,estado)`);
+        const otros=await sb(`curso_materiales?item_id=in.(${itemIds.join(",")})&curso_id=neq.${cursoId}&select=item_id,cantidad_estimada,cursos(nombre,fecha_inicio,fecha_fin,estado)`);
         const ini=new Date(curso.fecha_inicio),fin=curso.fecha_fin?new Date(curso.fecha_fin):ini;
         otros.forEach(o=>{
           const c2=o.cursos;
           if(!c2||!c2.fecha_inicio||c2.estado==="Cancelado")return;
           const ci=new Date(c2.fecha_inicio),cf=c2.fecha_fin?new Date(c2.fecha_fin):ci;
-          if(ini<=cf&&fin>=ci)(conflictosPorItem[o.item_id]=conflictosPorItem[o.item_id]||[]).push(c2);
+          if(ini<=cf&&fin>=ci)(conflictosPorItem[o.item_id]=conflictosPorItem[o.item_id]||[]).push({nombre:c2.nombre,cantidad:Number(o.cantidad_estimada||0),fecha_inicio:c2.fecha_inicio,fecha_fin:c2.fecha_fin});
         });
       }catch(e){}
     }
@@ -6487,18 +6487,25 @@ async function loadInstMat(cursoId){
       h+=`<div style="font-size:13px;color:var(--tx3);padding:6px 0">Sin materiales asignados todavía.</div>`;
     }else{
       materiales.forEach(m=>{
-        const insuf=m.inventario&&Number(m.inventario.stock_actual)<Number(m.cantidad_estimada);
+        const stockTotal=Number(m.inventario?.stock_actual??0);
         const conflictos=conflictosPorItem[m.item_id]||[];
-        h+=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:var(--bg3);border:1px solid ${conflictos.length?"rgba(245,158,11,.4)":insuf?"rgba(239,68,68,.35)":"var(--b)"};border-radius:var(--r);margin-bottom:6px">
+        const totalOtros=conflictos.reduce((s,c)=>s+c.cantidad,0);
+        const totalNecesario=Number(m.cantidad_estimada||0)+totalOtros;
+        const noAlcanzaEnFechas=conflictos.length&&totalNecesario>stockTotal;
+        const insuf=!conflictos.length&&Number(m.inventario?.stock_actual)<Number(m.cantidad_estimada);
+        const detalleConflictos=conflictos.map(c=>`"${esc(c.nombre)}" (${c.cantidad} un., ${fmt(c.fecha_inicio)}${c.fecha_fin&&c.fecha_fin!==c.fecha_inicio?" → "+fmt(c.fecha_fin):""})`).join(", ");
+        h+=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:var(--bg3);border:1px solid ${noAlcanzaEnFechas||insuf?"rgba(239,68,68,.35)":conflictos.length?"rgba(245,158,11,.4)":"var(--b)"};border-radius:var(--r);margin-bottom:6px">
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:500">${esc(m.inventario?.nombre||"")}</div>
             <div style="font-size:11px;color:var(--tx3);margin-top:3px">
               Necesita: <strong>${Number(m.cantidad_estimada)}</strong>
-              &nbsp;·&nbsp;Stock disponible: <span style="font-weight:600;color:${insuf?"var(--re)":"var(--tx2)"}">${Number(m.inventario?.stock_disponible??m.inventario?.stock_actual??0)}</span>
+              &nbsp;·&nbsp;Stock total: <span style="font-weight:600;color:${insuf?"var(--re)":"var(--tx2)"}">${stockTotal}</span>
               ${insuf?`&nbsp;<span style="color:var(--re);font-size:10px">⚠ stock insuficiente</span>`:""}
             </div>
             ${m.inventario?.observaciones?`<div style="font-size:11px;color:var(--tx3);margin-top:2px;font-style:italic">📝 ${esc(m.inventario.observaciones)}</div>`:""}
-            ${conflictos.length?`<div style="font-size:11px;color:var(--al);margin-top:3px">⚠️ También reservado en ${conflictos.map(c=>`"${esc(c.nombre)}" (${fmt(c.fecha_inicio)}${c.fecha_fin&&c.fecha_fin!==c.fecha_inicio?" → "+fmt(c.fecha_fin):""})`).join(", ")}</div>`:""}
+            ${noAlcanzaEnFechas
+              ?`<div style="font-size:11px;color:var(--re);margin-top:3px;font-weight:600">❌ No alcanza el stock en estas fechas: se necesitan ${totalNecesario} en simultáneo (este curso ${Number(m.cantidad_estimada)} + ${detalleConflictos}) pero hay ${stockTotal}</div>`
+              :conflictos.length?`<div style="font-size:11px;color:var(--al);margin-top:3px">⚠️ También lo usa ${detalleConflictos} — entre todos suman ${totalNecesario} de ${stockTotal}, alcanza</div>`:""}
           </div>
           <button class="btn" onclick="removeCursoMaterial('${m.id}','${cursoId}')" style="padding:3px 8px;color:var(--re);font-size:11px">✕</button>
         </div>`;
@@ -8705,14 +8712,22 @@ Para "materiales_necesarios": lista los simuladores, maniquíes o equipos de sim
         let avisoMat=`🎯 Material detectado: "${match.nombre}" — se va a agregar a Instructores y materiales`;
         if(iniM){
           try{
-            const otros=await sb(`curso_materiales?item_id=eq.${match.id}&select=cursos(nombre,fecha_inicio,fecha_fin,estado)`);
-            const conflicto=otros.find(o=>{
+            const otros=await sb(`curso_materiales?item_id=eq.${match.id}&select=cantidad_estimada,cursos(nombre,fecha_inicio,fecha_fin,estado)`);
+            const solapan=otros.filter(o=>{
               const c2=o.cursos;
               if(!c2||!c2.fecha_inicio||c2.estado==="Cancelado")return false;
               const ci=new Date(c2.fecha_inicio),cf=c2.fecha_fin?new Date(c2.fecha_fin):ci;
               return iniM<=cf&&finM>=ci;
             });
-            if(conflicto)avisoMat=`⚠️ "${match.nombre}" ya está reservado en "${conflicto.cursos.nombre}" en fechas superpuestas`;
+            if(solapan.length){
+              const stockTotal=Number(match.stock_actual??0);
+              const totalOtros=solapan.reduce((s,o)=>s+Number(o.cantidad_estimada||0),0);
+              const detalle=solapan.map(o=>`"${o.cursos.nombre}" (${Number(o.cantidad_estimada||0)} un.)`).join(", ");
+              const totalNecesario=1+totalOtros; // este curso se agrega con cantidad 1 por defecto, editable después
+              avisoMat=totalNecesario>stockTotal
+                ?`❌ "${match.nombre}": no alcanza el stock en estas fechas — se necesitan ${totalNecesario} en simultáneo (este curso + ${detalle}) pero hay ${stockTotal}`
+                :`⚠️ "${match.nombre}" también lo usa ${detalle} en fechas superpuestas — entre todos suman ${totalNecesario} de ${stockTotal}, alcanza`;
+            }
           }catch(e){}
         }
         avisos.push(avisoMat);
