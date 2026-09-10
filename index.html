@@ -510,6 +510,9 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   .oport-tipo-idea-grid{grid-template-columns:1fr!important}
   /* Portal form grids inline */
   .pf-2col{grid-template-columns:1fr !important}
+  /* Modal Proyecto de curso IA: panel de progreso pasa a overlay a pantalla completa en mobile */
+  #modal-curso-ia .modal{max-width:100%!important}
+  #curso-ia-progreso-panel{position:fixed!important;inset:0;z-index:260;background:var(--bg2);width:auto!important;border-left:none!important;padding:16px!important}
   /* KPIs con ID único — forzar 2 columnas */
   #pend-hist-kpis,#caja-kpis,#conc-kpis,#rend-stats,#pf-stats,
   #dash-alertas,#dash-fin-stats,#dash-proy-stats{grid-template-columns:repeat(2,1fr)!important}
@@ -2165,6 +2168,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="cd-tab" id="cftab-resumen-sem" onclick="setCFTab('resumen-sem',this)">📊 Resumen semanal</button>
     <button class="cd-tab" id="cftab-cuentas" onclick="setCFTab('cuentas',this)">🏦 Cuentas & Caja</button>
     <button class="cd-tab" id="cftab-pendientes" onclick="setCFTab('pendientes',this)">💸 Pendientes de pago</button>
+    <button class="cd-tab" id="cftab-promos" onclick="setCFTab('promos',this)">🎁 Promociones</button>
   </div>
 
   <!-- TAB: RESUMEN MENSUAL -->
@@ -2584,6 +2588,15 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
     <!-- Tabla -->
     <div id="conc-tabla" style="overflow-x:auto"></div>
+  </div>
+
+  <!-- TAB: PROMOCIONES DE MEDIOS DE PAGO -->
+  <div id="cfpg-promos" style="display:none">
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <div style="font-size:12px;color:var(--tx3)">Viumi · Payway · Banco Macro · Mercado Pago · ICBC — el agente busca automáticamente cada semana; revisá y aprobá antes de que queden visibles como vigentes.</div>
+      <button class="btn sm pri" id="btn-buscar-promos" onclick="buscarPromocionesAhora()" style="margin-left:auto">🔄 Buscar ahora</button>
+    </div>
+    <div id="cf-promos-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando promociones...</div></div></div>
   </div>
 </div>
 
@@ -4219,10 +4232,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <div class="mov" id="modal-curso-ia" onclick="if(event.target===this&&_movDown===this)closeModal('modal-curso-ia')">
-  <div class="modal" style="max-width:600px;height:80vh;display:flex;flex-direction:column">
+  <div class="modal" style="max-width:920px;height:85vh;display:flex;flex-direction:column">
     <div class="mt" style="display:flex;justify-content:space-between;align-items:center">
-      <span>✨ Crear curso con IA</span>
+      <span>🎓 Proyecto de curso — Asistente IA</span>
       <div style="display:flex;align-items:center;gap:8px">
+        <button id="btn-toggle-progreso-ia" onclick="_toggleProgresoPanelCursoIA()" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:3px 8px;cursor:pointer" title="Mostrar/ocultar progreso del proyecto">📋 Progreso</button>
         <button onclick="guardarChatCurso()" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:3px 8px;cursor:pointer" title="Guardar chat">💾 Guardar</button>
         <button onclick="listarChatsCurso()" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:3px 8px;cursor:pointer" title="Retomar chat guardado">📂 Retomar</button>
         <button id="btn-invitar-chat" onclick="invitarColaboradorChat()" style="background:none;border:1px solid var(--pu);border-radius:6px;color:var(--pu);font-size:11px;padding:3px 8px;cursor:pointer;display:none" title="Invitar colaborador a este chat">👥 Invitar</button>
@@ -4230,26 +4244,37 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <button onclick="closeModal('modal-curso-ia')" style="background:none;border:none;color:var(--tx3);font-size:18px;cursor:pointer">✕</button>
       </div>
     </div>
-    <div style="font-size:12px;color:var(--tx3);margin-bottom:4px;padding:0 2px">
-      Describí tu idea de curso. El agente te guiará por la Plantilla Intake y la metodología PEV.
+    <div style="font-size:12px;color:var(--tx3);margin-bottom:8px;padding:0 2px">
+      Describí tu idea de curso. El agente te guiará por la Plantilla Intake y la metodología PEV — el panel de la derecha muestra el avance del proyecto en vivo.
     </div>
-    <div id="curso-ia-chat-label" style="font-size:11px;color:var(--pu);margin-bottom:8px;padding:0 2px;min-height:14px"></div>
-    <div id="curso-ia-msgs" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:4px 2px;min-height:0"></div>
-    <!-- Archivos adjuntos -->
-    <div id="curso-ia-adjuntos" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;min-height:0"></div>
-    <div style="display:flex;gap:8px;margin-top:8px;align-items:flex-end">
-      <label class="btn sm sec" style="cursor:pointer;padding:7px 10px" title="Adjuntar PDF, Word o imagen">
-        📎
-        <input type="file" multiple accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.xlsx,.xls" style="display:none" onchange="adjuntarArchivoCursoIA(this)">
-      </label>
-      <button type="button" id="btn-curso-ia-mic" class="btn sm sec" style="padding:7px 10px" title="Grabar audio" onclick="toggleGrabacionCursoIA()">🎤</button>
-      <textarea id="curso-ia-input" class="fi" rows="1" placeholder="Describí tu idea o preguntá sobre los archivos adjuntos..." style="flex:1;resize:none;min-height:36px;max-height:160px;overflow-y:auto;line-height:1.4;font-family:inherit"
-        oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
-        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendCursoIA()}"></textarea>
-      <button class="btn pri" onclick="sendCursoIA()" id="btn-curso-ia-send" style="padding:8px 16px">Enviar</button>
-    </div>
-    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap" id="curso-ia-actions" style="display:none">
-      <button class="btn sm pri" onclick="crearCursoDesdeIA()" id="btn-crear-desde-ia" title="Crear el curso en el panel con los datos de la conversación">💾 Crear curso</button>
+    <div style="flex:1;display:flex;gap:16px;min-height:0">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0">
+        <div id="curso-ia-chat-label" style="font-size:11px;color:var(--pu);margin-bottom:8px;padding:0 2px;min-height:14px"></div>
+        <div id="curso-ia-msgs" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:4px 2px;min-height:0"></div>
+        <!-- Archivos adjuntos -->
+        <div id="curso-ia-adjuntos" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;min-height:0"></div>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:flex-end">
+          <label class="btn sm sec" style="cursor:pointer;padding:7px 10px" title="Adjuntar PDF, Word o imagen">
+            📎
+            <input type="file" multiple accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.xlsx,.xls" style="display:none" onchange="adjuntarArchivoCursoIA(this)">
+          </label>
+          <button type="button" id="btn-curso-ia-mic" class="btn sm sec" style="padding:7px 10px" title="Grabar audio" onclick="toggleGrabacionCursoIA()">🎤</button>
+          <textarea id="curso-ia-input" class="fi" rows="1" placeholder="Describí tu idea o preguntá sobre los archivos adjuntos..." style="flex:1;resize:none;min-height:36px;max-height:160px;overflow-y:auto;line-height:1.4;font-family:inherit"
+            oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendCursoIA()}"></textarea>
+          <button class="btn pri" onclick="sendCursoIA()" id="btn-curso-ia-send" style="padding:8px 16px">Enviar</button>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap" id="curso-ia-actions" style="display:none">
+          <button class="btn sm pri" onclick="crearCursoDesdeIA()" id="btn-crear-desde-ia" title="Crear el curso en el panel con los datos de la conversación">💾 Crear curso</button>
+        </div>
+      </div>
+      <div id="curso-ia-progreso-panel" style="width:230px;flex-shrink:0;border-left:1px solid var(--b);padding-left:14px;display:flex;flex-direction:column;min-height:0">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px">📋 Proyecto del curso</div>
+          <button onclick="_toggleProgresoPanelCursoIA()" style="background:none;border:none;color:var(--tx3);font-size:15px;cursor:pointer;padding:0 2px" title="Volver al chat">✕</button>
+        </div>
+        <div id="curso-ia-progreso-body" style="flex:1;overflow-y:auto;min-height:0"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -6190,7 +6215,10 @@ async function selectCurso(id){
     <div class="cd-header">
       <div>
         ${estadoBadge(curso.estado)}
-        <div class="cd-title">${esc(curso.nombre)}</div>
+        <div style="display:flex;align-items:center;gap:6px" id="cd-title-row-${id}">
+          <div class="cd-title">${esc(curso.nombre)}</div>
+          <button onclick="renombrarCurso('${id}')" style="background:none;border:none;color:var(--tx3);cursor:pointer;font-size:14px;padding:2px;flex-shrink:0" title="Cambiar nombre del curso">✎</button>
+        </div>
         <div style="font-size:12px;color:var(--tx2);margin-top:4px">${curso.tipo||""} · ${curso.modalidad||""}${curso.duracion_horas?` · ${curso.duracion_horas}hs cátedra`:""}${curso.instructor_nombre?` · Instructor: ${esc(curso.instructor_nombre)}`:""}</div>
         <div style="font-size:11px;color:var(--tx3);margin-top:3px">${curso.creado_por?`👤 Cargado por <strong style="color:var(--tx2)">${esc(curso.creado_por)}</strong>`:"👤 Sin registro de autor"}${curso.created_at?` · ${new Date(curso.created_at).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"})}`:""}</div>
       </div>
@@ -6798,8 +6826,12 @@ async function enviarNPSWhatsApp(cursoId){
     const data=await res.json();
     if(!res.ok)throw new Error(data.error||'Error');
     const msg=`Enviados: ${data.sent} · Fallidos: ${data.failed} · Sin teléfono: ${data.sin_telefono}`;
-    toast(msg,'ok');
-    if(data.errors?.length)console.warn('NPS WA errors:',data.errors);
+    if(data.errors?.length){
+      console.warn('NPS WA errors:',data.errors);
+      toast(msg+' — '+data.errors[0],'err');
+    }else{
+      toast(msg,'ok');
+    }
     loadNPS(cursoId);
   }catch(e){toast('Error: '+e.message,'err');}
   finally{btn.disabled=false;btn.textContent='📤 Enviar encuesta WA';}
@@ -7990,6 +8022,36 @@ async function setEstadoCurso(id,nuevo){
   renderCursos();
 }
 
+function renombrarCurso(id){
+  const curso=cursos.find(c=>c.id===id);if(!curso)return;
+  const row=document.getElementById(`cd-title-row-${id}`);
+  if(!row)return;
+  row.innerHTML=`<input class="fi" id="cd-title-input-${id}" type="text" style="font-family:var(--fc);font-size:18px;font-weight:700;padding:4px 8px;max-width:420px;flex:1">
+    <button onclick="guardarNombreCurso('${id}')" style="background:none;border:1px solid var(--ok,#10B981);color:var(--ok,#10B981);border-radius:6px;cursor:pointer;font-size:12px;padding:4px 10px;flex-shrink:0" title="Guardar">✓ Guardar</button>
+    <button onclick="selectCurso('${id}')" style="background:none;border:1px solid var(--b);color:var(--tx3);border-radius:6px;cursor:pointer;font-size:12px;padding:4px 10px;flex-shrink:0" title="Cancelar">Cancelar</button>`;
+  const inp=document.getElementById(`cd-title-input-${id}`);
+  inp.value=curso.nombre||"";
+  inp.focus();inp.select();
+  inp.onkeydown=e=>{
+    if(e.key==="Enter"){e.preventDefault();guardarNombreCurso(id);}
+    if(e.key==="Escape"){e.preventDefault();selectCurso(id);}
+  };
+}
+
+async function guardarNombreCurso(id){
+  const inp=document.getElementById(`cd-title-input-${id}`);
+  if(!inp)return;
+  const nuevo=inp.value.trim();
+  if(!nuevo){toast("El nombre no puede estar vacío","err");return;}
+  try{
+    await sb(`cursos?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({nombre:nuevo,updated_at:new Date().toISOString()})});
+    const curso=cursos.find(c=>c.id===id);if(curso)curso.nombre=nuevo;
+    toast("✅ Nombre del curso actualizado","ok");
+    selectCurso(id);
+    renderCursos();
+  }catch(e){toast("Error al renombrar: "+e.message,"err");}
+}
+
 async function delCurso(id){
   try{await sb(`cursos?id=eq.${id}`,{method:"DELETE"});cursos=cursos.filter(c=>c.id!==id);renderCursos();document.getElementById("curso-detail-container").innerHTML="";toast("Curso eliminado","ok");updateSideBadges();}catch(e){toast("Error","err")}
 }
@@ -8971,6 +9033,47 @@ function _generarPDFCurso(content,tipo,cursoId=null){
 let cursoIAHistorial=[];
 let cursoIAArchivos=[];  // [{nombre, tipo, base64}]
 let _cursoDesdeIA=false;  // true si el modal-curso se abrió desde "Crear curso" del chat IA
+let cursoIAProgreso=null;  // {A:{estado,resumen}, B:{...}, ...} — avance del intake guiado (bloques A→J)
+
+const BLOQUES_INTAKE_CURSO=[
+  ['A','Necesidad educativa'],
+  ['B','Destinatarios y nivel'],
+  ['C','Objetivos de aprendizaje'],
+  ['D','Nivel y modalidad'],
+  ['E','Recursos y equipamiento'],
+  ['F','Estructura de la actividad'],
+  ['G','Evaluación'],
+  ['H','Consideraciones especiales'],
+  ['I','Ética, seguridad y datos'],
+  ['J','Ruta PEV y readiness'],
+];
+
+function renderProgresoCursoIA(){
+  const cont=document.getElementById("curso-ia-progreso-body");
+  if(!cont)return;
+  if(!cursoIAProgreso){
+    cont.innerHTML=`<div style="font-size:11px;color:var(--tx3);padding:8px 2px;line-height:1.5">Cuando arranques el diseño guiado de un curso, acá vas a ver el avance por bloque de la Plantilla Intake.</div>`;
+    return;
+  }
+  cont.innerHTML=BLOQUES_INTAKE_CURSO.map(([letra,label])=>{
+    const b=cursoIAProgreso[letra];
+    const estado=b?.estado||"pendiente";
+    const icon=estado==="completo"?"✅":estado==="en_curso"?"🟡":"⚪";
+    return `<div style="display:flex;gap:8px;padding:6px 2px;border-bottom:1px solid var(--b)">
+      <div style="font-size:12px;line-height:1.6">${icon}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;font-weight:600;color:${estado==='pendiente'?'var(--tx3)':'var(--tx)'}">${letra} · ${esc(label)}</div>
+        ${b?.resumen?`<div style="font-size:10px;color:var(--tx3);margin-top:1px">${esc(b.resumen)}</div>`:''}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function _toggleProgresoPanelCursoIA(){
+  const panel=document.getElementById("curso-ia-progreso-panel");
+  if(!panel)return;
+  panel.style.display=(panel.style.display==="none")?"flex":"none";
+}
 
 async function _loadMammoth(){
   if(window.mammoth)return;
@@ -9133,6 +9236,9 @@ function openCrearCursoIA(){
       Te voy a guiar por la <strong>Plantilla Intake</strong> y la <strong>metodologia PEV</strong> para estructurarla bien antes de que llegue a ejecucion.
     </div>`;
   }
+  const panel=document.getElementById("curso-ia-progreso-panel");
+  if(panel)panel.style.display=window.innerWidth<840?"none":"flex";
+  renderProgresoCursoIA();
   openModal("modal-curso-ia");
   // Scroll al final si hay conversación
   if(msgs)setTimeout(()=>{msgs.scrollTop=msgs.scrollHeight;},100);
@@ -9145,9 +9251,11 @@ function resetCursoIA(){
   cursoIAArchivos=[];
   cursoIAChatId=null;
   cursoIAChatNombre=null;
+  cursoIAProgreso=null;
   _cursoEscenarios=[];
   _cursoDocumentos=[];
   _updateChatLabel();
+  renderProgresoCursoIA();
   const msgs=document.getElementById("curso-ia-msgs");
   if(msgs)msgs.innerHTML=`<div style="background:var(--surf2);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--tx2);max-width:90%">
     Hola! Soy el agente de cursos de Metanoia. Contame tu idea — ¿que curso queres crear?<br><br>
@@ -9283,6 +9391,7 @@ async function cargarChatCurso(id,nombre){
     cursoIAArchivos=[];
     _cursoEscenarios=[];
     _cursoDocumentos=[];
+    cursoIAProgreso=null;
     const msgs=document.getElementById("curso-ia-msgs");
     if(msgs){
       msgs.innerHTML="";
@@ -9307,10 +9416,12 @@ async function cargarChatCurso(id,nombre){
           }
           bubble+=`</div>`;
           msgs.innerHTML+=bubble;
+          if(m.progreso)cursoIAProgreso=m.progreso;
         }
       });
       setTimeout(()=>{msgs.scrollTop=msgs.scrollHeight;},100);
     }
+    renderProgresoCursoIA();
     if(cursoIAHistorial.length>=2){const a=document.getElementById("curso-ia-actions");if(a)a.style.display="flex";}
     _updateChatLabel();
     toast(`📂 Chat cargado`,"ok");
@@ -9849,7 +9960,15 @@ async function sendCursoIA(){
         try{docJson=JSON.parse(docMatch[1].trim());}catch(e){}
         textoDisplay=textoDisplay.replace(/<DOCUMENTO_JSON>[\s\S]*?<\/DOCUMENTO_JSON>/,'').trim();
       }
-      cursoIAHistorial.push({role:"assistant",content:textoDisplay,...(escJson?{escenario:escJson}:{}),...(docJson?{doc:docJson}:{})});
+      // Parsear progreso del intake guiado (bloques A→J)
+      const progMatch=textoDisplay.match(/<PROGRESO_JSON>([\s\S]*?)<\/PROGRESO_JSON>/);
+      let progJson=null;
+      if(progMatch){
+        try{progJson=JSON.parse(progMatch[1].trim());}catch(e){}
+        textoDisplay=textoDisplay.replace(/<PROGRESO_JSON>[\s\S]*?<\/PROGRESO_JSON>/,'').trim();
+      }
+      cursoIAHistorial.push({role:"assistant",content:textoDisplay,...(escJson?{escenario:escJson}:{}),...(docJson?{doc:docJson}:{}),...(progJson?{progreso:progJson}:{})});
+      if(progJson){cursoIAProgreso=progJson;renderProgresoCursoIA();}
       _autoguardarChatCurso();
       if(cursoIAHistorial.length>=2){
         const actions=document.getElementById("curso-ia-actions");
@@ -11810,6 +11929,79 @@ async function renderCFPendientes(){
   </div>`:""}`;
 }
 
+// ══ PROMOCIONES DE MEDIOS DE PAGO ══
+async function renderCFPromos(){
+  const cont=document.getElementById("cf-promos-container");
+  if(!cont)return;
+  try{
+    const todas=await sb("promociones_pago?select=*&order=created_at.desc");
+    const pendientes=(todas||[]).filter(p=>p.estado==="pendiente");
+    const aprobadas=(todas||[]).filter(p=>p.estado==="aprobada");
+    const card=(p,acciones)=>`<div style="background:var(--surf);border:1px solid var(--b);border-radius:10px;padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+            <span style="font-size:10px;font-weight:700;color:var(--pu);border:1px solid var(--pu);border-radius:4px;padding:1px 6px">${esc(p.fuente)}</span>
+            <span style="font-size:13px;font-weight:600;color:var(--tx)">${esc(p.titulo)}</span>
+          </div>
+          ${p.descripcion?`<div style="font-size:12px;color:var(--tx2);margin-bottom:4px">${esc(p.descripcion)}</div>`:""}
+          <div style="font-size:11px;color:var(--tx3);display:flex;gap:10px;flex-wrap:wrap">
+            ${p.descuento_pct?`<span>💲 ${p.descuento_pct}% descuento</span>`:""}
+            ${p.cuotas_sin_interes?`<span>💳 ${p.cuotas_sin_interes} cuotas sin interés</span>`:""}
+            ${p.vigencia_hasta?`<span>📅 Hasta ${new Date(p.vigencia_hasta+"T00:00:00").toLocaleDateString("es-AR")}</span>`:""}
+            ${p.url_fuente?`<a href="${esc(p.url_fuente)}" target="_blank" rel="noopener" style="color:var(--pu)">🔗 Fuente</a>`:""}
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">${acciones}</div>
+      </div>
+    </div>`;
+    let html="";
+    if(pendientes.length){
+      html+=`<div style="font-size:12px;font-weight:600;color:var(--tx);margin-bottom:8px">⏳ Pendientes de revisión (${pendientes.length})</div>`;
+      html+=pendientes.map(p=>card(p,`
+        <button onclick="aprobarPromocion('${p.id}')" style="background:#10B981;color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:12px;cursor:pointer;white-space:nowrap">✓ Aprobar</button>
+        <button onclick="rechazarPromocion('${p.id}')" style="background:none;border:1px solid #EF4444;color:#EF4444;border-radius:6px;padding:4px 12px;font-size:12px;cursor:pointer;white-space:nowrap">✗ Rechazar</button>
+      `)).join("");
+    }
+    if(aprobadas.length){
+      html+=`<div style="font-size:12px;font-weight:600;color:var(--tx);margin-top:${pendientes.length?16:0}px;margin-bottom:8px">✅ Vigentes (${aprobadas.length})</div>`;
+      html+=aprobadas.map(p=>card(p,`<button onclick="rechazarPromocion('${p.id}')" title="Quitar" style="background:none;border:none;color:var(--tx3);font-size:14px;cursor:pointer">✕</button>`)).join("");
+    }
+    if(!pendientes.length&&!aprobadas.length){
+      html=`<div class="empty"><div class="ei">🎁</div>No hay promociones cargadas todavía. Tocá "Buscar ahora" para que el agente revise Viumi, Payway, Macro, Mercado Pago e ICBC.</div>`;
+    }
+    cont.innerHTML=html;
+  }catch(e){cont.innerHTML=`<div style="font-size:12px;color:var(--tx3)">Error al cargar promociones: ${esc(e.message)}</div>`;}
+}
+
+async function buscarPromocionesAhora(){
+  const btn=document.getElementById("btn-buscar-promos");
+  if(btn){btn.disabled=true;btn.textContent="Buscando...";}
+  try{
+    const res=await fetchEdge("agente-promociones",{});
+    const data=await res.json();
+    if(data.error)throw new Error(data.error);
+    toast(`🎁 ${data.encontradas} promoción${data.encontradas===1?"":"es"} encontrada${data.encontradas===1?"":"s"} — revisá antes de aprobar`,"ok");
+    renderCFPromos();
+  }catch(e){toast("Error al buscar promociones: "+e.message,"err");}
+  finally{if(btn){btn.disabled=false;btn.textContent="🔄 Buscar ahora";}}
+}
+
+async function aprobarPromocion(id){
+  try{
+    await sb(`promociones_pago?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado:"aprobada",revisado_por:loggedUser?.nombre||"",revisado_en:new Date().toISOString()})});
+    toast("Promoción aprobada ✓","ok");
+    renderCFPromos();
+  }catch(e){toast("Error al aprobar: "+e.message,"err");}
+}
+
+async function rechazarPromocion(id){
+  try{
+    await sb(`promociones_pago?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado:"rechazada",revisado_por:loggedUser?.nombre||"",revisado_en:new Date().toISOString()})});
+    renderCFPromos();
+  }catch(e){toast("Error al rechazar: "+e.message,"err");}
+}
+
 function toggleCFPrestFin(){
   const rows=document.querySelectorAll('.cf-prest-fin-row');
   const ico=document.getElementById('cf-prest-fin-ico');
@@ -11822,7 +12014,7 @@ function setCFTab(tab,btn){
   document.querySelectorAll("#pg-cashflow .cd-tab").forEach(b=>b.classList.remove("on"));
   const tabBtn=btn||document.getElementById("cftab-"+tab);
   if(tabBtn)tabBtn.classList.add("on");
-  ["resumen","prestamos","cobranzas","inversiones","conciliacion","resumen-sem","cuentas","pendientes"].forEach(t=>{
+  ["resumen","prestamos","cobranzas","inversiones","conciliacion","resumen-sem","cuentas","pendientes","promos"].forEach(t=>{
     const el=document.getElementById("cfpg-"+t);
     if(el)el.style.display=t===tab?"":"none";
   });
@@ -11834,6 +12026,7 @@ function setCFTab(tab,btn){
   if(tab==="resumen-sem")renderResumenSemanal();
   if(tab==="cuentas"){if(cuentasSubTab==="medios")renderMediosPago();else renderCaja();}
   if(tab==="pendientes")renderCFPendientes();
+  if(tab==="promos")renderCFPromos();
 }
 
 // ══════════════════════════════════════════════

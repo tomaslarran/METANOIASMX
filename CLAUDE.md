@@ -100,6 +100,7 @@ Panel web interno para **Metanoia SMX**, empresa de capacitación médica en sim
 | `leer-factura` | Lee facturas con visión de Claude |
 | `whatsapp-agente` | Carga de facturas por WhatsApp via Twilio (flujo conversacional multi-paso) |
 | `enviar-diplomas` | Envío automático de diplomas por email (SMTP) al finalizar curso |
+| `agente-promociones` | Busca promociones de medios de pago (Viumi, Payway, Banco Macro, Mercado Pago, ICBC) con Tavily + Claude, semanal via pg_cron, requiere aprobación manual antes de contar como vigente |
 
 **Secrets de Supabase:**
 - `ANTHROPIC_API_KEY` — Claude API
@@ -110,7 +111,8 @@ Panel web interno para **Metanoia SMX**, empresa de capacitación médica en sim
 - `META_WA_TOKEN` — WhatsApp Business API token
 - `WA_PHONE_NUMBER_ID` — ID del número de WhatsApp Business
 - `WA_AMPARO`, `WA_VALENTINA`, `WA_DANI`, `WA_FLOR` — números WA del equipo para escalación
-- `TAVILY_API_KEY` — búsqueda web para agente comunicaciones
+- `TAVILY_API_KEY` — búsqueda web para agente comunicaciones (reutilizado también por `agente-promociones`)
+- `CRON_SECRET` — autentica llamadas programadas (pg_cron) a edge functions sin sesión de usuario (`check-alertas-pagos`, `agente-promociones`)
 - `LINKEDIN_ACCESS_TOKEN` — LinkedIn OAuth token (app "Panel Metanoia", vence cada 2 meses)
 - `GROQ_API_KEY` — transcripción de audio (Whisper) en agente-mensajes
 - `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` — integración WhatsApp via Twilio (whatsapp-agente)
@@ -148,6 +150,7 @@ Panel web interno para **Metanoia SMX**, empresa de capacitación médica en sim
 - `inflacion_mensual` — inflación mensual
 - `banco_movimientos` — movimientos del Banco Macro para conciliación (sociedad, fecha, concepto, importe, saldo, conciliado, match_*)
 - `caja_movimientos` — movimientos diarios de caja (sociedad, fecha, tipo, concepto, categoria, monto, observaciones)
+- `promociones_pago` — promociones de medios de pago (fuente, título, descuento/cuotas, vigencia, estado pendiente/aprobada/rechazada)
 - `comprobantes_compra` — facturas de proveedores (cargado_por, proveedor, total, fecha, sociedad, estado)
 - `cuenta_corriente` — cuentas corrientes de proveedores
 
@@ -496,6 +499,8 @@ ALTER TABLE cursos ADD CONSTRAINT cursos_estado_check CHECK (estado IN ('Borrado
 - ⏳ Template Meta `nps_post_curso` — enviado para aprobación (categoría Utilidad, cuerpo: "Hola {{1}}, gracias por participar en *{{2}}*. ¿Cómo calificarías la experiencia del *1 al 10*? Solo respondé con el número."). Aprobación: 24-72h hábiles.
 
 **SQL corrido (Supabase):** `instrumentos_evaluacion`, `evaluaciones_alumno`, `debriefings`, `nps_respuestas`, `nps_envios` + 4 INSERT instrumentos estándar
+
+**⚠️ Corrección (10 Sep 2026):** pese a lo anotado arriba, la tabla `debriefings` en realidad **nunca había quedado creada** en la base — el tab Debriefing de un curso tiraba `PGRST205: Could not find the table 'public.debriefings'`. Se re-creó vía SQL Editor (columnas `curso_id`, `titulo`, `fecha`, `instructor`, `duracion_min`, `escenario_desc`, `observaciones_generales`, `pearls_p/e/a/r/l/s`, RLS `authenticated`) y quedó funcionando. Verificado en producción (10 Sep 2026) que `instrumentos_evaluacion`, `evaluaciones_alumno`, `nps_respuestas` y `nps_envios` sí existen y funcionan (tabs Evaluar y NPS probados sin errores) — el problema fue exclusivo de `debriefings`.
 
 ## Implementado (27 Ago 2026) — Agente cursos: Excel, guardar/retomar chats, escenarios clínicos proyectables
 
@@ -900,6 +905,35 @@ CREATE POLICY "Autenticados pueden actualizar firmas" ON storage.objects
 
 ---
 
+## Implementado (9 Sep 2026) — Agente de cursos: panel de progreso del proyecto
+
+**Motivación:** el chat de "Crear curso con IA" ya genera el contenido y arma el curso completo (no es un simple auxiliar), pero al vivir como un chat genérico sin indicador de avance, el equipo no lo estaba tomando en serio como herramienta de trabajo. Se rediseñó el modal para que se sienta como el espacio donde se arma el proyecto del curso, no una conversación descartable.
+
+- ✅ Modal renombrado "✨ Crear curso con IA" → **"🎓 Proyecto de curso — Asistente IA"**, ensanchado a `max-width:920px` con layout de dos columnas: chat a la izquierda, panel **"📋 Proyecto del curso"** fijo a la derecha
+- ✅ Panel de progreso muestra en vivo los 10 bloques (A→J) de la Plantilla de Diseño Guiado ya existente en `agente-cursos` (necesidad educativa, destinatarios, objetivos, nivel/modalidad, recursos, estructura, evaluación, consideraciones especiales, ética/datos, ruta PEV) — cada uno con ⚪ pendiente / 🟡 en curso / ✅ completo + resumen de una línea con el dato confirmado
+- ✅ Edge function `agente-cursos`: nueva sección "7. PROGRESO DEL PROYECTO" en el system prompt — durante el modo INTAKE GUIADO, el agente emite `<PROGRESO_JSON>` en cada respuesta (acumulativo) con el estado de los bloques tocados hasta el momento
+- ✅ Frontend parsea `<PROGRESO_JSON>` igual que `<ESCENARIO_JSON>`/`<DOCUMENTO_JSON>`; el progreso queda guardado por mensaje en `agente_cursos_chats.historial` y se reconstruye al retomar un chat guardado (`cargarChatCurso`)
+- ✅ Botón "📋 Progreso" en el header para mostrar/ocultar el panel; en mobile el panel pasa a overlay a pantalla completa con su propio botón de cierre (sin depender del ancho de ventana para volver al chat)
+- ✅ Probado con Playwright contra el archivo real (bypaseando el login solo para inspección visual, sin credenciales): layout desktop de dos columnas, panel oculto por defecto en mobile, overlay fullscreen y su cierre — todo verificado antes de este commit
+- ✅ Backup de `index.html` y `agente-cursos/index.ts` previos al cambio en `backups/pre_rediseno_cursos_ia_20260909/` (también recuperable con `git checkout 094d5dd -- index.html supabase/functions/agente-cursos/index.ts`)
+
+**Deploy realizado (9 Sep 2026):** `agente-cursos` (nueva sección PROGRESO_JSON en el system prompt) — deployado en Supabase Dashboard.
+
+**Pendiente de decisión (no bloqueante):** si el panel de progreso resulta útil en la práctica, evaluar extraerlo de la ficha `ficha_diseno` en vez de un JSON paralelo, y unificar el render de burbujas (hoy sigue duplicado en 3 lugares: `sendCursoIA`, `cargarChatCurso`, mensaje de bienvenida) — no se tocó en este cambio para no ampliar el alcance.
+
+---
+
+## Implementado (9 Sep 2026) — Fix: no se podía cambiar el nombre de un curso ya creado
+
+**Motivación:** el modal de curso (`modal-curso`) solo tenía flujo de creación (`createCurso()`) — no existía ningún `editCurso()` ni forma de hacer PATCH del campo `nombre` una vez creado el curso. Detectado al pedir cambiar el nombre de un curso ya cargado (REPA).
+
+- ✅ Ícono ✎ al lado del título en el detalle de curso (`.cd-title`, `selectCurso()`) — click activa edición inline
+- ✅ `renombrarCurso(id)` reemplaza el título por un input pre-cargado con el nombre actual (autoseleccionado) + botones "✓ Guardar" / "Cancelar"; Enter guarda, Escape cancela
+- ✅ `guardarNombreCurso(id)` hace `PATCH cursos?id=eq.${id}` con el nombre nuevo, actualiza el array `cursos` en memoria y refresca el detalle + la grilla
+- ✅ Probado con Playwright contra el archivo real (sin login): el input aparece con el texto completo seleccionado y los botones funcionan
+
+---
+
 ## Implementado (9 Sep 2026) — Diploma: firma en 2 líneas, Coordinador, carga horaria + permisos instructor + aprobación de certificados
 
 ### Diploma
@@ -918,7 +952,7 @@ CREATE POLICY "Autenticados pueden actualizar firmas" ON storage.objects
 - ✅ Si el curso no tiene instructor vinculado en `curso_instructores`, no aplica el gate (se puede emitir igual, no hay firma de terceros en juego)
 - ✅ **Backfill obligatorio en el SQL de abajo:** los cursos ya existentes se marcan como aprobados automáticamente para no bloquear diplomas de cursos ya cerrados/en curso — el gate rige desde ahora en adelante para certificados nuevos
 
-**SQL pendiente (correr en Supabase SQL editor):**
+**SQL corrido (9 Sep 2026):**
 ```sql
 ALTER TABLE cursos ADD COLUMN IF NOT EXISTS certificados_aprobados boolean DEFAULT false;
 ALTER TABLE cursos ADD COLUMN IF NOT EXISTS certificados_aprobados_por text;
@@ -926,6 +960,68 @@ ALTER TABLE cursos ADD COLUMN IF NOT EXISTS certificados_aprobados_en timestampt
 -- Backfill: no bloquear cursos que ya venían funcionando antes de este cambio
 UPDATE cursos SET certificados_aprobados = true WHERE certificados_aprobados IS NOT true;
 ```
+
+---
+
+## Implementado (9 Sep 2026) — Agente de promociones de medios de pago
+
+**Motivación:** pedido de Tomás para tener un radar semanal de promociones de tarjetas/bancos (cuotas sin interés, descuentos) para ofrecer a los clientes al cobrar cursos.
+
+**Diseño acordado:** búsqueda web automática (Tavily) + revisión manual antes de que la promo cuente como vigente (mismo patrón que `agente_mejoras` en Comunicaciones) — no se publica nada sin que un admin la apruebe. Frecuencia: semanal.
+
+- ✅ Edge Function `agente-promociones` — busca con Tavily promociones de **Viumi, Payway, Banco Macro, Mercado Pago e ICBC**, le pasa los resultados a Claude Haiku para estructurarlos, borra los pendientes previos (evita acumulación de duplicados semana a semana) y carga los hallazgos nuevos como `estado='pendiente'`
+- ✅ Acepta autenticación por JWT de usuario (disparo manual) O por header `x-cron-secret` (disparo programado) — mismo patrón que `check-alertas-pagos`
+- ✅ Tabla `promociones_pago` — fuente, título, descripción, % descuento, cuotas sin interés, vigencia, url, estado (pendiente/aprobada/rechazada)
+- ✅ Nuevo tab **"🎁 Promociones"** en Cash Flow — sección "⏳ Pendientes de revisión" con botones Aprobar/Rechazar, sección "✅ Vigentes" con las aprobadas, botón "🔄 Buscar ahora" para disparo manual sin esperar al cron
+- ✅ Probado con Playwright contra el archivo real (datos simulados, sin backend): layout de dos secciones, botones funcionando
+
+**⚠️ Hallazgo importante durante la implementación:** `check-alertas-pagos` (función existente) tiene el soporte de `CRON_SECRET` en el código pero **nunca tuvo un disparador automático real** — ni pg_cron, ni GitHub Action, ni tarea programada. Hoy solo se ejecuta si alguien aprieta el botón manual del panel. Para que "semanal" sea real acá, se agrega `pg_cron` + `pg_net` (ver SQL abajo) — es la primera vez que este proyecto tiene un cron real corriendo del lado de Supabase.
+
+**Secret agregado en Supabase → Edge Functions → Secrets:**
+- `CRON_SECRET` = `8c41426e297656f051a3a69cf07fbab32ff734694890b1fd8533631399940187`
+  (ya existe `TAVILY_API_KEY` de agente-comunicaciones, se reutiliza)
+
+**SQL corrido (9 Sep 2026)** — tabla creada, extensiones `pg_cron`/`pg_net` activadas, job `agente-promociones-semanal` registrado (id 5, corre lunes 09:00 hora Salta):
+```sql
+-- Tabla de promociones
+CREATE TABLE IF NOT EXISTS promociones_pago (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  fuente text NOT NULL,
+  titulo text NOT NULL,
+  descripcion text,
+  descuento_pct numeric,
+  cuotas_sin_interes int,
+  vigencia_desde date,
+  vigencia_hasta date,
+  url_fuente text,
+  estado text DEFAULT 'pendiente' CHECK (estado IN ('pendiente','aprobada','rechazada')),
+  revisado_por text,
+  revisado_en timestamptz,
+  raw jsonb,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE promociones_pago ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Solo autenticados" ON promociones_pago FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- Cron semanal (lunes 09:00 hora Salta = 12:00 UTC)
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+
+SELECT cron.schedule(
+  'agente-promociones-semanal',
+  '0 12 * * 1',
+  $$
+  SELECT net.http_post(
+    url := 'https://jppxmdvddvbsvymogvcp.supabase.co/functions/v1/agente-promociones',
+    headers := jsonb_build_object('Content-Type','application/json','x-cron-secret','8c41426e297656f051a3a69cf07fbab32ff734694890b1fd8533631399940187'),
+    body := '{}'::jsonb
+  );
+  $$
+);
+```
+**Deploy realizado (9 Sep 2026):** `agente-promociones` deployado en Supabase Dashboard. Los 3 pasos (SQL + cron, secret, deploy) están completos — el flujo automático semanal ya está activo. Pendiente: probar "🔄 Buscar ahora" en el panel para validar el circuito end-to-end antes de esperar al primer disparo del cron.
+
+**Pendiente de decisión (no bloqueante):** si Viumi/Payway/ICBC no tienen suficiente presencia web indexada, la búsqueda puede volver vacía seguido para esas fuentes — si pasa varias semanas, evaluar si conviene cargar esas promos a mano en vez de por búsqueda.
 
 ---
 
