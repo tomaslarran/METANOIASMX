@@ -1028,14 +1028,14 @@ SELECT cron.schedule(
 - ✅ Cada nombre se matchea contra `inventario` (comparación normalizada sin tildes/mayúsculas, mismo criterio que el match de instructor por nombre — `_normTxt`)
 - ✅ Si matchea: se guarda en `_cursoIAMaterialesDetectados` y al confirmar el curso (`createCurso()`) se inserta solo en `curso_materiales` (cantidad estimada 1, editable después a mano)
 - ✅ Si NO matchea contra ningún ítem del Inventario: aviso `🔧 Mencionaron "X" pero no está en el Inventario` — no bloquea la creación, solo informa
-- ✅ Si matchea pero esas fechas ya están reservadas por otro curso: aviso `⚠️ "X" ya está reservado en "Y" en fechas superpuestas` **antes** de crear el curso
+- ✅ Si matchea y hay otro(s) curso(s) en fechas superpuestas usando el mismo ítem: suma las cantidades de todos (este curso + los demás) y compara contra `inventario.stock_actual` — si no alcanza, aviso `❌ no alcanza el stock en estas fechas` con el detalle de cuánto pide cada curso; si alcanza, aviso informativo (no bloqueante) **antes** de crear el curso
 
 ### Disponibilidad persistente en "Instructores y materiales"
-- ✅ `loadInstMat()` ahora cruza cada material ya asignado al curso contra `curso_materiales` de TODOS los demás cursos (mismo `item_id`) y compara fechas — si hay superposición (y el otro curso no está Cancelado), muestra debajo del ítem: `⚠️ También reservado en "Curso Y" (dd/mm → dd/mm)`. Aplica a cualquier curso, no solo a los creados por IA
+- ✅ `loadInstMat()` cruza cada material ya asignado al curso contra `curso_materiales` de TODOS los demás cursos (mismo `item_id`) con fechas superpuestas (excluye cursos Cancelados), **sumando** `cantidad_estimada` de todos ellos + la de este curso y comparando el total contra `inventario.stock_actual` — no es un chequeo binario "¿lo usa alguien más?", sino "¿la demanda simultánea supera el stock físico?" (ej: ítem con 3 unidades, un curso pide 3 y otro pide 2 en la misma fecha → `❌ No alcanza el stock: se necesitan 5 pero hay 3`). Si hay superposición pero el stock sí alcanza, el aviso es informativo (ámbar), no de error. Aplica a cualquier curso, no solo a los creados por IA
 - ✅ Se muestra también el campo `inventario.observaciones` (si tiene algo cargado) como nota de condición/mantenimiento del equipo debajo del ítem — reutiliza el campo existente en vez de agregar uno nuevo
 - ⚠️ No hay campo dedicado de "condición del equipo" en `inventario` — por ahora se resuelve con `observaciones` (texto libre). Si hace falta algo más estructurado (ej. estado operativo/en mantenimiento con opciones fijas), es un paso siguiente, no incluido acá.
 
-**Sin SQL pendiente** — usa columnas y tablas que ya existían (`inventario.observaciones`, `curso_materiales`).
+**Sin SQL pendiente** — usa columnas y tablas que ya existían (`inventario.observaciones`, `inventario.stock_actual`, `curso_materiales`).
 
 ---
 
