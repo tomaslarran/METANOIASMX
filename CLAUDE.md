@@ -487,6 +487,8 @@ ALTER TABLE cursos ADD CONSTRAINT cursos_estado_check CHECK (estado IN ('Borrado
 
 **SQL corrido (Supabase):** `instrumentos_evaluacion`, `evaluaciones_alumno`, `debriefings`, `nps_respuestas`, `nps_envios` + 4 INSERT instrumentos estándar
 
+**⚠️ Corrección (10 Sep 2026):** pese a lo anotado arriba, la tabla `debriefings` en realidad **nunca había quedado creada** en la base — el tab Debriefing de un curso tiraba `PGRST205: Could not find the table 'public.debriefings'`. Se re-creó vía SQL Editor (columnas `curso_id`, `titulo`, `fecha`, `instructor`, `duracion_min`, `escenario_desc`, `observaciones_generales`, `pearls_p/e/a/r/l/s`, RLS `authenticated`) y quedó funcionando. **No verificado todavía:** si `instrumentos_evaluacion`, `evaluaciones_alumno`, `nps_respuestas` y `nps_envios` sí llegaron a crearse en su momento — probar los tabs Evaluar y NPS de un curso antes de asumir que están bien.
+
 ## Implementado (27 Ago 2026) — Agente cursos: Excel, guardar/retomar chats, escenarios clínicos proyectables
 
 - ✅ **Leer Excel en chat IA** — soporte `.xlsx`/`.xls` en `adjuntarArchivoCursoIA`: carga xlsx.js dinámicamente, convierte cada hoja a CSV y lo envía como texto plano al agente
