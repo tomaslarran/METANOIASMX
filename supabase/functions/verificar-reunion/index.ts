@@ -19,7 +19,7 @@ function parsearAnalisis(rawText: string): any {
   return JSON.parse(txt);
 }
 
-async function analizarConClaude(transcripcionTexto: string, anthropicKey: string): Promise<any> {
+async function analizarConClaude(transcripcionTexto: string, anthropicKey: string, supabase?: any): Promise<any> {
   const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -65,6 +65,14 @@ Si el transcript está vacío o es incomprensible, devolvé el JSON con campos v
   if (claudeData.type === "error") {
     throw new Error(`Claude error: ${claudeData.error?.message || JSON.stringify(claudeData.error)}`);
   }
+  if (supabase && claudeData.usage) {
+    try {
+      await supabase.from("ia_uso").insert({
+        funcion: "verificar-reunion", modelo: claudeData.model || null,
+        input_tokens: claudeData.usage.input_tokens || 0, output_tokens: claudeData.usage.output_tokens || 0,
+      });
+    } catch (_) {}
+  }
   const rawText = claudeData.content?.[0]?.text ?? "{}";
   try {
     return parsearAnalisis(rawText);
@@ -105,7 +113,7 @@ serve(async (req) => {
 
     // ── Modo re-análisis: usar transcripción ya guardada, llamar solo a Claude ──
     if (reanalizar && reunion.transcripcion) {
-      const analisis = await analizarConClaude(reunion.transcripcion, ANTHROPIC_KEY);
+      const analisis = await analizarConClaude(reunion.transcripcion, ANTHROPIC_KEY, supabase);
       if (!analisis) throw new Error("Claude no pudo parsear la respuesta como JSON. Revisá los logs de la función.");
 
       await supabase.from("reuniones").update({
@@ -186,7 +194,7 @@ serve(async (req) => {
     const duracionMin = aaiData.audio_duration ? Math.round(aaiData.audio_duration / 60) : null;
 
     // ── Análisis con Claude ──
-    const analisis = await analizarConClaude(transcripcionTexto, ANTHROPIC_KEY) ?? {
+    const analisis = await analizarConClaude(transcripcionTexto, ANTHROPIC_KEY, supabase) ?? {
       resumen: null, decisiones: [], tareas_extraidas: [], proximos_pasos: [], temas_tratados: [],
     };
 

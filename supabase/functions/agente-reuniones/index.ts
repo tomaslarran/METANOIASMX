@@ -173,6 +173,15 @@ ${reunionFoco ? `## REUNIÓN EN FOCO\n${JSON.stringify(reunionFoco, null, 2)}` :
     if (data.type === "error") throw new Error(data.error?.message ?? "API error");
     const respuesta = data.content?.[0]?.text ?? "No pude generar una respuesta.";
 
+    if (data.usage) {
+      try {
+        await supabase.from("ia_uso").insert({
+          funcion: "agente-reuniones", modelo: data.model || null,
+          input_tokens: data.usage.input_tokens || 0, output_tokens: data.usage.output_tokens || 0,
+        });
+      } catch (_) {}
+    }
+
     return new Response(JSON.stringify({ respuesta }), {
       headers: { ...cors, "Content-Type": "application/json" },
     });

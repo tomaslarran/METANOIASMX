@@ -104,6 +104,16 @@ Deno.serve(async (req) => {
 
     const text = data.content?.[0]?.text?.trim() ?? "";
     const clean = text.replace(/^```[a-z]*\n?/,"").replace(/\n?```$/,"").trim();
+
+    if (data.usage) {
+      try {
+        await supabaseAuth.from("ia_uso").insert({
+          funcion: "leer-factura", modelo: data.model || model || null,
+          input_tokens: data.usage.input_tokens || 0, output_tokens: data.usage.output_tokens || 0,
+        });
+      } catch (_) {}
+    }
+
     return new Response(clean, { headers:{...corsHeaders,"Content-Type":"application/json"} });
   } catch(e) {
     return new Response(JSON.stringify({error:(e as Error).message}), { status:500, headers:corsHeaders });

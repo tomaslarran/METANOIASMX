@@ -185,6 +185,14 @@ Sé concreto, mencioná los números y conceptos específicos que aparecen arrib
         messages: [{ role: "user", content: prompt }],
       });
       resumen.analisis = (msg.content[0] as any).text;
+      if (msg.usage) {
+        try {
+          await supabase.from("ia_uso").insert({
+            funcion: "cierre-mensual", modelo: msg.model || null,
+            input_tokens: msg.usage.input_tokens || 0, output_tokens: msg.usage.output_tokens || 0,
+          });
+        } catch (_) {}
+      }
     }
 
     return new Response(JSON.stringify(resumen), {

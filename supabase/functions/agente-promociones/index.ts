@@ -100,6 +100,15 @@ Si no hay NINGUNA promoción concreta en todo el contexto, respondé: []`;
     const jsonMatch = texto.match(/\[[\s\S]*\]/);
     const promos = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
 
+    if (data.usage) {
+      try {
+        await supabase.from("ia_uso").insert({
+          funcion: "agente-promociones", modelo: data.model || null,
+          input_tokens: data.usage.input_tokens || 0, output_tokens: data.usage.output_tokens || 0,
+        });
+      } catch (_) {}
+    }
+
     // 3. Limpiar pendientes anteriores (no revisados) y cargar los nuevos hallazgos
     await supabase.from("promociones_pago").delete().eq("estado", "pendiente");
 

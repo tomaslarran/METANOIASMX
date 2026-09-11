@@ -401,6 +401,15 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
   const aiData = await aiRes.json();
   const rawResp: string = aiData.content?.[0]?.text ?? "";
 
+  if (aiData.usage) {
+    try {
+      await supabase.from("ia_uso").insert({
+        funcion: "agente-mensajes", modelo: aiData.model || null,
+        input_tokens: aiData.usage.input_tokens || 0, output_tokens: aiData.usage.output_tokens || 0,
+      });
+    } catch (_) {}
+  }
+
   if (!rawResp) {
     console.error("Claude devolvió respuesta vacía:", JSON.stringify(aiData).slice(0, 300));
     await sendReply("En este momento no puedo responder. Por favor escribime de nuevo en unos minutos. 😊");

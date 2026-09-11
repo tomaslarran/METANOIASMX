@@ -334,7 +334,7 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
   - Definir el modelo comercial (planes, precios, qué incluye cada uno)
   - Extender `organizacion_id` a las tablas que todavía no lo tienen (cursos, alumnos, instructores, finanzas, etc.) y todas las policies RLS filtrando por organización, no solo por `authenticated`
   - Onboarding de una organización nueva (alta de org + admin inicial)
-- [ ] **Análisis de costo de tokens de IA por organización/curso** — antes de vender, calcular: cuánto consume en tokens (Claude API) operar un curso típico de punta a punta (crear con IA, chat, escenarios clínicos, agente-mensajes, etc.) vs. cuánto se cobraría por suscripción/usuario, para que el pricing no quede regalado. Referencia: skill `claude-api` de este mismo Claude Code tiene precios y modelos actualizados para hacer la cuenta cuando se retome esto.
+- [x] **Análisis de costo de tokens de IA por organización/curso** — arrancado 11 Sep 2026: logging real de tokens por función (`ia_uso`, ver sección "Implementado (11 Sep 2026) — Logging de uso de IA"). Falta el análisis con datos reales (recién arranca a acumular desde el deploy) y decidir el modelo de precios; ver `estrategia_comercial_claude.md` para el marco de la conversación.
 
 ### Producto (baja prioridad)
 - [ ] Módulo COFRADIA — gestión de planes, suscriptores y contenido (Línea D)
@@ -1036,6 +1036,39 @@ SELECT cron.schedule(
 - ⚠️ No hay campo dedicado de "condición del equipo" en `inventario` — por ahora se resuelve con `observaciones` (texto libre). Si hace falta algo más estructurado (ej. estado operativo/en mantenimiento con opciones fijas), es un paso siguiente, no incluido acá.
 
 **Sin SQL pendiente** — usa columnas y tablas que ya existían (`inventario.observaciones`, `inventario.stock_actual`, `curso_materiales`).
+
+---
+
+## Implementado (11 Sep 2026) — Logging de uso de IA (tokens por función)
+
+**Motivación:** paso previo indispensable para poder vender el panel como SaaS con licencia mensual (ver "Convertir el panel en producto SaaS vendible") — antes de fijar un precio hay que saber cuánto cuesta realmente en tokens de Claude operar el panel. Hasta ahora no había ningún registro de consumo real, solo estimaciones.
+
+- ✅ Tabla `ia_uso` — cada llamada a la API de Claude que ya hace una edge function ahora también inserta una fila con `funcion`, `modelo` (leído en vivo de la respuesta de la API, no hardcodeado, para que no se desactualice si cambia el modelo pedido), `input_tokens`, `output_tokens`
+- ✅ Instrumentadas las **9 funciones de mayor volumen**: `agente-cursos`, `agente-mensajes`, `agente-financiero`, `leer-factura`, `agente-comunicaciones`, `verificar-reunion`, `agente-reuniones`, `agente-promociones`, `cierre-mensual`
+- ✅ Insert con `await` + `try/catch` silencioso (no bloquea la respuesta al usuario si falla el logging) — se descartó fire-and-forget porque el runtime de Deno no garantiza que una promesa sin awaitear termine de correr después de devuelta la respuesta
+- ✅ Las funciones sin cliente `service_role` propio (`leer-factura`, `agente-comunicaciones`) loguean con `supabaseAuth` (JWT del usuario) en vez de `supabase` — funciona por la policy `{authenticated} USING (true) WITH CHECK (true)` ya estándar en el proyecto
+- ⏸️ **Deliberadamente sin instrumentar** (bajo volumen, no aportan al análisis de costo por curso/organización): `agente-tareas`, `agente-ejecutivo`, `agente-oportunidades`, `analizar-feedback`, `cofradia-borrador`, `cofradia-clasificar`, `leer-prestamo`, `procesar-video`, `whatsapp-agente`, `agente-plataforma`. Sumar cuando se necesite afinar el análisis.
+- ⏸️ **Sin costo en $ calculado al insertar** — se guardan tokens crudos + modelo; la conversión a $ queda para una vista futura en el panel con una tabla de precios en JS fácil de actualizar (Sonnet 5 $2/$10 por MTok in/out, Sonnet 4.6 $3/$15, Haiku 4.5 $1/$5, Opus 5 $5/$25 — precios de referencia al 11 Sep 2026, la mayoría de las funciones de este proyecto todavía corre en `claude-sonnet-4-6`, no en Sonnet 5)
+- ⏸️ **Sin vista en el panel todavía** — por ahora los datos se consultan directo en Supabase (`SELECT funcion, modelo, sum(input_tokens), sum(output_tokens) FROM ia_uso GROUP BY funcion, modelo`). Agregar un tab de reporte cuando haya volumen real acumulado para analizar.
+
+**SQL pendiente (correr en Supabase SQL editor):**
+```sql
+CREATE TABLE IF NOT EXISTS ia_uso (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  funcion text NOT NULL,
+  modelo text,
+  input_tokens int DEFAULT 0,
+  output_tokens int DEFAULT 0,
+  organizacion_id uuid REFERENCES organizaciones(id),
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE ia_uso ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Solo autenticados" ON ia_uso FOR ALL TO authenticated USING (true) WITH CHECK (true);
+```
+
+**Deploy pendiente (Supabase Dashboard → Edge Functions) — las 9 funciones de arriba** necesitan redeploy para que el logging entre en efecto (el cambio ya está en el código, pero Supabase sirve la versión previamente deployada hasta que se pegue el código nuevo en el dashboard).
+
+**Ver también:** `estrategia_comercial_claude.md` en la raíz del repo — documento para llevar a una sesión aparte de Claude chat y trabajar la estrategia de comercialización/pricing del panel como SaaS.
 
 ---
 

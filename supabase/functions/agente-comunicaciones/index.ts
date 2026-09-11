@@ -222,6 +222,15 @@ ${resumen}`;
     if (claudeData.type === "error") throw new Error(claudeData.error?.message || "Error de Claude");
     const respuesta = claudeData.content?.[0]?.text ?? "Sin respuesta";
 
+    if (claudeData.usage) {
+      try {
+        await supabaseAuth.from("ia_uso").insert({
+          funcion: "agente-comunicaciones", modelo: claudeData.model || null,
+          input_tokens: claudeData.usage.input_tokens || 0, output_tokens: claudeData.usage.output_tokens || 0,
+        });
+      } catch (_) {}
+    }
+
     return new Response(JSON.stringify({ respuesta }), {
       headers: { ...cors, "Content-Type": "application/json" },
     });
