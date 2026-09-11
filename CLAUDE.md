@@ -1048,8 +1048,8 @@ SELECT cron.schedule(
 - ✅ Insert con `await` + `try/catch` silencioso (no bloquea la respuesta al usuario si falla el logging) — se descartó fire-and-forget porque el runtime de Deno no garantiza que una promesa sin awaitear termine de correr después de devuelta la respuesta
 - ✅ Las funciones sin cliente `service_role` propio (`leer-factura`, `agente-comunicaciones`) loguean con `supabaseAuth` (JWT del usuario) en vez de `supabase` — funciona por la policy `{authenticated} USING (true) WITH CHECK (true)` ya estándar en el proyecto
 - ⏸️ **Deliberadamente sin instrumentar** (bajo volumen, no aportan al análisis de costo por curso/organización): `agente-tareas`, `agente-ejecutivo`, `agente-oportunidades`, `analizar-feedback`, `cofradia-borrador`, `cofradia-clasificar`, `leer-prestamo`, `procesar-video`, `whatsapp-agente`, `agente-plataforma`. Sumar cuando se necesite afinar el análisis.
-- ⏸️ **Sin costo en $ calculado al insertar** — se guardan tokens crudos + modelo; la conversión a $ queda para una vista futura en el panel con una tabla de precios en JS fácil de actualizar (Sonnet 5 $2/$10 por MTok in/out, Sonnet 4.6 $3/$15, Haiku 4.5 $1/$5, Opus 5 $5/$25 — precios de referencia al 11 Sep 2026, la mayoría de las funciones de este proyecto todavía corre en `claude-sonnet-4-6`, no en Sonnet 5)
-- ⏸️ **Sin vista en el panel todavía** — por ahora los datos se consultan directo en Supabase (`SELECT funcion, modelo, sum(input_tokens), sum(output_tokens) FROM ia_uso GROUP BY funcion, modelo`). Agregar un tab de reporte cuando haya volumen real acumulado para analizar.
+- ⏸️ **Sin costo en $ calculado al insertar** — se guardan tokens crudos + modelo; la conversión a $ queda para una vista futura con una tabla de precios en JS fácil de actualizar (Sonnet 5 $2/$10 por MTok in/out, Sonnet 4.6 $3/$15, Haiku 4.5 $1/$5, Opus 5 $5/$25 — precios de referencia al 11 Sep 2026, la mayoría de las funciones de este proyecto todavía corre en `claude-sonnet-4-6`, no en Sonnet 5)
+- 🐛 **Bug preexistente encontrado y corregido de paso:** `agente-comunicaciones` usaba `createClient` sin importarlo — el chequeo de JWT (`const supabaseAuth = createClient(...)`) iba a tirar `ReferenceError` en cada llamada. Se agregó el import. Si el dashboard de Supabase tenía una versión distinta ya deployada (posible, dado el flujo de deploy manual), redeployar con el código actualizado del repo.
 
 **SQL pendiente (correr en Supabase SQL editor):**
 ```sql
@@ -1060,6 +1060,7 @@ CREATE TABLE IF NOT EXISTS ia_uso (
   input_tokens int DEFAULT 0,
   output_tokens int DEFAULT 0,
   organizacion_id uuid REFERENCES organizaciones(id),
+  usuario_id uuid REFERENCES usuarios(id),
   created_at timestamptz DEFAULT now()
 );
 ALTER TABLE ia_uso ENABLE ROW LEVEL SECURITY;
@@ -1069,6 +1070,40 @@ CREATE POLICY "Solo autenticados" ON ia_uso FOR ALL TO authenticated USING (true
 **Deploy pendiente (Supabase Dashboard → Edge Functions) — las 9 funciones de arriba** necesitan redeploy para que el logging entre en efecto (el cambio ya está en el código, pero Supabase sirve la versión previamente deployada hasta que se pegue el código nuevo en el dashboard).
 
 **Ver también:** `estrategia_comercial_claude.md` en la raíz del repo — documento para llevar a una sesión aparte de Claude chat y trabajar la estrategia de comercialización/pricing del panel como SaaS.
+
+---
+
+## Implementado (11 Sep 2026) — Límites de tokens de IA: aviso, bloqueo duro y pedido de aumento
+
+**Motivación:** pedido explícito de Tomás — no alcanza con medir el consumo de tokens (ver sección anterior), hace falta poder **restringir** cuánto puede gastar cada usuario/organización en IA, para poder contabilizar y cobrar por uso u ofrecer planes más altos cuando se venda el panel como SaaS. Decisión de diseño acordada: avisar al acercarse al límite, bloquear duro al alcanzarlo, y dejar la puerta abierta a "pagar por más" (sin pasarela de pago real todavía — hoy es un admin editando el límite a mano). Granularidad: por organización **y** por usuario, ambos límites independientes.
+
+### Esquema
+- `organizaciones.limite_tokens_mensual` (bigint, null = sin límite) + `alerta_pct_tokens` (int, default 80 — a qué % avisar)
+- `usuarios.limite_tokens_mensual` (bigint, null = sin tope individual — solo aplica el de la organización)
+- `ia_uso.usuario_id` — se agregó desde el arranque de la tabla (ver sección anterior) para poder sumar consumo por usuario, no solo por organización
+
+### Backend — bloqueo duro
+- Las mismas 9 edge functions instrumentadas para logging ahora también **chequean el límite antes de llamar a Claude** (`chequearLimiteIA()`, duplicada inline en cada función por la misma razón que el logging: el deploy es copy-paste de un solo archivo, no hay bundler compartido). Suma tokens del mes en curso (`ia_uso` desde el día 1) contra el límite de organización y, si el usuario tiene uno propio, también contra el de usuario — el primero que se pase corta.
+- Al bloquear, cada función devuelve el mensaje de bloqueo respetando su propio contrato de respuesta para que se vea bien en el lugar donde ya se muestra (no un error genérico): `agente-cursos`/`agente-financiero`/`agente-comunicaciones`/`agente-reuniones` devuelven `{respuesta: mensaje}` (se ve como una respuesta más del chat); `verificar-reunion` devuelve el objeto de análisis con `resumen` = mensaje y el resto de los campos vacíos; `cierre-mensual` deja `resumen.analisis` = mensaje sin llamar a Claude; `leer-factura` devuelve HTTP 402 con `{error: mensaje}` (su convención de error ya existente); `agente-promociones` devuelve `{encontradas:0, bloqueado:true, error: mensaje}` sin gastar en Tavily.
+- `agente-mensajes` (el bot de WhatsApp/IG/FB, sin JWT/usuario interno) es un caso especial: al bloquear, **no se queda mudo** — responde al cliente "en este momento no puedo responder automáticamente, el equipo se va a comunicar" y dispara la misma escalación por WhatsApp al equipo que ya existe para errores de Claude, marcando la conversación como pendiente. Como no hay usuario JWT en un webhook, el chequeo ahí es solo a nivel organización (asume la única organización activa — a revisar cuando haya multi-tenant real y cada línea de WhatsApp pertenezca a una org distinta).
+- El mensaje de bloqueo siempre incluye la fecha de renovación (primer día del mes siguiente) para que quede claro cuándo se resetea el conteo.
+
+### Frontend
+- **Módulo Usuarios** — nueva card "🎚️ Uso de IA — organización" arriba de la lista: barra de progreso con color (verde <80%, ámbar 80-99%, rojo ≥100% bloqueado), tokens usados/límite/%, fecha de renovación, y botón "Editar límite" para fijarlo (vacío = sin límite)
+- **Modal Editar usuario** — nuevo campo "Límite mensual de tokens de IA (personal)"; si está cargado, se ve un badge `🎚️ Xk tok/mes` en la card del usuario en el listado
+- **Dashboard de Alertas** — si el uso de la organización llega al `alerta_pct_tokens` (80% por defecto), aparece una alerta (🟡 aviso / 🔴 crítica si ya llegó al 100%) con el % actual y la fecha de renovación, que lleva al módulo Usuarios al clickearla
+- **"Pedir aumento" (v1):** hoy Tomás es admin y dueño de la única organización, así que "pedir aumento" es directamente editar el límite desde esa misma card — no hay pasarela de pago ni flujo de aprobación separado todavía. Cuando haya organizaciones-cliente reales pagando una licencia, ahí sí va a hacer falta un flujo real (ej: botón que abra un pedido de upgrade de plan en vez de un input editable a mano).
+
+**SQL pendiente (correr en Supabase SQL editor, junto con el de `ia_uso` de la sección anterior si todavía no se corrió):**
+```sql
+ALTER TABLE organizaciones ADD COLUMN IF NOT EXISTS limite_tokens_mensual bigint;
+ALTER TABLE organizaciones ADD COLUMN IF NOT EXISTS alerta_pct_tokens int DEFAULT 80;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS limite_tokens_mensual bigint;
+```
+
+**Deploy pendiente (Supabase Dashboard → Edge Functions):** las mismas 9 funciones de la sección de logging (`agente-cursos`, `agente-mensajes`, `agente-financiero`, `leer-factura`, `agente-comunicaciones`, `verificar-reunion`, `agente-reuniones`, `agente-promociones`, `cierre-mensual`) — el bloqueo por límite viaja en el mismo redeploy que el logging.
+
+**Sin límite cargado hoy = sin cambio de comportamiento** — tanto `organizaciones.limite_tokens_mensual` como `usuarios.limite_tokens_mensual` arrancan en `null`, así que nada se bloquea hasta que se cargue un número a propósito desde el panel.
 
 ---
 

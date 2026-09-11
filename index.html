@@ -2697,6 +2697,19 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </div>
   </div>
 
+  <!-- Uso de IA — organización -->
+  <div id="limite-ia-org-card" style="max-width:560px;background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:18px;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700;color:var(--tx)">🎚️ Uso de IA — organización</div>
+      <button class="btn sec" style="font-size:11px" onclick="toggleEditarLimiteOrg()">Editar límite</button>
+    </div>
+    <div id="limite-ia-org-body" style="font-size:12px;color:var(--tx3)">Cargando...</div>
+    <div id="limite-ia-org-edit" style="display:none;margin-top:10px;gap:8px;align-items:end">
+      <div style="flex:1"><label class="ml">Límite mensual de tokens (organización)</label><input class="mi" id="org-limite-ia" type="number" min="0" step="10000" placeholder="Vacío = sin límite"></div>
+      <button class="btn pri" style="font-size:12px" onclick="guardarLimiteOrg()">Guardar</button>
+    </div>
+  </div>
+
   <!-- Panel editar usuario -->
   <div id="edit-usuario-panel" style="display:none;max-width:560px;background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:18px;margin-bottom:16px">
     <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:12px">Editar usuario</div>
@@ -2711,6 +2724,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <input type="checkbox" id="eu-wpp-autorizado" style="width:15px;height:15px;cursor:pointer;accent-color:var(--gr)">
         <label style="font-size:12px;color:var(--tx2);cursor:pointer;line-height:1.3" for="eu-wpp-autorizado">📲 Autorizado carga facturas por WA</label>
       </div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label class="ml">🎚️ Límite mensual de tokens de IA (personal)</label>
+      <input class="mi" id="eu-limite-ia" type="number" min="0" step="1000" placeholder="Sin límite propio — usa solo el de la organización">
+      <div style="font-size:11px;color:var(--tx3);margin-top:3px">Dejalo vacío para que este usuario no tenga tope individual (solo aplica el límite de la organización, si hay uno cargado).</div>
     </div>
     <div style="display:flex;gap:8px">
       <button class="btn" onclick="closeEditUsuario()">Cancelar</button>
@@ -5249,6 +5267,28 @@ async function renderAlertas(){
         onclick:t.url_renovar?`window.open('${t.url_renovar}','_blank')`:`toast('Renovar en Supabase Secrets','inf')`
       });
     });
+  }catch(_){}
+
+  // ── Alerta de uso de IA (límite mensual de tokens de la organización) ──
+  try{
+    const orgs=await sb("organizaciones?select=id,limite_tokens_mensual,alerta_pct_tokens&order=created_at.asc&limit=1");
+    const org=orgs?.[0];
+    if(org?.limite_tokens_mensual){
+      const inicioMesIA=new Date();inicioMesIA.setDate(1);inicioMesIA.setHours(0,0,0,0);
+      const usoIA=await sb(`ia_uso?organizacion_id=eq.${org.id}&created_at=gte.${inicioMesIA.toISOString()}&select=input_tokens,output_tokens`);
+      const totalIA=(usoIA||[]).reduce((s,r)=>s+(r.input_tokens||0)+(r.output_tokens||0),0);
+      const pctIA=Math.round(totalIA/org.limite_tokens_mensual*100);
+      const alertaPct=org.alerta_pct_tokens||80;
+      const renuevaIA=new Date(inicioMesIA);renuevaIA.setMonth(renuevaIA.getMonth()+1);
+      const renuevaIAStr=renuevaIA.toLocaleDateString("es-AR",{day:"2-digit",month:"long"});
+      if(pctIA>=alertaPct){
+        alertas.push({tipo:"ia_uso",icon:pctIA>=100?"🔴":"🟡",urgencia:pctIA>=100?"critica":"semana",d:0,
+          titulo:pctIA>=100?"Límite de IA alcanzado — agentes bloqueados":`Uso de IA al ${pctIA}% del límite mensual`,
+          sub:`${totalIA.toLocaleString("es-AR")} / ${org.limite_tokens_mensual.toLocaleString("es-AR")} tokens este mes · Se renueva el ${renuevaIAStr}`,
+          fecha:null,
+          onclick:`goPage('usuarios',document.getElementById('nav-usuarios'))`});
+      }
+    }
   }catch(_){}
 
   // ── Alertas cruzadas ──
@@ -19809,12 +19849,13 @@ function copiarLinkInvitacion(){
   if(!val){toast("Sin link","inf");return;}
   navigator.clipboard.writeText(val).then(()=>toast("Link copiado","ok")).catch(()=>toast("Error al copiar","err"));
 }
-function openEditUsuario(id,nombre,email,telefono,wppAutorizado){
+function openEditUsuario(id,nombre,email,telefono,wppAutorizado,limiteIA){
   document.getElementById("eu-id").value=id;
   document.getElementById("eu-nombre").value=nombre||"";
   document.getElementById("eu-email").value=email||"";
   document.getElementById("eu-telefono").value=telefono||"";
   document.getElementById("eu-wpp-autorizado").checked=!!wppAutorizado;
+  document.getElementById("eu-limite-ia").value=(limiteIA===null||limiteIA===undefined)?"":limiteIA;
   document.getElementById("invitar-usuario-panel").style.display="none";
   document.getElementById("edit-usuario-panel").style.display="";
   document.getElementById("eu-nombre").focus();
@@ -19828,13 +19869,15 @@ async function saveEditUsuario(){
   const email=document.getElementById("eu-email").value.trim().toLowerCase();
   const telefono=document.getElementById("eu-telefono").value.trim()||null;
   const wpp_autorizado=document.getElementById("eu-wpp-autorizado").checked;
+  const limiteIAVal=document.getElementById("eu-limite-ia").value.trim();
+  const limite_tokens_mensual=limiteIAVal===""?null:parseInt(limiteIAVal,10);
   if(!nombre){toast("Escribí el nombre","err");return;}
   if(!email||!email.includes("@")){toast("Email inválido","err");return;}
   if(wpp_autorizado&&!telefono){toast("Ingresá el teléfono para autorizar WA","err");return;}
   const btn=document.getElementById("eu-save-btn");
   btn.disabled=true;btn.textContent="Guardando...";
   try{
-    await sb(`usuarios?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({nombre,email,telefono,wpp_autorizado})});
+    await sb(`usuarios?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({nombre,email,telefono,wpp_autorizado,limite_tokens_mensual})});
     closeEditUsuario();
     toast("Usuario actualizado","ok");
     loadUsuariosPage();
@@ -19847,12 +19890,63 @@ async function loadUsuariosPage(){
   if(!wrap)return;
   wrap.innerHTML=`<div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>`;
   try{
-    const users=await sb("usuarios?select=id,nombre,email,rol,estado,invitado_at,permisos_extra,telefono,wpp_autorizado&order=nombre");
+    const users=await sb("usuarios?select=id,nombre,email,rol,estado,invitado_at,permisos_extra,telefono,wpp_autorizado,limite_tokens_mensual&order=nombre");
     renderUsuariosPage(users||[]);
     loadInstrumentosPanel();
+    loadLimiteIAOrg();
   }catch(e){
     wrap.innerHTML=`<p style="color:var(--re);padding:20px">Error al cargar usuarios.</p>`;
   }
+}
+
+let _orgIALimiteId=null;
+async function loadLimiteIAOrg(){
+  const body=document.getElementById("limite-ia-org-body");
+  if(!body)return;
+  body.textContent="Cargando...";
+  try{
+    const orgs=await sb("organizaciones?select=id,limite_tokens_mensual&order=created_at.asc&limit=1");
+    const org=orgs?.[0];
+    if(!org){body.innerHTML=`Sin organización configurada — correr el SQL de <code>organizaciones</code>.`;return;}
+    _orgIALimiteId=org.id;
+    const inputLimite=document.getElementById("org-limite-ia");
+    if(inputLimite)inputLimite.value=org.limite_tokens_mensual??"";
+    const inicioMes=new Date();inicioMes.setDate(1);inicioMes.setHours(0,0,0,0);
+    const uso=await sb(`ia_uso?organizacion_id=eq.${org.id}&created_at=gte.${inicioMes.toISOString()}&select=input_tokens,output_tokens`);
+    const total=(uso||[]).reduce((s,r)=>s+(r.input_tokens||0)+(r.output_tokens||0),0);
+    const renueva=new Date(inicioMes);renueva.setMonth(renueva.getMonth()+1);
+    const renuevaStr=renueva.toLocaleDateString("es-AR",{day:"2-digit",month:"long"});
+    if(!org.limite_tokens_mensual){
+      body.innerHTML=`Sin límite configurado — los agentes de IA no tienen tope. Uso de este mes: <b>${total.toLocaleString("es-AR")}</b> tokens. El conteo mensual se reinicia el ${esc(renuevaStr)}.`;
+      return;
+    }
+    const pct=Math.min(100,Math.round(total/org.limite_tokens_mensual*100));
+    const color=pct>=100?"var(--re)":pct>=80?"#F59E0B":"var(--gr)";
+    const estado=pct>=100?"🔴 Bloqueado — se cortó el uso de IA":pct>=80?"🟡 Cerca del límite":"🟢 OK";
+    body.innerHTML=`
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px;gap:8px;flex-wrap:wrap">
+        <span>${total.toLocaleString("es-AR")} / ${org.limite_tokens_mensual.toLocaleString("es-AR")} tokens usados este mes (${pct}%)</span>
+        <span style="color:${color};font-weight:700">${estado}</span>
+      </div>
+      <div style="height:8px;background:var(--b);border-radius:5px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${color}"></div></div>
+      <div style="font-size:11px;color:var(--tx3);margin-top:6px">El conteo mensual se reinicia el ${esc(renuevaStr)}.</div>
+    `;
+  }catch(e){body.innerHTML=`<span style="color:var(--re)">Error al cargar uso de IA — ¿corriste el SQL de la tabla ia_uso?</span>`;}
+}
+function toggleEditarLimiteOrg(){
+  const el=document.getElementById("limite-ia-org-edit");
+  el.style.display=el.style.display==="none"?"flex":"none";
+}
+async function guardarLimiteOrg(){
+  if(!_orgIALimiteId){toast("Sin organización cargada","err");return;}
+  const val=document.getElementById("org-limite-ia").value.trim();
+  const limite_tokens_mensual=val===""?null:parseInt(val,10);
+  try{
+    await sb(`organizaciones?id=eq.${_orgIALimiteId}`,{method:"PATCH",body:JSON.stringify({limite_tokens_mensual})});
+    toast("Límite de IA de la organización actualizado","ok");
+    document.getElementById("limite-ia-org-edit").style.display="none";
+    loadLimiteIAOrg();
+  }catch(e){toast("Error: "+e.message,"err");}
 }
 
 let _usuariosData=[];
@@ -19875,6 +19969,7 @@ function renderUsuariosPage(users){
           ${isPending?` <span style="font-size:10px;padding:1px 7px;background:rgba(245,158,11,.12);color:#F59E0B;border-radius:8px;border:1px solid rgba(245,158,11,.3)">pendiente</span>`:""}
           ${isSuspended?` <span style="font-size:10px;padding:1px 7px;background:rgba(239,68,68,.1);color:var(--re);border-radius:8px;border:1px solid rgba(239,68,68,.2)">suspendido</span>`:""}
           ${u.wpp_autorizado?` <span style="font-size:10px;padding:1px 7px;background:rgba(37,211,102,.12);color:#25D166;border-radius:8px;border:1px solid rgba(37,211,102,.3)" title="${esc(u.telefono||"")}">📲 WA</span>`:""}
+          ${u.limite_tokens_mensual?` <span style="font-size:10px;padding:1px 7px;background:rgba(124,58,237,.12);color:var(--pu);border-radius:8px;border:1px solid rgba(124,58,237,.3)" title="Límite mensual de tokens de IA">🎚️ ${(u.limite_tokens_mensual/1000).toFixed(0)}k tok/mes</span>`:""}
         </div>
         <div class="urol-email">${esc(u.email||"")}</div>
         ${!isPending?`<span class="urol-badge ${rol}">${rolLabels[rol]||rol}</span>`:""}
@@ -19889,7 +19984,7 @@ function renderUsuariosPage(users){
           <option value="proveedor"${rol==="proveedor"?" selected":""}>Proveedor externo</option>
         </select>`:""}
         ${rol==="instructor"&&!isPending?(()=>{const hasCof=(u.permisos_extra||[]).includes("cofradia");return`<button class="btn" style="font-size:10px;padding:2px 8px;${hasCof?"background:rgba(124,58,237,.15);border-color:rgba(124,58,237,.4);color:var(--pu)":""}" onclick="toggleCofradiaAccess('${u.id}')" title="${hasCof?"Quitar acceso COFRADIA":"Dar acceso COFRADIA"}">🌐 COFRADIA${hasCof?" ✓":""}</button>`;})():""}
-        <button class="btn" style="font-size:11px;padding:3px 9px" onclick="openEditUsuario('${u.id}','${esc(u.nombre||"")}','${esc(u.email||"")}','${esc(u.telefono||"")}',${!!u.wpp_autorizado})">✏️ Editar</button>
+        <button class="btn" style="font-size:11px;padding:3px 9px" onclick="openEditUsuario('${u.id}','${esc(u.nombre||"")}','${esc(u.email||"")}','${esc(u.telefono||"")}',${!!u.wpp_autorizado},${u.limite_tokens_mensual??"null"})">✏️ Editar</button>
         ${!isSelf&&!isPending?`<button class="btn" style="font-size:11px;padding:3px 9px" onclick="toggleActivarUsuario('${u.id}',${isSuspended})">${isSuspended?"▶ Activar":"⏸ Pausar"}</button>`:""}
         ${rol==="proveedor"?`<button class="btn sec" style="font-size:11px;padding:3px 9px" onclick="openCuentaCorriente('${u.id}','${esc(u.nombre)}')">📊 Cuenta</button>`:""}
         ${!isSelf?`<button class="btn" style="font-size:11px;padding:3px 9px;background:var(--re);color:#fff;border-color:var(--re)" onclick="eliminarUsuario('${u.id}','${esc(u.nombre)}')">🗑</button>`:""}

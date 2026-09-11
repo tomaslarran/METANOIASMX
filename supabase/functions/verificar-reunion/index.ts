@@ -19,7 +19,57 @@ function parsearAnalisis(rawText: string): any {
   return JSON.parse(txt);
 }
 
-async function analizarConClaude(transcripcionTexto: string, anthropicKey: string, supabase?: any): Promise<any> {
+// Chequea el límite mensual de tokens de IA de la organización y del usuario.
+async function chequearLimiteIA(supabase: any, email: string | null) {
+  const inicioMes = new Date();
+  inicioMes.setUTCDate(1);
+  inicioMes.setUTCHours(0, 0, 0, 0);
+  const inicioMesISO = inicioMes.toISOString();
+  const renuevaMes = new Date(inicioMes);
+  renuevaMes.setUTCMonth(renuevaMes.getUTCMonth() + 1);
+  const renuevaStr = renuevaMes.toLocaleDateString("es-AR", { day: "2-digit", month: "long", timeZone: "America/Argentina/Salta" });
+
+  let usuario: any = null;
+  if (email) {
+    const { data } = await supabase.from("usuarios").select("id,organizacion_id,limite_tokens_mensual").ilike("email", email).maybeSingle();
+    usuario = data;
+  }
+  let organizacionId: string | null = usuario?.organizacion_id ?? null;
+  let organizacion: any = null;
+  if (organizacionId) {
+    const { data } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").eq("id", organizacionId).maybeSingle();
+    organizacion = data;
+  } else if (!email) {
+    const { data } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").limit(1).maybeSingle();
+    organizacion = data;
+    organizacionId = organizacion?.id ?? null;
+  }
+
+  if (organizacion?.limite_tokens_mensual) {
+    const { data: usoOrg } = await supabase.from("ia_uso").select("input_tokens,output_tokens").eq("organizacion_id", organizacionId).gte("created_at", inicioMesISO);
+    const totalOrg = (usoOrg || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0), 0);
+    if (totalOrg >= organizacion.limite_tokens_mensual) {
+      return { bloqueado: true, motivo: "organizacion", mensaje: `Se alcanzó el límite mensual de uso de IA de la organización. Se renueva el ${renuevaStr}. Pedile a un admin que amplíe el plan.`, usuarioId: usuario?.id ?? null, organizacionId };
+    }
+  }
+  if (usuario?.limite_tokens_mensual) {
+    const { data: usoUser } = await supabase.from("ia_uso").select("input_tokens,output_tokens").eq("usuario_id", usuario.id).gte("created_at", inicioMesISO);
+    const totalUser = (usoUser || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0), 0);
+    if (totalUser >= usuario.limite_tokens_mensual) {
+      return { bloqueado: true, motivo: "usuario", mensaje: `Alcanzaste tu límite mensual personal de uso de IA. Se renueva el ${renuevaStr}. Pedile a un admin que te amplíe el límite.`, usuarioId: usuario.id, organizacionId };
+    }
+  }
+  return { bloqueado: false, motivo: null as string | null, mensaje: null as string | null, usuarioId: usuario?.id ?? null, organizacionId };
+}
+
+async function analizarConClaude(transcripcionTexto: string, anthropicKey: string, supabase?: any, userEmail?: string | null): Promise<any> {
+  let limite: any = null;
+  if (supabase) {
+    limite = await chequearLimiteIA(supabase, userEmail ?? null);
+    if (limite.bloqueado) {
+      return { resumen: limite.mensaje, temas_tratados: [], decisiones: [], tareas_extraidas: [], proximos_pasos: [] };
+    }
+  }
   const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -70,6 +120,7 @@ Si el transcript está vacío o es incomprensible, devolvé el JSON con campos v
       await supabase.from("ia_uso").insert({
         funcion: "verificar-reunion", modelo: claudeData.model || null,
         input_tokens: claudeData.usage.input_tokens || 0, output_tokens: claudeData.usage.output_tokens || 0,
+        organizacion_id: limite?.organizacionId ?? null, usuario_id: limite?.usuarioId ?? null,
       });
     } catch (_) {}
   }
@@ -113,7 +164,7 @@ serve(async (req) => {
 
     // ── Modo re-análisis: usar transcripción ya guardada, llamar solo a Claude ──
     if (reanalizar && reunion.transcripcion) {
-      const analisis = await analizarConClaude(reunion.transcripcion, ANTHROPIC_KEY, supabase);
+      const analisis = await analizarConClaude(reunion.transcripcion, ANTHROPIC_KEY, supabase, user.email ?? null);
       if (!analisis) throw new Error("Claude no pudo parsear la respuesta como JSON. Revisá los logs de la función.");
 
       await supabase.from("reuniones").update({
@@ -194,7 +245,7 @@ serve(async (req) => {
     const duracionMin = aaiData.audio_duration ? Math.round(aaiData.audio_duration / 60) : null;
 
     // ── Análisis con Claude ──
-    const analisis = await analizarConClaude(transcripcionTexto, ANTHROPIC_KEY, supabase) ?? {
+    const analisis = await analizarConClaude(transcripcionTexto, ANTHROPIC_KEY, supabase, user.email ?? null) ?? {
       resumen: null, decisiones: [], tareas_extraidas: [], proximos_pasos: [], temas_tratados: [],
     };
 

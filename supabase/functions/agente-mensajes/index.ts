@@ -7,6 +7,28 @@ const WA_API = `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`;
 const IG_PAGE_ID = "17841470857318268";
 const FB_PAGE_ID = "478694861999786";
 
+// Chequea el límite mensual de tokens de IA. Sin JWT en este webhook — se asume
+// la única organización activa (single-tenant hoy; revisar cuando haya multi-tenant real).
+async function chequearLimiteIA(supabase: any) {
+  const inicioMes = new Date();
+  inicioMes.setUTCDate(1);
+  inicioMes.setUTCHours(0, 0, 0, 0);
+  const inicioMesISO = inicioMes.toISOString();
+  const renuevaMes = new Date(inicioMes);
+  renuevaMes.setUTCMonth(renuevaMes.getUTCMonth() + 1);
+  const renuevaStr = renuevaMes.toLocaleDateString("es-AR", { day: "2-digit", month: "long", timeZone: "America/Argentina/Salta" });
+
+  const { data: organizacion } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").limit(1).maybeSingle();
+  if (!organizacion?.limite_tokens_mensual) return { bloqueado: false, mensaje: null as string | null, organizacionId: organizacion?.id ?? null };
+
+  const { data: usoOrg } = await supabase.from("ia_uso").select("input_tokens,output_tokens").eq("organizacion_id", organizacion.id).gte("created_at", inicioMesISO);
+  const totalOrg = (usoOrg || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0), 0);
+  if (totalOrg >= organizacion.limite_tokens_mensual) {
+    return { bloqueado: true, mensaje: `límite mensual de IA de la organización alcanzado (se renueva el ${renuevaStr})`, organizacionId: organizacion.id };
+  }
+  return { bloqueado: false, mensaje: null as string | null, organizacionId: organizacion.id };
+}
+
 const EQUIPO = [
   { nombre: "Amparo", wa: Deno.env.get("WA_AMPARO") || "5493874462320" },
   { nombre: "Valentina", wa: Deno.env.get("WA_VALENTINA") || "5493875094959" },
@@ -372,6 +394,17 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
 
   const siteContent = await fetchWebContent("https://metanoiasmx.com/");
 
+  const limite = await chequearLimiteIA(supabase);
+  if (limite.bloqueado) {
+    console.warn("Bot pausado por límite de IA:", limite.mensaje);
+    await sendReply("En este momento no puedo responder automáticamente. El equipo se va a comunicar con vos en breve. 😊");
+    await sendEscalacion(`⚠️ Bot ${plataforma} pausado — ${limite.mensaje}. Mensaje de ${fromName} sin responder por IA: "${texto}"`);
+    if (idsPendientes.length > 0) {
+      await supabase.from("mensajes_publico").update({ respuesta: "[Bot pausado — límite de IA alcanzado]", estado: "pendiente" }).in("id", idsPendientes);
+    }
+    return;
+  }
+
   const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -406,6 +439,7 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
       await supabase.from("ia_uso").insert({
         funcion: "agente-mensajes", modelo: aiData.model || null,
         input_tokens: aiData.usage.input_tokens || 0, output_tokens: aiData.usage.output_tokens || 0,
+        organizacion_id: limite.organizacionId,
       });
     } catch (_) {}
   }

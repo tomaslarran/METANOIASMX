@@ -1,9 +1,53 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const cors = {
   "Access-Control-Allow-Origin": "https://tomaslarran.github.io",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Chequea el límite mensual de tokens de IA de la organización y del usuario.
+async function chequearLimiteIA(supabase: any, email: string | null) {
+  const inicioMes = new Date();
+  inicioMes.setUTCDate(1);
+  inicioMes.setUTCHours(0, 0, 0, 0);
+  const inicioMesISO = inicioMes.toISOString();
+  const renuevaMes = new Date(inicioMes);
+  renuevaMes.setUTCMonth(renuevaMes.getUTCMonth() + 1);
+  const renuevaStr = renuevaMes.toLocaleDateString("es-AR", { day: "2-digit", month: "long", timeZone: "America/Argentina/Salta" });
+
+  let usuario: any = null;
+  if (email) {
+    const { data } = await supabase.from("usuarios").select("id,organizacion_id,limite_tokens_mensual").ilike("email", email).maybeSingle();
+    usuario = data;
+  }
+  let organizacionId: string | null = usuario?.organizacion_id ?? null;
+  let organizacion: any = null;
+  if (organizacionId) {
+    const { data } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").eq("id", organizacionId).maybeSingle();
+    organizacion = data;
+  } else if (!email) {
+    const { data } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").limit(1).maybeSingle();
+    organizacion = data;
+    organizacionId = organizacion?.id ?? null;
+  }
+
+  if (organizacion?.limite_tokens_mensual) {
+    const { data: usoOrg } = await supabase.from("ia_uso").select("input_tokens,output_tokens").eq("organizacion_id", organizacionId).gte("created_at", inicioMesISO);
+    const totalOrg = (usoOrg || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0), 0);
+    if (totalOrg >= organizacion.limite_tokens_mensual) {
+      return { bloqueado: true, motivo: "organizacion", mensaje: `Se alcanzó el límite mensual de uso de IA de la organización. Se renueva el ${renuevaStr}. Pedile a un admin que amplíe el plan.`, usuarioId: usuario?.id ?? null, organizacionId };
+    }
+  }
+  if (usuario?.limite_tokens_mensual) {
+    const { data: usoUser } = await supabase.from("ia_uso").select("input_tokens,output_tokens").eq("usuario_id", usuario.id).gte("created_at", inicioMesISO);
+    const totalUser = (usoUser || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0), 0);
+    if (totalUser >= usuario.limite_tokens_mensual) {
+      return { bloqueado: true, motivo: "usuario", mensaje: `Alcanzaste tu límite mensual personal de uso de IA. Se renueva el ${renuevaStr}. Pedile a un admin que te amplíe el límite.`, usuarioId: usuario.id, organizacionId };
+    }
+  }
+  return { bloqueado: false, motivo: null as string | null, mensaje: null as string | null, usuarioId: usuario?.id ?? null, organizacionId };
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -202,6 +246,13 @@ HISTORIAL:
 ${resumen}`;
     }
 
+    const limite = await chequearLimiteIA(supabaseAuth, user.email ?? null);
+    if (limite.bloqueado) {
+      return new Response(JSON.stringify({ respuesta: limite.mensaje }), {
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
     const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -227,6 +278,7 @@ ${resumen}`;
         await supabaseAuth.from("ia_uso").insert({
           funcion: "agente-comunicaciones", modelo: claudeData.model || null,
           input_tokens: claudeData.usage.input_tokens || 0, output_tokens: claudeData.usage.output_tokens || 0,
+          organizacion_id: limite.organizacionId, usuario_id: limite.usuarioId,
         });
       } catch (_) {}
     }

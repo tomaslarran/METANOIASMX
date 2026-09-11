@@ -14,6 +14,50 @@ const FUENTES = [
   { nombre: "ICBC", query: "promociones ICBC Argentina descuentos cuotas sin interés tarjeta" },
 ];
 
+// Chequea el límite mensual de tokens de IA de la organización y del usuario.
+// email=null (disparo por cron) asume la única organización activa (single-tenant hoy).
+async function chequearLimiteIA(supabase: any, email: string | null) {
+  const inicioMes = new Date();
+  inicioMes.setUTCDate(1);
+  inicioMes.setUTCHours(0, 0, 0, 0);
+  const inicioMesISO = inicioMes.toISOString();
+  const renuevaMes = new Date(inicioMes);
+  renuevaMes.setUTCMonth(renuevaMes.getUTCMonth() + 1);
+  const renuevaStr = renuevaMes.toLocaleDateString("es-AR", { day: "2-digit", month: "long", timeZone: "America/Argentina/Salta" });
+
+  let usuario: any = null;
+  if (email) {
+    const { data } = await supabase.from("usuarios").select("id,organizacion_id,limite_tokens_mensual").ilike("email", email).maybeSingle();
+    usuario = data;
+  }
+  let organizacionId: string | null = usuario?.organizacion_id ?? null;
+  let organizacion: any = null;
+  if (organizacionId) {
+    const { data } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").eq("id", organizacionId).maybeSingle();
+    organizacion = data;
+  } else if (!email) {
+    const { data } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").limit(1).maybeSingle();
+    organizacion = data;
+    organizacionId = organizacion?.id ?? null;
+  }
+
+  if (organizacion?.limite_tokens_mensual) {
+    const { data: usoOrg } = await supabase.from("ia_uso").select("input_tokens,output_tokens").eq("organizacion_id", organizacionId).gte("created_at", inicioMesISO);
+    const totalOrg = (usoOrg || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0), 0);
+    if (totalOrg >= organizacion.limite_tokens_mensual) {
+      return { bloqueado: true, motivo: "organizacion", mensaje: `Se alcanzó el límite mensual de uso de IA de la organización. Se renueva el ${renuevaStr}. Pedile a un admin que amplíe el plan.`, usuarioId: usuario?.id ?? null, organizacionId };
+    }
+  }
+  if (usuario?.limite_tokens_mensual) {
+    const { data: usoUser } = await supabase.from("ia_uso").select("input_tokens,output_tokens").eq("usuario_id", usuario.id).gte("created_at", inicioMesISO);
+    const totalUser = (usoUser || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0), 0);
+    if (totalUser >= usuario.limite_tokens_mensual) {
+      return { bloqueado: true, motivo: "usuario", mensaje: `Alcanzaste tu límite mensual personal de uso de IA. Se renueva el ${renuevaStr}. Pedile a un admin que te amplíe el límite.`, usuarioId: usuario.id, organizacionId };
+    }
+  }
+  return { bloqueado: false, motivo: null as string | null, mensaje: null as string | null, usuarioId: usuario?.id ?? null, organizacionId };
+}
+
 async function buscarTavily(query: string, apiKey: string) {
   const res = await fetch("https://api.tavily.com/search", {
     method: "POST",
@@ -38,13 +82,14 @@ serve(async (req) => {
   const cronSecret = req.headers.get("x-cron-secret");
   const CRON_SECRET = Deno.env.get("CRON_SECRET");
   let autorizado = false;
+  let userEmail: string | null = null;
 
   if (cronSecret && CRON_SECRET && cronSecret === CRON_SECRET) {
     autorizado = true;
   } else if (authHeader) {
     const supabaseAuth = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
     const { data: { user } } = await supabaseAuth.auth.getUser();
-    if (user) autorizado = true;
+    if (user) { autorizado = true; userEmail = user.email ?? null; }
   }
   if (!autorizado) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
 
@@ -54,6 +99,13 @@ serve(async (req) => {
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     if (!TAVILY_API_KEY || !ANTHROPIC_API_KEY) {
       return new Response(JSON.stringify({ error: "Faltan TAVILY_API_KEY o ANTHROPIC_API_KEY en Secrets" }), { status: 500, headers: cors });
+    }
+
+    const limite = await chequearLimiteIA(supabase, userEmail);
+    if (limite.bloqueado) {
+      return new Response(JSON.stringify({ encontradas: 0, bloqueado: true, error: limite.mensaje }), {
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
     }
 
     // 1. Buscar en la web para cada fuente
@@ -105,6 +157,7 @@ Si no hay NINGUNA promoción concreta en todo el contexto, respondé: []`;
         await supabase.from("ia_uso").insert({
           funcion: "agente-promociones", modelo: data.model || null,
           input_tokens: data.usage.input_tokens || 0, output_tokens: data.usage.output_tokens || 0,
+          organizacion_id: limite.organizacionId, usuario_id: limite.usuarioId,
         });
       } catch (_) {}
     }
