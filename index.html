@@ -8677,11 +8677,31 @@ async function crearCursoDesdeIA(){
 Para "materiales_necesarios": lista los simuladores, maniquíes o equipos de simulación específicos que se mencionaron en la charla como necesarios para este curso (ej: "simulador de vía aérea", "maniquí de RCP adulto", "brazo de punción venosa"). Array vacío si no se mencionó ningún equipo puntual.`;
     const res=await fetchEdge("agente-cursos",{message:extractPrompt,historial:cursoIAHistorial.slice(-20),canal:"generacion"});
     const data=await res.json();
-    let texto=data.respuesta||"{}";
-    texto=texto.replace(/```json?/gi,"").replace(/```/g,"").trim();
+    if(!res.ok||data.error){
+      console.error("agente-cursos (extracción) devolvió error:",data.error||res.status);
+      toast("Error del agente: "+(data.error||`HTTP ${res.status}`),"err");
+      return;
+    }
+    let texto=(data.respuesta||"").replace(/```json?/gi,"").replace(/```/g,"").trim();
+    if(!texto){
+      toast("El agente no devolvió respuesta — reintentá","err");
+      return;
+    }
     const jsonMatch=texto.match(/\{[\s\S]*\}/);
     let curso={};
-    try{curso=JSON.parse(jsonMatch?.[0]||texto);}catch(e){toast("No pude extraer los datos — completá el formulario manualmente","inf");}
+    if(jsonMatch){
+      try{curso=JSON.parse(jsonMatch[0]);}
+      catch(e){
+        console.error("JSON inválido de agente-cursos:",texto);
+        toast("El agente respondió pero el JSON no se pudo leer — mirá la consola (F12) para ver el texto crudo","err");
+        return;
+      }
+    }else{
+      // No vino JSON — probablemente un bloqueo (límite de IA) o una respuesta conversacional en vez de la extracción
+      console.warn("agente-cursos no devolvió JSON, respuesta cruda:",texto);
+      toast(texto.slice(0,200),"err");
+      return;
+    }
     if(!curso.nombre&&cursoIAChatNombre)curso.nombre=cursoIAChatNombre;
 
     // Limpiar y pre-llenar el formulario
