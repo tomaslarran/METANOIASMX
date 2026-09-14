@@ -318,18 +318,23 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
 
   const insertData: any = { plataforma, from_id: fromId, from_name: fromName, mensaje: mensajeGuardado, estado: "pendiente", wa_message_id: msgId };
   if (imageUrl) insertData.imagen_url = imageUrl;
-  await supabase.from("mensajes_publico").insert(insertData);
+  const { data: insertedRow } = await supabase.from("mensajes_publico").insert(insertData).select("id").single();
+  const miRowId = insertedRow?.id;
 
   // Debounce
   await new Promise(r => setTimeout(r, 2000));
 
-  const { data: masNuevos } = await supabase
+  // ¿Soy el mensaje pendiente más reciente de esta conversación? Si llegó uno más nuevo mientras esperaba,
+  // dejo que la invocación de ESE mensaje sea la que procese y combine todo — evita que dos invocaciones
+  // concurrentes se cancelen mutuamente (antes: si había 2+ pendientes TODAS las invocaciones abortaban
+  // y la conversación quedaba sin ninguna respuesta).
+  const { data: masReciente } = await supabase
     .from("mensajes_publico").select("id")
     .eq("from_id", fromId).eq("plataforma", plataforma).eq("estado", "pendiente")
     .gt("created_at", new Date(Date.now() - 1800000).toISOString())
-    .order("created_at", { ascending: false }).limit(2);
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
 
-  if (masNuevos && masNuevos.length > 1) return;
+  if (masReciente && miRowId && masReciente.id !== miRowId) return;
 
   const { data: pendientes } = await supabase
     .from("mensajes_publico").select("id, mensaje")
@@ -343,7 +348,9 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
   const { data: historial } = await supabase
     .from("mensajes_publico").select("mensaje, respuesta")
     .eq("from_id", fromId).eq("plataforma", plataforma).eq("estado", "respondido")
-    .eq("es_respuesta_manual", false)
+    // Postgres: NULL != false, así que un .eq("es_respuesta_manual", false) estricto
+    // excluye también las filas viejas donde esa columna quedó en NULL (nunca se seteó explícitamente)
+    .or("es_respuesta_manual.eq.false,es_respuesta_manual.is.null")
     .gt("created_at", seisHorasAtras)
     .order("created_at", { ascending: false }).limit(5);
 

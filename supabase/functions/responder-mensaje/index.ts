@@ -7,6 +7,7 @@ const cors = {
 };
 
 const FB_PAGE_ID = "478694861999786";
+const IG_PAGE_ID = "17841470857318268";
 const WA_PHONE_NUMBER_ID = Deno.env.get("WA_PHONE_NUMBER_ID") || "1064395966761110";
 
 serve(async (req) => {
@@ -45,8 +46,12 @@ serve(async (req) => {
       }
 
     } else if (plataforma === "instagram" || plataforma === "facebook") {
-      const pageToken = Deno.env.get("META_FB_PAGE_TOKEN")!;
-      const res = await fetch(`https://graph.facebook.com/v21.0/${FB_PAGE_ID}/messages`, {
+      // Instagram DM e Facebook Messenger usan endpoint, page ID y token distintos (igual que en agente-mensajes)
+      const isIG = plataforma === "instagram";
+      const base = isIG ? "https://graph.instagram.com" : "https://graph.facebook.com";
+      const pageId = isIG ? IG_PAGE_ID : FB_PAGE_ID;
+      const pageToken = isIG ? Deno.env.get("META_ACCESS_TOKEN")! : Deno.env.get("META_FB_PAGE_TOKEN")!;
+      const res = await fetch(`${base}/v21.0/${pageId}/messages`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${pageToken}`, "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -490,7 +490,9 @@ ALTER TABLE cursos ADD CONSTRAINT cursos_estado_check CHECK (estado IN ('Borrado
 - ✅ Edge function `enviar-nps-wpp` — envía template `nps_post_curso` a inscriptos con teléfono (normalización automática formato argentino), registra en `nps_envios`
 - ✅ `agente-mensajes` actualizado — detecta respuesta numérica 0-10 de un número con envío pendiente, guarda en `nps_respuestas` (`canal='whatsapp'`), marca `nps_envios.estado='respondido'`, responde con agradecimiento. No pasa a Claude.
 - ✅ Tabla `nps_envios` — seguimiento de encuestas enviadas (telefono, wa_message_id, estado: enviado/respondido/fallido)
-- ⏳ Template Meta `nps_post_curso` — enviado para aprobación (categoría Utilidad, cuerpo: "Hola {{1}}, gracias por participar en *{{2}}*. ¿Cómo calificarías la experiencia del *1 al 10*? Solo respondé con el número."). Aprobación: 24-72h hábiles.
+- ✅ Template Meta `nps_post_curso` — **aprobada** (estado "Activa" en WhatsApp Manager desde el 28/08/2026, idioma **"Spanish" genérico, código `es`** — no `es_AR`).
+
+**✅ Fix (10 Sep 2026):** el envío fallaba con error Meta `#132001 Template name does not exist in the translation` — la edge function pedía la plantilla en idioma `es_AR` pero en WhatsApp Manager quedó aprobada como `es` (Spanish genérico, no Spanish ARG). Corregido `language.code` en `enviar-nps-wpp` de `es_AR` → `es` y deployado. Probado end-to-end: envío funcionando. De paso se mejoró el frontend (`enviarNPSWhatsApp` en `index.html`) para mostrar el error real de Meta en el toast en vez de solo loguearlo en consola — útil si aparece un error parecido en otra plantilla a futuro.
 
 **SQL corrido (Supabase):** `instrumentos_evaluacion`, `evaluaciones_alumno`, `debriefings`, `nps_respuestas`, `nps_envios` + 4 INSERT instrumentos estándar
 
