@@ -23272,7 +23272,8 @@ async function renderMsgDetalle(fromId,plataforma){
                 ${m.feedback?(m.feedback_comentario?
                   `<div style="font-size:11px;color:var(--tx3);background:var(--surf2);border-radius:8px;padding:5px 8px;font-style:italic">"${esc(m.feedback_comentario)}"</div>`:
                   `<div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap" id="fb-comment-${m.id}">
-                    <textarea id="fb-txt-${m.id}" placeholder="${m.feedback==="dislike"?"¿Qué mejorarías?":"¿Qué estuvo bien?"}" rows="2" style="font-size:11px;padding:5px 8px;border:1px solid var(--b);border-radius:8px;background:var(--surf);color:var(--tx);resize:none;flex:1;min-width:120px;font-family:inherit"></textarea>
+                    <textarea id="fb-txt-${m.id}" placeholder="${m.feedback==="dislike"?"¿Qué mejorarías?":"¿Qué estuvo bien?"}" rows="2" style="font-size:11px;padding:5px 8px;border:1px solid var(--b);border-radius:8px;background:var(--surf);color:var(--tx);resize:vertical;flex:1;min-width:120px;font-family:inherit"
+                      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();msgFeedbackComentario('${m.id}')}"></textarea>
                     <button onclick="msgFeedbackComentario('${m.id}')" style="background:var(--primary);border:none;border-radius:8px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap">Guardar</button>
                   </div>`
                 ):""}
