@@ -9385,12 +9385,85 @@ async function _transcribirAudioCursoIA(blob){
 
 // Abre el chat IA ya vinculado a un curso existente — si ya hay una charla guardada para
 // ese curso la retoma, si no arranca una nueva y la vincula automáticamente.
+// Trae los archivos ya cargados en la tab Archivos del curso (Word/Excel/PDF/imágenes) y los agrega
+// como contexto del chat IA — mismo pipeline de extracción que adjuntarArchivoCursoIA (mammoth/xlsx).
+// Cachea si stock permite, no genera cifras nuevas — solo lectura. Cap MAX_ARCHIVOS/MAX_MB para no disparar el costo en tokens.
+async function _cargarArchivosCursoComoContexto(cursoId){
+  const MAX_ARCHIVOS=6,MAX_MB=8;
+  try{
+    const rows=await sb(`curso_archivos?curso_id=eq.${cursoId}&order=created_at.desc&limit=20`);
+    if(!rows||!rows.length)return;
+    const STO=`${SB}/storage/v1/object/public/curso-archivos`;
+    let cargados=0,saltados=0;
+    for(const f of rows){
+      if(cargados>=MAX_ARCHIVOS)break;
+      if((f.storage_path||"").startsWith("http")){saltados++;continue;}
+      const lower=(f.nombre||"").toLowerCase();
+      const isDocx=lower.endsWith(".docx");
+      const isXlsx=lower.endsWith(".xlsx")||lower.endsWith(".xls");
+      const isPdf=lower.endsWith(".pdf");
+      const isImg=/\.(jpe?g|png|gif|webp)$/.test(lower);
+      const isTxt=lower.endsWith(".txt");
+      if(!isDocx&&!isXlsx&&!isPdf&&!isImg&&!isTxt){saltados++;continue;}
+      if(f.size_bytes&&f.size_bytes>MAX_MB*1024*1024){saltados++;continue;}
+      try{
+        const resp=await fetch(`${STO}/${f.storage_path}`);
+        if(!resp.ok){saltados++;continue;}
+        const blob=await resp.blob();
+        let tipo,base64;
+        if(isDocx){
+          await _loadMammoth();
+          const buf=await blob.arrayBuffer();
+          const result=await mammoth.extractRawText({arrayBuffer:buf});
+          const text=result.value||"(sin contenido)";
+          const bytes=new TextEncoder().encode(text);
+          base64=btoa(Array.from(bytes,b=>String.fromCharCode(b)).join(""));
+          tipo="text/plain";
+        }else if(isXlsx){
+          await _loadXLSX();
+          const buf=await blob.arrayBuffer();
+          const wb=XLSX.read(buf,{type:"array"});
+          const lines=[];
+          wb.SheetNames.forEach(name=>{lines.push(`=== Hoja: ${name} ===`);lines.push(XLSX.utils.sheet_to_csv(wb.Sheets[name]));});
+          const text=lines.join("\n")||"(sin contenido)";
+          const bytes=new TextEncoder().encode(text);
+          base64=btoa(Array.from(bytes,b=>String.fromCharCode(b)).join(""));
+          tipo="text/plain";
+        }else{
+          base64=await new Promise((res,rej)=>{
+            const rd=new FileReader();
+            rd.onload=e=>res(e.target.result.split(",")[1]);
+            rd.onerror=rej;
+            rd.readAsDataURL(blob);
+          });
+          tipo=isPdf?"application/pdf":(isImg?(blob.type||"image/jpeg"):"text/plain");
+        }
+        cursoIAArchivos.push({nombre:f.nombre,tipo,base64});
+        cargados++;
+      }catch(e){saltados++;}
+    }
+    if(cargados>0){
+      const adjDiv=document.getElementById("curso-ia-adjuntos");
+      if(adjDiv){
+        cursoIAArchivos.slice(-cargados).forEach(a=>{
+          adjDiv.innerHTML+=`<span style="background:var(--pl);color:var(--pu);border:1px solid var(--pu);border-radius:12px;padding:3px 10px;font-size:11px;display:flex;align-items:center;gap:5px">
+            📎 ${esc(a.nombre)}
+            <button onclick="this.parentElement.remove();cursoIAArchivos=cursoIAArchivos.filter(x=>x.nombre!=='${esc(a.nombre)}')" style="background:none;border:none;color:var(--tx3);cursor:pointer;font-size:13px;line-height:1">×</button>
+          </span>`;
+        });
+      }
+      toast(`📎 ${cargados} archivo(s) del curso cargados como contexto${saltados?` (${saltados} no se pudieron leer)`:""}`,"inf");
+    }
+  }catch(e){console.error("Error cargando archivos de curso como contexto:",e);}
+}
+
 async function abrirChatIAParaCurso(cursoId,cursoNombre){
   try{
     const rows=await sb(`agente_cursos_chats?curso_id=eq.${cursoId}&select=id,nombre&order=updated_at.desc&limit=1`);
     if(rows&&rows.length){
       await cargarChatCurso(rows[0].id,rows[0].nombre);
       openCrearCursoIA();
+      _cargarArchivosCursoComoContexto(cursoId);
     }else{
       cursoIAHistorial=[];
       cursoIAArchivos=[];
@@ -9412,6 +9485,7 @@ async function abrirChatIAParaCurso(cursoId,cursoNombre){
       if(actions)actions.style.display="none";
       renderProgresoCursoIA();
       _updateChatLabel();
+      _cargarArchivosCursoComoContexto(cursoId);
     }
   }catch(e){toast("Error al abrir el chat: "+e.message,"err");}
 }
@@ -10182,7 +10256,8 @@ async function sendCursoIA(){
       message:texto,
       historial:cursoIAHistorial.slice(-10).map(m=>({role:m.role,content:m.content})),
       canal:"panel",
-      archivos:cursoIAArchivos.length?cursoIAArchivos:undefined
+      archivos:cursoIAArchivos.length?cursoIAArchivos:undefined,
+      curso_id:_cursoIACursoVinculado||undefined
     });
     const data=await res.json();
     if(data.error){

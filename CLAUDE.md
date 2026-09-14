@@ -1177,6 +1177,24 @@ ALTER TABLE agente_cursos_chats ADD COLUMN IF NOT EXISTS curso_id uuid REFERENCE
 
 ---
 
+## Implementado (14 Sep 2026) — Contexto automático del curso en el chat IA ("Colaborar con IA")
+
+**Motivación:** pedido de Tomás — cuando se colabora con la IA sobre un curso ya existente (vía "🤖 Colaborar con IA"), que el agente tome automáticamente como contexto todo lo que ya está cargado de ese curso: archivos adjuntos (Word/Excel/PDF/imágenes), y su metadata (descripción, fechas, instructor, inscriptos, capacidad) — sin que el usuario tenga que volver a explicarlo o subir los archivos de nuevo a mano.
+
+- ✅ **Metadata del curso** — `agente-cursos` ahora recibe `curso_id` en cada mensaje (ya viajaba desde el fix de "Vincular curso"); cuando está presente, la edge function trae en paralelo la ficha completa del curso (`cursos.*`), instructores asignados (`curso_instructores→instructores`), inscriptos activos (`inscripciones→alumnos`, excluye Baja) y materiales reservados (`curso_materiales→inventario`), e inyecta todo como bloque `## CURSO EN CONTEXTO` en el system prompt — el agente ya no tiene que preguntar cupos, fechas o quién es el instructor si esos datos ya están cargados en el curso
+- ✅ **Archivos del curso como contexto** — nueva función `_cargarArchivosCursoComoContexto(cursoId)` en el frontend: al abrir "Colaborar con IA" (tanto para retomar un chat existente como para arrancar uno nuevo), trae los archivos ya subidos a la tab Archivos del curso (`curso_archivos`) y los agrega como adjuntos del chat reusando el mismo pipeline de extracción ya probado en `adjuntarArchivoCursoIA` (mammoth para `.docx`, xlsx.js para `.xlsx`/`.xls`, base64 directo para PDF/imágenes) — se ven como chips 📎 en el chat, removibles igual que un adjunto manual
+- ✅ **Límites de costo** — máximo 6 archivos y 8MB por archivo por auto-carga (`MAX_ARCHIVOS`/`MAX_MB` en la función); links externos (YouTube, etc.) y formatos sin extractor (ej. `.pptx`, video) se saltean en silencio — solo se avisa con un toast el conteo de cargados/saltados
+- ℹ️ El auto-guardado de documentos generados en este contexto sigue yendo al curso vinculado (fix anterior) — este cambio solo agrega qué entra como CONTEXTO de lectura, no toca el guardado de salida
+
+**Sin SQL pendiente** — no se agregaron columnas nuevas, solo lectura de tablas ya existentes.
+
+**Deploy pendiente (Supabase Dashboard → Edge Functions):**
+- `agente-cursos` (nuevo bloque CURSO EN CONTEXTO en el system prompt)
+
+El resto (`_cargarArchivosCursoComoContexto` y su wiring) es 100% frontend — alcanza con `git pull`, sin redeploy.
+
+---
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:

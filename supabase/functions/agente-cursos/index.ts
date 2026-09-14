@@ -389,7 +389,7 @@ serve(async (req) => {
   if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
 
   try {
-    const { message, historial = [], canal = "panel", archivos = [] } = await req.json();
+    const { message, historial = [], canal = "panel", archivos = [], curso_id = null } = await req.json();
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -404,6 +404,27 @@ serve(async (req) => {
       ]);
       cursos = c;
       instructores.data = inst.data ?? [];
+    }
+
+    // Cuando la charla está vinculada a un curso ya existente, traemos su ficha completa
+    // (metadata + instructores + inscriptos + materiales) para que el agente la tenga como contexto.
+    let cursoContexto: any = null;
+    if (curso_id) {
+      const [cursoRow, cursoInst, inscrip, cursoMat] = await Promise.all([
+        supabase.from("cursos").select("*").eq("id", curso_id).maybeSingle(),
+        supabase.from("curso_instructores").select("rol,instructores(nombre,apellido,email,especialidad)").eq("curso_id", curso_id),
+        supabase.from("inscripciones").select("estado,monto,cuotas,alumnos(nombre,apellido)").eq("curso_id", curso_id).neq("estado", "Baja"),
+        supabase.from("curso_materiales").select("cantidad_estimada,inventario(nombre,stock_actual)").eq("curso_id", curso_id),
+      ]);
+      if (cursoRow.data) {
+        cursoContexto = {
+          curso: cursoRow.data,
+          instructores_asignados: cursoInst.data ?? [],
+          inscriptos_count: (inscrip.data ?? []).length,
+          inscriptos: inscrip.data ?? [],
+          materiales: cursoMat.data ?? [],
+        };
+      }
     }
 
     const hoy = new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Salta" });
@@ -523,7 +544,11 @@ ${ESTRATEGIA_OFERTA}
 ${PLANTILLA_DISENO}
 
 CURSOS ACTUALES: ${JSON.stringify(cursos.data)}
-INSTRUCTORES: ${JSON.stringify(instructores.data)}`;
+INSTRUCTORES: ${JSON.stringify(instructores.data)}
+
+${cursoContexto ? `## CURSO EN CONTEXTO
+Esta conversación está vinculada al siguiente curso ya existente. Es el foco de la charla: usá estos datos reales (no los reinventes ni le pidas al usuario datos que ya están acá) al responder consultas, generar documentos o discutir cambios sobre este curso en particular.
+${JSON.stringify(cursoContexto, null, 2)}` : ""}`;
 
     // Anthropic rechaza cualquier campo que no sea role/content en messages — el historial
     // del frontend trae campos extra (nombre, escenario, progreso) para uso propio del panel.
