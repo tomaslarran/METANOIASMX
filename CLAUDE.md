@@ -1166,7 +1166,7 @@ ALTER TABLE cursos ALTER COLUMN duracion_horas TYPE numeric USING duracion_horas
 - ✅ `_descargarDocumentoIA()` ahora prioriza el curso vinculado del chat sobre `_cursoDetalleId`; si no hay ningún curso vinculado, muestra un toast explicando que hay que vincular antes de poder guardar el documento — antes fallaba en silencio contra un destino equivocado o inexistente
 - ℹ️ El flujo de "Crear curso con IA" desde cero no se ve afectado — sigue usando el `id` real del curso recién creado (`createCurso()`), no depende de este vínculo
 
-**SQL pendiente (correr en Supabase SQL editor):**
+**SQL corrido (14 Sep 2026):**
 ```sql
 ALTER TABLE agente_cursos_chats ADD COLUMN IF NOT EXISTS curso_id uuid REFERENCES cursos(id);
 ```
@@ -1204,6 +1204,8 @@ El resto (`_cargarArchivosCursoComoContexto` y su wiring) es 100% frontend — a
 - ⚠️ **Nota para próximos botones con nombres dinámicos:** NUNCA usar `JSON.stringify(texto)` directo dentro de un atributo `onclick="..."` — rompe siempre. El escape correcto para JS embebido en un atributo doble-comillado es backslash literal (`\\'`), no la entidad HTML `&#39;` (que decodifica de vuelta a comilla simple real antes de que el navegador compile el handler, y NO protege el string JS interno — se comprobó también con Playwright al armar este fix). Varios botones ya existentes en el archivo (`abrirChatColaborativo`, `cargarChatCurso` desde el listado, invitaciones de chat, conversaciones internas) usan el patrón `&#39;` y quedarían con el mismo problema si el nombre/usuario tiene un apóstrofe — no se tocaron en este fix por no ampliar el alcance, pero si aparece un síntoma similar en alguno de ellos, aplicar el mismo fix (`\\'` en vez de `&#39;`).
 
 **Sin SQL ni deploy de Edge Function** — 100% frontend, alcanza con `git pull`.
+
+**✅ Confirmado en producción (14 Sep 2026):** una vez corrido el `ALTER TABLE agente_cursos_chats ADD COLUMN curso_id...` pendiente (ver sección "Vincular chat IA de cursos a un curso existente" arriba, que faltaba correr y tiraba `42703 column agente_cursos_chats.curso_id does not exist` al clickear el botón), Tomás probó el botón "Colaborar con IA" end-to-end y quedó funcionando.
 
 ---
 
