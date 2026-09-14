@@ -195,7 +195,8 @@ ${reunionFoco ? `## REUNIÓN EN FOCO\n${JSON.stringify(reunionFoco, null, 2)}` :
 - Si te preguntan qué pasó con algo: cruzá decisiones y tareas extraídas de múltiples reuniones
 - Si una oportunidad tiene reunión vinculada: conectá lo que se decidió con el estado actual de la oportunidad`;
 
-    const historialReciente = historial.slice(-10);
+    // Anthropic rechaza cualquier campo que no sea role/content en messages.
+    const historialReciente = historial.slice(-10).map((h: any) => ({ role: h.role, content: h.content }));
 
     const limite = await chequearLimiteIA(supabase, user.email ?? null);
     if (limite.bloqueado) {

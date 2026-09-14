@@ -136,7 +136,8 @@ COBRANZAS DE CURSOS - INSCRIPCIONES (estado=pagado/pendiente/cuotas, monto=lo ab
 ${JSON.stringify(inscripciones.data)}`;
 
     // Limitar historial para no exceder contexto (sistema prompt es grande)
-    const historialReciente = historial.slice(-6);
+    // Anthropic rechaza cualquier campo que no sea role/content en messages.
+    const historialReciente = historial.slice(-6).map((h: any) => ({ role: h.role, content: h.content }));
 
     const limite = await chequearLimiteIA(supabase, user.email ?? null);
     if (limite.bloqueado) {

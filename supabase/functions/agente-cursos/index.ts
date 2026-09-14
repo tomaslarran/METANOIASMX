@@ -524,7 +524,9 @@ ${PLANTILLA_DISENO}
 CURSOS ACTUALES: ${JSON.stringify(cursos.data)}
 INSTRUCTORES: ${JSON.stringify(instructores.data)}`;
 
-    const historialReciente = historial.slice(-8);
+    // Anthropic rechaza cualquier campo que no sea role/content en messages — el historial
+    // del frontend trae campos extra (nombre, escenario, progreso) para uso propio del panel.
+    const historialReciente = historial.slice(-8).map((h: any) => ({ role: h.role, content: h.content }));
 
     let userContent: any = message;
     if (archivos && archivos.length > 0) {
