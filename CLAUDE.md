@@ -1140,6 +1140,22 @@ ALTER TABLE cursos ALTER COLUMN duracion_horas TYPE numeric USING duracion_horas
 
 ---
 
+## Fix (14 Sep 2026) — Archivos de curso no se guardaban en el panel + consistencia numérica en documentos IA
+
+**Motivación:** siguiendo con las pruebas de "Crear curso con IA", surgieron 3 cosas más: (1) confusión sobre por qué un curso recién creado "desaparecía" — resultó ser que queda en estado Borrador y hay que mirar la sub-pestaña Borradores, no es un bug; (2) los documentos generados por el agente (cronograma, consentimiento) se descargaban bien a la PC pero nunca quedaban guardados en la tab Archivos del curso; (3) un documento generado mostraba números que no coincidían con los ya charlados (30 inscriptos confirmados → el documento decía 15, y aparecían horas cátedra de la nada).
+
+- ✅ **Causa real de (2):** `_guardarArchivoEnCurso()` subía el archivo con un `fetch()` directo del navegador a `/storage/v1/object/curso-archivos/...` — el mismo mecanismo que ya falla silenciosamente para `firmas-instructores` (bug de plataforma sin resolver, ver nota del 9 Sep: policy y JWT correctos, Supabase igual lo rechaza). El error quedaba atrapado en un `catch` que solo lo logueaba a consola, así que en el panel no se veía ningún aviso — parecía que "no pasaba nada". Fix: nueva Edge Function `subir-archivo-curso` que sube el archivo con `service_role` (no depende de esa RLS rota) e inserta la fila en `curso_archivos`; `_guardarArchivoEnCurso()` ahora llama a esa función en vez de subir directo. Esto arregla **tanto** el auto-guardado de documentos generados por IA **como** la subida manual de archivos ("📤 Subir archivo"), porque ambas pasan por la misma función. También se agregó un toast de error visible si la subida falla — antes quedaba completamente silencioso.
+- ✅ **Causa de (3):** el agente no tenía ninguna instrucción explícita de mantener los números ya confirmados al generar un documento — cada `<DOCUMENTO_JSON>` se genera en una llamada separada a Claude, sin garantía de reusar cifras de mensajes anteriores. Se agregó una regla explícita en `agente-cursos`: "CONSISTENCIA NUMÉRICA OBLIGATORIA — usá siempre los mismos valores ya confirmados... NUNCA los recalcules, redondees ni inventes". Mitiga el problema pero no lo elimina al 100% — sigue siendo generación de un LLM, no una plantilla determinística.
+- ℹ️ **(1) no era un bug** — los cursos nuevos se crean en estado `Borrador` por defecto y el módulo Cursos separa la vista en sub-pestañas Activos / Borradores / Completados.
+
+**Riesgo actualizado:** el bug de Storage de (2) confirma que el problema de `firmas-instructores` **no está limitado a usuarios no-admin** como se sospechaba el 9 Sep — le pasó a Tomás (admin) también. Quedan con el mismo riesgo sin corregir: `Facturas`, `impuestos-vep`, `oportunidades` (cualquier otro upload directo a Storage desde el frontend). Aplicar el mismo workaround (Edge Function + `service_role`) si aparece el mismo síntoma ahí.
+
+**Deploy pendiente (Supabase Dashboard → Edge Functions):**
+- `subir-archivo-curso` (nueva)
+- `agente-cursos` (regla de consistencia numérica)
+
+---
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:

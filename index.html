@@ -8442,24 +8442,36 @@ async function loadCursoArchivos(cursoId){
   }catch(e){cont.innerHTML=`<div style="color:var(--re);padding:20px">Error: ${esc(e.message)}</div>`;}
 }
 
+function _blobToBase64(blob){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onloadend=()=>resolve(String(reader.result).split(",")[1]||"");
+    reader.onerror=reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Sube vía función del servidor (service_role) en vez de directo del navegador a Storage —
+// el upload directo a curso-archivos falla silenciosamente por el mismo bug de plataforma
+// ya documentado con firmas-instructores (policy y JWT correctos, igual lo rechaza).
 async function _guardarArchivoEnCurso(cursoId,blob,nombre,tipo,generadoIA=false,silencioso=false){
   try{
-    const safe=nombre.replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,80);
-    const path=`${cursoId}/${tipo}/${Date.now()}_${safe}`;
-    const subirArchivo=()=>fetch(`${SB}/storage/v1/object/curso-archivos/${path}`,{
-      method:"POST",
-      headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":blob.type||"application/octet-stream","x-upsert":"false"},
-      body:blob
-    });
-    let upRes=await subirArchivo();
-    if(!upRes.ok&&(upRes.status===401||upRes.status===403)&&await sbRefreshToken())upRes=await subirArchivo();
-    if(!upRes.ok){const t=await upRes.text();throw new Error(t);}
     const sess=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
-    await sb("curso_archivos",{method:"POST",body:JSON.stringify({curso_id:cursoId,tipo,nombre,storage_path:path,size_bytes:blob.size,subido_por:sess.id||null,generado_ia:generadoIA})});
+    const fileBase64=await _blobToBase64(blob);
+    const res=await fetchEdge("subir-archivo-curso",{
+      cursoId,tipo,nombre,generadoIA,fileBase64,
+      contentType:blob.type||"application/octet-stream",
+      subidoPor:sess.id||null
+    });
+    const data=await res.json();
+    if(!res.ok||data.error)throw new Error(data.error||`HTTP ${res.status}`);
     if(!silencioso)toast(`Guardado en el curso: ${nombre}`,"ok");
     const cont=document.getElementById(`archivos-content-${cursoId}`);
     if(cont&&cont.parentElement&&cont.parentElement.style.display!=="none")loadCursoArchivos(cursoId);
-  }catch(e){console.error("Error guardando archivo en curso:",e);}
+  }catch(e){
+    console.error("Error guardando archivo en curso:",e);
+    toast(`No se pudo guardar "${nombre}" en el curso: `+e.message,"err");
+  }
 }
 
 function _base64ToBlob(base64,mime){
