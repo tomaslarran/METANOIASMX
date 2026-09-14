@@ -1173,6 +1173,8 @@ ALTER TABLE agente_cursos_chats ADD COLUMN IF NOT EXISTS curso_id uuid REFERENCE
 
 **Sin deploy de Edge Function** — es 100% frontend, alcanza con `git push`.
 
+**Complemento (mismo día):** botón **"🤖 Colaborar con IA"** en el header del detalle de cada curso — abre el chat ya vinculado a ese curso automáticamente (`abrirChatIAParaCurso()`): si ya existe una charla guardada con ese `curso_id` la retoma, si no arranca una nueva con el vínculo puesto de entrada. Mientras el chat esté vinculado a un curso existente, el botón "💾 Crear curso" queda oculto (evita crear un curso duplicado por error al confundirlo con el flujo de creación desde cero).
+
 ---
 
 ## Notas técnicas críticas
