@@ -1195,6 +1195,18 @@ El resto (`_cargarArchivosCursoComoContexto` y su wiring) es 100% frontend — a
 
 ---
 
+## Fix (14 Sep 2026) — Botón "🤖 Colaborar con IA" no hacía nada
+
+**Motivación:** Tomás reportó que el botón "Colaborar con IA" del detalle de curso no reaccionaba al clickearlo — ni abría el modal ni tiraba ningún error visible.
+
+- ✅ **Causa real:** el botón armaba su `onclick` con `${JSON.stringify(curso.nombre||"")}` dentro de un atributo HTML delimitado por comillas dobles (`onclick="..."`). `JSON.stringify` de un string SIEMPRE envuelve el resultado en comillas dobles literales — al insertarse dentro de un atributo que también usa comillas dobles, el navegador cortaba el atributo ahí mismo, dejando el handler con JS incompleto (`abrirChatIAParaCurso('c1',` sin cerrar) → `Uncaught SyntaxError: Unexpected end of input` en la consola del navegador, sin ningún toast ni señal visible en el panel. Pasaba con **cualquier** nombre de curso, no un caso raro — reproducido con Playwright contra el archivo real (click real sobre el botón, no invocación directa de la función) confirmando el error exacto antes de tocar nada.
+- ✅ **Fix:** reemplazado por el patrón ya usado en el resto del archivo para pasar strings dinámicos a un `onclick` — comillas simples para el argumento JS + escape de apóstrofes con `\'` (backslash real en el HTML fuente, no entidad `&#39;`): `'${esc(curso.nombre||"").replace(/'/g,"\\'")}'`. Verificado con Playwright con click real: ahora abre el modal correctamente, incluido un caso de prueba con apóstrofe en el nombre del curso.
+- ⚠️ **Nota para próximos botones con nombres dinámicos:** NUNCA usar `JSON.stringify(texto)` directo dentro de un atributo `onclick="..."` — rompe siempre. El escape correcto para JS embebido en un atributo doble-comillado es backslash literal (`\\'`), no la entidad HTML `&#39;` (que decodifica de vuelta a comilla simple real antes de que el navegador compile el handler, y NO protege el string JS interno — se comprobó también con Playwright al armar este fix). Varios botones ya existentes en el archivo (`abrirChatColaborativo`, `cargarChatCurso` desde el listado, invitaciones de chat, conversaciones internas) usan el patrón `&#39;` y quedarían con el mismo problema si el nombre/usuario tiene un apóstrofe — no se tocaron en este fix por no ampliar el alcance, pero si aparece un síntoma similar en alguno de ellos, aplicar el mismo fix (`\\'` en vez de `&#39;`).
+
+**Sin SQL ni deploy de Edge Function** — 100% frontend, alcanza con `git pull`.
+
+---
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:
