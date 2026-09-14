@@ -1123,6 +1123,23 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS limite_tokens_mensual bigint;
 
 ---
 
+## Fix (14 Sep 2026) — Chat IA de cursos no extraía nada al crear curso + `duracion_horas` no acepta decimales
+
+**Motivación:** Tomás reportó que "Crear curso con IA" no completaba ningún campo del formulario (ni nombre, ni fecha, ni instructor) pese a haber charlado con el agente sobre el curso.
+
+- ✅ **Causa raíz real:** el historial del chat de cursos guarda un campo extra `nombre` por mensaje (para mostrarlo sobre las burbujas, feature del 3 Sep) y ese historial se manda tal cual como `messages` a la API de Claude — que rechaza cualquier campo que no sea `role`/`content` (`400 — messages.0.nombre: Extra inputs are not permitted`). Rompía **toda** llamada que llevara historial (no solo la extracción del formulario), aunque el chat en sí seguía andando porque cada mensaje individual se manda con `message` + `historial` por separado y el error solo se disparaba en la llamada a Anthropic. Fix: `historialReciente` ahora se mapea a `{role, content}` antes de mandarlo, en `agente-cursos`. Mismo blindaje preventivo en `agente-financiero` y `agente-reuniones` (mismo patrón de spread directo).
+- ✅ **Bug de UX descubierto en el camino:** `crearCursoDesdeIA()` no revisaba si la edge function devolvía un error — si fallaba, el modal se abría vacío sin avisar nada, dando la falsa impresión de "no extrae info" sin ninguna pista. Ahora se revisa `data.error`/`res.ok` y, si no hay JSON en la respuesta, se muestra el texto crudo en el toast — esto fue lo que permitió encontrar el bug real de arriba.
+- ✅ **`cursos.duracion_horas` no acepta decimales** — la columna quedó tipada `integer` en algún momento, pero un curso corto (ej. un workshop de 3 estaciones de 20 min) puede durar 1,5 horas cátedra. El frontend ya manda el valor correcto sin redondear (`Number(...)`); el error `22P02 invalid input syntax for type integer: "1.5"` es solo de la base. Fix: cambiar el tipo de columna a `numeric` (ver SQL abajo).
+
+**SQL pendiente (correr en Supabase SQL editor):**
+```sql
+ALTER TABLE cursos ALTER COLUMN duracion_horas TYPE numeric USING duracion_horas::numeric;
+```
+
+**Deploy pendiente (Supabase Dashboard → Edge Functions):** `agente-cursos`, `agente-financiero`, `agente-reuniones` (el fix de historial). El resto (extracción, `duracion_horas`) es frontend/SQL, sin redeploy de función.
+
+---
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:
