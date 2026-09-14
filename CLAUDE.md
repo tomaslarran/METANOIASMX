@@ -1109,6 +1109,20 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS limite_tokens_mensual bigint;
 
 ---
 
+## Fix (14 Sep 2026) — Bugs en `agente-mensajes` que podían dejar conversaciones sin ninguna respuesta
+
+**Motivación:** Tomás reportó que la sección de Comunicaciones "estaba fallando en la parte de respuestas automáticas". No había errores nuevos en `panel_errores` (tabla RLS-protegida, solo legible por `authenticated` — no se pudo auditar con la anon key), así que el diagnóstico fue por revisión de código y del historial de commits del archivo.
+
+- ✅ **Race condition en el debounce de mensajes en ráfaga** — cuando un cliente mandaba 2+ mensajes seguidos muy rápido (algo común: preguntar en dos globos separados), CADA invocación de la función esperaba 2s y después contaba cuántos mensajes "pendientes" había; si había 2 o más, esa invocación abortaba sin responder. Con 2+ invocaciones corriendo casi en paralelo, **todas** se veían a sí mismas + a las otras como "2+ pendientes" y **todas** abortaban — la conversación quedaba sin ninguna respuesta, ni del bot ni de alerta al equipo. Fix: cada invocación ahora guarda el `id` de la fila que insertó y, tras el debounce, chequea si esa fila sigue siendo la más reciente pendiente; si no lo es, deja que la invocación del mensaje más nuevo sea la que procese y combine todo.
+- ✅ **Filtro de historial de conversación silenciosamente vacío** — `.eq("es_respuesta_manual", false)` es estricto en Postgres (`NULL != false`), así que excluía también las filas viejas donde esa columna nunca se seteó explícitamente (quedó en `NULL`). Efecto: el bot podía perder el contexto de mensajes previos de la misma conversación al armar la respuesta. Cambiado a `.or("es_respuesta_manual.eq.false,es_respuesta_manual.is.null")`.
+- ✅ **`responder-mensaje`** (botón "Responder" manual del panel, en Chats de Comunicaciones): las respuestas a Instagram DM se mandaban con el endpoint, page ID y token de **Facebook** (`graph.facebook.com` + `FB_PAGE_ID` + `META_FB_PAGE_TOKEN`) en vez de los de Instagram (`graph.instagram.com` + `IG_PAGE_ID` + `META_ACCESS_TOKEN`) — mismo criterio que ya usa correctamente `agente-mensajes` para el envío automático. Esto rompía cualquier respuesta manual a un DM de Instagram.
+
+**No confirmado como causa única** — no se pudo verificar contra `panel_errores` ni `mensajes_publico` en vivo (RLS bloqueó la lectura con la anon key), así que estos son los bugs reales encontrados en el código, pero puede haber otro factor puntual del incidente que reportó Tomás sin que quedara evidencia en el repo.
+
+**Deploy pendiente (Supabase Dashboard → Edge Functions):** `agente-mensajes`, `responder-mensaje`.
+
+---
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:
