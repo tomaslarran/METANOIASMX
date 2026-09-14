@@ -8181,6 +8181,13 @@ async function createCurso(){
     closeModal("modal-curso");renderCursos();updateSideBadges();toast(`"${nombre}" creado`,"ok");
     await selectCurso(created.id);
     if(_cursoDesdeIA&&cursoIAArchivos.length)await _subirArchivosIAAlCurso(created.id);
+    if(_cursoDesdeIA&&_cursoDocumentos.length){
+      for(let i=0;i<_cursoDocumentos.length;i++){
+        try{await _descargarDocumentoIA(i,created.id);}catch(e){}
+      }
+      toast(`${_cursoDocumentos.length} documento(s) generado(s) en la charla guardados en Archivos`,"ok");
+      _cursoDocumentos=[];
+    }
     _cursoDesdeIA=false;
     const tieneCls=document.getElementById("c-tiene-clases")?.checked;
     if(tieneCls){
@@ -9590,11 +9597,11 @@ function _buildDocumentoCard(doc,idx){
   </div>`;
 }
 
-async function _descargarDocumentoIA(idx){
+async function _descargarDocumentoIA(idx,cursoIdOverride){
   const doc=_cursoDocumentos[idx];
   if(!doc)return;
   const {tipo,datos,titulo}=doc;
-  const cId=_cursoDetalleId;
+  const cId=cursoIdOverride||_cursoDetalleId;
   if(tipo==='presentacion'){
     await _generarPPTCurso(JSON.stringify({titulo:datos.titulo||titulo,subtitulo:datos.subtitulo||'',slides:datos.slides||[]}),cId);
   }else if(tipo==='examen'){
