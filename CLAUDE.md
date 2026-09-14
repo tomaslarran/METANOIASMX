@@ -1156,6 +1156,25 @@ ALTER TABLE cursos ALTER COLUMN duracion_horas TYPE numeric USING duracion_horas
 
 ---
 
+## Implementado (14 Sep 2026) — Vincular chat IA de cursos a un curso existente
+
+**Motivación:** siguiendo el fix de arriba, seguía sin poder guardarse un documento generado desde un chat **retomado** de un curso que ya existe. Causa raíz distinta a la de arriba: el modal "Proyecto de curso — Asistente IA" es **global** — se abre siempre desde el mismo botón, sin ningún concepto de "para qué curso es esta charla". La tabla `agente_cursos_chats` tampoco tenía ninguna columna que vinculara un chat guardado a un curso. Al clickear la card de un documento generado, `_descargarDocumentoIA()` usaba `_cursoDetalleId` (la última vez que se visitó el detalle de ALGÚN curso) como destino — una variable ajena al chat, que podía estar en `null` o apuntar a un curso totalmente distinto.
+
+- ✅ Nuevo botón **"🔗 Vincular curso"** en el header del modal de chat — abre un buscador simple (filtra `cursos` por nombre en vivo) para asociar la conversación actual a un curso ya existente
+- ✅ Nueva columna `agente_cursos_chats.curso_id` — se guarda al vincular (si el chat ya está guardado, hace `PATCH` inmediato) y también al hacer 💾 Guardar
+- ✅ Al retomar (`cargarChatCurso`) un chat que tiene `curso_id`, se restaura el vínculo automáticamente — se ve como `🔗 {nombre del curso}` junto al nombre del chat en el header
+- ✅ `_descargarDocumentoIA()` ahora prioriza el curso vinculado del chat sobre `_cursoDetalleId`; si no hay ningún curso vinculado, muestra un toast explicando que hay que vincular antes de poder guardar el documento — antes fallaba en silencio contra un destino equivocado o inexistente
+- ℹ️ El flujo de "Crear curso con IA" desde cero no se ve afectado — sigue usando el `id` real del curso recién creado (`createCurso()`), no depende de este vínculo
+
+**SQL pendiente (correr en Supabase SQL editor):**
+```sql
+ALTER TABLE agente_cursos_chats ADD COLUMN IF NOT EXISTS curso_id uuid REFERENCES cursos(id);
+```
+
+**Sin deploy de Edge Function** — es 100% frontend, alcanza con `git push`.
+
+---
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:

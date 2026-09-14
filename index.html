@@ -4257,6 +4257,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <button id="btn-toggle-progreso-ia" onclick="_toggleProgresoPanelCursoIA()" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:3px 8px;cursor:pointer" title="Mostrar/ocultar progreso del proyecto">📋 Progreso</button>
         <button onclick="guardarChatCurso()" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:3px 8px;cursor:pointer" title="Guardar chat">💾 Guardar</button>
         <button onclick="listarChatsCurso()" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:3px 8px;cursor:pointer" title="Retomar chat guardado">📂 Retomar</button>
+        <button onclick="vincularCursoChatIA()" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:3px 8px;cursor:pointer" title="Vincular este chat a un curso existente — para que los documentos generados se guarden ahí">🔗 Vincular curso</button>
         <button id="btn-invitar-chat" onclick="invitarColaboradorChat()" style="background:none;border:1px solid var(--pu);border-radius:6px;color:var(--pu);font-size:11px;padding:3px 8px;cursor:pointer;display:none" title="Invitar colaborador a este chat">👥 Invitar</button>
         <button onclick="resetCursoIA()" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:3px 8px;cursor:pointer" title="Nueva conversación">🗑 Nueva</button>
         <button onclick="closeModal('modal-curso-ia')" style="background:none;border:none;color:var(--tx3);font-size:18px;cursor:pointer">✕</button>
@@ -9408,6 +9409,8 @@ function resetCursoIA(){
   cursoIAProgreso=null;
   _cursoEscenarios=[];
   _cursoDocumentos=[];
+  _cursoIACursoVinculado=null;
+  _cursoIACursoVinculadoNombre=null;
   _updateChatLabel();
   renderProgresoCursoIA();
   const msgs=document.getElementById("curso-ia-msgs");
@@ -9424,12 +9427,59 @@ function resetCursoIA(){
 
 let cursoIAChatId=null;
 let cursoIAChatNombre=null;
+let _cursoIACursoVinculado=null;
+let _cursoIACursoVinculadoNombre=null;
 
 function _updateChatLabel(){
   const lbl=document.getElementById("curso-ia-chat-label");
-  if(lbl)lbl.textContent=cursoIAChatNombre?"📝 "+cursoIAChatNombre:"";
+  if(lbl){
+    let txt=cursoIAChatNombre?"📝 "+cursoIAChatNombre:"";
+    if(_cursoIACursoVinculado)txt+=(txt?" · ":"")+"🔗 "+(_cursoIACursoVinculadoNombre||"curso vinculado");
+    lbl.textContent=txt;
+  }
   const invBtn=document.getElementById("btn-invitar-chat");
   if(invBtn)invBtn.style.display=cursoIAChatId?"inline-block":"none";
+}
+
+function vincularCursoChatIA(){
+  const el=document.createElement("div");
+  el.id="modal-vincular-curso";
+  el.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10002;display:flex;align-items:center;justify-content:center";
+  el.onclick=e=>{if(e.target===el)el.remove();};
+  el.innerHTML=`<div style="background:var(--surf);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.28);padding:20px;min-width:320px;max-width:420px">
+    <div style="font-size:13px;font-weight:700;margin-bottom:6px">🔗 Vincular este chat a un curso existente</div>
+    <div style="font-size:11px;color:var(--tx3);margin-bottom:10px">Los documentos que generes de acá en más se van a guardar directo en la tab Archivos de ese curso.</div>
+    <input class="fi" id="vinc-curso-search" placeholder="Buscar curso por nombre..." style="width:100%;margin-bottom:10px" oninput="_filtrarVincularCurso(this.value)">
+    <div id="vinc-curso-list" style="max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:4px"></div>
+    ${_cursoIACursoVinculado?`<button class="btn sm sec" style="margin-top:10px;color:var(--re)" onclick="_desvincularCursoChatIA()">✕ Quitar vínculo actual (${esc(_cursoIACursoVinculadoNombre||"")})</button>`:""}
+    <div style="margin-top:12px;text-align:right"><button class="btn sm" onclick="this.closest('#modal-vincular-curso').remove()">Cerrar</button></div>
+  </div>`;
+  document.body.appendChild(el);
+  _filtrarVincularCurso("");
+  setTimeout(()=>document.getElementById("vinc-curso-search")?.focus(),100);
+}
+function _filtrarVincularCurso(q){
+  const list=document.getElementById("vinc-curso-list");
+  if(!list)return;
+  const Q=(q||"").toLowerCase();
+  const matches=(cursos||[]).filter(c=>(c.nombre||"").toLowerCase().includes(Q)).slice(0,20);
+  list.innerHTML=matches.length?matches.map(c=>`<div style="padding:7px 10px;border:1px solid var(--b);border-radius:8px;cursor:pointer;font-size:12px" onclick="_elegirCursoVinculado('${c.id}',${JSON.stringify(c.nombre||"")})">${esc(c.nombre)} <span style="color:var(--tx3);font-size:11px">· ${esc(c.estado||"")}</span></div>`).join(""):`<div style="color:var(--tx3);font-size:12px;padding:8px 0">Sin resultados</div>`;
+}
+function _elegirCursoVinculado(id,nombre){
+  _cursoIACursoVinculado=id;
+  _cursoIACursoVinculadoNombre=nombre;
+  document.getElementById("modal-vincular-curso")?.remove();
+  _updateChatLabel();
+  if(cursoIAChatId)sb(`agente_cursos_chats?id=eq.${cursoIAChatId}`,{method:"PATCH",body:JSON.stringify({curso_id:id})}).catch(()=>{});
+  toast(`Chat vinculado a "${nombre}" — los documentos generados se van a guardar ahí`,"ok");
+}
+function _desvincularCursoChatIA(){
+  _cursoIACursoVinculado=null;
+  _cursoIACursoVinculadoNombre=null;
+  document.getElementById("modal-vincular-curso")?.remove();
+  _updateChatLabel();
+  if(cursoIAChatId)sb(`agente_cursos_chats?id=eq.${cursoIAChatId}`,{method:"PATCH",body:JSON.stringify({curso_id:null})}).catch(()=>{});
+  toast("Vínculo quitado","inf");
 }
 
 async function guardarChatCurso(){
@@ -9439,10 +9489,10 @@ async function guardarChatCurso(){
   cursoIAChatNombre=nombre;
   try{
     if(cursoIAChatId){
-      await sb(`agente_cursos_chats?id=eq.${cursoIAChatId}`,{method:"PATCH",body:JSON.stringify({nombre,historial:cursoIAHistorial,archivos_meta:cursoIAArchivos.map(a=>({nombre:a.nombre,tipo:a.tipo})),updated_at:new Date().toISOString()})});
+      await sb(`agente_cursos_chats?id=eq.${cursoIAChatId}`,{method:"PATCH",body:JSON.stringify({nombre,historial:cursoIAHistorial,archivos_meta:cursoIAArchivos.map(a=>({nombre:a.nombre,tipo:a.tipo})),curso_id:_cursoIACursoVinculado,updated_at:new Date().toISOString()})});
     }else{
       const _sess=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
-      const [row]=await sb("agente_cursos_chats",{method:"POST",body:JSON.stringify({nombre,historial:cursoIAHistorial,archivos_meta:cursoIAArchivos.map(a=>({nombre:a.nombre,tipo:a.tipo})),usuario:_sess.email||"",user_id:loggedUser?.id||null,organizacion_id:loggedUser?.organizacion_id||null})});
+      const [row]=await sb("agente_cursos_chats",{method:"POST",body:JSON.stringify({nombre,historial:cursoIAHistorial,archivos_meta:cursoIAArchivos.map(a=>({nombre:a.nombre,tipo:a.tipo})),usuario:_sess.email||"",user_id:loggedUser?.id||null,organizacion_id:loggedUser?.organizacion_id||null,curso_id:_cursoIACursoVinculado})});
       cursoIAChatId=row?.id;
     }
     _updateChatLabel();
@@ -9546,6 +9596,8 @@ async function cargarChatCurso(id,nombre){
     _cursoEscenarios=[];
     _cursoDocumentos=[];
     cursoIAProgreso=null;
+    _cursoIACursoVinculado=row.curso_id||null;
+    _cursoIACursoVinculadoNombre=row.curso_id?(cursos.find(c=>c.id===row.curso_id)?.nombre||"curso vinculado"):null;
     const msgs=document.getElementById("curso-ia-msgs");
     if(msgs){
       msgs.innerHTML="";
@@ -9613,7 +9665,11 @@ async function _descargarDocumentoIA(idx,cursoIdOverride){
   const doc=_cursoDocumentos[idx];
   if(!doc)return;
   const {tipo,datos,titulo}=doc;
-  const cId=cursoIdOverride||_cursoDetalleId;
+  const cId=cursoIdOverride||_cursoIACursoVinculado||_cursoDetalleId;
+  if(!cId){
+    toast("Este chat no está vinculado a ningún curso — clickeá \"🔗 Vincular curso\" arriba para poder guardar los documentos generados","err");
+    return;
+  }
   if(tipo==='presentacion'){
     await _generarPPTCurso(JSON.stringify({titulo:datos.titulo||titulo,subtitulo:datos.subtitulo||'',slides:datos.slides||[]}),cId);
   }else if(tipo==='examen'){
