@@ -6264,7 +6264,7 @@ async function selectCurso(id){
         <div style="font-size:11px;color:var(--tx3);margin-top:3px">${curso.creado_por?`👤 Cargado por <strong style="color:var(--tx2)">${esc(curso.creado_por)}</strong>`:"👤 Sin registro de autor"}${curso.created_at?` · ${new Date(curso.created_at).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"})}`:""}</div>
       </div>
       <div style="display:flex;gap:6px">
-        <button class="btn" onclick="abrirChatIAParaCurso('${id}',${JSON.stringify(curso.nombre||"")})" title="Chatear con el agente de IA sobre este curso — lo que generes queda guardado acá">🤖 Colaborar con IA</button>
+        <button class="btn" onclick="abrirChatIAParaCurso('${id}','${esc(curso.nombre||"").replace(/'/g,"\\'")}')" title="Chatear con el agente de IA sobre este curso — lo que generes queda guardado acá">🤖 Colaborar con IA</button>
         <div style="position:relative;display:inline-block" id="estado-dd-wrap-${id}" onclick="event.stopPropagation()">
           <button class="btn" onclick="event.stopPropagation();toggleEstadoDD('${id}')">Cambiar estado ▾</button>
           <div id="estado-dd-${id}" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--surf);border:1px solid var(--b);border-radius:8px;padding:4px;z-index:999;min-width:150px;box-shadow:0 4px 16px rgba(0,0,0,.25)" onclick="event.stopPropagation()">
