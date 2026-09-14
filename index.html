@@ -6264,6 +6264,7 @@ async function selectCurso(id){
         <div style="font-size:11px;color:var(--tx3);margin-top:3px">${curso.creado_por?`👤 Cargado por <strong style="color:var(--tx2)">${esc(curso.creado_por)}</strong>`:"👤 Sin registro de autor"}${curso.created_at?` · ${new Date(curso.created_at).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"})}`:""}</div>
       </div>
       <div style="display:flex;gap:6px">
+        <button class="btn" onclick="abrirChatIAParaCurso('${id}',${JSON.stringify(curso.nombre||"")})" title="Chatear con el agente de IA sobre este curso — lo que generes queda guardado acá">🤖 Colaborar con IA</button>
         <div style="position:relative;display:inline-block" id="estado-dd-wrap-${id}" onclick="event.stopPropagation()">
           <button class="btn" onclick="event.stopPropagation();toggleEstadoDD('${id}')">Cambiar estado ▾</button>
           <div id="estado-dd-${id}" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--surf);border:1px solid var(--b);border-radius:8px;padding:4px;z-index:999;min-width:150px;box-shadow:0 4px 16px rgba(0,0,0,.25)" onclick="event.stopPropagation()">
@@ -9382,6 +9383,39 @@ async function _transcribirAudioCursoIA(blob){
   }
 }
 
+// Abre el chat IA ya vinculado a un curso existente — si ya hay una charla guardada para
+// ese curso la retoma, si no arranca una nueva y la vincula automáticamente.
+async function abrirChatIAParaCurso(cursoId,cursoNombre){
+  try{
+    const rows=await sb(`agente_cursos_chats?curso_id=eq.${cursoId}&select=id,nombre&order=updated_at.desc&limit=1`);
+    if(rows&&rows.length){
+      await cargarChatCurso(rows[0].id,rows[0].nombre);
+      openCrearCursoIA();
+    }else{
+      cursoIAHistorial=[];
+      cursoIAArchivos=[];
+      cursoIAChatId=null;
+      cursoIAChatNombre=null;
+      cursoIAProgreso=null;
+      _cursoEscenarios=[];
+      _cursoDocumentos=[];
+      _cursoIACursoVinculado=cursoId;
+      _cursoIACursoVinculadoNombre=cursoNombre;
+      openCrearCursoIA();
+      const msgs=document.getElementById("curso-ia-msgs");
+      if(msgs)msgs.innerHTML=`<div style="background:var(--surf2);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--tx2);max-width:90%">
+        Hola! Soy el agente de cursos de Metanoia. Estamos charlando sobre <strong>${esc(cursoNombre)}</strong> — decime en qué te ayudo (armar materiales, un escenario clínico, un cronograma, revisar el diseño, etc.). Lo que generemos acá queda guardado directo en la tab Archivos de este curso.
+      </div>`;
+      const adjDiv=document.getElementById("curso-ia-adjuntos");
+      if(adjDiv)adjDiv.innerHTML="";
+      const actions=document.getElementById("curso-ia-actions");
+      if(actions)actions.style.display="none";
+      renderProgresoCursoIA();
+      _updateChatLabel();
+    }
+  }catch(e){toast("Error al abrir el chat: "+e.message,"err");}
+}
+
 function openCrearCursoIA(){
   const msgs=document.getElementById("curso-ia-msgs");
   // Si no hay conversación previa, mostrar mensaje de bienvenida
@@ -9470,6 +9504,8 @@ function _elegirCursoVinculado(id,nombre){
   _cursoIACursoVinculadoNombre=nombre;
   document.getElementById("modal-vincular-curso")?.remove();
   _updateChatLabel();
+  const actions=document.getElementById("curso-ia-actions");
+  if(actions)actions.style.display="none";
   if(cursoIAChatId)sb(`agente_cursos_chats?id=eq.${cursoIAChatId}`,{method:"PATCH",body:JSON.stringify({curso_id:id})}).catch(()=>{});
   toast(`Chat vinculado a "${nombre}" — los documentos generados se van a guardar ahí`,"ok");
 }
@@ -9628,7 +9664,7 @@ async function cargarChatCurso(id,nombre){
       setTimeout(()=>{msgs.scrollTop=msgs.scrollHeight;},100);
     }
     renderProgresoCursoIA();
-    if(cursoIAHistorial.length>=2){const a=document.getElementById("curso-ia-actions");if(a)a.style.display="flex";}
+    if(cursoIAHistorial.length>=2&&!_cursoIACursoVinculado){const a=document.getElementById("curso-ia-actions");if(a)a.style.display="flex";}
     _updateChatLabel();
     toast(`📂 Chat cargado`,"ok");
   }catch(e){toast("Error al cargar: "+e.message,"err");}
@@ -10180,7 +10216,7 @@ async function sendCursoIA(){
       cursoIAHistorial.push({role:"assistant",content:textoDisplay,...(escJson?{escenario:escJson}:{}),...(docJson?{doc:docJson}:{}),...(progJson?{progreso:progJson}:{})});
       if(progJson){cursoIAProgreso=progJson;renderProgresoCursoIA();}
       _autoguardarChatCurso();
-      if(cursoIAHistorial.length>=2){
+      if(cursoIAHistorial.length>=2&&!_cursoIACursoVinculado){
         const actions=document.getElementById("curso-ia-actions");
         if(actions)actions.style.display="flex";
       }
