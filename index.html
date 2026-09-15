@@ -16875,19 +16875,19 @@ const _MCF_META={
   "2.1.02.001":{nombre:"Préstamos bancarios — capital",tipo:"pasivo"},
   "2.1.03.001":{nombre:"Ret. IIBB a depositar",tipo:"pasivo"},
   "2.1.03.002":{nombre:"Ret. SICORE / Ganancias a depositar",tipo:"pasivo"},
-  "3.1.01.001":{nombre:"Capital social",tipo:"patrimonio"},
-  "4.1.01.001":{nombre:"Compras / insumos",tipo:"gasto"},
+  "3.1.01.001":{nombre:"Capital social",tipo:"patrimonio_neto"},
+  "4.1.01.001":{nombre:"Compras / insumos",tipo:"egreso"},
   "4.1.02.001":{nombre:"IVA crédito fiscal",tipo:"activo"},
-  "4.2.01.001":{nombre:"Sueldos y honorarios",tipo:"gasto"},
-  "4.2.03.001":{nombre:"Intereses y gastos financieros",tipo:"gasto"},
+  "4.2.01.001":{nombre:"Sueldos y honorarios",tipo:"egreso"},
+  "4.2.03.001":{nombre:"Intereses y gastos financieros",tipo:"egreso"},
   "5.1.01.001":{nombre:"Ingresos por cursos",tipo:"ingreso"},
   "5.1.02.001":{nombre:"Ingresos por suscripciones",tipo:"ingreso"},
 };
 function _mcfTipoByCode(codigo){
   const p=parseInt(codigo.charAt(0));
-  return p===1?"activo":p===2?"pasivo":p===3?"patrimonio":p===4?"gasto":"ingreso";
+  return p===1?"activo":p===2?"pasivo":p===3?"patrimonio_neto":p===4?"egreso":"ingreso";
 }
-function _mcfNaturaleza(tipo){return["activo","gasto"].includes(tipo)?"deudora":"acreedora";}
+function _mcfNaturaleza(tipo){return["activo","egreso"].includes(tipo)?"deudora":"acreedora";}
 function mcfAbrir(faltantes,asientoData){
   _pendingAsientoData={...asientoData,_faltantes:faltantes};
   const lista=document.getElementById("mcf-lista");
@@ -16896,7 +16896,8 @@ function mcfAbrir(faltantes,asientoData){
     const meta=_MCF_META[codigo]||{};
     const tipoSug=meta.tipo||_mcfTipoByCode(codigo);
     const nombreSug=meta.nombre||"";
-    const tipoOpts=["activo","pasivo","patrimonio","gasto","ingreso"].map(t=>`<option value="${t}"${t===tipoSug?" selected":""}>${t.charAt(0).toUpperCase()+t.slice(1)}</option>`).join("");
+    const tipoLabels={activo:"Activo",pasivo:"Pasivo",patrimonio_neto:"Patrimonio neto",egreso:"Egreso",ingreso:"Ingreso"};
+    const tipoOpts=["activo","pasivo","patrimonio_neto","egreso","ingreso"].map(t=>`<option value="${t}"${t===tipoSug?" selected":""}>${tipoLabels[t]}</option>`).join("");
     const existSel=existentes.length?`<div id="mcf-panel-usar-${codigo}" style="display:none">
       <select id="mcf-existente-${codigo}" class="fi sel">
         ${existentes.map(c=>`<option value="${esc(c.codigo)}">${esc(c.codigo)} — ${esc(c.nombre)}</option>`).join("")}
