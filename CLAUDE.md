@@ -408,7 +408,7 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 - ✅ Fix Benchmark vs Inflación vacío — `getCapActivo` redefinido en scope de `renderBenchmark`
 - ✅ Fix `leer-factura` model error — hardcodeado `claude-sonnet-4-6` (eliminada detección dinámica que elegía claude-fable-5)
 - ✅ Fix `leer-factura` + `analizarConIA` + `apAnalizar` Unauthorized — usar `authToken||KEY` en lugar de anon key hardcodeada
-- ✅ Edge Function `eliminar-usuario` — elimina usuario de Supabase Auth + tabla `usuarios`, solo admins, con guard de auto-eliminación (pendiente deploy en Supabase dashboard)
+- ✅ Edge Function `eliminar-usuario` — elimina usuario de Supabase Auth + tabla `usuarios`, solo admins, con guard de auto-eliminación (deployada)
 - ✅ Botón "Eliminar" en módulo Usuarios — llama a `eliminar-usuario` con confirmación
 
 **SQL pendiente (correr en Supabase SQL editor):**
@@ -817,14 +817,7 @@ CREATE POLICY "Solo autenticados" ON elearning_sync_log FOR ALL TO authenticated
 - ⚠️ **Es un filtro de frontend, no una política RLS** — las tablas `cursos`/`curso_instructores` siguen con policy `{authenticated} USING (true)`, por lo que un instructor que inspeccione las llamadas REST podría seguir leyendo cursos ajenos. Si se necesita un límite real a nivel de datos, hay que sumar una policy RLS específica para el rol instructor (pendiente, requiere decidir cómo exponer el rol al motor de RLS — hoy el rol vive en la tabla `usuarios`, no en un claim de JWT).
 - ⚠️ **Riesgo de datos:** si el registro del instructor en la tabla `instructores` no tiene cargado el mismo email que su usuario de login, o el curso no está vinculado ni por `curso_instructores` ni por `instructor_nombre`, ese instructor va a ver la grilla de Cursos vacía. Antes de dar por cerrado este punto, verificar/completar el email en Instructores y los vínculos en `curso_instructores` para Derlin (único instructor activo al momento de este cambio).
 
-**SQL pendiente (correr en Supabase SQL editor):**
-```sql
-ALTER TABLE tareas ADD COLUMN IF NOT EXISTS fecha_inicio date;
-```
-
-**Deploy pendiente (Supabase Dashboard → Edge Functions):**
-- `transcribir-audio` (nueva)
-- `agente-cursos` (cambio de wording comercializarse → implementarse, y extracción de nombre más robusta)
+**SQL corrido.** **Deploy realizado (15 Sep 2026):** `transcribir-audio` y `agente-cursos` (wording + extracción de nombre) deployados.
 
 ---
 
@@ -849,13 +842,7 @@ ALTER TABLE tareas ADD COLUMN IF NOT EXISTS fecha_inicio date;
 
 Todo validado con Playwright (renderizando el canvas real contra el fondo real) antes de subir, en varios escenarios: con firma de instructor, sin firma de instructor, título de curso a 1 y 2 líneas.
 
-**SQL pendiente (correr en Supabase SQL editor):**
-```sql
-ALTER TABLE instructores ADD COLUMN IF NOT EXISTS firma_url text;
-```
-
-**Storage pendiente (Supabase Dashboard → Storage):**
-- Crear bucket **`firmas-instructores`** → Public (mismo tipo que `curso-archivos`, `mensajes-media`)
+**SQL corrido** (`instructores.firma_url`). **Storage:** bucket `firmas-instructores` creado como Public.
 
 ---
 
@@ -874,10 +861,7 @@ ALTER TABLE instructores ADD COLUMN IF NOT EXISTS firma_url text;
 - ✅ Nuevo campo **Género** en la ficha de instructor (modal Instructores y tab Datos de Mi Perfil) — Masculino/Femenino/Sin especificar
 - ✅ Si está cargado, el diploma antepone automáticamente "Dr." o "Dra." al nombre del instructor (línea "dictada por" y línea de firma) en las 3 funciones de diploma
 
-**SQL pendiente (correr en Supabase SQL editor — sin esto, guardar un instructor o generar/enviar diplomas puede fallar):**
-```sql
-ALTER TABLE instructores ADD COLUMN IF NOT EXISTS genero text CHECK (genero IN ('M','F'));
-```
+**SQL corrido** (`instructores.genero`).
 
 **Fix RLS bucket `firmas-instructores` (8 Sep 2026):** marcar el bucket como Public solo habilita lectura pública — hacía falta política explícita para que un `authenticated` pueda subir/actualizar su firma (daba `403 new row violates row-level security policy`):
 ```sql
@@ -896,8 +880,7 @@ CREATE POLICY "Autenticados pueden actualizar firmas" ON storage.objects
 
 **Riesgo:** los demás uploads directos a Storage desde el frontend (`curso-archivos`, `Facturas`, `impuestos-vep`, `oportunidades`) usan el mismo mecanismo roto y podrían fallar igual en cualquier momento para cualquier usuario no-admin. Si aparece el mismo error en esos módulos, aplicar el mismo workaround (Edge Function + service_role) en vez de perder tiempo con las policies.
 
-**Deploy pendiente (Supabase Dashboard → Edge Functions):**
-- `subir-firma-instructor` (nueva)
+**Deploy realizado (15 Sep 2026):** `subir-firma-instructor` deployada.
 
 ---
 
@@ -1053,23 +1036,7 @@ SELECT cron.schedule(
 - ⏸️ **Sin costo en $ calculado al insertar** — se guardan tokens crudos + modelo; la conversión a $ queda para una vista futura con una tabla de precios en JS fácil de actualizar (Sonnet 5 $2/$10 por MTok in/out, Sonnet 4.6 $3/$15, Haiku 4.5 $1/$5, Opus 5 $5/$25 — precios de referencia al 11 Sep 2026, la mayoría de las funciones de este proyecto todavía corre en `claude-sonnet-4-6`, no en Sonnet 5)
 - 🐛 **Bug preexistente encontrado y corregido de paso:** `agente-comunicaciones` usaba `createClient` sin importarlo — el chequeo de JWT (`const supabaseAuth = createClient(...)`) iba a tirar `ReferenceError` en cada llamada. Se agregó el import. Si el dashboard de Supabase tenía una versión distinta ya deployada (posible, dado el flujo de deploy manual), redeployar con el código actualizado del repo.
 
-**SQL pendiente (correr en Supabase SQL editor):**
-```sql
-CREATE TABLE IF NOT EXISTS ia_uso (
-  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  funcion text NOT NULL,
-  modelo text,
-  input_tokens int DEFAULT 0,
-  output_tokens int DEFAULT 0,
-  organizacion_id uuid REFERENCES organizaciones(id),
-  usuario_id uuid REFERENCES usuarios(id),
-  created_at timestamptz DEFAULT now()
-);
-ALTER TABLE ia_uso ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Solo autenticados" ON ia_uso FOR ALL TO authenticated USING (true) WITH CHECK (true);
-```
-
-**Deploy pendiente (Supabase Dashboard → Edge Functions) — las 9 funciones de arriba** necesitan redeploy para que el logging entre en efecto (el cambio ya está en el código, pero Supabase sirve la versión previamente deployada hasta que se pegue el código nuevo en el dashboard).
+**SQL corrido** (tabla `ia_uso`). **Deploy realizado (15 Sep 2026):** las 9 funciones de arriba redeployadas — el logging ya está en efecto.
 
 **Ver también:** `estrategia_comercial_claude.md` en la raíz del repo — documento para llevar a una sesión aparte de Claude chat y trabajar la estrategia de comercialización/pricing del panel como SaaS.
 
@@ -1096,14 +1063,9 @@ CREATE POLICY "Solo autenticados" ON ia_uso FOR ALL TO authenticated USING (true
 - **Dashboard de Alertas** — si el uso de la organización llega al `alerta_pct_tokens` (80% por defecto), aparece una alerta (🟡 aviso / 🔴 crítica si ya llegó al 100%) con el % actual y la fecha de renovación, que lleva al módulo Usuarios al clickearla
 - **"Pedir aumento" (v1):** hoy Tomás es admin y dueño de la única organización, así que "pedir aumento" es directamente editar el límite desde esa misma card — no hay pasarela de pago ni flujo de aprobación separado todavía. Cuando haya organizaciones-cliente reales pagando una licencia, ahí sí va a hacer falta un flujo real (ej: botón que abra un pedido de upgrade de plan en vez de un input editable a mano).
 
-**SQL pendiente (correr en Supabase SQL editor, junto con el de `ia_uso` de la sección anterior si todavía no se corrió):**
-```sql
-ALTER TABLE organizaciones ADD COLUMN IF NOT EXISTS limite_tokens_mensual bigint;
-ALTER TABLE organizaciones ADD COLUMN IF NOT EXISTS alerta_pct_tokens int DEFAULT 80;
-ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS limite_tokens_mensual bigint;
-```
+**SQL corrido** (`organizaciones.limite_tokens_mensual`/`alerta_pct_tokens`, `usuarios.limite_tokens_mensual` — verificado 15 Sep 2026 contra la API real, no solo asumido).
 
-**Deploy pendiente (Supabase Dashboard → Edge Functions):** las mismas 9 funciones de la sección de logging (`agente-cursos`, `agente-mensajes`, `agente-financiero`, `leer-factura`, `agente-comunicaciones`, `verificar-reunion`, `agente-reuniones`, `agente-promociones`, `cierre-mensual`) — el bloqueo por límite viaja en el mismo redeploy que el logging.
+**Deploy realizado (15 Sep 2026):** las mismas 9 funciones de la sección de logging (`agente-cursos`, `agente-mensajes`, `agente-financiero`, `leer-factura`, `agente-comunicaciones`, `verificar-reunion`, `agente-reuniones`, `agente-promociones`, `cierre-mensual`) — el bloqueo por límite ya está activo.
 
 **Sin límite cargado hoy = sin cambio de comportamiento** — tanto `organizaciones.limite_tokens_mensual` como `usuarios.limite_tokens_mensual` arrancan en `null`, así que nada se bloquea hasta que se cargue un número a propósito desde el panel.
 
@@ -1119,93 +1081,7 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS limite_tokens_mensual bigint;
 
 **No confirmado como causa única** — no se pudo verificar contra `panel_errores` ni `mensajes_publico` en vivo (RLS bloqueó la lectura con la anon key), así que estos son los bugs reales encontrados en el código, pero puede haber otro factor puntual del incidente que reportó Tomás sin que quedara evidencia en el repo.
 
-**Deploy pendiente (Supabase Dashboard → Edge Functions):** `agente-mensajes`, `responder-mensaje`.
-
----
-
-## Fix (14 Sep 2026) — Chat IA de cursos no extraía nada al crear curso + `duracion_horas` no acepta decimales
-
-**Motivación:** Tomás reportó que "Crear curso con IA" no completaba ningún campo del formulario (ni nombre, ni fecha, ni instructor) pese a haber charlado con el agente sobre el curso.
-
-- ✅ **Causa raíz real:** el historial del chat de cursos guarda un campo extra `nombre` por mensaje (para mostrarlo sobre las burbujas, feature del 3 Sep) y ese historial se manda tal cual como `messages` a la API de Claude — que rechaza cualquier campo que no sea `role`/`content` (`400 — messages.0.nombre: Extra inputs are not permitted`). Rompía **toda** llamada que llevara historial (no solo la extracción del formulario), aunque el chat en sí seguía andando porque cada mensaje individual se manda con `message` + `historial` por separado y el error solo se disparaba en la llamada a Anthropic. Fix: `historialReciente` ahora se mapea a `{role, content}` antes de mandarlo, en `agente-cursos`. Mismo blindaje preventivo en `agente-financiero` y `agente-reuniones` (mismo patrón de spread directo).
-- ✅ **Bug de UX descubierto en el camino:** `crearCursoDesdeIA()` no revisaba si la edge function devolvía un error — si fallaba, el modal se abría vacío sin avisar nada, dando la falsa impresión de "no extrae info" sin ninguna pista. Ahora se revisa `data.error`/`res.ok` y, si no hay JSON en la respuesta, se muestra el texto crudo en el toast — esto fue lo que permitió encontrar el bug real de arriba.
-- ✅ **`cursos.duracion_horas` no acepta decimales** — la columna quedó tipada `integer` en algún momento, pero un curso corto (ej. un workshop de 3 estaciones de 20 min) puede durar 1,5 horas cátedra. El frontend ya manda el valor correcto sin redondear (`Number(...)`); el error `22P02 invalid input syntax for type integer: "1.5"` es solo de la base. Fix: cambiar el tipo de columna a `numeric` (ver SQL abajo).
-
-**SQL pendiente (correr en Supabase SQL editor):**
-```sql
-ALTER TABLE cursos ALTER COLUMN duracion_horas TYPE numeric USING duracion_horas::numeric;
-```
-
-**Deploy pendiente (Supabase Dashboard → Edge Functions):** `agente-cursos`, `agente-financiero`, `agente-reuniones` (el fix de historial). El resto (extracción, `duracion_horas`) es frontend/SQL, sin redeploy de función.
-
----
-
-## Fix (14 Sep 2026) — Archivos de curso no se guardaban en el panel + consistencia numérica en documentos IA
-
-**Motivación:** siguiendo con las pruebas de "Crear curso con IA", surgieron 3 cosas más: (1) confusión sobre por qué un curso recién creado "desaparecía" — resultó ser que queda en estado Borrador y hay que mirar la sub-pestaña Borradores, no es un bug; (2) los documentos generados por el agente (cronograma, consentimiento) se descargaban bien a la PC pero nunca quedaban guardados en la tab Archivos del curso; (3) un documento generado mostraba números que no coincidían con los ya charlados (30 inscriptos confirmados → el documento decía 15, y aparecían horas cátedra de la nada).
-
-- ✅ **Causa real de (2):** `_guardarArchivoEnCurso()` subía el archivo con un `fetch()` directo del navegador a `/storage/v1/object/curso-archivos/...` — el mismo mecanismo que ya falla silenciosamente para `firmas-instructores` (bug de plataforma sin resolver, ver nota del 9 Sep: policy y JWT correctos, Supabase igual lo rechaza). El error quedaba atrapado en un `catch` que solo lo logueaba a consola, así que en el panel no se veía ningún aviso — parecía que "no pasaba nada". Fix: nueva Edge Function `subir-archivo-curso` que sube el archivo con `service_role` (no depende de esa RLS rota) e inserta la fila en `curso_archivos`; `_guardarArchivoEnCurso()` ahora llama a esa función en vez de subir directo. Esto arregla **tanto** el auto-guardado de documentos generados por IA **como** la subida manual de archivos ("📤 Subir archivo"), porque ambas pasan por la misma función. También se agregó un toast de error visible si la subida falla — antes quedaba completamente silencioso.
-- ✅ **Causa de (3):** el agente no tenía ninguna instrucción explícita de mantener los números ya confirmados al generar un documento — cada `<DOCUMENTO_JSON>` se genera en una llamada separada a Claude, sin garantía de reusar cifras de mensajes anteriores. Se agregó una regla explícita en `agente-cursos`: "CONSISTENCIA NUMÉRICA OBLIGATORIA — usá siempre los mismos valores ya confirmados... NUNCA los recalcules, redondees ni inventes". Mitiga el problema pero no lo elimina al 100% — sigue siendo generación de un LLM, no una plantilla determinística.
-- ℹ️ **(1) no era un bug** — los cursos nuevos se crean en estado `Borrador` por defecto y el módulo Cursos separa la vista en sub-pestañas Activos / Borradores / Completados.
-
-**Riesgo actualizado:** el bug de Storage de (2) confirma que el problema de `firmas-instructores` **no está limitado a usuarios no-admin** como se sospechaba el 9 Sep — le pasó a Tomás (admin) también. Quedan con el mismo riesgo sin corregir: `Facturas`, `impuestos-vep`, `oportunidades` (cualquier otro upload directo a Storage desde el frontend). Aplicar el mismo workaround (Edge Function + `service_role`) si aparece el mismo síntoma ahí.
-
-**Deploy pendiente (Supabase Dashboard → Edge Functions):**
-- `subir-archivo-curso` (nueva)
-- `agente-cursos` (regla de consistencia numérica)
-
----
-
-## Implementado (14 Sep 2026) — Vincular chat IA de cursos a un curso existente
-
-**Motivación:** siguiendo el fix de arriba, seguía sin poder guardarse un documento generado desde un chat **retomado** de un curso que ya existe. Causa raíz distinta a la de arriba: el modal "Proyecto de curso — Asistente IA" es **global** — se abre siempre desde el mismo botón, sin ningún concepto de "para qué curso es esta charla". La tabla `agente_cursos_chats` tampoco tenía ninguna columna que vinculara un chat guardado a un curso. Al clickear la card de un documento generado, `_descargarDocumentoIA()` usaba `_cursoDetalleId` (la última vez que se visitó el detalle de ALGÚN curso) como destino — una variable ajena al chat, que podía estar en `null` o apuntar a un curso totalmente distinto.
-
-- ✅ Nuevo botón **"🔗 Vincular curso"** en el header del modal de chat — abre un buscador simple (filtra `cursos` por nombre en vivo) para asociar la conversación actual a un curso ya existente
-- ✅ Nueva columna `agente_cursos_chats.curso_id` — se guarda al vincular (si el chat ya está guardado, hace `PATCH` inmediato) y también al hacer 💾 Guardar
-- ✅ Al retomar (`cargarChatCurso`) un chat que tiene `curso_id`, se restaura el vínculo automáticamente — se ve como `🔗 {nombre del curso}` junto al nombre del chat en el header
-- ✅ `_descargarDocumentoIA()` ahora prioriza el curso vinculado del chat sobre `_cursoDetalleId`; si no hay ningún curso vinculado, muestra un toast explicando que hay que vincular antes de poder guardar el documento — antes fallaba en silencio contra un destino equivocado o inexistente
-- ℹ️ El flujo de "Crear curso con IA" desde cero no se ve afectado — sigue usando el `id` real del curso recién creado (`createCurso()`), no depende de este vínculo
-
-**SQL corrido (14 Sep 2026):**
-```sql
-ALTER TABLE agente_cursos_chats ADD COLUMN IF NOT EXISTS curso_id uuid REFERENCES cursos(id);
-```
-
-**Sin deploy de Edge Function** — es 100% frontend, alcanza con `git push`.
-
-**Complemento (mismo día):** botón **"🤖 Colaborar con IA"** en el header del detalle de cada curso — abre el chat ya vinculado a ese curso automáticamente (`abrirChatIAParaCurso()`): si ya existe una charla guardada con ese `curso_id` la retoma, si no arranca una nueva con el vínculo puesto de entrada. Mientras el chat esté vinculado a un curso existente, el botón "💾 Crear curso" queda oculto (evita crear un curso duplicado por error al confundirlo con el flujo de creación desde cero).
-
----
-
-## Implementado (14 Sep 2026) — Contexto automático del curso en el chat IA ("Colaborar con IA")
-
-**Motivación:** pedido de Tomás — cuando se colabora con la IA sobre un curso ya existente (vía "🤖 Colaborar con IA"), que el agente tome automáticamente como contexto todo lo que ya está cargado de ese curso: archivos adjuntos (Word/Excel/PDF/imágenes), y su metadata (descripción, fechas, instructor, inscriptos, capacidad) — sin que el usuario tenga que volver a explicarlo o subir los archivos de nuevo a mano.
-
-- ✅ **Metadata del curso** — `agente-cursos` ahora recibe `curso_id` en cada mensaje (ya viajaba desde el fix de "Vincular curso"); cuando está presente, la edge function trae en paralelo la ficha completa del curso (`cursos.*`), instructores asignados (`curso_instructores→instructores`), inscriptos activos (`inscripciones→alumnos`, excluye Baja) y materiales reservados (`curso_materiales→inventario`), e inyecta todo como bloque `## CURSO EN CONTEXTO` en el system prompt — el agente ya no tiene que preguntar cupos, fechas o quién es el instructor si esos datos ya están cargados en el curso
-- ✅ **Archivos del curso como contexto** — nueva función `_cargarArchivosCursoComoContexto(cursoId)` en el frontend: al abrir "Colaborar con IA" (tanto para retomar un chat existente como para arrancar uno nuevo), trae los archivos ya subidos a la tab Archivos del curso (`curso_archivos`) y los agrega como adjuntos del chat reusando el mismo pipeline de extracción ya probado en `adjuntarArchivoCursoIA` (mammoth para `.docx`, xlsx.js para `.xlsx`/`.xls`, base64 directo para PDF/imágenes) — se ven como chips 📎 en el chat, removibles igual que un adjunto manual
-- ✅ **Límites de costo** — máximo 6 archivos y 8MB por archivo por auto-carga (`MAX_ARCHIVOS`/`MAX_MB` en la función); links externos (YouTube, etc.) y formatos sin extractor (ej. `.pptx`, video) se saltean en silencio — solo se avisa con un toast el conteo de cargados/saltados
-- ℹ️ El auto-guardado de documentos generados en este contexto sigue yendo al curso vinculado (fix anterior) — este cambio solo agrega qué entra como CONTEXTO de lectura, no toca el guardado de salida
-
-**Sin SQL pendiente** — no se agregaron columnas nuevas, solo lectura de tablas ya existentes.
-
-**Deploy pendiente (Supabase Dashboard → Edge Functions):**
-- `agente-cursos` (nuevo bloque CURSO EN CONTEXTO en el system prompt)
-
-El resto (`_cargarArchivosCursoComoContexto` y su wiring) es 100% frontend — alcanza con `git pull`, sin redeploy.
-
----
-
-## Fix (14 Sep 2026) — Botón "🤖 Colaborar con IA" no hacía nada
-
-**Motivación:** Tomás reportó que el botón "Colaborar con IA" del detalle de curso no reaccionaba al clickearlo — ni abría el modal ni tiraba ningún error visible.
-
-- ✅ **Causa real:** el botón armaba su `onclick` con `${JSON.stringify(curso.nombre||"")}` dentro de un atributo HTML delimitado por comillas dobles (`onclick="..."`). `JSON.stringify` de un string SIEMPRE envuelve el resultado en comillas dobles literales — al insertarse dentro de un atributo que también usa comillas dobles, el navegador cortaba el atributo ahí mismo, dejando el handler con JS incompleto (`abrirChatIAParaCurso('c1',` sin cerrar) → `Uncaught SyntaxError: Unexpected end of input` en la consola del navegador, sin ningún toast ni señal visible en el panel. Pasaba con **cualquier** nombre de curso, no un caso raro — reproducido con Playwright contra el archivo real (click real sobre el botón, no invocación directa de la función) confirmando el error exacto antes de tocar nada.
-- ✅ **Fix:** reemplazado por el patrón ya usado en el resto del archivo para pasar strings dinámicos a un `onclick` — comillas simples para el argumento JS + escape de apóstrofes con `\'` (backslash real en el HTML fuente, no entidad `&#39;`): `'${esc(curso.nombre||"").replace(/'/g,"\\'")}'`. Verificado con Playwright con click real: ahora abre el modal correctamente, incluido un caso de prueba con apóstrofe en el nombre del curso.
-- ⚠️ **Nota para próximos botones con nombres dinámicos:** NUNCA usar `JSON.stringify(texto)` directo dentro de un atributo `onclick="..."` — rompe siempre. El escape correcto para JS embebido en un atributo doble-comillado es backslash literal (`\\'`), no la entidad HTML `&#39;` (que decodifica de vuelta a comilla simple real antes de que el navegador compile el handler, y NO protege el string JS interno — se comprobó también con Playwright al armar este fix). Varios botones ya existentes en el archivo (`abrirChatColaborativo`, `cargarChatCurso` desde el listado, invitaciones de chat, conversaciones internas) usan el patrón `&#39;` y quedarían con el mismo problema si el nombre/usuario tiene un apóstrofe — no se tocaron en este fix por no ampliar el alcance, pero si aparece un síntoma similar en alguno de ellos, aplicar el mismo fix (`\\'` en vez de `&#39;`).
-
-**Sin SQL ni deploy de Edge Function** — 100% frontend, alcanza con `git pull`.
-
-**✅ Confirmado en producción (14 Sep 2026):** una vez corrido el `ALTER TABLE agente_cursos_chats ADD COLUMN curso_id...` pendiente (ver sección "Vincular chat IA de cursos a un curso existente" arriba, que faltaba correr y tiraba `42703 column agente_cursos_chats.curso_id does not exist` al clickear el botón), Tomás probó el botón "Colaborar con IA" end-to-end y quedó funcionando.
+**Deploy realizado (15 Sep 2026):** `agente-mensajes`, `responder-mensaje`.
 
 ---
 
