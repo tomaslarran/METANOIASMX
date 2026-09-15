@@ -1098,6 +1098,19 @@ SELECT cron.schedule(
 
 ---
 
+## Implementado (14 Sep 2026) — Chat IA de cursos vinculado a un curso existente + contexto automático
+
+**Qué hace hoy** (resumen — el detalle bug-por-bug de cómo se llegó acá se podó del historial el 15 Sep, ver commit `389e5dc`):
+
+- `agente_cursos_chats.curso_id` — un chat guardado puede quedar vinculado a un curso ya existente. Botón **"🔗 Vincular curso"** en el header del modal de chat (buscador por nombre); se restaura solo al retomar (`cargarChatCurso`) un chat que ya tiene `curso_id`.
+- Botón **"🤖 Colaborar con IA"** en el detalle de cada curso (`abrirChatIAParaCurso()`) — abre directo el chat vinculado a ese curso: retoma el guardado si existe, o arranca uno nuevo ya vinculado. Con un chat vinculado, el botón "💾 Crear curso" se oculta (evita duplicar el curso por error).
+- Los documentos generados (`_descargarDocumentoIA()`) se guardan en la tab Archivos del curso vinculado del chat — ya no dependen de `_cursoDetalleId` (variable ajena que podía apuntar a cualquier otro curso visitado antes).
+- **Contexto automático:** al abrir "Colaborar con IA", `_cargarArchivosCursoComoContexto(cursoId)` trae los archivos ya subidos a la tab Archivos (mismo pipeline de extracción que `adjuntarArchivoCursoIA`: mammoth para `.docx`, xlsx.js para `.xlsx`/`.xls`, base64 directo para PDF/imágenes — tope `MAX_ARCHIVOS=6`/`MAX_MB=8`). Además, `agente-cursos` recibe `curso_id` en cada mensaje y arma un bloque `## CURSO EN CONTEXTO` en el system prompt con la ficha del curso (`cursos.*`), instructores (`curso_instructores`), inscriptos activos (`inscripciones`) y materiales (`curso_materiales`) — el agente no necesita que le repitas fechas/cupos/instructor si ya están cargados.
+
+**Estado:** confirmado funcionando end-to-end en producción (14-15 Sep 2026).
+
+---
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:
@@ -1112,6 +1125,8 @@ SELECT cron.schedule(
 2. **Token Instagram:** `META_ACCESS_TOKEN` generado desde developers.facebook.com → Casos de uso → API de Instagram → Generar token.
 
 3. **CSS roles:** El sistema de permisos usa `body.rol-X` classes + CSS `!important`. NO usar JS `element.style.display` para controlar visibilidad de nav items de roles — el CSS lo overridea correctamente.
+
+3b. **`onclick="..."` con strings dinámicos:** NUNCA usar `JSON.stringify(texto)` directo dentro de un atributo `onclick` doble-comillado — `JSON.stringify` siempre envuelve el string en comillas dobles literales, que cortan el atributo ahí mismo y dejan el handler con JS incompleto (`SyntaxError: Unexpected end of input`, sin ningún error visible en el panel — pasa con cualquier valor, no es un caso raro). El escape correcto es comillas simples + backslash literal para apóstrofes: `'${esc(texto).replace(/'/g,"\\'")}'`. La entidad HTML `&#39;` (usada en varios botones ya existentes: `abrirChatColaborativo`, `cargarChatCurso` desde el listado, invitaciones de chat, conversaciones internas) **no sirve** para esto — decodifica de vuelta a comilla simple real antes de que el navegador compile el handler, así que no protege el string JS interno si el nombre/usuario tiene un apóstrofe.
 
 4. **index.html monolítico:** Todo el código está en un solo archivo. Buscar secciones con `<!-- ══ NOMBRE ══ -->` comentarios. Las funciones JS están al final del archivo.
 
