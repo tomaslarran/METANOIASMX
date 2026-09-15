@@ -5796,7 +5796,7 @@ function renderEventosSection(){
           ${t.notas?`<span style="font-size:11px;color:var(--tx3)">· ${esc(t.notas)}</span>`:""}
         </div>
       </div>
-      <button onclick="eliminarTarea('${t.id}')" style="flex-shrink:0;background:none;border:none;color:var(--tx3);cursor:pointer;font-size:14px;padding:4px" title="Eliminar">🗑</button>
+      <button onclick="confirmDel('¿Eliminar &quot;${esc(t.nombre)}&quot;?',()=>delTask('${t.id}'))" style="flex-shrink:0;background:none;border:none;color:var(--tx3);cursor:pointer;font-size:14px;padding:4px" title="Eliminar">🗑</button>
     </div>`;
   }).join("");
 }
@@ -5850,7 +5850,7 @@ function renderTaskList(list){
             ${t.notas?`<span style="font-size:11px;color:var(--tx3)">· ${esc(t.notas)}</span>`:""}
           </div>
         </div>
-        <button onclick="eliminarTarea('${t.id}')" style="flex-shrink:0;background:none;border:none;color:var(--tx3);cursor:pointer;font-size:14px;padding:4px" title="Eliminar">🗑</button>
+        <button onclick="confirmDel('¿Eliminar &quot;${esc(t.nombre)}&quot;?',()=>delTask('${t.id}'))" style="flex-shrink:0;background:none;border:none;color:var(--tx3);cursor:pointer;font-size:14px;padding:4px" title="Eliminar">🗑</button>
       </div>`;
     }).join("");
     return;
@@ -13402,7 +13402,9 @@ async function renderCajaHistorial(){
 async function exportCajaHistorial(){
   if(!cajaHistorialData.length){toast("Sin datos para exportar","err");return;}
   try{
-    if(typeof XLSX==="undefined")await loadLib("xlsx","https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js");
+    if(typeof XLSX==="undefined"){
+      await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+    }
     const rows=cajaHistorialData.map(m=>({
       Fecha:m.fecha||"",
       Sociedad:m.sociedad||"",
