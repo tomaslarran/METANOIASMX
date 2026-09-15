@@ -1085,6 +1085,19 @@ SELECT cron.schedule(
 
 ---
 
+## Fix (15 Sep 2026) — Agente de promociones: búsqueda poco certera
+
+**Motivación:** Tomás probó "🔄 Buscar ahora" y el agente traía ruido — promos genéricas de cualquier tarjeta/comercio en vez de lo que realmente sirve: planes de cuotas sin interés que ofrecen los procesadores/posnet (Viumi, Payway) al cobrar con tarjetas de determinado banco. Ejemplo real que dio Tomás: "en Viumi a veces ofrecen pagos en cuotas con tarjetas Macro... y cosas así en su posnet". Además el agente confundía **Banco Macro** con **Makro** (cadena de supermercados mayoristas, sin relación).
+
+- ✅ Reescritas las 5 queries de Tavily en `agente-promociones` para apuntar específicamente a "posnet + planes de cuotas sin interés + comercios adheridos" en vez de "promociones [fuente] Argentina" genérico
+- ✅ Reescrito el system prompt de Claude: sección explícita "QUÉ BUSCAR" (financiación para comercios que cobran con tarjeta, no ofertas de compra al público) y "QUÉ DESCARTAR" (promos de una cadena/local específico no relacionado, y regla explícita para no confundir Banco Macro con Makro supermercados)
+- Todavía no re-probado en producción — pendiente correr "🔄 Buscar ahora" de nuevo tras el deploy y confirmar que el ruido bajó
+
+**Deploy pendiente (Supabase Dashboard → Edge Functions):**
+- `agente-promociones` (queries + system prompt reescritos)
+
+---
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:

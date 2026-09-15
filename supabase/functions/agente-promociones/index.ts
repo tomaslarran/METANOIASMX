@@ -7,11 +7,11 @@ const cors = {
 };
 
 const FUENTES = [
-  { nombre: "Viumi", query: "promociones descuentos Viumi Argentina cuotas sin interés" },
-  { nombre: "Payway", query: "promociones descuentos Payway Argentina cuotas sin interés" },
-  { nombre: "Banco Macro", query: "promociones Banco Macro Argentina descuentos cuotas sin interés tarjeta" },
-  { nombre: "Mercado Pago", query: "promociones Mercado Pago Argentina descuentos cuotas sin interés" },
-  { nombre: "ICBC", query: "promociones ICBC Argentina descuentos cuotas sin interés tarjeta" },
+  { nombre: "Viumi", query: "Viumi posnet planes de cuotas sin interés tarjetas de crédito bancos Argentina comercios adheridos" },
+  { nombre: "Payway", query: "Payway posnet planes de cuotas sin interés tarjetas de crédito bancos Argentina comercios adheridos" },
+  { nombre: "Banco Macro", query: "Banco Macro tarjeta de crédito cuotas sin interés comercios adheridos posnet Argentina" },
+  { nombre: "Mercado Pago", query: "Mercado Pago Point posnet QR cuotas sin interés promociones comercios Argentina" },
+  { nombre: "ICBC", query: "ICBC tarjeta de crédito cuotas sin interés comercios adheridos posnet Argentina" },
 ];
 
 // Chequea el límite mensual de tokens de IA de la organización y del usuario.
@@ -123,13 +123,22 @@ serve(async (req) => {
     const hoy = new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Salta" });
     const contexto = resultadosBusqueda.map(r => `### Fuente: ${r.fuente}\n${r.resultado.answer || ""}\n${(r.resultado.results || []).map((x: any) => `- ${x.title}: ${x.content?.slice(0, 500)} (${x.url})`).join("\n")}`).join("\n\n");
 
-    const sistema = `Sos un analista que extrae promociones de pago (descuentos, cuotas sin interés) de medios de cobro para un centro de simulación médica en Salta, Argentina (Metanoia SMX / SUDES / POINTERS). Hoy es ${hoy}.
+    const sistema = `Sos un analista que busca promociones de FINANCIACIÓN PARA COMERCIOS en medios de cobro con tarjeta, para un centro de simulación médica en Salta, Argentina (Metanoia SMX / SUDES / POINTERS) que cobra sus cursos con posnet/link de pago. Hoy es ${hoy}.
+
+## QUÉ BUSCAR
+Metanoia es un COMERCIO que cobra con tarjeta a través de procesadores de pago (Viumi, Payway) y wallets (Mercado Pago). Buscás promociones que Metanoia podría OFRECER A SUS CLIENTES al cobrarles un curso — planes de cuotas sin interés o descuentos vigentes que un procesador/posnet aplica cuando el cliente paga con tarjeta de determinado banco. Ejemplo real de lo que buscamos: "en Viumi a veces ofrecen pagos en 3 cuotas sin interés con tarjetas de Banco Macro en el posnet".
+
 Te paso resultados de búsqueda web sobre 5 fuentes: Viumi, Payway, Banco Macro, Mercado Pago, ICBC.
-Extraé SOLO promociones concretas y vigentes (o próximas a vigencia) que la empresa podría usar u ofrecer a sus clientes al cobrar cursos.
-Ignorá resultados genéricos, viejos, o que no sean promociones reales de pago/descuento/cuotas.
-Si no encontrás nada concreto para una fuente, no inventes — omitila.
+
+## QUÉ DESCARTAR (importante)
+- Promociones de compra en un comercio o cadena específica no relacionada al rubro de Metanoia (supermercados, electrodomésticos, indumentaria, etc.) — no interesa qué descuento da un local, sino qué plan de cuotas ofrece el MEDIO DE PAGO en general.
+- **Ojo con la confusión Macro vs Makro**: "Banco Macro" es el banco (nuestra fuente). "Makro" es una cadena de supermercados mayoristas, sin relación con el banco. Si un resultado habla de Makro (supermercado), descartalo por completo — no es una promoción de Banco Macro.
+- Resultados genéricos, viejos, sin fecha clara, o que no mencionen ni cuotas sin interés ni un % de descuento concreto.
+- Noticias institucionales, cambios de firma, resultados financieros u otra información que no sea una promoción de pago concreta.
+
+Si no encontrás nada concreto y verificado para una fuente, no inventes — omitila.
 Respondé SOLO con un JSON array (sin texto adicional, sin markdown), cada elemento:
-{"fuente":"Viumi|Payway|Banco Macro|Mercado Pago|ICBC","titulo":"...","descripcion":"resumen breve en español, máx 200 caracteres","descuento_pct":null o número,"cuotas_sin_interes":null o número entero,"vigencia_desde":"YYYY-MM-DD o null","vigencia_hasta":"YYYY-MM-DD o null","url_fuente":"..."}
+{"fuente":"Viumi|Payway|Banco Macro|Mercado Pago|ICBC","titulo":"...","descripcion":"resumen breve en español, máx 200 caracteres, aclarando con qué tarjeta/banco aplica si corresponde","descuento_pct":null o número,"cuotas_sin_interes":null o número entero,"vigencia_desde":"YYYY-MM-DD o null","vigencia_hasta":"YYYY-MM-DD o null","url_fuente":"..."}
 Si no hay NINGUNA promoción concreta en todo el contexto, respondé: []`;
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
