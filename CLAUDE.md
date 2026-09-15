@@ -1091,10 +1091,7 @@ SELECT cron.schedule(
 
 - ✅ Reescritas las 5 queries de Tavily en `agente-promociones` para apuntar específicamente a "posnet + planes de cuotas sin interés + comercios adheridos" en vez de "promociones [fuente] Argentina" genérico
 - ✅ Reescrito el system prompt de Claude: sección explícita "QUÉ BUSCAR" (financiación para comercios que cobran con tarjeta, no ofertas de compra al público) y "QUÉ DESCARTAR" (promos de una cadena/local específico no relacionado, y regla explícita para no confundir Banco Macro con Makro supermercados)
-- Todavía no re-probado en producción — pendiente correr "🔄 Buscar ahora" de nuevo tras el deploy y confirmar que el ruido bajó
-
-**Deploy pendiente (Supabase Dashboard → Edge Functions):**
-- `agente-promociones` (queries + system prompt reescritos)
+**Deploy realizado (15 Sep 2026):** `agente-promociones` (queries + system prompt reescritos). Pendiente: correr "🔄 Buscar ahora" de nuevo y confirmar que el ruido bajó.
 
 ---
 
