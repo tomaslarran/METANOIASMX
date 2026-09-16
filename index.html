@@ -2701,13 +2701,17 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div id="limite-ia-org-card" style="max-width:560px;background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:18px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:13px;font-weight:700;color:var(--tx)">🎚️ Uso de IA — organización</div>
-      <button class="btn sec" style="font-size:11px" onclick="toggleEditarLimiteOrg()">Editar límite</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn sec" style="font-size:11px" onclick="toggleDetalleUsoIA()">Ver detalle</button>
+        <button class="btn sec" style="font-size:11px" onclick="toggleEditarLimiteOrg()">Editar límite</button>
+      </div>
     </div>
     <div id="limite-ia-org-body" style="font-size:12px;color:var(--tx3)">Cargando...</div>
     <div id="limite-ia-org-edit" style="display:none;margin-top:10px;gap:8px;align-items:end">
       <div style="flex:1"><label class="ml">Límite mensual de tokens (organización)</label><input class="mi" id="org-limite-ia" type="number" min="0" step="10000" placeholder="Vacío = sin límite"></div>
       <button class="btn pri" style="font-size:12px" onclick="guardarLimiteOrg()">Guardar</button>
     </div>
+    <div id="limite-ia-org-detalle" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--b);font-size:12px">Cargando desglose...</div>
   </div>
 
   <!-- Panel editar usuario -->
@@ -20113,6 +20117,7 @@ async function loadLimiteIAOrg(){
   const body=document.getElementById("limite-ia-org-body");
   if(!body)return;
   body.textContent="Cargando...";
+  _detalleIACargado=false;
   try{
     const orgs=await sb("organizaciones?select=id,limite_tokens_mensual&order=created_at.asc&limit=1");
     const org=orgs?.[0];
@@ -20145,6 +20150,54 @@ async function loadLimiteIAOrg(){
 function toggleEditarLimiteOrg(){
   const el=document.getElementById("limite-ia-org-edit");
   el.style.display=el.style.display==="none"?"flex":"none";
+}
+let _detalleIACargado=false;
+async function toggleDetalleUsoIA(){
+  const el=document.getElementById("limite-ia-org-detalle");
+  if(!el)return;
+  const show=el.style.display==="none";
+  el.style.display=show?"block":"none";
+  if(show&&!_detalleIACargado)await loadDetalleUsoIA();
+}
+async function loadDetalleUsoIA(){
+  const el=document.getElementById("limite-ia-org-detalle");
+  if(!el||!_orgIALimiteId)return;
+  el.innerHTML="Cargando desglose...";
+  try{
+    const inicioMes=new Date();inicioMes.setDate(1);inicioMes.setHours(0,0,0,0);
+    const rows=await sb(`ia_uso?organizacion_id=eq.${_orgIALimiteId}&created_at=gte.${inicioMes.toISOString()}&select=funcion,modelo,input_tokens,output_tokens,created_at&order=created_at.desc`);
+    if(!rows||!rows.length){el.innerHTML=`<span style="color:var(--tx3)">Sin uso registrado este mes todavía.</span>`;_detalleIACargado=true;return;}
+    const porFuncion={};
+    rows.forEach(r=>{
+      const f=r.funcion||"(sin nombre)";
+      if(!porFuncion[f])porFuncion[f]={tokens:0,llamadas:0,ultima:r.created_at,modelos:new Set()};
+      porFuncion[f].tokens+=(r.input_tokens||0)+(r.output_tokens||0);
+      porFuncion[f].llamadas++;
+      if(r.modelo)porFuncion[f].modelos.add(r.modelo);
+      if(r.created_at>porFuncion[f].ultima)porFuncion[f].ultima=r.created_at;
+    });
+    const totalTokens=rows.reduce((s,r)=>s+(r.input_tokens||0)+(r.output_tokens||0),0);
+    const ordenado=Object.entries(porFuncion).sort((a,b)=>b[1].tokens-a[1].tokens);
+    el.innerHTML=`
+      <div style="font-weight:700;margin-bottom:8px">Desglose por función este mes</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${ordenado.map(([nombre,d])=>{
+          const pct=totalTokens?Math.round(d.tokens/totalTokens*100):0;
+          return`<div>
+            <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px">
+              <span style="font-weight:600">${esc(nombre)}</span>
+              <span style="color:var(--tx3)">${d.tokens.toLocaleString("es-AR")} tok · ${d.llamadas} llamada${d.llamadas!==1?"s":""} · ${pct}%</span>
+            </div>
+            <div style="height:5px;background:var(--b);border-radius:3px;overflow:hidden;margin-top:2px">
+              <div style="height:100%;width:${pct}%;background:var(--pu)"></div>
+            </div>
+          </div>`;
+        }).join("")}
+      </div>
+      <div style="font-size:11px;color:var(--tx3);margin-top:10px">Total: ${totalTokens.toLocaleString("es-AR")} tokens en ${rows.length} llamada${rows.length!==1?"s":""} · ${ordenado.length} función${ordenado.length!==1?"es":""} distintas.</div>
+    `;
+    _detalleIACargado=true;
+  }catch(e){el.innerHTML=`<span style="color:var(--re)">Error al cargar el desglose: ${esc(e.message)}</span>`;}
 }
 async function guardarLimiteOrg(){
   if(!_orgIALimiteId){toast("Sin organización cargada","err");return;}
