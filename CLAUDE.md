@@ -1136,7 +1136,7 @@ SELECT cron.schedule(
 - Mucho más conservador que en el panel por ser un canal externo con clientes reales: no intercepta fechas ni público objetivo (solo cupos/precio), mensajes >150 caracteres siempre van a la IA, imágenes siempre van a la IA, y ante cualquier ambigüedad de curso no intercepta
 - Si intercepta: ahorra las 3 queries de contexto (`publicaciones`/`mejoras`/`planes`) + el llamado completo a Claude; el mensaje queda igual registrado en `mensajes_publico` como `estado='respondido'` para no romper el historial ni las vistas de Chats del panel
 
-**Deploy pendiente (Supabase Dashboard → Edge Functions):** `agente-mensajes`.
+**Deploy realizado (17 Sep 2026):** `agente-mensajes`.
 
 **Próximos candidatos (a definir con Tomás cuando se retome):** evaluar si conviene el mismo tratamiento en otros agentes (`agente-financiero`, `agente-comunicaciones`); sumar fechas de curso como cuarto patrón si el paso 4 funciona bien en producción.
 
