@@ -10255,6 +10255,41 @@ function _abrirProyector(idx){
   document.body.appendChild(el);
 }
 
+// Respuesta directa (sin IA) para preguntas de dato puro sobre el curso vinculado al chat.
+// Solo intercepta preguntas cortas y claras (inscriptos, cupos, precio) -- ante cualquier duda
+// devuelve null y la pregunta sigue su camino normal hacia agente-cursos.
+async function _tryRespuestaDirectaCurso(texto,cursoId){
+  if(!cursoId)return null;
+  const curso=cursos.find(c=>c.id===cursoId);
+  if(!curso)return null;
+  const t=texto.toLowerCase().trim();
+  if(t.length>80)return null; // mensaje largo -> mejor que lo vea la IA, no es una pregunta puntual
+
+  const esInscriptos=/(cu[aá]nt[oa]s?\s+(inscript|alumn|anotad|participant))|((inscript|alumn)os?\s+(hay|tiene))/.test(t);
+  const esCupos=!esInscriptos&&/cupo|vacante|lugares?\s+(disponible|libre|quedan)/.test(t);
+  const esPrecio=/\b(precio|arancel|cuesta|vale|costo)\b/.test(t);
+
+  try{
+    if(esInscriptos){
+      const insc=await sb(`inscripciones?curso_id=eq.${cursoId}&estado=neq.Baja&select=id`);
+      const n=insc?.length||0;
+      const cupos=curso.cupos_max;
+      const disp=cupos?Math.max(0,cupos-n):null;
+      return `📊 <strong>${esc(curso.nombre)}</strong> tiene <strong>${n}</strong> inscripto${n!==1?"s":""} activo${n!==1?"s":""}${cupos?` de un cupo máximo de ${cupos}${disp!==null?` (quedan ${disp} lugares)`:""}`:""}.`;
+    }
+    if(esCupos){
+      return curso.cupos_max
+        ?`📊 El cupo máximo de <strong>${esc(curso.nombre)}</strong> es de <strong>${curso.cupos_max}</strong> participantes.`
+        :`📊 <strong>${esc(curso.nombre)}</strong> no tiene cupo máximo cargado.`;
+    }
+    if(esPrecio){
+      return curso.arancel
+        ?`📊 El arancel de <strong>${esc(curso.nombre)}</strong> es <strong>$${Number(curso.arancel).toLocaleString("es-AR")}</strong>.`
+        :`📊 <strong>${esc(curso.nombre)}</strong> no tiene arancel cargado.`;
+    }
+  }catch(e){return null;}
+  return null;
+}
 async function sendCursoIA(){
   const input=document.getElementById("curso-ia-input");
   const msgs=document.getElementById("curso-ia-msgs");
@@ -10280,6 +10315,18 @@ async function sendCursoIA(){
   if(btn)btn.disabled=true;
 
   cursoIAHistorial.push({role:"user",content:texto,nombre:loggedUser?.nombre||""});
+
+  const respuestaDirecta=await _tryRespuestaDirectaCurso(texto,_cursoIACursoVinculado);
+  if(respuestaDirecta){
+    cursoIAHistorial.push({role:"assistant",content:respuestaDirecta});
+    _autoguardarChatCurso();
+    const loadEl=document.getElementById(loadId);
+    if(loadEl){loadEl.style.color="var(--tx)";loadEl.innerHTML=respuestaDirecta+`<div style="font-size:10px;color:var(--tx3);margin-top:6px">⚡ Respuesta directa — no se usó IA</div>`;}
+    if(btn)btn.disabled=false;
+    msgs.scrollTop=msgs.scrollHeight;
+    input.focus();
+    return;
+  }
 
   try{
     const res=await fetchEdge("agente-cursos",{
