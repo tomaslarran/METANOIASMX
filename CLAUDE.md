@@ -1131,7 +1131,14 @@ SELECT cron.schedule(
 
 **Sin deploy de Edge Functions** — todo este cambio es frontend puro (`index.html`), no tocó ninguna función.
 
-**Próximos candidatos (a definir con Tomás cuando se retome):** aplicar el mismo patrón a `agente-mensajes` (el que más consume, ver sección de logging de IA) para preguntas de clientes sobre fechas/cupos/precio de cursos; evaluar si conviene el mismo tratamiento en otros agentes.
+### Paso 4 — Lo mismo en `agente-mensajes` (el bot de cara al cliente, el que más consume)
+- `_tryRespuestaDirectaCurso()` + `_matchCursoEnTexto()` en la edge function — antes de traer `publicaciones`/`mejoras`/`planes` y de llamar a Claude, intenta responder directo si el mensaje pregunta por **cupos** o **precio/arancel** de un curso que identifica sin ambigüedad (matcheo de palabras distintivas del nombre contra `cursos`, exige que el mejor candidato le gane claro al segundo)
+- Mucho más conservador que en el panel por ser un canal externo con clientes reales: no intercepta fechas ni público objetivo (solo cupos/precio), mensajes >150 caracteres siempre van a la IA, imágenes siempre van a la IA, y ante cualquier ambigüedad de curso no intercepta
+- Si intercepta: ahorra las 3 queries de contexto (`publicaciones`/`mejoras`/`planes`) + el llamado completo a Claude; el mensaje queda igual registrado en `mensajes_publico` como `estado='respondido'` para no romper el historial ni las vistas de Chats del panel
+
+**Deploy pendiente (Supabase Dashboard → Edge Functions):** `agente-mensajes`.
+
+**Próximos candidatos (a definir con Tomás cuando se retome):** evaluar si conviene el mismo tratamiento en otros agentes (`agente-financiero`, `agente-comunicaciones`); sumar fechas de curso como cuarto patrón si el paso 4 funciona bien en producción.
 
 ---
 
