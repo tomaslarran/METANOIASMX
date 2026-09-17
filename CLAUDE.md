@@ -1145,7 +1145,17 @@ SELECT cron.schedule(
 
 **Deploy pendiente (Supabase Dashboard → Edge Functions):** `agente-mensajes` (nuevo patrón de fechas).
 
-**Próximos candidatos (a definir con Tomás cuando se retome):** evaluar si conviene el mismo tratamiento en otros agentes (`agente-financiero`, `agente-comunicaciones`).
+### Paso 6 — Stock de inventario como lookup, no como razonamiento de IA
+- Motivación: `agente-cursos` manda el `INVENTARIO_EQUIPOS` completo (tabla de 12 ítems) en cada mensaje y le pide a la IA que razone disponibilidad — el mismo problema que cupos/precio/fecha, aplicado a stock
+- Nuevo interceptor `_tryRespuestaDirectaStock(texto)` en `sendCursoIA()`, probado después de `_tryRespuestaDirectaCurso` en la misma llamada
+- Matchea el ítem de inventario por nombre (`_matchInventarioEnTexto`, mismo criterio de palabras distintivas que el matcheo de cursos)
+- **Sin fecha mencionada:** responde `stock_disponible`/`stock_actual` directo
+- **Con fecha mencionada** (`_parseFechaDeTexto` soporta "10 de mayo", "10/05", "10-05-2026"): calcula disponibilidad real para ese día sumando `cantidad_estimada` de TODOS los cursos no cancelados que usan ese ítem en fechas superpuestas — **misma lógica exacta que ya usa `loadInstMat()`** en la tab "Instructores y materiales" de un curso (no es una regla nueva, es la lógica determinista ya validada de la sección "Implementado 10 Sep 2026", ahora expuesta también por chat)
+- Ante cualquier duda (ítem ambiguo, mensaje largo) no intercepta, sigue a la IA
+
+**Sin deploy de Edge Functions** — frontend puro (`index.html`).
+
+**Próximos candidatos (a definir con Tomás cuando se retome):** evaluar si conviene el mismo tratamiento en otros agentes (`agente-financiero`, `agente-comunicaciones`); replicar el interceptor de stock también en `agente-mensajes` si algún cliente externo llega a preguntar por equipamiento (poco probable, es más un caso de uso interno).
 
 ---
 
