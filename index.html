@@ -10320,6 +10320,79 @@ async function _tryRespuestaDirectaCurso(texto,cursoId){
   }catch(e){return null;}
   return null;
 }
+
+// ── Stock de inventario: respuesta directa sin IA ──────────────────────────
+// Misma iniciativa de estandarización, aplicada a "¿tenemos stock de X?". Reutiliza
+// la MISMA lógica de superposición de fechas que ya usa loadInstMat() (tab
+// "Instructores y materiales" de un curso) -- no es una regla nueva, es la
+// existente expuesta también por chat.
+const _MESES_ES=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","setiembre","octubre","noviembre","diciembre"];
+function _parseFechaDeTexto(texto){
+  const t=texto.toLowerCase();
+  let m=t.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/);
+  if(m){
+    const dd=m[1].padStart(2,"0"),mm=m[2].padStart(2,"0");
+    const yyyy=m[3]?(m[3].length===2?"20"+m[3]:m[3]):String(new Date().getFullYear());
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  m=t.match(/\b(\d{1,2})\s+de\s+([a-záéíóúñ]+)(?:\s+de\s+(\d{4}))?\b/);
+  if(m){
+    const dd=m[1].padStart(2,"0");
+    const mesTxt=m[2].normalize("NFD").replace(/[̀-ͯ]/g,"");
+    const mesIdx=_MESES_ES.findIndex(mes=>mes.normalize("NFD").replace(/[̀-ͯ]/g,"").startsWith(mesTxt.slice(0,4)));
+    if(mesIdx<0)return null;
+    const yyyy=m[3]||String(new Date().getFullYear());
+    return `${yyyy}-${String(mesIdx+1).padStart(2,"0")}-${dd}`;
+  }
+  return null;
+}
+function _matchInventarioEnTexto(texto,invList){
+  const t=_normTxtInv(texto);
+  const STOP=new Set(["de","del","la","el","los","las","y","en","con","para","simulador","entrenador","equipo","maniqui","brazo","modelo"]);
+  let best=null,bestScore=0,segundo=0;
+  for(const i of invList){
+    if(!i.nombre)continue;
+    const palabras=_normTxtInv(i.nombre).split(/[^a-z0-9]+/).filter(w=>w.length>=4&&!STOP.has(w));
+    if(!palabras.length)continue;
+    const score=palabras.filter(w=>t.includes(w)).length;
+    if(score>bestScore){segundo=bestScore;best=i;bestScore=score;}
+    else if(score>segundo)segundo=score;
+  }
+  return (best&&bestScore>=1&&bestScore>segundo)?best:null;
+}
+function _normTxtInv(s){return(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");}
+async function _tryRespuestaDirectaStock(texto){
+  if(!texto||texto.length>100)return null;
+  const t=texto.toLowerCase();
+  const esStock=/\bstock\b|disponib|\btenemos\b|\bhay\b.{0,20}(simulador|equipo|maniqu|entrenador|brazo)|cu[aá]nt[oa]s?\s+(hay|tenemos|quedan)/.test(t);
+  if(!esStock)return null;
+  if(!inventario.length){try{inventario=await sb("inventario?select=*");}catch(e){return null;}}
+  const item=_matchInventarioEnTexto(texto,inventario);
+  if(!item)return null;
+
+  const fecha=_parseFechaDeTexto(texto);
+  if(!fecha){
+    const disp=item.stock_disponible??item.stock_actual??0;
+    return `📊 Stock disponible de <strong>${esc(item.nombre)}</strong>: <strong>${disp}</strong> unidad${disp!==1?"es":""}${item.observaciones?` (${esc(item.observaciones)})`:""}.`;
+  }
+  try{
+    const otros=await sb(`curso_materiales?item_id=eq.${item.id}&select=cantidad_estimada,cursos(nombre,fecha_inicio,fecha_fin,estado)`);
+    const fechaD=new Date(fecha+"T12:00:00");
+    let usado=0;
+    const nombresQueLoUsan=[];
+    (otros||[]).forEach(o=>{
+      const c=o.cursos;
+      if(!c||!c.fecha_inicio||c.estado==="Cancelado")return;
+      const ini=new Date(c.fecha_inicio+"T12:00:00"),fin=c.fecha_fin?new Date(c.fecha_fin+"T12:00:00"):ini;
+      if(fechaD>=ini&&fechaD<=fin){usado+=Number(o.cantidad_estimada||0);nombresQueLoUsan.push(c.nombre);}
+    });
+    const total=item.stock_actual||0;
+    const libre=Math.max(0,total-usado);
+    const fechaFmt=fmt(fecha);
+    if(usado===0)return `📊 <strong>${esc(item.nombre)}</strong>: los <strong>${total}</strong> disponibles están libres para el ${fechaFmt} — nadie más lo tiene reservado ese día.`;
+    return `📊 <strong>${esc(item.nombre)}</strong> el ${fechaFmt}: de ${total} en total, ${usado} ya comprometidos por ${nombresQueLoUsan.map(n=>esc(n)).join(", ")} — quedan <strong>${libre}</strong> libres.`;
+  }catch(e){return null;}
+}
 async function sendCursoIA(){
   const input=document.getElementById("curso-ia-input");
   const msgs=document.getElementById("curso-ia-msgs");
@@ -10346,7 +10419,7 @@ async function sendCursoIA(){
 
   cursoIAHistorial.push({role:"user",content:texto,nombre:loggedUser?.nombre||""});
 
-  const respuestaDirecta=await _tryRespuestaDirectaCurso(texto,_cursoIACursoVinculado);
+  const respuestaDirecta=(await _tryRespuestaDirectaCurso(texto,_cursoIACursoVinculado))||(await _tryRespuestaDirectaStock(texto));
   if(respuestaDirecta){
     cursoIAHistorial.push({role:"assistant",content:respuestaDirecta});
     _autoguardarChatCurso();
