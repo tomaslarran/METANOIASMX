@@ -317,12 +317,18 @@ function _matchCursoEnTexto(texto: string, cursosList: any[]): any | null {
   // Exigimos al menos 1 palabra distintiva matcheada y que no haya ambigüedad con un segundo curso
   return (best && bestScore >= 1 && bestScore > segundo) ? best : null;
 }
+function _fmtFechaCorta(f: string | null): string {
+  if (!f) return "";
+  const d = new Date(f + "T12:00:00");
+  return d.toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Argentina/Salta" });
+}
 function _tryRespuestaDirectaCurso(texto: string, cursosList: any[]): string | null {
   if (!texto || texto.length > 150) return null; // mensaje largo -> mejor que lo maneje la IA
   const t = _normTxt(texto);
   const esCupos = /cupo|vacante|lugar(es)?\s*(disponible|libre)/.test(t);
   const esPrecio = /precio|arancel|cuesta|vale|costo/.test(t);
-  if (!esCupos && !esPrecio) return null;
+  const esFecha = /cuando (es|empieza|arranca|comienza|termina)|fecha (de inicio|de fin|del curso)|que dia (es|empieza)/.test(t);
+  if (!esCupos && !esPrecio && !esFecha) return null;
   const curso = _matchCursoEnTexto(texto, cursosList);
   if (!curso) return null;
   if (esCupos) {
@@ -330,9 +336,16 @@ function _tryRespuestaDirectaCurso(texto: string, cursosList: any[]): string | n
       ? `El curso "${curso.nombre}" tiene un cupo máximo de ${curso.cupos_max} participantes. ¿Querés que te cuente más para anotarte? 😊`
       : `Por ahora no tengo el cupo exacto cargado para "${curso.nombre}" — dejame tus datos y el equipo te confirma. 😊`;
   }
-  return curso.arancel
-    ? `El arancel de "${curso.nombre}" es de $${Number(curso.arancel).toLocaleString("es-AR")}. Hasta el 31 de octubre la suscripción anual a la plataforma es sin cargo 🎉 ¿Te cuento más sobre el curso?`
-    : `Por ahora no tengo el arancel cargado para "${curso.nombre}" — dejame tus datos y el equipo te confirma. 😊`;
+  if (esPrecio) {
+    return curso.arancel
+      ? `El arancel de "${curso.nombre}" es de $${Number(curso.arancel).toLocaleString("es-AR")}. Hasta el 31 de octubre la suscripción anual a la plataforma es sin cargo 🎉 ¿Te cuento más sobre el curso?`
+      : `Por ahora no tengo el arancel cargado para "${curso.nombre}" — dejame tus datos y el equipo te confirma. 😊`;
+  }
+  if (!curso.fecha_inicio) return `Por ahora no tengo la fecha cargada para "${curso.nombre}" — dejame tus datos y el equipo te confirma. 😊`;
+  const rango = curso.fecha_fin && curso.fecha_fin !== curso.fecha_inicio
+    ? `del ${_fmtFechaCorta(curso.fecha_inicio)} al ${_fmtFechaCorta(curso.fecha_fin)}`
+    : `el ${_fmtFechaCorta(curso.fecha_inicio)}`;
+  return `El curso "${curso.nombre}" es ${rango}. ¿Te cuento más para anotarte? 😊`;
 }
 
 // ── Procesamiento común (Claude + DB) ─────────────────────────────────────────

@@ -10287,6 +10287,7 @@ async function _tryRespuestaDirectaCurso(texto,cursoId){
   const esCupos=!esInscriptos&&/cupo|vacante|lugares?\s+(disponible|libre|quedan)/.test(t);
   const esPrecio=/\b(precio|arancel|cuesta|vale|costo)\b/.test(t);
   const esPublico=/p[uú]blico objetivo|a qui[eé]nes? est[aá] dirigid|dirigido a qui[eé]n|para qui[eé]n(es)? es (este|el) curso/.test(t);
+  const esFecha=/cu[aá]ndo (es|empieza|arranca|comienza|termina)|fecha (de inicio|de fin|del curso)|qu[eé] d[ií]a (es|empieza)/.test(t);
 
   try{
     if(esInscriptos){
@@ -10310,6 +10311,11 @@ async function _tryRespuestaDirectaCurso(texto,cursoId){
       // Si todavía no está definido, no interceptamos -- eso es una decisión de diseño
       // (Bloque B del Intake), no un dato a buscar. Ahí sí tiene que responder la IA.
       return `📊 <strong>${esc(curso.nombre)}</strong> está dirigido a: <strong>${esc(curso.publico_objetivo)}</strong>.`;
+    }
+    if(esFecha){
+      if(!curso.fecha_inicio)return `📊 <strong>${esc(curso.nombre)}</strong> todavía no tiene fecha cargada.`;
+      const rango=curso.fecha_fin&&curso.fecha_fin!==curso.fecha_inicio?`${fmt(curso.fecha_inicio)} al ${fmt(curso.fecha_fin)}`:fmt(curso.fecha_inicio);
+      return `📊 <strong>${esc(curso.nombre)}</strong> es el <strong>${rango}</strong>.`;
     }
   }catch(e){return null;}
   return null;
