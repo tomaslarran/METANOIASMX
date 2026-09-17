@@ -294,6 +294,47 @@ serve(async (req) => {
   return new Response("OK", { status: 200 });
 });
 
+// ── Respuesta directa (sin IA) para preguntas de cupos/precio de un curso concreto ────────
+// Tercer paso de la iniciativa de estandarización (ver CLAUDE.md "Estandarizar respuestas").
+// Muy conservador a propósito: es de cara al cliente, así que ante cualquier ambigüedad
+// (no se identifica un único curso con confianza, o el mensaje no matchea el patrón) se
+// deja pasar de largo y responde la IA como siempre.
+function _normTxt(s: string): string {
+  return (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+const _STOPWORDS_CURSO = new Set(["curso", "taller", "workshop", "nivel", "de", "del", "la", "el", "los", "las", "y", "en", "con", "para", "básico", "basico", "avanzado"]);
+function _matchCursoEnTexto(texto: string, cursosList: any[]): any | null {
+  const t = _normTxt(texto);
+  let best: any = null, bestScore = 0, segundo = 0;
+  for (const c of cursosList) {
+    if (!c.nombre) continue;
+    const palabras = _normTxt(c.nombre).split(/[^a-z0-9]+/).filter((w: string) => w.length >= 4 && !_STOPWORDS_CURSO.has(w));
+    if (!palabras.length) continue;
+    const score = palabras.filter((w: string) => t.includes(w)).length;
+    if (score > bestScore) { segundo = bestScore; best = c; bestScore = score; }
+    else if (score > segundo) { segundo = score; }
+  }
+  // Exigimos al menos 1 palabra distintiva matcheada y que no haya ambigüedad con un segundo curso
+  return (best && bestScore >= 1 && bestScore > segundo) ? best : null;
+}
+function _tryRespuestaDirectaCurso(texto: string, cursosList: any[]): string | null {
+  if (!texto || texto.length > 150) return null; // mensaje largo -> mejor que lo maneje la IA
+  const t = _normTxt(texto);
+  const esCupos = /cupo|vacante|lugar(es)?\s*(disponible|libre)/.test(t);
+  const esPrecio = /precio|arancel|cuesta|vale|costo/.test(t);
+  if (!esCupos && !esPrecio) return null;
+  const curso = _matchCursoEnTexto(texto, cursosList);
+  if (!curso) return null;
+  if (esCupos) {
+    return curso.cupos_max
+      ? `El curso "${curso.nombre}" tiene un cupo máximo de ${curso.cupos_max} participantes. ¿Querés que te cuente más para anotarte? 😊`
+      : `Por ahora no tengo el cupo exacto cargado para "${curso.nombre}" — dejame tus datos y el equipo te confirma. 😊`;
+  }
+  return curso.arancel
+    ? `El arancel de "${curso.nombre}" es de $${Number(curso.arancel).toLocaleString("es-AR")}. Hasta el 31 de octubre la suscripción anual a la plataforma es sin cargo 🎉 ¿Te cuento más sobre el curso?`
+    : `Por ahora no tengo el arancel cargado para "${curso.nombre}" — dejame tus datos y el equipo te confirma. 😊`;
+}
+
 // ── Procesamiento común (Claude + DB) ─────────────────────────────────────────
 async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, msgId, imageBase64, imageMediaType, imageUrl, sendReply, sendEscalacion }: {
   supabase: any;
@@ -358,6 +399,19 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
     .from("cursos").select("nombre, estado, fecha_inicio, fecha_fin, arancel, cupos_max, descripcion, instructor, linea_negocio, desc_colegio, recurrencia, respaldo_institucional")
     .in("estado", ["Convocatoria", "Inscripciones", "En curso"])
     .order("fecha_inicio", { ascending: true });
+
+  // Respuesta directa sin IA para preguntas puntuales de cupos/precio con un curso identificado
+  // sin ambigüedad. Solo aplica a mensajes de texto (una imagen siempre necesita razonamiento).
+  if (!imageBase64) {
+    const directa = _tryRespuestaDirectaCurso(textoCombinado, cursos ?? []);
+    if (directa) {
+      await sendReply(directa);
+      if (idsPendientes.length > 0) {
+        await supabase.from("mensajes_publico").update({ respuesta: directa, estado: "respondido" }).in("id", idsPendientes);
+      }
+      return;
+    }
+  }
 
   const { data: publicaciones } = await supabase
     .from("publicaciones").select("plataforma, tipo, tema, caption, fecha_publicacion, url")
