@@ -1177,6 +1177,19 @@ ALTER TABLE ia_uso ADD COLUMN IF NOT EXISTS cache_read_input_tokens int DEFAULT 
 
 **Pendiente (fase 2, no arrancada):** aplicar el mismo split estático/dinámico de caching a `agente-mensajes` — ahí `buildSistema()` entrelaza texto estático (FAQ, reglas, ejemplos) con datos dinámicos (`cursosTexto`, `pubTexto`, `mejorasTexto`, `planesTexto`, `siteContent`) en un solo string, así que requiere reordenar la función, no es un split mecánico como en `agente-cursos`. Quedan también sin explorar las otras 3 palancas propuestas (armado condicional del prompt, downgrade a Haiku para consultas simples, recorte de `agente-mensajes`).
 
+### Fix crítico (17 Sep 2026) — `agente-mensajes` llevaba tiempo respondiendo sin datos reales de cursos
+
+**Motivación:** Tomás reportó un caso real (curso de cirugía mínimamente invasiva de Derlin Juárez Muas) donde el bot gastó ~10.000 tokens en 3 llamadas y aun así contestó evasivo ("no tengo el arancel publicado... prefiero conectarte con el equipo") pese a que el curso **sí tenía arancel cargado ($850.000) y cupo (100)**.
+
+- **Causa raíz:** la consulta `supabase.from("cursos").select(...)` en `procesarMensaje()` pedía una columna `instructor` que **no existe** en la tabla (el campo real es `instructor_nombre`) — Postgres devuelve error 42703 en el `select` completo, así que `cursos` volvía `null`/vacío en **absolutamente todos los mensajes**, sin ninguna señal de error visible (el catch silencioso de Supabase JS no tira excepción, solo deja `data:null`)
+- Efecto doble: (1) el interceptor `_tryRespuestaDirectaCurso()` nunca tenía datos contra los que matchear, así que cupos/precio/fecha de CUALQUIER curso siempre caían a la IA; (2) la IA tampoco tenía contexto real de cursos (`cursosTexto` quedaba en "No hay cursos próximos publicados"), así que improvisaba respuestas evasivas en vez de alucinar o de admitir que no tenía nada — el prompt completo (FAQ, reglas, ejemplos, programa MSP, fetch del sitio web) se seguía gastando igual, por nada
+- **Fix:** `instructor` → `instructor_nombre` en el `select` y en el armado de `cursosTexto` (`buildSistema`)
+- Verificado contra la API real: con la columna corregida, el curso de Derlin Juárez Muas trae `arancel:850000, cupos_max:100` — el interceptor ahora sí lo va a resolver sin IA
+
+**No se sabe hace cuánto estaba roto** — no hay forma de saber desde cuándo (no quedó registrado en `panel_errores`, que es de errores del panel, no de edge functions). Cualquier respuesta histórica del bot sobre cupos/precio/fecha de un curso específico pudo haber sido una improvisación de la IA sin datos reales de por medio, no una alucinación aislada.
+
+**Deploy pendiente (Supabase Dashboard → Edge Functions):** `agente-mensajes`.
+
 ---
 
 ## Notas técnicas críticas
