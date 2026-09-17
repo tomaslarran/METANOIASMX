@@ -4311,8 +4311,9 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg"><label class="fl">Tipo</label><select class="fs" id="c-tipo"><option value="Mixto">Mixto</option><option value="Teórico">Teórico</option><option value="Práctico">Práctico</option><option value="Educación médica continua">Educación médica continua</option></select></div>
     <div class="fg"><label class="fl">Modalidad</label><select class="fs" id="c-modalidad"><option value="Presencial">Presencial</option><option value="Virtual">Virtual</option><option value="Híbrido">Híbrido</option></select></div>
     <div class="fg"><label class="fl">Estado</label><select class="fs" id="c-estado"><option value="Borrador">Borrador</option><option value="Convocatoria">Convocatoria</option><option value="Inscripciones">Inscripciones</option><option value="En curso">En curso</option><option value="Educación médica continua">Educación médica continua</option></select></div>
-    <div class="fg"><label class="fl">Fecha inicio</label><input class="fi" id="c-inicio" type="date"></div>
-    <div class="fg"><label class="fl">Fecha fin</label><input class="fi" id="c-fin" type="date"></div>
+    <div class="fg"><label class="fl">Fecha inicio</label><input class="fi" id="c-inicio" type="date" oninput="checkFechaCursoNuevo()"></div>
+    <div class="fg"><label class="fl">Fecha fin</label><input class="fi" id="c-fin" type="date" oninput="checkFechaCursoNuevo()"></div>
+    <div class="fg form-full" id="c-fecha-warn" style="display:none;font-size:11px;padding:6px 10px;border-radius:6px;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.3);color:#D97706"></div>
     <div class="fg"><label class="fl">Duración (horas cátedra)</label><input class="fi" id="c-horas" type="number" placeholder="8"></div>
     <div class="fg"><label class="fl">Cupos máximos</label><input class="fi" id="c-cupos" type="number" placeholder="20"></div>
     <div class="fg"><label class="fl">Arancel ($)</label><input class="fi" id="c-arancel" type="number" placeholder="0"></div>
@@ -8127,6 +8128,31 @@ async function guardarNombreCurso(id){
 
 async function delCurso(id){
   try{await sb(`cursos?id=eq.${id}`,{method:"DELETE"});cursos=cursos.filter(c=>c.id!==id);renderCursos();document.getElementById("curso-detail-container").innerHTML="";toast("Curso eliminado","ok");updateSideBadges();}catch(e){toast("Error","err")}
+}
+
+// Validación de fecha 100% en JS (fin de semana / feriado / superposición) — reemplaza
+// el chequeo que antes le pedíamos al agente de cursos por IA para esto mismo.
+const FERIADOS_AR_2026=["2026-01-01","2026-02-16","2026-02-17","2026-03-24","2026-04-02","2026-04-03","2026-05-01","2026-05-25","2026-06-20","2026-07-09","2026-08-17","2026-10-12","2026-11-20","2026-12-08","2026-12-25"];
+function _rangosSuperponen(aIni,aFin,bIni,bFin){
+  const a1=aIni,a2=aFin||aIni,b1=bIni,b2=bFin||bIni;
+  return a1<=b2&&b1<=a2;
+}
+function checkFechaCursoNuevo(excluirId){
+  const warnEl=document.getElementById("c-fecha-warn");
+  if(!warnEl)return;
+  const ini=document.getElementById("c-inicio").value;
+  const fin=document.getElementById("c-fin").value;
+  if(!ini){warnEl.style.display="none";return;}
+  const avisos=[];
+  const d=new Date(ini+"T12:00:00");
+  const dow=d.getDay();
+  if(dow===0||dow===6)avisos.push(`📅 El ${dow===0?"domingo":"sábado"} ${fmt(ini)} cae fin de semana.`);
+  if(FERIADOS_AR_2026.includes(ini))avisos.push(`🎉 ${fmt(ini)} es feriado nacional.`);
+  const solapados=(cursos||[]).filter(c=>c.id!==excluirId&&c.estado!=="Cancelado"&&c.fecha_inicio&&_rangosSuperponen(ini,fin,c.fecha_inicio,c.fecha_fin));
+  if(solapados.length)avisos.push(`⚠️ Se superpone con: ${solapados.map(c=>esc(c.nombre)).join(", ")}.`);
+  if(avisos.length){warnEl.style.display="";warnEl.innerHTML=avisos.join("<br>");}
+  else{warnEl.style.display="";warnEl.style.background="rgba(16,185,129,.12)";warnEl.style.borderColor="rgba(16,185,129,.3)";warnEl.style.color="#059669";warnEl.innerHTML="✓ Fecha libre — sin feriados ni superposiciones.";return;}
+  warnEl.style.background="rgba(251,191,36,.12)";warnEl.style.borderColor="rgba(251,191,36,.3)";warnEl.style.color="#D97706";
 }
 
 async function createCurso(){
