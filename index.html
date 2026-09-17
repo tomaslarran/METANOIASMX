@@ -6305,6 +6305,8 @@ async function selectCurso(id){
           <div class="fg"><label class="fl">Recurrencia</label><select class="fs" onchange="updateCursoField('${id}','recurrencia',this.value||null)"><option value="">Única vez</option>${["Mensual","Cuatrimestral","Semestral","Anual"].map(r=>`<option value="${r}"${curso.recurrencia===r?" selected":""}>${r}</option>`).join("")}</select></div>
           <div class="fg form-full"><label class="fl">Respaldo institucional</label><input class="fi" value="${esc(curso.respaldo_institucional||"")}" onchange="updateCursoField('${id}','respaldo_institucional',this.value)"></div>
           <div class="fg form-full"><label class="fl">Público objetivo</label><input class="fi" value="${esc(curso.publico_objetivo||"")}" placeholder="Ej: Residentes de cirugía general (R2-R4)" onchange="updateCursoField('${id}','publico_objetivo',this.value)"></div>
+          <div class="fg form-full"><label class="fl">Texto de participación (diploma)</label><input class="fi" value="${esc(curso.texto_participacion||"")}" placeholder="Ej: participó como alumno del entrenamiento teórico-práctico del curso" onchange="updateCursoField('${id}','texto_participacion',this.value)"></div>
+          <div class="fg"><label class="fl">Lugar (diploma)</label><input class="fi" value="${esc(curso.lugar_diploma||"")}" placeholder="Ej: Salta, Argentina" onchange="updateCursoField('${id}','lugar_diploma',this.value)"></div>
           <div class="fg form-full"><label class="fl">Descripción del curso</label><textarea class="fta" onchange="updateCursoField('${id}','descripcion',this.value)">${esc(curso.descripcion||"")}</textarea></div>
           <div class="fg form-full"><label class="fl">Descripción de clases</label><textarea class="fta" onchange="updateCursoField('${id}','descripcion_clases',this.value)">${esc(curso.descripcion_clases||"")}</textarea></div>
         </div>
@@ -6612,6 +6614,92 @@ async function removeCursoMaterial(matId,cursoId){
 }
 // ────────────────────────────────────────────────────────────────────
 // INSCRIPTOS + CERTIFICADOS
+// ── Firmantes del certificado ─────────────────────────────────────────────────
+function abrirModalFirmante(cursoId){
+  const exist=document.getElementById("modal-firmante");
+  if(exist)exist.remove();
+  const m=document.createElement("div");
+  m.id="modal-firmante";
+  m.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:center;justify-content:center";
+  m.innerHTML=`<div style="background:var(--surf);border-radius:16px;padding:24px;width:360px;max-width:95vw">
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">✍️ Agregar firmante</h3>
+    <label style="font-size:12px;color:var(--tx3);display:block;margin-bottom:4px">Nombre completo</label>
+    <input id="fnombre" class="fi" type="text" placeholder="Ej: Dr. Juan Pérez" style="width:100%;margin-bottom:12px">
+    <label style="font-size:12px;color:var(--tx3);display:block;margin-bottom:4px">Cargo / Título</label>
+    <input id="ftitulo" class="fi" type="text" placeholder="Ej: Director Médico" style="width:100%;margin-bottom:16px">
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn sm" onclick="document.getElementById('modal-firmante').remove()">Cancelar</button>
+      <button class="btn sm pri" onclick="guardarFirmante('${cursoId}')">Guardar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  setTimeout(()=>document.getElementById("fnombre")?.focus(),50);
+}
+
+async function guardarFirmante(cursoId){
+  const nombre=(document.getElementById("fnombre")?.value||"").trim();
+  const titulo=(document.getElementById("ftitulo")?.value||"").trim();
+  if(!nombre||!titulo){toast("Completá nombre y cargo","err");return;}
+  try{
+    const existing=await sb(`curso_firmantes?curso_id=eq.${cursoId}&order=orden.desc&select=orden&limit=1`);
+    const orden=(existing[0]?.orden||0)+1;
+    await sb("curso_firmantes",{method:"POST",body:JSON.stringify({curso_id:cursoId,nombre,titulo,orden})});
+    document.getElementById("modal-firmante")?.remove();
+    toast("Firmante agregado","ok");
+    loadInscriptos(cursoId);
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function eliminarFirmanteCurso(firmId,cursoId){
+  if(!confirm("¿Eliminar este firmante del certificado?"))return;
+  try{
+    await sb(`curso_firmantes?id=eq.${firmId}`,{method:"DELETE"});
+    toast("Firmante eliminado","ok");
+    loadInscriptos(cursoId);
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+// Carga firmantes del curso como dataURLs listos para el canvas + agrega Mario al final
+async function _fetchFirmantesConFirma(cursoId){
+  const curso=cursos.find(c=>c.id===cursoId)||{};
+  const firmantes=[];
+
+  // Firmantes personalizados del curso
+  try{
+    const list=await sb(`curso_firmantes?curso_id=eq.${cursoId}&order=orden.asc`);
+    for(const f of list){
+      let firmaDataUrl="";
+      if(f.firma_url){
+        try{const r=await fetch(f.firma_url);if(r.ok){const b=await r.blob();firmaDataUrl=await new Promise(res=>{const rd=new FileReader();rd.onload=()=>res(rd.result);rd.readAsDataURL(b);});}}catch(e){}
+      }
+      firmantes.push({nombre:f.nombre,titulo:f.titulo,firmaDataUrl});
+    }
+  }catch(e){}
+
+  // Si no hay firmantes personalizados, usar el instructor del curso como antes
+  if(!firmantes.length){
+    try{
+      const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(id,nombre,apellido,firma_url,genero)&limit=1`);
+      if(ci[0]){
+        const ins=ci[0].instructores;
+        const nombre=`${ins.nombre||""} ${ins.apellido||""}`.trim();
+        const genero=ins.genero||"";
+        const prefijo=genero==="F"?"Dra. ":genero==="M"?"Dr. ":"";
+        let firmaDataUrl="";
+        if(ins.firma_url){try{const r=await fetch(ins.firma_url);if(r.ok){const b=await r.blob();firmaDataUrl=await new Promise(res=>{const rd=new FileReader();rd.onload=()=>res(rd.result);rd.readAsDataURL(b);});}}catch(e){}}
+        firmantes.push({nombre:prefijo+nombre,titulo:"COORDINADOR",firmaDataUrl});
+      }
+    }catch(e){}
+  }
+
+  // Mario siempre al final
+  let marioFirma="";
+  try{const r=await fetch("./firma-mario.png");if(r.ok){const b=await r.blob();marioFirma=await new Promise(res=>{const rd=new FileReader();rd.onload=()=>res(rd.result);rd.readAsDataURL(b);});}}catch(e){}
+  firmantes.push({nombre:"Mario Larrán",titulo:"CEO Metanoia",firmaDataUrl:marioFirma});
+
+  return firmantes;
+}
+
 // ────────────────────────────────────────────────────────────────────
 
 async function loadInscriptos(cursoId){
@@ -6636,6 +6724,31 @@ async function loadInscriptos(cursoId){
     const certificadosBloqueados=!!(esCert&&instructorAsignado&&!curso.certificados_aprobados);
 
     let h="";
+
+    // ── Sección Firmantes del certificado ──
+    if(esCert||loggedUser?.rol==="admin"){
+      let firmantes=[];
+      try{firmantes=await sb(`curso_firmantes?curso_id=eq.${cursoId}&order=orden.asc`);}catch(e){}
+      h+=`<div style="margin-bottom:14px;border:1px solid var(--b2);border-radius:var(--r);padding:12px 14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <span style="font-size:12px;font-weight:700;color:var(--tx2)">✍️ Firmantes del certificado</span>
+          <button class="btn sm" style="font-size:11px" onclick="abrirModalFirmante('${cursoId}')">+ Agregar</button>
+        </div>
+        <div id="firmantes-list-${cursoId}" style="display:flex;flex-wrap:wrap;gap:8px">
+          ${firmantes.map(f=>`<div style="display:flex;align-items:center;gap:6px;background:var(--bg2);border-radius:6px;padding:5px 10px;font-size:12px">
+            ${f.firma_url?`<span style="color:var(--gr)" title="Firma cargada">✎</span>`:`<span style="color:var(--tx3)" title="Sin firma">○</span>`}
+            <span><strong>${esc(f.nombre)}</strong> — ${esc(f.titulo)}</span>
+            <button style="background:none;border:none;color:var(--re);cursor:pointer;padding:0 2px;font-size:14px;line-height:1" onclick="eliminarFirmanteCurso('${f.id}','${cursoId}')" title="Eliminar">×</button>
+          </div>`).join("")}
+          <div style="display:flex;align-items:center;gap:6px;background:var(--bg2);border-radius:6px;padding:5px 10px;font-size:12px;opacity:.6">
+            <span style="color:var(--gr)">✎</span>
+            <span><strong>Mario Larrán</strong> — CEO Metanoia</span>
+            <span style="font-size:10px;color:var(--tx3)">(siempre)</span>
+          </div>
+        </div>
+      </div>`;
+    }
+
     if(esCert&&instructorAsignado){
       if(curso.certificados_aprobados){
         h+=`<div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:var(--r);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--gr)">
@@ -7386,24 +7499,13 @@ async function generarCertificado(inscId,cursoId){
     const [insc]=await sb(`inscripciones?id=eq.${inscId}&select=*,alumnos(id,nombre,apellido,dni,matricula)`);
     const curso=cursos.find(c=>c.id===cursoId)||{};
     const a=insc?.alumnos||{};
-    let instructorNombre=curso.instructor_nombre||"";
-    let instructorFirmaUrl=null,instructorGenero=null;
-    try{
-      const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(id,nombre,apellido,firma_url)&limit=1`);
-      if(ci[0]){
-        const inst=ci[0].instructores;instructorNombre=`${inst.nombre||""} ${inst.apellido||""}`.trim();instructorFirmaUrl=inst.firma_url||null;
-        try{const [ig]=await sb(`instructores?id=eq.${inst.id}&select=genero`);instructorGenero=ig?.genero||null;}catch(e){}
-      }
-    }catch(e){}
-
-    // ── Diploma generado con el mismo canvas que se usa para el envío por email ──
-    // (antes esta función tenía su propio layout en mm, desincronizado del fondo real — unificado para que ambos caminos siempre coincidan)
+    const firmantes=await _fetchFirmantesConFirma(cursoId);
     const nombreAlumno=`${a.nombre||""} ${a.apellido||""}`.trim();
     const fecha=fechaCertificadoCurso(curso);
     const base64=await diplomaCanvasBase64({
       nombre:nombreAlumno,dni:a.dni||"",matricula:a.matricula||"",
-      curso:(curso.nombre||"").toUpperCase(),instructores:instructorNombre,fecha,
-      firmaInstructorUrl:instructorFirmaUrl,instructorGenero,duracionHoras:curso.duracion_horas,
+      curso:(curso.nombre||"").toUpperCase(),
+      fecha,firmantes,duracionHoras:curso.duracion_horas,
       numero:inscId.slice(-8).toUpperCase()
     });
 
@@ -7445,17 +7547,6 @@ async function diplomaCanvasBase64(datos){
     bgDataUrl=await new Promise(res=>{const rd=new FileReader();rd.onload=()=>res(rd.result);rd.readAsDataURL(blob);});
   }catch(e){
     throw new Error("No se pudo cargar el fondo del diploma: "+e.message);
-  }
-  // Firma del instructor (si tiene una guardada en "Mi firma") — se trae como dataURL para no tainted el canvas por CORS
-  let firmaInstructorDataUrl="";
-  if(datos.firmaInstructorUrl){
-    try{
-      const fr=await fetch(datos.firmaInstructorUrl);
-      if(fr.ok){
-        const fblob=await fr.blob();
-        firmaInstructorDataUrl=await new Promise(res=>{const rd=new FileReader();rd.onload=()=>res(rd.result);rd.readAsDataURL(fblob);});
-      }
-    }catch(e){} // sin firma del instructor, el diploma sigue siendo válido
   }
   return new Promise((resolve,reject)=>{
     const img=new Image();
@@ -7505,10 +7596,11 @@ async function diplomaCanvasBase64(datos){
       const cursoStartY=s(1310)-((lines.length-1)*lineGap)/2;
       lines.forEach((l,i)=>ctx.fillText(l,s(1748),cursoStartY+i*lineGap));
 
-      const tituloInst=datos.instructorGenero==="F"?"Dra. ":(datos.instructorGenero==="M"?"Dr. ":"");
+      // Firmante principal (primer firmante no-Mario) en la línea del diploma donde antes iba "instructor"
+      const primerFirmante=(datos.firmantes||[]).find(f=>!f.nombre.toLowerCase().includes("mario larrán")&&!f.titulo.toLowerCase().includes("ceo"));
       ctx.font=`${s(80)}px Arial,sans-serif`;
-      ctx.textBaseline="alphabetic"; // apoyado sobre la línea en blanco, igual que el nombre
-      ctx.fillText(datos.instructores?tituloInst+datos.instructores:"",s(1748),s(1652));
+      ctx.textBaseline="alphabetic";
+      ctx.fillText(primerFirmante?.nombre||"",s(1748),s(1652));
 
       ctx.textAlign="left";ctx.textBaseline="middle";
       // Auto-ajuste de tamaño: fechas largas ("dd de septiembre de aaaa") se salían del margen derecho de la página
@@ -7529,12 +7621,64 @@ async function diplomaCanvasBase64(datos){
         ctx.fillText(`Carga horaria: ${datos.duracionHoras} hs cátedra`,s(760),s(1845));
       }
 
-      // Nombre y cargo separados en dos líneas, bajo cada línea de firma
-      ctx.textAlign="center";
-      ctx.font=`bold ${s(40)}px Arial,sans-serif`;
-      ctx.fillText("MARIO LARRÁN",s(2230),s(2270));
-      ctx.font=`${s(28)}px Arial,sans-serif`;
-      ctx.fillText("CEO METANOIA",s(2230),s(2312));
+      // ── Firmantes dinámicos ──────────────────────────────────────────────────
+      const sigFirmantes=datos.firmantes||[];
+      const dibujarFirmaOpt=(src,cx,lineY,maxFW)=>new Promise(res=>{
+        if(!src){res();return;}
+        const im=new Image();
+        im.onload=()=>{
+          const fw=Math.min(s(maxFW||260),(im.width>0?s(maxFW||260)*Math.min(1,im.width/im.height*0.6):s(260)));
+          const fh=fw*(im.height/im.width);
+          ctx.drawImage(im,s(cx)-fw/2,s(lineY)-fh+s(25),fw,fh);
+          res();
+        };
+        im.onerror=()=>res();
+        im.src=src;
+      });
+
+      if(sigFirmantes.length>0){
+        // Borrar zona de firmas del fondo para dibujar dinámicamente
+        ctx.fillStyle="#FFFFFF";
+        ctx.fillRect(s(280),s(2060),s(2960),s(390));
+        ctx.fillStyle="rgb(52,48,90)";
+
+        const N=sigFirmantes.length;
+        const zoneX1=460,zoneX2=3040;
+        const colW=(zoneX2-zoneX1)/N;
+        const sigLineY=2185;
+        const nameFontSize=N<=3?42:N<=4?36:30;
+        const subFontSize=N<=3?30:N<=4?26:22;
+
+        for(let i=0;i<N;i++){
+          const f=sigFirmantes[i];
+          const cx=zoneX1+colW*(i+0.5);
+          const halfLine=Math.min(220,colW*0.38);
+
+          // Firma imagen
+          if(f.firmaDataUrl)await dibujarFirmaOpt(f.firmaDataUrl,cx,sigLineY,colW*0.55);
+
+          // Línea horizontal de firma
+          ctx.strokeStyle="rgb(52,48,90)";ctx.lineWidth=s(2);
+          ctx.beginPath();ctx.moveTo(s(cx-halfLine),s(sigLineY+32));ctx.lineTo(s(cx+halfLine),s(sigLineY+32));ctx.stroke();
+
+          // Nombre
+          ctx.fillStyle="rgb(52,48,90)";ctx.textAlign="center";
+          ctx.font=`bold ${s(nameFontSize)}px Arial,sans-serif`;
+          ctx.fillText(f.nombre.toUpperCase(),s(cx),s(sigLineY+78));
+
+          // Cargo
+          ctx.font=`${s(subFontSize)}px Arial,sans-serif`;
+          ctx.fillText(f.titulo.toUpperCase(),s(cx),s(sigLineY+78+(subFontSize+8)));
+        }
+      }else{
+        // Fallback sin firmantes (solo Mario)
+        ctx.textAlign="center";
+        ctx.font=`bold ${s(40)}px Arial,sans-serif`;
+        ctx.fillText("MARIO LARRÁN",s(2230),s(2270));
+        ctx.font=`${s(28)}px Arial,sans-serif`;
+        ctx.fillText("CEO METANOIA",s(2230),s(2312));
+        await dibujarFirmaOpt("./firma-mario.png",2230,2205);
+      }
 
       if(datos.numero){
         ctx.textAlign="right";
@@ -7542,32 +7686,6 @@ async function diplomaCanvasBase64(datos){
         ctx.font=`${s(28)}px Arial,sans-serif`;
         ctx.fillText("N° "+datos.numero,s(3440),s(2445));
       }
-
-      // Nombre y cargo del instructor, separados en dos líneas, bajo la línea de firma izquierda
-      if(datos.instructores){
-        ctx.fillStyle="rgb(52,48,90)"; // el bloque "N°" de arriba cambia el color, hay que restaurarlo
-        ctx.textAlign="center";
-        ctx.font=`bold ${s(40)}px Arial,sans-serif`;
-        ctx.fillText(`${tituloInst.toUpperCase()}${datos.instructores.toUpperCase()}`,s(1067),s(2270));
-        ctx.font=`${s(28)}px Arial,sans-serif`;
-        ctx.fillText("COORDINADOR",s(1067),s(2312));
-      }
-
-      // Carga opcional de una imagen y la dibuja apoyada sobre una línea de firma (si falla o no hay imagen, no rompe el diploma)
-      const dibujarFirmaOpt=(src,cx,lineY)=>new Promise(res=>{
-        if(!src){res();return;}
-        const im=new Image();
-        im.onload=()=>{
-          const fw=s(260),fh=fw*(im.height/im.width);
-          ctx.drawImage(im,s(cx)-fw/2,s(lineY)-fh+s(30),fw,fh);
-          res();
-        };
-        im.onerror=()=>res();
-        im.src=src;
-      });
-
-      await dibujarFirmaOpt(firmaInstructorDataUrl,1067,2205); // firma del instructor, línea izquierda
-      await dibujarFirmaOpt("./firma-mario.png",2230,2205); // firma de Mario, línea derecha
 
       resolve(canvas.toDataURL("image/png",0.85));
     }catch(err){reject(err);}};
@@ -7584,13 +7702,11 @@ async function enviarDiplomaEmail(inscId,cursoId,btnEl){
     const curso=cursos.find(c=>c.id===cursoId)||{};
     const a=insc?.alumnos||{};
     if(!a.email)throw new Error(`${a.nombre} ${a.apellido} no tiene email registrado`);
-    let instructor=curso.instructor_nombre||"";
-    let instructorFirmaUrl=null,instructorGenero=null;
-    try{const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(id,nombre,apellido,firma_url)&limit=1`);if(ci[0]){const ins=ci[0].instructores;instructor=`${ins.nombre||""} ${ins.apellido||""}`.trim();instructorFirmaUrl=ins.firma_url||null;try{const [ig]=await sb(`instructores?id=eq.${ins.id}&select=genero`);instructorGenero=ig?.genero||null;}catch(e){}}}catch(_){}
+    const firmantes=await _fetchFirmantesConFirma(cursoId);
     const fecha=fechaCertificadoCurso(curso);
     const nombre=`${a.nombre||""} ${a.apellido||""}`.trim();
     toast("Generando diploma...","inf");
-    const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha,firmaInstructorUrl:instructorFirmaUrl,instructorGenero,duracionHoras:curso.duracion_horas,numero:inscId.slice(-8).toUpperCase()});
+    const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),fecha,firmantes,duracionHoras:curso.duracion_horas,numero:inscId.slice(-8).toUpperCase()});
     toast("Enviando email...","inf");
     const res=await fetch(`${SB}/functions/v1/enviar-diplomas`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},body:JSON.stringify({email:a.email,nombre,curso:curso.nombre||"",instructores:instructor,fecha,diploma_base64:base64})});
     const data=await res.json();
@@ -7613,17 +7729,15 @@ async function enviarTodosLosDiplomas(cursoId){
     const conEmail=insc.filter(i=>i.alumnos?.email);
     const sinEmail=insc.filter(i=>!i.alumnos?.email);
     if(!conEmail.length){toast("Ningún inscripto tiene email registrado","err");return;}
-    let instructor=curso.instructor_nombre||"";
-    let instructorFirmaUrl=null,instructorGenero=null;
-    try{const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(id,nombre,apellido,firma_url)&limit=1`);if(ci[0]){const ins=ci[0].instructores;instructor=`${ins.nombre||""} ${ins.apellido||""}`.trim();instructorFirmaUrl=ins.firma_url||null;try{const [ig]=await sb(`instructores?id=eq.${ins.id}&select=genero`);instructorGenero=ig?.genero||null;}catch(e){}}}catch(_){}
     const fecha=fechaCertificadoCurso(curso);
+    const firmantes=await _fetchFirmantesConFirma(cursoId);
     let enviados=0;
     for(const i of conEmail){
       try{
         const a=i.alumnos;
         const nombre=`${a.nombre||""} ${a.apellido||""}`.trim();
         if(btn)btn.textContent=`Enviando ${enviados+1}/${conEmail.length}...`;
-        const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),instructores:instructor,fecha,firmaInstructorUrl:instructorFirmaUrl,instructorGenero,duracionHoras:curso.duracion_horas,numero:i.id.slice(-8).toUpperCase()});
+        const base64=await diplomaCanvasBase64({nombre,dni:a.dni||"",matricula:a.matricula||"",curso:(curso.nombre||"").toUpperCase(),fecha,firmantes,duracionHoras:curso.duracion_horas,numero:i.id.slice(-8).toUpperCase()});
         const res=await fetch(`${SB}/functions/v1/enviar-diplomas`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},body:JSON.stringify({email:a.email,nombre,curso:curso.nombre,instructores:instructor,fecha,diploma_base64:base64})});
         const data=await res.json();
         if(!data.error){
