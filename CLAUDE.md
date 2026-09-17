@@ -1108,6 +1108,36 @@ SELECT cron.schedule(
 
 ---
 
+## Implementado (16-17 Sep 2026) — Estandarizar respuestas: sacar de la IA lo que es puro dato
+
+**Motivación:** conversación con Tomás — con el técnico están viendo cómo reducir el uso de tokens/IA en `agente-mensajes` y `agente-cursos` estandarizando las respuestas que son datos puros (cantidad de inscriptos, calendario, público objetivo, precio) en vez de hacer que la IA las razone cada vez. Arrancado por `agente-cursos` a pedido de Tomás. Motivo real no es el costo en dólares (a este volumen es marginal, ver sección de límites de IA) sino velocidad, consistencia y evitar que la IA alucine un dato que ya está en la base.
+
+### Paso 1 — Calendario 100% en JS, sin IA
+- Modal "Nuevo Curso" — al tocar fecha inicio/fin (`oninput`), `checkFechaCursoNuevo()` valida al instante: fin de semana, feriado nacional 2026 (mismo listado que antes vivía en el system prompt de `agente-cursos`), y superposición con otro curso ya cargado (contra el array `cursos` en memoria, sin ninguna llamada a IA)
+- Pendiente (no incluido en este cambio): el chequeo de fecha *conversacional* dentro del chat ("¿podemos dar el curso el 25 de mayo?") sigue pasando por el LLM — interceptarlo requiere reconocer la pregunta en lenguaje natural, que es más complejo que un campo de formulario
+
+### Paso 2 — Respuesta directa para preguntas puntuales sobre un curso vinculado
+- `_tryRespuestaDirectaCurso(texto, cursoId)` en `sendCursoIA()` — si el chat está vinculado a un curso y el mensaje es corto (≤80 caracteres) y matchea un patrón conocido (inscriptos, cupos, precio/arancel, público objetivo), responde directo desde `cursos` (ya en memoria) + una consulta liviana a `inscripciones` para el conteo real — sin llamar a `agente-cursos`
+- La respuesta se marca visualmente "⚡ Respuesta directa — no se usó IA" para que quede claro que no pasó por Claude
+- Cualquier mensaje que no matchee ningún patrón (o supere los 80 caracteres) sigue el camino normal hacia la IA — ante la duda, no se intercepta
+
+### Paso 3 — `publico_objetivo` como columna real + ciclo de vida completo
+- Nueva columna editable `cursos.publico_objetivo` (modal de creación + vista de detalle, mismo patrón que `respaldo_institucional`)
+- `crearCursoDesdeIA()` la extrae como campo propio (antes quedaba mezclada dentro del texto libre de `descripcion`)
+- **Regla clave del interceptor:** si la columna está cargada → respuesta directa (como inscriptos/cupos/precio). Si está vacía → se deja pasar a la IA, porque ahí no hay un dato para buscar — es una decisión de diseño todavía no tomada (Bloque B del Intake Guiado). Interceptar ahí sería inventarle una respuesta al usuario en vez de responder un lookup real
+- **Cierre del círculo:** cuando el agente genera una `ficha_diseno` con `publico_objetivo` definido, aparece un botón "💾 Guardar público objetivo" en la card del documento (`_guardarPublicoObjetivoDesdeFicha()`) que lo escribe directo en el curso vinculado — la próxima vez que alguien pregunte, ya es un lookup puro
+
+**SQL pendiente (correr en Supabase SQL editor):**
+```sql
+ALTER TABLE cursos ADD COLUMN IF NOT EXISTS publico_objetivo text;
+```
+
+**Sin deploy de Edge Functions** — todo este cambio es frontend puro (`index.html`), no tocó ninguna función.
+
+**Próximos candidatos (a definir con Tomás cuando se retome):** aplicar el mismo patrón a `agente-mensajes` (el que más consume, ver sección de logging de IA) para preguntas de clientes sobre fechas/cupos/precio de cursos; evaluar si conviene el mismo tratamiento en otros agentes.
+
+---
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:
