@@ -409,7 +409,7 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
     .order("created_at", { ascending: false }).limit(5);
 
   const { data: cursos } = await supabase
-    .from("cursos").select("nombre, estado, fecha_inicio, fecha_fin, arancel, cupos_max, descripcion, instructor_nombre, linea_negocio, desc_colegio, recurrencia, respaldo_institucional")
+    .from("cursos").select("nombre, estado, fecha_inicio, fecha_fin, arancel, cupos_max, descripcion, instructor_nombre, linea_negocio, descuento_colegio, recurrencia, respaldo_institucional")
     .in("estado", ["Convocatoria", "Inscripciones", "En curso"])
     .order("fecha_inicio", { ascending: true });
 
@@ -672,7 +672,7 @@ function buildSistema(cursos: any[], publicaciones: any[], fromName: string, pla
         const partes = [
           `• ${c.nombre} [${c.estado}]`,
           `  Inicio: ${fmtFecha(c.fecha_inicio)} — Fin: ${fmtFecha(c.fecha_fin)}`,
-          `  Arancel: ${c.arancel ? "$" + Number(c.arancel).toLocaleString("es-AR") : "a consultar"}${c.desc_colegio ? ` (descuento Colmedsa: ${c.desc_colegio}%)` : ""}`,
+          `  Arancel: ${c.arancel ? "$" + Number(c.arancel).toLocaleString("es-AR") : "a consultar"}${c.descuento_colegio ? ` (descuento Colmedsa: ${c.descuento_colegio}%)` : ""}`,
           `  Cupos máximos: ${c.cupos_max ?? "a confirmar"}`,
           c.instructor_nombre ? `  Instructor: ${c.instructor_nombre}` : null,
           c.linea_negocio ? `  Línea: ${c.linea_negocio}` : null,
