@@ -1157,6 +1157,26 @@ SELECT cron.schedule(
 
 **Próximos candidatos (a definir con Tomás cuando se retome):** evaluar si conviene el mismo tratamiento en otros agentes (`agente-financiero`, `agente-comunicaciones`); replicar el interceptor de stock también en `agente-mensajes` si algún cliente externo llega a preguntar por equipamiento (poco probable, es más un caso de uso interno).
 
+### Paso 7 — Prompt caching en `agente-cursos` (Lever #1 de reducción de tokens)
+
+**Motivación:** después de cerrar el paso 6, Tomás preguntó si había formas de reducir el gasto de prompts además de los interceptores. Se propusieron 4 palancas (caching, armado condicional del prompt, downgrade de modelo para consultas simples, recorte de `agente-mensajes`); se arrancó por la de mayor impacto y menor riesgo.
+
+- `agente-cursos` — el `system` se partió en dos bloques: `sistemaEstatico` (SKILL_CURSOS + PROGRAMA_MSP + DOCS_NORMATIVOS + INVENTARIO_EQUIPOS + ESTRATEGIA_OFERTA + PLANTILLA_DISENO — miles de tokens que nunca cambian) con `cache_control: {type:"ephemeral"}`, y `sistemaDinamico` (fecha de hoy, modo conciso, cursos/instructores en vivo, curso en contexto) sin cache, siempre después del bloque cacheado para no invalidarlo
+- Anthropic GA, sin beta header — el bloque estático supera de sobra el mínimo cacheable de Sonnet (1024 tokens)
+- **Hallazgo propio durante la implementación:** con caching activo, `response.usage.input_tokens` pasa a ser solo el remanente sin cachear — los tokens reales quedan repartidos en `cache_creation_input_tokens` (escritura, ~1.25×) y `cache_read_input_tokens` (lectura, ~0.1×), dos campos que `ia_uso` y `chequearLimiteIA()` nunca sumaban. Sin corregirlo, el límite de tokens y el desglose de uso por función iban a **subestimar el consumo real** apenas se activara el cache en cualquier función
+- Corregido en las **9 funciones instrumentadas** (`agente-cursos`, `agente-mensajes`, `agente-financiero`, `agente-comunicaciones`, `verificar-reunion`, `agente-reuniones`, `agente-promociones`, `cierre-mensual`, `leer-factura`) y en **3 lugares del panel** que también sumaban `ia_uso`: `loadDetalleUsoIA()` (modal "Ver detalle" de Usuarios), la KPI de alertas del dashboard (línea ~5285) y `loadLimiteIAOrg()` (card "🎚️ Uso de IA — organización", línea ~20305) — los tres ahora incluyen `cache_creation_input_tokens`/`cache_read_input_tokens` en el `select` y en la suma
+- Solo `agente-cursos` tiene la restructuración real de caching (bloque estático/dinámico separado); las otras 8 funciones solo recibieron el fix de conteo, para que el agregado compartido de `ia_uso` no quede mal apenas se sume caching en cualquiera de ellas más adelante
+
+**SQL pendiente (correr en Supabase SQL editor):**
+```sql
+ALTER TABLE ia_uso ADD COLUMN IF NOT EXISTS cache_creation_input_tokens int DEFAULT 0;
+ALTER TABLE ia_uso ADD COLUMN IF NOT EXISTS cache_read_input_tokens int DEFAULT 0;
+```
+
+**Deploy pendiente (Supabase Dashboard → Edge Functions):** las 9 funciones de arriba — ninguna de estas ediciones está en efecto hasta redeployarlas (y correr el SQL antes, si no el INSERT con los campos nuevos puede fallar).
+
+**Pendiente (fase 2, no arrancada):** aplicar el mismo split estático/dinámico de caching a `agente-mensajes` — ahí `buildSistema()` entrelaza texto estático (FAQ, reglas, ejemplos) con datos dinámicos (`cursosTexto`, `pubTexto`, `mejorasTexto`, `planesTexto`, `siteContent`) en un solo string, así que requiere reordenar la función, no es un split mecánico como en `agente-cursos`. Quedan también sin explorar las otras 3 palancas propuestas (armado condicional del prompt, downgrade a Haiku para consultas simples, recorte de `agente-mensajes`).
+
 ---
 
 ## Notas técnicas críticas

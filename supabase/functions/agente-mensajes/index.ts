@@ -21,8 +21,8 @@ async function chequearLimiteIA(supabase: any) {
   const { data: organizacion } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").limit(1).maybeSingle();
   if (!organizacion?.limite_tokens_mensual) return { bloqueado: false, mensaje: null as string | null, organizacionId: organizacion?.id ?? null };
 
-  const { data: usoOrg } = await supabase.from("ia_uso").select("input_tokens,output_tokens").eq("organizacion_id", organizacion.id).gte("created_at", inicioMesISO);
-  const totalOrg = (usoOrg || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0), 0);
+  const { data: usoOrg } = await supabase.from("ia_uso").select("input_tokens,output_tokens,cache_creation_input_tokens,cache_read_input_tokens").eq("organizacion_id", organizacion.id).gte("created_at", inicioMesISO);
+  const totalOrg = (usoOrg || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0) + (r.cache_creation_input_tokens || 0) + (r.cache_read_input_tokens || 0), 0);
   if (totalOrg >= organizacion.limite_tokens_mensual) {
     return { bloqueado: true, mensaje: `límite mensual de IA de la organización alcanzado (se renueva el ${renuevaStr})`, organizacionId: organizacion.id };
   }
@@ -513,6 +513,8 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
       await supabase.from("ia_uso").insert({
         funcion: "agente-mensajes", modelo: aiData.model || null,
         input_tokens: aiData.usage.input_tokens || 0, output_tokens: aiData.usage.output_tokens || 0,
+        cache_creation_input_tokens: aiData.usage.cache_creation_input_tokens || 0,
+        cache_read_input_tokens: aiData.usage.cache_read_input_tokens || 0,
         organizacion_id: limite.organizacionId,
       });
     } catch (_) {}

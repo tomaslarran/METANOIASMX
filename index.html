@@ -5282,8 +5282,8 @@ async function renderAlertas(){
     const org=orgs?.[0];
     if(org?.limite_tokens_mensual){
       const inicioMesIA=new Date();inicioMesIA.setDate(1);inicioMesIA.setHours(0,0,0,0);
-      const usoIA=await sb(`ia_uso?organizacion_id=eq.${org.id}&created_at=gte.${inicioMesIA.toISOString()}&select=input_tokens,output_tokens`);
-      const totalIA=(usoIA||[]).reduce((s,r)=>s+(r.input_tokens||0)+(r.output_tokens||0),0);
+      const usoIA=await sb(`ia_uso?organizacion_id=eq.${org.id}&created_at=gte.${inicioMesIA.toISOString()}&select=input_tokens,output_tokens,cache_creation_input_tokens,cache_read_input_tokens`);
+      const totalIA=(usoIA||[]).reduce((s,r)=>s+(r.input_tokens||0)+(r.output_tokens||0)+(r.cache_creation_input_tokens||0)+(r.cache_read_input_tokens||0),0);
       const pctIA=Math.round(totalIA/org.limite_tokens_mensual*100);
       const alertaPct=org.alerta_pct_tokens||80;
       const renuevaIA=new Date(inicioMesIA);renuevaIA.setMonth(renuevaIA.getMonth()+1);
@@ -20302,8 +20302,8 @@ async function loadLimiteIAOrg(){
     const inputLimite=document.getElementById("org-limite-ia");
     if(inputLimite)inputLimite.value=org.limite_tokens_mensual??"";
     const inicioMes=new Date();inicioMes.setDate(1);inicioMes.setHours(0,0,0,0);
-    const uso=await sb(`ia_uso?organizacion_id=eq.${org.id}&created_at=gte.${inicioMes.toISOString()}&select=input_tokens,output_tokens`);
-    const total=(uso||[]).reduce((s,r)=>s+(r.input_tokens||0)+(r.output_tokens||0),0);
+    const uso=await sb(`ia_uso?organizacion_id=eq.${org.id}&created_at=gte.${inicioMes.toISOString()}&select=input_tokens,output_tokens,cache_creation_input_tokens,cache_read_input_tokens`);
+    const total=(uso||[]).reduce((s,r)=>s+(r.input_tokens||0)+(r.output_tokens||0)+(r.cache_creation_input_tokens||0)+(r.cache_read_input_tokens||0),0);
     const renueva=new Date(inicioMes);renueva.setMonth(renueva.getMonth()+1);
     const renuevaStr=renueva.toLocaleDateString("es-AR",{day:"2-digit",month:"long"});
     if(!org.limite_tokens_mensual){
@@ -20341,18 +20341,22 @@ async function loadDetalleUsoIA(){
   el.innerHTML="Cargando desglose...";
   try{
     const inicioMes=new Date();inicioMes.setDate(1);inicioMes.setHours(0,0,0,0);
-    const rows=await sb(`ia_uso?organizacion_id=eq.${_orgIALimiteId}&created_at=gte.${inicioMes.toISOString()}&select=funcion,modelo,input_tokens,output_tokens,created_at&order=created_at.desc`);
+    const rows=await sb(`ia_uso?organizacion_id=eq.${_orgIALimiteId}&created_at=gte.${inicioMes.toISOString()}&select=funcion,modelo,input_tokens,output_tokens,cache_creation_input_tokens,cache_read_input_tokens,created_at&order=created_at.desc`);
     if(!rows||!rows.length){el.innerHTML=`<span style="color:var(--tx3)">Sin uso registrado este mes todavía.</span>`;_detalleIACargado=true;return;}
+    // Con prompt caching, input_tokens es solo el remanente sin cachear -- hay que sumar
+    // tambien cache_creation/cache_read para reflejar el total real (ver CLAUDE.md, paso caching).
+    const _tokReal=r=>(r.input_tokens||0)+(r.output_tokens||0)+(r.cache_creation_input_tokens||0)+(r.cache_read_input_tokens||0);
     const porFuncion={};
     rows.forEach(r=>{
       const f=r.funcion||"(sin nombre)";
-      if(!porFuncion[f])porFuncion[f]={tokens:0,llamadas:0,ultima:r.created_at,modelos:new Set()};
-      porFuncion[f].tokens+=(r.input_tokens||0)+(r.output_tokens||0);
+      if(!porFuncion[f])porFuncion[f]={tokens:0,cacheRead:0,llamadas:0,ultima:r.created_at,modelos:new Set()};
+      porFuncion[f].tokens+=_tokReal(r);
+      porFuncion[f].cacheRead+=(r.cache_read_input_tokens||0);
       porFuncion[f].llamadas++;
       if(r.modelo)porFuncion[f].modelos.add(r.modelo);
       if(r.created_at>porFuncion[f].ultima)porFuncion[f].ultima=r.created_at;
     });
-    const totalTokens=rows.reduce((s,r)=>s+(r.input_tokens||0)+(r.output_tokens||0),0);
+    const totalTokens=rows.reduce((s,r)=>s+_tokReal(r),0);
     const ordenado=Object.entries(porFuncion).sort((a,b)=>b[1].tokens-a[1].tokens);
     el.innerHTML=`
       <div style="font-weight:700;margin-bottom:8px">Desglose por función este mes</div>

@@ -363,15 +363,15 @@ async function chequearLimiteIA(supabase: any, email: string | null) {
   }
 
   if (organizacion?.limite_tokens_mensual) {
-    const { data: usoOrg } = await supabase.from("ia_uso").select("input_tokens,output_tokens").eq("organizacion_id", organizacionId).gte("created_at", inicioMesISO);
-    const totalOrg = (usoOrg || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0), 0);
+    const { data: usoOrg } = await supabase.from("ia_uso").select("input_tokens,output_tokens,cache_creation_input_tokens,cache_read_input_tokens").eq("organizacion_id", organizacionId).gte("created_at", inicioMesISO);
+    const totalOrg = (usoOrg || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0) + (r.cache_creation_input_tokens || 0) + (r.cache_read_input_tokens || 0), 0);
     if (totalOrg >= organizacion.limite_tokens_mensual) {
       return { bloqueado: true, motivo: "organizacion", mensaje: `Se alcanzó el límite mensual de uso de IA de la organización. Se renueva el ${renuevaStr}. Pedile a un admin que amplíe el plan.`, usuarioId: usuario?.id ?? null, organizacionId };
     }
   }
   if (usuario?.limite_tokens_mensual) {
-    const { data: usoUser } = await supabase.from("ia_uso").select("input_tokens,output_tokens").eq("usuario_id", usuario.id).gte("created_at", inicioMesISO);
-    const totalUser = (usoUser || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0), 0);
+    const { data: usoUser } = await supabase.from("ia_uso").select("input_tokens,output_tokens,cache_creation_input_tokens,cache_read_input_tokens").eq("usuario_id", usuario.id).gte("created_at", inicioMesISO);
+    const totalUser = (usoUser || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0) + (r.cache_creation_input_tokens || 0) + (r.cache_read_input_tokens || 0), 0);
     if (totalUser >= usuario.limite_tokens_mensual) {
       return { bloqueado: true, motivo: "usuario", mensaje: `Alcanzaste tu límite mensual personal de uso de IA. Se renueva el ${renuevaStr}. Pedile a un admin que te amplíe el límite.`, usuarioId: usuario.id, organizacionId };
     }
@@ -433,8 +433,11 @@ serve(async (req) => {
       ? "Respondé MUY CONCISO (máximo 4 párrafos cortos, sin tablas largas). Usá emojis para claridad."
       : "Podés usar listas y formato markdown. Sé detallado cuando diseñes cursos o conduzcas intakes.";
 
-    const sistema = `## ROL
-Sos el agente de cursos de Metanoia SMX. Asistís al equipo interno (instructores, coordinadores y dirección) en la consulta, diseño y planificación de cursos de simulación médica. Hoy es ${hoy}.
+    // Bloque 100% estático — nunca cambia entre requests, así se puede cachear del lado de
+    // Anthropic (cache_control más abajo). "Hoy es X" y "conciso" quedan afuera a propósito:
+    // si entraran acá invalidarían el cache en cada día/canal distinto.
+    const sistemaEstatico = `## ROL
+Sos el agente de cursos de Metanoia SMX. Asistís al equipo interno (instructores, coordinadores y dirección) en la consulta, diseño y planificación de cursos de simulación médica.
 
 ## CONTEXTO
 Operás dentro del panel de gestión interno de Metanoia SMX (Salta, Argentina). Los usuarios son miembros del equipo, no el público general. Tenés acceso a los cursos actuales, instructores, inventario de equipos, marcos normativos y estrategia de oferta. Todo lo que producís es para uso interno — borradores, fichas, respuestas a consultas del equipo.
@@ -502,7 +505,7 @@ SIEMPRE que se proponga una fecha para un curso nuevo:
 4. Si la fecha es válida, confirmala. Si no, proponé alternativas concretas.
 
 ## FORMATO
-Respondé siempre en español. ${conciso}
+Respondé siempre en español.
 - Usá listas y secciones claras cuando diseñes cursos o conduzcas intakes.
 - En modo CONSULTA: respuestas directas y concisas.
 - En modo INTAKE: una pregunta a la vez, confirmá cada bloque antes de avanzar.
@@ -541,7 +544,11 @@ ${INVENTARIO_EQUIPOS}
 
 ${ESTRATEGIA_OFERTA}
 
-${PLANTILLA_DISENO}
+${PLANTILLA_DISENO}`;
+
+    // Bloque dinámico — cambia en cada request (fecha, canal, datos reales de cursos/instructores/
+    // curso vinculado). Va DESPUÉS del breakpoint de cache, así nunca invalida el bloque estático.
+    const sistemaDinamico = `Hoy es ${hoy}. ${conciso}
 
 CURSOS ACTUALES: ${JSON.stringify(cursos.data)}
 INSTRUCTORES: ${JSON.stringify(instructores.data)}
@@ -591,7 +598,15 @@ ${JSON.stringify(cursoContexto, null, 2)}` : ""}`;
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 4096,
-        system: sistema,
+        // Prompt caching (GA, sin beta header): el bloque estático (marcos normativos, inventario,
+        // programa MSP, plantilla de diseño — miles de tokens que nunca cambian) se cachea del lado
+        // de Anthropic. Las llamadas siguientes dentro de la ventana de cache pagan ~10% de esos
+        // tokens en vez del 100%. El bloque dinámico (fecha, cursos, instructores, curso vinculado)
+        // va sin cache_control, así nunca invalida el bloque estático.
+        system: [
+          { type: "text", text: sistemaEstatico, cache_control: { type: "ephemeral" } },
+          { type: "text", text: sistemaDinamico },
+        ],
         messages: [...historialReciente, { role: "user", content: userContent }],
       }),
     });
@@ -602,9 +617,15 @@ ${JSON.stringify(cursoContexto, null, 2)}` : ""}`;
 
     if (data.usage) {
       try {
+        // Con caching activo, input_tokens es SOLO el remanente sin cachear -- los tokens que
+        // vinieron de cache quedan en cache_creation_input_tokens/cache_read_input_tokens, dos
+        // campos separados. Si no se suman acá, el limite de IA y el desglose por funcion
+        // subestiman el uso real (el bloque estatico cacheado "desaparece" de la cuenta).
         await supabase.from("ia_uso").insert({
           funcion: "agente-cursos", modelo: data.model || null,
           input_tokens: data.usage.input_tokens || 0, output_tokens: data.usage.output_tokens || 0,
+          cache_creation_input_tokens: data.usage.cache_creation_input_tokens || 0,
+          cache_read_input_tokens: data.usage.cache_read_input_tokens || 0,
           organizacion_id: limite.organizacionId, usuario_id: limite.usuarioId,
         });
       } catch (_) {}
