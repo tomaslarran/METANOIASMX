@@ -4327,6 +4327,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <!-- Proveedor se edita en la tab Presupuesto del curso ya creado -->
     <div class="fg" style="display:none"><label class="fl">Proveedor</label><select class="fs" id="c-proveedor"><option value="">Sin proveedor</option></select></div>
     <div class="fg form-full"><label class="fl">Respaldo institucional</label><input class="fi" id="c-respaldo" type="text" placeholder="Ej: Colegio de Médicos de Salta"></div>
+    <div class="fg form-full"><label class="fl">Público objetivo</label><input class="fi" id="c-publico" type="text" placeholder="Ej: Residentes de cirugía general (R2-R4)"></div>
     <div class="fg form-full" id="c-desc-wrap"><label class="fl">Descripción del curso</label><textarea class="fta" id="c-desc" placeholder="Descripción del curso, objetivos, contenido..."></textarea></div>
     <div class="fg form-full" id="c-desc-clases-wrap"><label class="fl">Descripción de clases</label><textarea class="fta" id="c-desc-clases" placeholder="Detalle de clases, módulos, actividades..."></textarea></div>
   </div>
@@ -5694,7 +5695,7 @@ function openNewModal(){
   if(curPage==="tareas")openModal("modal-tarea");
   else if(curPage==="cursos"){
     // Limpiar todos los campos antes de abrir
-    ["c-nombre","c-instructor","c-respaldo","c-desc","c-desc-clases","c-inicio","c-fin","c-after-desc","c-cotizacion-id"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+    ["c-nombre","c-instructor","c-respaldo","c-publico","c-desc","c-desc-clases","c-inicio","c-fin","c-after-desc","c-cotizacion-id"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
     ["c-horas","c-cupos","c-arancel","c-descuento"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
     document.getElementById("c-tipo").value="Mixto";
     document.getElementById("c-modalidad").value="Presencial";
@@ -6303,6 +6304,7 @@ async function selectCurso(id){
           <div class="fg"><label class="fl">Instructor</label><input class="fi" value="${esc(curso.instructor_nombre||"")}" list="instructores-datalist" autocomplete="off" onchange="updateCursoField('${id}','instructor_nombre',this.value)"></div>
           <div class="fg"><label class="fl">Recurrencia</label><select class="fs" onchange="updateCursoField('${id}','recurrencia',this.value||null)"><option value="">Única vez</option>${["Mensual","Cuatrimestral","Semestral","Anual"].map(r=>`<option value="${r}"${curso.recurrencia===r?" selected":""}>${r}</option>`).join("")}</select></div>
           <div class="fg form-full"><label class="fl">Respaldo institucional</label><input class="fi" value="${esc(curso.respaldo_institucional||"")}" onchange="updateCursoField('${id}','respaldo_institucional',this.value)"></div>
+          <div class="fg form-full"><label class="fl">Público objetivo</label><input class="fi" value="${esc(curso.publico_objetivo||"")}" placeholder="Ej: Residentes de cirugía general (R2-R4)" onchange="updateCursoField('${id}','publico_objetivo',this.value)"></div>
           <div class="fg form-full"><label class="fl">Descripción del curso</label><textarea class="fta" onchange="updateCursoField('${id}','descripcion',this.value)">${esc(curso.descripcion||"")}</textarea></div>
           <div class="fg form-full"><label class="fl">Descripción de clases</label><textarea class="fta" onchange="updateCursoField('${id}','descripcion_clases',this.value)">${esc(curso.descripcion_clases||"")}</textarea></div>
         </div>
@@ -8058,7 +8060,7 @@ async function _autoLinkInstructorCurso(cursoId,nombreTexto){
 async function updateCursoField(id,field,val){
   try{
     const body={updated_at:new Date().toISOString()};
-    body[field]=val===""||val===null?null:(typeof val==="string"&&!isNaN(val)&&field!=="instructor_nombre"&&field!=="respaldo_institucional"&&field!=="descripcion"&&field!=="descripcion_after"?Number(val):val);
+    body[field]=val===""||val===null?null:(typeof val==="string"&&!isNaN(val)&&field!=="instructor_nombre"&&field!=="respaldo_institucional"&&field!=="descripcion"&&field!=="descripcion_after"&&field!=="publico_objetivo"?Number(val):val);
     await sb(`cursos?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(body)});
     const c=cursos.find(c=>c.id===id);if(c)c[field]=body[field];
     // Alerta: curso sin instructor
@@ -8173,6 +8175,7 @@ async function createCurso(){
     instructor_nombre:document.getElementById("c-instructor").value||null,
     proveedor_id:document.getElementById("c-proveedor").value||null,
     respaldo_institucional:document.getElementById("c-respaldo").value||null,
+    publico_objetivo:document.getElementById("c-publico").value||null,
     descripcion:document.getElementById("c-desc").value||null,
     descripcion_clases:document.getElementById("c-desc-clases").value||null,
     tiene_after:afterChecked,
@@ -8722,7 +8725,8 @@ async function crearCursoDesdeIA(){
   "arancel": número en pesos argentinos o null,
   "instructor_nombre": "nombre o null",
   "respaldo_institucional": "institución o null",
-  "descripcion": "Descripción completa del curso: objetivos de aprendizaje, público objetivo, contenido temático principal, metodología de enseñanza, nivel de simulación, requisitos previos y competencias que se desarrollan. Máximo 400 palabras. Sin markdown.",
+  "publico_objetivo": "A quién está dirigido el curso (ej: 'Residentes de cirugía general R2-R4', 'Enfermería y obstetricia') o null si no se mencionó",
+  "descripcion": "Descripción completa del curso: objetivos de aprendizaje, contenido temático principal, metodología de enseñanza, nivel de simulación, requisitos previos y competencias que se desarrollan. Máximo 400 palabras. Sin markdown.",
   "materiales_necesarios": ["nombre del simulador/maniquí/equipo 1", "nombre del simulador/maniquí/equipo 2"] o []
 }
 Para "materiales_necesarios": lista los simuladores, maniquíes o equipos de simulación específicos que se mencionaron en la charla como necesarios para este curso (ej: "simulador de vía aérea", "maniquí de RCP adulto", "brazo de punción venosa"). Array vacío si no se mencionó ningún equipo puntual.`;
@@ -8756,7 +8760,7 @@ Para "materiales_necesarios": lista los simuladores, maniquíes o equipos de sim
     if(!curso.nombre&&cursoIAChatNombre)curso.nombre=cursoIAChatNombre;
 
     // Limpiar y pre-llenar el formulario
-    ["c-nombre","c-instructor","c-respaldo","c-desc","c-desc-clases","c-inicio","c-fin","c-after-desc","c-cotizacion-id"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+    ["c-nombre","c-instructor","c-respaldo","c-publico","c-desc","c-desc-clases","c-inicio","c-fin","c-after-desc","c-cotizacion-id"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
     ["c-horas","c-cupos","c-arancel","c-descuento"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
     document.getElementById("c-tipo").value="Mixto";
     document.getElementById("c-modalidad").value="Presencial";
@@ -8780,6 +8784,7 @@ Para "materiales_necesarios": lista los simuladores, maniquíes o equipos de sim
     if(curso.arancel)document.getElementById("c-arancel").value=curso.arancel;
     if(curso.instructor_nombre)document.getElementById("c-instructor").value=curso.instructor_nombre;
     if(curso.respaldo_institucional)document.getElementById("c-respaldo").value=curso.respaldo_institucional;
+    if(curso.publico_objetivo)document.getElementById("c-publico").value=curso.publico_objetivo;
     if(curso.descripcion)document.getElementById("c-desc").value=curso.descripcion;
     if(curso.descripcion_clases)document.getElementById("c-desc-clases").value=curso.descripcion_clases;
 
@@ -9791,14 +9796,27 @@ function _buildDocumentoCard(doc,idx){
   const NOMS={ficha_diseno:'Ficha de diseño PEV1',programa:'Programa académico',examen:'Evaluación teórica',manual_facilitador:'Manual del facilitador',cronograma:'Cronograma de rotaciones',presentacion:'Presentación PPT',planilla_prebrief:'Planilla prebriefing',planilla_debrief:'Planilla debriefing PEARLS',instrumento_eval:'Instrumento de evaluación',consentimiento:'Consentimiento de grabación'};
   const icon=ICNS[doc.tipo]||'📄';
   const nom=NOMS[doc.tipo]||doc.tipo;
+  const publicoBtn=(doc.tipo==='ficha_diseno'&&doc.datos?.publico_objetivo)
+    ?`<button onclick="event.stopPropagation();_guardarPublicoObjetivoDesdeFicha(${idx})" style="flex-shrink:0;background:var(--surf2);border:1px solid var(--b);border-radius:6px;padding:5px 8px;font-size:10px;color:var(--tx3);cursor:pointer" title="Guardar '${esc(doc.datos.publico_objetivo)}' como público objetivo del curso vinculado">💾 Guardar público objetivo</button>`
+    :"";
   return `<div style="display:inline-flex;align-items:center;gap:10px;background:var(--surf);border:1px solid var(--b);border-left:3px solid var(--pu);border-radius:10px;padding:10px 14px;margin-top:10px;cursor:pointer;max-width:100%;box-sizing:border-box" onclick="_descargarDocumentoIA(${idx})" title="Click para descargar">
     <span style="font-size:20px">${icon}</span>
     <div style="flex:1;min-width:0">
       <div style="font-size:12px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(doc.titulo||nom)}</div>
       <div style="font-size:11px;color:var(--tx3)">${nom} · Click para descargar</div>
     </div>
+    ${publicoBtn}
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--pu)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
   </div>`;
+}
+async function _guardarPublicoObjetivoDesdeFicha(idx){
+  const doc=_cursoDocumentos[idx];
+  const cId=_cursoIACursoVinculado||_cursoDetalleId;
+  if(!doc?.datos?.publico_objetivo||!cId){toast("Este chat no está vinculado a ningún curso","err");return;}
+  try{
+    await updateCursoField(cId,"publico_objetivo",doc.datos.publico_objetivo);
+    toast("Público objetivo guardado en el curso","ok");
+  }catch(e){toast("Error al guardar: "+e.message,"err");}
 }
 
 async function _descargarDocumentoIA(idx,cursoIdOverride){
@@ -10268,6 +10286,7 @@ async function _tryRespuestaDirectaCurso(texto,cursoId){
   const esInscriptos=/(cu[aá]nt[oa]s?\s+(inscript|alumn|anotad|participant))|((inscript|alumn)os?\s+(hay|tiene))/.test(t);
   const esCupos=!esInscriptos&&/cupo|vacante|lugares?\s+(disponible|libre|quedan)/.test(t);
   const esPrecio=/\b(precio|arancel|cuesta|vale|costo)\b/.test(t);
+  const esPublico=/p[uú]blico objetivo|a qui[eé]nes? est[aá] dirigid|dirigido a qui[eé]n|para qui[eé]n(es)? es (este|el) curso/.test(t);
 
   try{
     if(esInscriptos){
@@ -10286,6 +10305,11 @@ async function _tryRespuestaDirectaCurso(texto,cursoId){
       return curso.arancel
         ?`📊 El arancel de <strong>${esc(curso.nombre)}</strong> es <strong>$${Number(curso.arancel).toLocaleString("es-AR")}</strong>.`
         :`📊 <strong>${esc(curso.nombre)}</strong> no tiene arancel cargado.`;
+    }
+    if(esPublico&&curso.publico_objetivo){
+      // Si todavía no está definido, no interceptamos -- eso es una decisión de diseño
+      // (Bloque B del Intake), no un dato a buscar. Ahí sí tiene que responder la IA.
+      return `📊 <strong>${esc(curso.nombre)}</strong> está dirigido a: <strong>${esc(curso.publico_objetivo)}</strong>.`;
     }
   }catch(e){return null;}
   return null;
