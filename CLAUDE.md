@@ -1138,7 +1138,14 @@ SELECT cron.schedule(
 
 **Deploy realizado (17 Sep 2026):** `agente-mensajes`.
 
-**Próximos candidatos (a definir con Tomás cuando se retome):** evaluar si conviene el mismo tratamiento en otros agentes (`agente-financiero`, `agente-comunicaciones`); sumar fechas de curso como cuarto patrón si el paso 4 funciona bien en producción.
+### Paso 5 — Fechas como cuarto patrón (panel + agente-mensajes)
+- Misma lógica replicada en los dos lugares donde ya vivían cupos/precio: "¿cuándo es/empieza/termina el curso X?", "fecha de inicio/fin" → responde `fecha_inicio`/`fecha_fin` de `cursos` sin pasar por la IA
+- En el panel: patrón agregado a `_tryRespuestaDirectaCurso()` (chat vinculado a un curso)
+- En `agente-mensajes`: mismo patrón + requiere identificar sin ambigüedad el curso mencionado (`_matchCursoEnTexto`), igual que cupos/precio — mismas reglas de seguridad (mensaje corto, curso sin ambigüedad, dato cargado)
+
+**Deploy pendiente (Supabase Dashboard → Edge Functions):** `agente-mensajes` (nuevo patrón de fechas).
+
+**Próximos candidatos (a definir con Tomás cuando se retome):** evaluar si conviene el mismo tratamiento en otros agentes (`agente-financiero`, `agente-comunicaciones`).
 
 ---
 
