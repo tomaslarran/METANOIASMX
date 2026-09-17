@@ -1127,10 +1127,7 @@ SELECT cron.schedule(
 - **Regla clave del interceptor:** si la columna está cargada → respuesta directa (como inscriptos/cupos/precio). Si está vacía → se deja pasar a la IA, porque ahí no hay un dato para buscar — es una decisión de diseño todavía no tomada (Bloque B del Intake Guiado). Interceptar ahí sería inventarle una respuesta al usuario en vez de responder un lookup real
 - **Cierre del círculo:** cuando el agente genera una `ficha_diseno` con `publico_objetivo` definido, aparece un botón "💾 Guardar público objetivo" en la card del documento (`_guardarPublicoObjetivoDesdeFicha()`) que lo escribe directo en el curso vinculado — la próxima vez que alguien pregunte, ya es un lookup puro
 
-**SQL pendiente (correr en Supabase SQL editor):**
-```sql
-ALTER TABLE cursos ADD COLUMN IF NOT EXISTS publico_objetivo text;
-```
+**SQL corrido** (`cursos.publico_objetivo` — verificado 17 Sep 2026 contra la API real).
 
 **Sin deploy de Edge Functions** — todo este cambio es frontend puro (`index.html`), no tocó ninguna función.
 
