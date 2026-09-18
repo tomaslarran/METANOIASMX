@@ -363,7 +363,7 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
   imageBase64: string | null;
   imageMediaType: string;
   imageUrl: string | null;
-  sendReply: (text: string) => Promise<void>;
+  sendReply: (text: string) => Promise<boolean>;
   sendEscalacion: (text: string) => Promise<void>;
 }) {
   // Deduplicar
@@ -570,7 +570,11 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
     }
   } catch (_) {}
 
-  await sendReply(respuesta);
+  const entregado = await _enviarRespuestaCompleta(sendReply, respuesta, plataforma);
+  if (!entregado) {
+    console.error(`No se pudo entregar la respuesta completa a ${fromName} por ${plataforma}`);
+    await sendEscalacion(`⚠️ La respuesta del bot a ${fromName} por ${plataforma === "whatsapp" ? "WhatsApp" : plataforma === "instagram" ? "Instagram DM" : "Facebook Messenger"} no se pudo entregar completa (falló el envío). Revisar la conversación manualmente.`);
+  }
 
   if (idsPendientes.length > 0) {
     const estadoFinal = escalado ? "escalado" : cerrado ? "cerrado" : "respondido";
@@ -581,7 +585,10 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
 }
 
 // ── Helpers de envío ──────────────────────────────────────────────────────────
-async function sendWA(to: string, text: string): Promise<void> {
+// Devuelven boolean (éxito real de entrega) -- antes eran void y un fallo de la API
+// (ej. texto que supera el límite de caracteres de Messenger/Instagram) quedaba solo
+// en el log del servidor, mientras la conversación se marcaba igual como "respondido".
+async function sendWA(to: string, text: string): Promise<boolean> {
   const token = Deno.env.get("META_WA_TOKEN");
   try {
     const res = await fetch(WA_API, {
@@ -600,30 +607,74 @@ async function sendWA(to: string, text: string): Promise<void> {
     if (!res.ok) {
       const err = await res.text();
       console.error(`sendWA error [→${to}] ${res.status}:`, err.slice(0, 200));
+      return false;
     }
+    return true;
   } catch (e) {
     console.error("sendWA fetch error:", (e as Error).message);
+    return false;
   }
 }
 
-async function sendMessenger(recipientId: string, text: string, pageId: string, token: string, isInstagram = false): Promise<void> {
+async function sendMessenger(recipientId: string, text: string, pageId: string, token: string, isInstagram = false): Promise<boolean> {
   const base = isInstagram ? "https://graph.instagram.com" : "https://graph.facebook.com";
-  const res = await fetch(`${base}/v21.0/${pageId}/messages`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      recipient: { id: recipientId },
-      message: { text },
-      messaging_type: "RESPONSE",
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    console.error(`sendMessenger error [${pageId}→${recipientId}]:`, err);
+  try {
+    const res = await fetch(`${base}/v21.0/${pageId}/messages`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        recipient: { id: recipientId },
+        message: { text },
+        messaging_type: "RESPONSE",
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      console.error(`sendMessenger error [${pageId}→${recipientId}]:`, err);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("sendMessenger fetch error:", (e as Error).message);
+    return false;
   }
+}
+
+// Divide un texto largo en partes que respetan el límite de caracteres de la
+// plataforma (Instagram/Messenger rechazan un solo mensaje muy largo -- WhatsApp
+// tolera mucho más, ~4096). Corta en el borde de párrafo/línea/espacio más cercano
+// por debajo del límite para no partir una palabra a la mitad.
+function _splitMensaje(texto: string, maxLen: number): string[] {
+  if (texto.length <= maxLen) return [texto];
+  const partes: string[] = [];
+  let resto = texto;
+  while (resto.length > maxLen) {
+    let corte = resto.lastIndexOf("\n\n", maxLen);
+    if (corte < maxLen * 0.4) corte = resto.lastIndexOf("\n", maxLen);
+    if (corte < maxLen * 0.4) corte = resto.lastIndexOf(" ", maxLen);
+    if (corte < maxLen * 0.4) corte = maxLen;
+    partes.push(resto.slice(0, corte).trim());
+    resto = resto.slice(corte).trim();
+  }
+  if (resto) partes.push(resto);
+  return partes;
+}
+
+// Envía un texto completo, partiéndolo en varios mensajes si hace falta. Devuelve
+// false si alguna parte no se pudo entregar (para poder escalar en vez de dar
+// la conversación por respondida en silencio).
+async function _enviarRespuestaCompleta(sendReply: (t: string) => Promise<boolean>, texto: string, plataforma: string): Promise<boolean> {
+  const maxLen = plataforma === "whatsapp" ? 3500 : 900;
+  const partes = _splitMensaje(texto, maxLen);
+  let ok = true;
+  for (const parte of partes) {
+    const enviado = await sendReply(parte);
+    if (!enviado) ok = false;
+  }
+  return ok;
 }
 
 async function downloadMedia(mediaId: string, token: string): Promise<{ buffer: Uint8Array; mimeType: string }> {
