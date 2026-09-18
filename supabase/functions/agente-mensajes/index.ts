@@ -214,14 +214,18 @@ serve(async (req) => {
     const fromId = messaging.sender.id as string;
     const msgId = messaging.message.mid as string;
 
-    // Obtener nombre del usuario
+    // Obtener nombre del usuario. Instagram-scoped IDs (IGSID) solo se resuelven contra
+    // graph.instagram.com -- graph.facebook.com no los reconoce y devuelve sin "name",
+    // así que el bot se quedaba mudo mostrando el ID numérico en vez del nombre real.
     let fromName = fromId;
     try {
+      const nameBase = isIG ? "https://graph.instagram.com" : "https://graph.facebook.com";
       const nameRes = await fetch(
-        `https://graph.facebook.com/v21.0/${fromId}?fields=name&access_token=${apiToken}`
+        `${nameBase}/v21.0/${fromId}?fields=name,username&access_token=${apiToken}`
       );
       const nameData = await nameRes.json();
       if (nameData.name) fromName = nameData.name;
+      else if (nameData.username) fromName = `@${nameData.username}`;
     } catch (_) {}
 
     let texto = messaging.message.text?.trim() || "";
