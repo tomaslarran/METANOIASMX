@@ -16613,8 +16613,33 @@ async function saveCFInversion(){
 function delCFInvMov(movId, invId){
   confirmDel("¿Eliminar este movimiento?", async()=>{
     try{
+      const mov=cfInvMovs.find(m=>m.id===movId);
       await sb(`cf_inversiones_movimientos?id=eq.${movId}`,{method:"DELETE"});
       cfInvMovs=cfInvMovs.filter(m=>m.id!==movId);
+
+      // Revertir el efecto del movimiento sobre capital/valor_actual de la inversión --
+      // si no, el monto queda "atrapado" en capital y termina apareciendo como capital
+      // inicial fantasma (capitalInicial = capital - aportesMovs, y aportesMovs ya no
+      // lo incluye una vez borrado, pero capital nunca se ajustaba).
+      // "Rescate Total" queda afuera a propósito: revertirlo bien implicaría además
+      // reabrir el estado "Rescatada" de la inversión, caso más raro y no cubierto acá.
+      if(mov&&mov.tipo!=="Rescate Total"){
+        const inv=cfInversiones.find(i=>i.id===invId);
+        if(inv){
+          const patch={updated_at:new Date().toISOString()};
+          if(mov.tipo==="Aporte de capital"){
+            patch.capital=Math.max(0,(inv.capital||0)-(mov.monto||0));
+            patch.valor_actual=Math.max(0,(inv.valor_actual||inv.capital||0)-(mov.monto||0));
+          } else {
+            // Rescate Parcial: al eliminarlo, ese monto vuelve a estar dentro del fondo
+            patch.valor_actual=(inv.valor_actual||inv.capital||0)+(mov.monto||0);
+          }
+          await sb(`cf_inversiones?id=eq.${invId}`,{method:"PATCH",body:JSON.stringify(patch)});
+          const idx=cfInversiones.findIndex(i=>i.id===invId);
+          if(idx>=0)cfInversiones[idx]={...cfInversiones[idx],...patch};
+        }
+      }
+
       renderCFInversiones();
       toast("Movimiento eliminado","ok");
     }catch(e){toast("Error al eliminar: "+e.message,"err")}
