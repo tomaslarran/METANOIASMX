@@ -16114,7 +16114,11 @@ function renderCFInversiones(){
   // Rendimiento realizado vs flotante (método costo promedio)
   const getRendDesglosado=(inv)=>{
     const capHist=getCapHist(inv);
-    const valAct=getCapActivo(inv);
+    // Una inversión Rescatada no tiene nada "flotando" -- valor_actual le queda pisado
+    // con lo último que tenía cargado antes del rescate total (ese campo no se limpia al
+    // cerrar la inversión), así que usarlo acá inflaba Realizado/Flotante/Total con un
+    // resto viejo que ya no representa nada.
+    const valAct=inv.estado==="Activa"?getCapActivo(inv):0;
     const resc=getRescatado(inv);
     const totalVal=valAct+resc;
     const pctResc=totalVal>0?resc/totalVal:0;
