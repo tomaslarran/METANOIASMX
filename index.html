@@ -12947,12 +12947,13 @@ async function renderResumenSemanal(){
   const sf=rsemSociedad?`&sociedad=eq.${rsemSociedad}`:"";
 
   try{
-    const [cajaMovs,bancoMovs,cobranzas,prestamos,inversiones]=await Promise.all([
+    const [cajaMovs,bancoMovs,cobranzas,prestamos,inversiones,invMovsResumen]=await Promise.all([
       sb(`caja_movimientos?select=sociedad,tipo,monto,concepto,fecha${sf}&order=fecha.desc&limit=50`).catch(()=>[]),
       sb(`banco_movimientos?select=fecha,concepto,importe,sociedad,conciliado${sf}&order=fecha.desc&limit=10`).catch(()=>[]),
       sb(`cf_cobranzas?select=descripcion,monto,fecha_vencimiento,estado,empresa&order=fecha_vencimiento.asc`).catch(()=>[]),
       sb(`cf_prestamos?select=nombre,sociedad,saldo_actual,cuota_mensual&activo=eq.true`).catch(()=>[]),
-      sb(`cf_inversiones?select=nombre,sociedad,capital,valor_actual,tna&order=valor_actual.desc`).catch(()=>[]),
+      sb(`cf_inversiones?select=id,nombre,sociedad,estado,capital,valor_actual,tna&order=valor_actual.desc`).catch(()=>[]),
+      sb(`cf_inversiones_movimientos?select=inversion_id,tipo,monto`).catch(()=>[]),
     ]);
 
     // Saldos de caja
@@ -12983,9 +12984,13 @@ async function renderResumenSemanal(){
     const totalDeuda=prestamos.reduce((s,p)=>s+(parseFloat(p.saldo_actual)||0),0);
     const totalCuota=prestamos.reduce((s,p)=>s+(parseFloat(p.cuota_mensual)||0),0);
 
-    // Inversiones
-    const totalInv=inversiones.reduce((s,i)=>s+(parseFloat(i.valor_actual)||0),0);
+    // Inversiones -- "Ganancia" tiene que sumar tambien lo ya rescatado (igual que en el
+    // tab Inversiones), si no cualquier inversion con plata ya retirada muestra ganancia
+    // de menos (o perdida donde en realidad hubo ganancia realizada).
+    const invActivas=inversiones.filter(i=>i.estado==="Activa");
+    const totalInv=invActivas.reduce((s,i)=>s+(parseFloat(i.valor_actual)||0),0);
     const totalCapInv=inversiones.reduce((s,i)=>s+(parseFloat(i.capital)||0),0);
+    const totalRescInv=invMovsResumen.filter(m=>m.tipo!=="Aporte de capital").reduce((s,m)=>s+(parseFloat(m.monto)||0),0);
 
     const socList=rsemSociedad?[rsemSociedad]:["SUDES","POINTERS"];
 
@@ -13052,11 +13057,11 @@ async function renderResumenSemanal(){
     }
 
     // ── Inversiones ──
-    if(inversiones.length){
-      const ganancia=totalInv-totalCapInv;
+    if(invActivas.length){
+      const ganancia=totalInv+totalRescInv-totalCapInv;
       h+=`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);padding:16px">
         <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">📈 Inversiones — Valor actual: ${fmtM(totalInv)} · Ganancia: ${fmtM(ganancia)}</div>
-        ${inversiones.map(i=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--b);font-size:11px">
+        ${invActivas.map(i=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--b);font-size:11px">
           <span style="color:var(--tx)">${esc(i.nombre||"")} <span style="color:var(--tx3)">${i.sociedad||""}</span></span>
           <span style="color:var(--gr);font-weight:600">$${Math.round(parseFloat(i.valor_actual)||0).toLocaleString("es-AR")}</span>
         </div>`).join("")}
@@ -16066,20 +16071,25 @@ function calcCapitalProm(inv,movs){
   const t0=new Date(fechaInicio).getTime();
   const tF=new Date(fechaFin).getTime();
   const diasTotal=Math.max(1,Math.round((tF-t0)/msDay));
-  // Aportes ordenados por fecha
-  const aportes=movs.filter(m=>m.tipo==="Aporte de capital").slice().sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  // Aportes ordenados por fecha (solo para back-calcular el capital inicial)
+  const aportes=movs.filter(m=>m.tipo==="Aporte de capital");
   const sumaAportes=aportes.reduce((s,m)=>s+(parseFloat(m.monto)||0),0);
   const capitalInicial=(parseFloat(inv.capital)||0)-sumaAportes;
-  // Calcular promedio ponderado por días
+  // Calcular promedio ponderado por días -- TODOS los movimientos, no solo aportes.
+  // Antes solo sumaba los aportes y nunca restaba los rescates, así que el capital
+  // "promedio" quedaba inflado después de cualquier rescate (seguía ponderando como si
+  // la plata rescatada hubiera seguido invertida), distorsionando TNA est./Rend. prom.
+  const movsOrdenados=movs.slice().sort((a,b)=>a.fecha.localeCompare(b.fecha));
   let capActual=capitalInicial;
   let tPrev=t0;
   let sumaPond=0;
-  for(const ap of aportes){
-    const tAp=new Date(ap.fecha).getTime();
-    const dias=Math.max(0,Math.round((tAp-tPrev)/msDay));
+  for(const mv of movsOrdenados){
+    const tMv=new Date(mv.fecha).getTime();
+    const dias=Math.max(0,Math.round((tMv-tPrev)/msDay));
     sumaPond+=capActual*dias;
-    capActual+=parseFloat(ap.monto)||0;
-    tPrev=tAp;
+    const monto=parseFloat(mv.monto)||0;
+    capActual+=mv.tipo==="Aporte de capital"?monto:-monto;
+    tPrev=tMv;
   }
   sumaPond+=capActual*Math.max(0,Math.round((tF-tPrev)/msDay));
   const capitalProm=Math.round(sumaPond/diasTotal);
@@ -16110,11 +16120,11 @@ function renderCFInversiones(){
     const pctResc=totalVal>0?resc/totalVal:0;
     const capResc=capHist*pctResc;
     const capPend=capHist-capResc;
-    return{
-      realizado:Math.round(resc-capResc),
-      flotante:Math.round(valAct-capPend),
-      total:Math.round((resc-capResc)+(valAct-capPend))
-    };
+    // Total = suma de los componentes YA redondeados (no un tercer redondeo independiente
+    // de la suma sin redondear) -- si no, Total podía quedar $1 desalineado de Realizado+Flotante.
+    const realizado=Math.round(resc-capResc);
+    const flotante=Math.round(valAct-capPend);
+    return{realizado,flotante,total:realizado+flotante};
   };
   // Totales globales (todas las inversiones, no solo activas)
   const totalCapHist=cfInversiones.reduce((s,i)=>s+getCapHist(i),0);
@@ -16273,6 +16283,7 @@ function renderCFInversiones(){
                 <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
                   ${isActiva?`<button class="btn sm" style="background:var(--gr);color:#fff" onclick="openAgregarCapital('${inv.id}')">💰 + Capital</button>`:""}
                   ${isActiva?`<button class="btn sm pri" onclick="openRescateModal('${inv.id}')">Rescatar</button>`:""}
+                  ${!isActiva?`<button class="btn sm pri" onclick="reinvertirEnFondo('${inv.id}')">🔁 Reinvertir</button>`:""}
                   <button class="btn sm" onclick="editCFInv('${inv.id}')">✎</button>
                   <button class="btn sm danger" onclick="delCFInv('${inv.id}')">✕</button>
                 </div>
@@ -16562,6 +16573,23 @@ async function saveRescate(){
   finally{btn.disabled=false}
 }
 
+// Reinvertir en el mismo fondo desde una inversión ya Rescatada -- precarga una Nueva
+// Inversión con los datos del fondo original (tipo/entidad/sociedad/tasa), sin tocar el
+// registro Rescatado (queda como historial cerrado, la reinversión es un registro nuevo).
+function reinvertirEnFondo(id){
+  const src=cfInversiones.find(i=>i.id===id);if(!src)return;
+  openAddInversion();
+  document.getElementById("cfi-nombre").value=src.nombre||"";
+  document.getElementById("cfi-tipo").value=src.tipo||"FCI";
+  document.getElementById("cfi-entidad").value=src.entidad||"";
+  document.getElementById("cfi-soc").value=src.sociedad||"SUDES";
+  document.getElementById("cfi-tasa").value=src.tasa||"";
+  document.getElementById("cfi-objetivo").value=src.objetivo||"";
+  document.getElementById("cfi-riesgo").value=src.tipo_riesgo||"";
+  document.getElementById("cfi-plazo").value=src.plazo_rescate||"T+0";
+  document.getElementById("mci-title").textContent=`Reinvertir — ${src.nombre}`;
+}
+
 function openAddInversion(){
   editCFInvId=null;
   document.getElementById("mci-title").textContent="Nueva Inversión";
@@ -16677,7 +16705,13 @@ function calcRendStats(){
     activas.forEach(inv=>{
       const vH=valInvEn(inv,hoy);
       const vB=valInvEn(inv,fechaBase);
-      if(vH!==null&&vB!==null){dHoy+=vH;dBase+=vB;tieneComparacion=true;}
+      if(vH!==null&&vB!==null){
+        // Neteamos aportes/rescates del período -- si no, un aporte de $10M "hoy" se
+        // veía como si la cartera hubiera ganado $10M ese día (y un rescate, como pérdida).
+        const movsPeriodo=cfInvMovs.filter(m=>m.inversion_id===inv.id&&m.fecha>fechaBase&&m.fecha<=hoy);
+        const netoMovs=movsPeriodo.reduce((s,m)=>s+(m.tipo==="Aporte de capital"?(m.monto||0):-(m.monto||0)),0);
+        dHoy+=vH;dBase+=vB+netoMovs;tieneComparacion=true;
+      }
     });
     return tieneComparacion?dHoy-dBase:null;
   }
