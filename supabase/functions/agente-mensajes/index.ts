@@ -202,7 +202,6 @@ serve(async (req) => {
   if (object === "instagram" || object === "page") {
     const entry = body.entry?.[0];
     const messaging = entry?.messaging?.[0];
-    if (!messaging?.message || messaging.message.is_echo) return new Response("OK", { status: 200 });
 
     const plataforma = object === "instagram" ? "instagram" : "facebook";
     // Instagram DMs: usa el token de usuario IG (META_ACCESS_TOKEN) + IG_PAGE_ID
@@ -210,6 +209,24 @@ serve(async (req) => {
     const isIG = object === "instagram";
     const apiToken = isIG ? Deno.env.get("META_ACCESS_TOKEN")! : Deno.env.get("META_FB_PAGE_TOKEN")!;
     const pageId = isIG ? IG_PAGE_ID : FB_PAGE_ID;
+
+    // Reacción (❤️/👍/🔥/etc.) sobre un mensaje nuestro -- no es una consulta, así que
+    // no pasa por la IA: agradecimiento directo y listo, sin preguntar "¿algo más?".
+    if (messaging?.reaction && messaging.reaction.action === "react") {
+      const fromReact = messaging.sender?.id as string | undefined;
+      if (fromReact) {
+        const gracias = "¡Muchas gracias por el apoyo! 🙌";
+        await sendMessenger(fromReact, gracias, pageId, apiToken, isIG);
+        await supabase.from("mensajes_publico").insert({
+          plataforma, from_id: fromReact, from_name: fromReact,
+          mensaje: `[Reacción ${messaging.reaction.emoji || messaging.reaction.reaction || ""}]`.trim(),
+          estado: "respondido", respuesta: gracias,
+        });
+      }
+      return new Response("OK", { status: 200 });
+    }
+
+    if (!messaging?.message || messaging.message.is_echo) return new Response("OK", { status: 200 });
 
     const fromId = messaging.sender.id as string;
     const msgId = messaging.message.mid as string;
@@ -277,6 +294,17 @@ serve(async (req) => {
         } catch (_) {
           texto = "[audio no procesado]";
         }
+
+      } else if (att.type === "share" || att.type === "story_mention" || att.type === "template") {
+        // Mención/compartido de una publicación -- agradecimiento directo sin pasar por la
+        // IA y sin la pregunta de cierre habitual ("¿algo más?"): no es una consulta.
+        const gracias = "¡Gracias por la mención! 🙌 Nos alegra mucho el apoyo.";
+        await sendMessenger(fromId, gracias, pageId, apiToken, isIG);
+        await supabase.from("mensajes_publico").insert({
+          plataforma, from_id: fromId, from_name: fromName,
+          mensaje: `[${att.type}]`, estado: "respondido", respuesta: gracias, wa_message_id: msgId,
+        });
+        return new Response("OK", { status: 200 });
 
       } else {
         texto = `[${att.type}]`;
