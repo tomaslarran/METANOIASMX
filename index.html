@@ -16126,7 +16126,7 @@ function renderCFInversiones(){
   set("inv-valor","$"+Math.round(totalCapActivo).toLocaleString("es-AR"));
   set("inv-rescatado","$"+Math.round(totalRescatado).toLocaleString("es-AR"));
   const rendEl=document.getElementById("inv-rend");
-  if(rendEl){rendEl.textContent=(rendNeto>=0?"+":"")+"$"+Math.round(Math.abs(rendNeto)).toLocaleString("es-AR");rendEl.style.color=rendNeto>=0?"var(--gr)":"var(--re)"}
+  if(rendEl){rendEl.textContent=(rendNeto>=0?"+":"-")+"$"+Math.round(Math.abs(rendNeto)).toLocaleString("es-AR");rendEl.style.color=rendNeto>=0?"var(--gr)":"var(--re)"}
   const rendSubEl=document.getElementById("inv-rend-sub");
   if(rendSubEl){const rendPct=totalCapHist?((rendNeto/totalCapHist)*100).toFixed(1):"0.0";rendSubEl.textContent=(rendNeto>=0?"+":"")+rendPct+"% sobre cap. histórico";}
   // Bloque de liquidez
@@ -16161,11 +16161,11 @@ function renderCFInversiones(){
         <div style="display:flex;flex-direction:column;gap:8px">
           <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--r);padding:10px 12px">
             <div style="font-size:10px;color:var(--tx3);margin-bottom:3px">✅ Realizado <span style="font-style:italic">(ya en el bolsillo)</span></div>
-            <div style="font-size:16px;font-weight:700;color:${totalRealizado>=0?"var(--gr)":"var(--re)"}">${totalRealizado>=0?"+":""}$${Math.abs(totalRealizado).toLocaleString("es-AR")}</div>
+            <div style="font-size:16px;font-weight:700;color:${totalRealizado>=0?"var(--gr)":"var(--re)"}">${totalRealizado>=0?"+":"-"}$${Math.abs(totalRealizado).toLocaleString("es-AR")}</div>
           </div>
           <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:var(--r);padding:10px 12px">
             <div style="font-size:10px;color:var(--tx3);margin-bottom:3px">📈 Flotante <span style="font-style:italic">(depende del mercado)</span></div>
-            <div style="font-size:16px;font-weight:700;color:${totalFlotante>=0?"#60A5FA":"var(--re)"}">${totalFlotante>=0?"+":""}$${Math.abs(totalFlotante).toLocaleString("es-AR")}</div>
+            <div style="font-size:16px;font-weight:700;color:${totalFlotante>=0?"#60A5FA":"var(--re)"}">${totalFlotante>=0?"+":"-"}$${Math.abs(totalFlotante).toLocaleString("es-AR")}</div>
           </div>
         </div>
       </div>
@@ -16210,7 +16210,7 @@ function renderCFInversiones(){
             <span>Histórico: <strong style="color:var(--tx)">$${Math.round(capHist).toLocaleString("es-AR")}</strong></span>
             <span>Activo: <strong style="color:var(--ac)">$${Math.round(val).toLocaleString("es-AR")}</strong></span>
             ${rescEmp>0?`<span>Rescatado: <strong style="color:var(--am)">$${Math.round(rescEmp).toLocaleString("es-AR")}</strong></span>`:""}
-            <span style="color:${rendE>=0?"var(--gr)":"var(--re)"}"><strong>${rendE>=0?"+":""}$${Math.round(Math.abs(rendE)).toLocaleString("es-AR")} (${rendE>=0?"+":""}${rendPct}%)</strong></span>
+            <span style="color:${rendE>=0?"var(--gr)":"var(--re)"}"><strong>${rendE>=0?"+":"-"}$${Math.round(Math.abs(rendE)).toLocaleString("es-AR")} (${rendE>=0?"+":""}${rendPct}%)</strong></span>
           </div>`:`<div style="font-size:12px;color:var(--tx3);margin-top:2px">Sin inversiones activas</div>`}
         </div>
         <div style="display:flex;align-items:center;gap:6px">
@@ -16254,9 +16254,9 @@ function renderCFInversiones(){
                     ${inv.fecha_vencimiento?`<span style="color:${d!==null&&d<=7?"#FCD34D":"var(--tx3)"}">${vencAlert}${isActiva?"Vence":"Cerrada"}: ${fmt(inv.fecha_rescate||inv.fecha_vencimiento)}${isActiva&&d!==null?" ("+Math.abs(d)+"d"+(d<0?" pasado":" restante")+")":""}</span>`:""}
                   </div>
                   <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;margin-top:5px;padding-top:5px;border-top:1px solid var(--b)">
-                    <span style="color:var(--tx3)">Realizado: <strong style="color:${rend.realizado>=0?"var(--gr)":"var(--re)"}">${rend.realizado>=0?"+":""}$${Math.abs(rend.realizado).toLocaleString("es-AR")}</strong></span>
-                    <span style="color:var(--tx3)">Flotante: <strong style="color:${rend.flotante>=0?"var(--gr)":"var(--re)"}">${rend.flotante>=0?"+":""}$${Math.abs(rend.flotante).toLocaleString("es-AR")}</strong></span>
-                    <span style="color:var(--tx3)">Total: <strong style="color:${rend.total>=0?"var(--gr)":"var(--re)"}">${rend.total>=0?"+":""}$${Math.abs(rend.total).toLocaleString("es-AR")} (${rendPct}%)</strong></span>
+                    <span style="color:var(--tx3)">Realizado: <strong style="color:${rend.realizado>=0?"var(--gr)":"var(--re)"}">${rend.realizado>=0?"+":"-"}$${Math.abs(rend.realizado).toLocaleString("es-AR")}</strong></span>
+                    <span style="color:var(--tx3)">Flotante: <strong style="color:${rend.flotante>=0?"var(--gr)":"var(--re)"}">${rend.flotante>=0?"+":"-"}$${Math.abs(rend.flotante).toLocaleString("es-AR")}</strong></span>
+                    <span style="color:var(--tx3)">Total: <strong style="color:${rend.total>=0?"var(--gr)":"var(--re)"}">${rend.total>=0?"+":"-"}$${Math.abs(rend.total).toLocaleString("es-AR")} (${rendPct}%)</strong></span>
                   </div>
                   ${inv.notas?`<div style="font-size:10px;color:var(--tx3);margin-top:3px;font-style:italic">${esc(inv.notas)}</div>`:""}
                   ${cp?`<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;margin-top:6px;padding:5px 8px;background:var(--surf2);border-radius:5px;align-items:center">
@@ -17003,7 +17003,7 @@ async function exportCompetenciasXLS(){
 
 function renderRendStats(){
   const s=calcRendStats();
-  const fmt=v=>(v>=0?"+":"")+"$"+Math.round(Math.abs(v)).toLocaleString("es-AR");
+  const fmt=v=>(v>=0?"+":"-")+"$"+Math.round(Math.abs(v)).toLocaleString("es-AR");
   const col=v=>v>=0?"var(--gr)":"var(--re)";
   ["hoy","sem","mes"].forEach(k=>{
     const el=document.getElementById(`rend-stat-${k}`);
