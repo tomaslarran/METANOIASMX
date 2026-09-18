@@ -334,6 +334,13 @@ serve(async (req) => {
 function _normTxt(s: string): string {
   return (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
+// true si el mensaje, sacando emojis/espacios/signos de puntuación, no deja nada de texto real.
+function _esSoloEmojis(texto: string): boolean {
+  const limpio = (texto || "").trim();
+  if (!limpio) return false;
+  const sinEmoji = limpio.replace(/[\p{Extended_Pictographic}‍️\s.,;:!?¡¿]/gu, "");
+  return sinEmoji.length === 0;
+}
 const _STOPWORDS_CURSO = new Set(["curso", "taller", "workshop", "nivel", "de", "del", "la", "el", "los", "las", "y", "en", "con", "para", "básico", "basico", "avanzado"]);
 function _matchCursoEnTexto(texto: string, cursosList: any[]): any | null {
   const t = _normTxt(texto);
@@ -444,6 +451,18 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
     .from("cursos").select("nombre, estado, fecha_inicio, fecha_fin, arancel, cupos_max, descripcion, instructor_nombre, linea_negocio, descuento_colegio, recurrencia, respaldo_institucional")
     .in("estado", ["Convocatoria", "Inscripciones", "En curso"])
     .order("fecha_inicio", { ascending: true });
+
+  // Mensaje de puro emoji (🎉🔥👏 etc., escrito como texto, no una reacción real de Meta
+  // -- esas ya se manejan aparte en el webhook) -- mismo trato que una reacción: agradecer
+  // directo sin IA y sin la pregunta de cierre habitual, no es una consulta.
+  if (!imageBase64 && _esSoloEmojis(textoCombinado)) {
+    const gracias = "¡Muchas gracias por el apoyo! 🙌";
+    await sendReply(gracias);
+    if (idsPendientes.length > 0) {
+      await supabase.from("mensajes_publico").update({ respuesta: gracias, estado: "respondido" }).in("id", idsPendientes);
+    }
+    return;
+  }
 
   // Respuesta directa sin IA para preguntas puntuales de cupos/precio con un curso identificado
   // sin ambigüedad. Solo aplica a mensajes de texto (una imagen siempre necesita razonamiento).
