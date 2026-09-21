@@ -16697,24 +16697,30 @@ function delCFInv(id){
 /* ── RENDIMIENTOS DIARIOS ── */
 function calcRendStats(){
   const activas=cfInversiones.filter(i=>i.estado==="Activa");
-  // Valor de una inversión en una fecha dada (null si no hay datos)
-  function valInvEn(inv,fecha){
+  // Último registro de una inversión en o antes de una fecha dada (null si no hay datos).
+  // Devuelve el registro completo {fecha,valor} -- la fecha REAL importa: si hay un hueco
+  // de varios días sin registrar, el registro usado como base puede ser bastante anterior
+  // a la fecha nominal que se pidió.
+  function regInvEn(inv,fecha){
     const reg=[...rendDiarios.filter(r=>r.inversion_id===inv.id&&r.fecha<=fecha)].pop();
-    return reg?reg.valor:null;
+    return reg||null;
   }
   // Diferencia de portfolio entre hoy y una fecha base, solo con inversiones con datos en ambos extremos
   function diffPortfolio(fechaBase){
     const hoy=today();
     let dHoy=0,dBase=0,tieneComparacion=false;
     activas.forEach(inv=>{
-      const vH=valInvEn(inv,hoy);
-      const vB=valInvEn(inv,fechaBase);
-      if(vH!==null&&vB!==null){
-        // Neteamos aportes/rescates del período -- si no, un aporte de $10M "hoy" se
-        // veía como si la cartera hubiera ganado $10M ese día (y un rescate, como pérdida).
-        const movsPeriodo=cfInvMovs.filter(m=>m.inversion_id===inv.id&&m.fecha>fechaBase&&m.fecha<=hoy);
+      const regH=regInvEn(inv,hoy);
+      const regB=regInvEn(inv,fechaBase);
+      if(regH&&regB){
+        // Neteamos los aportes/rescates desde la fecha REAL del registro base (no desde
+        // fechaBase nominal) hasta hoy -- si no, un movimiento que cae en un hueco entre
+        // el último registro real y fechaBase queda "perdido": ni en el valor base ni
+        // neteado, y se ve como ganancia/pérdida de cartera cuando es plata que entró o
+        // salió. Antes solo se neteaba desde fechaBase, dejando afuera justo esos casos.
+        const movsPeriodo=cfInvMovs.filter(m=>m.inversion_id===inv.id&&m.fecha>regB.fecha&&m.fecha<=hoy);
         const netoMovs=movsPeriodo.reduce((s,m)=>s+(m.tipo==="Aporte de capital"?(m.monto||0):-(m.monto||0)),0);
-        dHoy+=vH;dBase+=vB+netoMovs;tieneComparacion=true;
+        dHoy+=regH.valor;dBase+=regB.valor+netoMovs;tieneComparacion=true;
       }
     });
     return tieneComparacion?dHoy-dBase:null;
@@ -16724,7 +16730,7 @@ function calcRendStats(){
   const dSem=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
   const dMes=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
   // Para "hoy" usamos valor_actual como fallback si no hay registro
-  const vHoy=activas.reduce((s,inv)=>{const r=valInvEn(inv,hoy);return s+(r!==null?r:(inv.valor_actual||inv.capital||0));},0);
+  const vHoy=activas.reduce((s,inv)=>{const r=regInvEn(inv,hoy);return s+(r?r.valor:(inv.valor_actual||inv.capital||0));},0);
   return{hoy:diffPortfolio(dAyer),sem:diffPortfolio(dSem),mes:diffPortfolio(dMes),vHoy};
 }
 
