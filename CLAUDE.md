@@ -1221,6 +1221,10 @@ ALTER TABLE asientos_contables ADD CONSTRAINT asientos_contables_tipo_check
 
 **Decisión pendiente de Tomás — numeración estilo Tango:** todavía no se tocó el plan de cuentas para alinearlo a Tango Gestión. Paso siguiente sugerido: pedirle al equipo de contadores el export/pantallazo del plan de cuentas real que usan en su instancia de Tango, para calcarlo en vez de aproximarlo — cada instalación personaliza su propia numeración.
 
+**SQL corrido (21 Sep 2026):** el ALTER del constraint de arriba ya se ejecutó en Supabase.
+
+**Pendiente para la próxima sesión:** después de correr "🔄 Generar históricos" (Libro Diario), quedaron algunos asientos de **cuotas de préstamos sin generar** — Tomás lo notó al revisar, todavía no se investigó la causa (podría ser cuotas sin `prestamo_id` válido, sin `capital`/`intereses` cargados, u otra cosa). Retomar desde ahí.
+
 ---
 
 ## Notas técnicas críticas
