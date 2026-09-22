@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import nodemailer from "npm:nodemailer@6.9.9";
 
 const VERIFY_TOKEN = Deno.env.get("META_WH_VERIFY_TOKEN") || "metanoia_wh_2026";
 const PHONE_NUMBER_ID = Deno.env.get("WA_PHONE_NUMBER_ID") || "1064395966761110";
@@ -29,12 +30,27 @@ async function chequearLimiteIA(supabase: any) {
   return { bloqueado: false, mensaje: null as string | null, organizacionId: organizacion.id };
 }
 
-const EQUIPO = [
-  { nombre: "Amparo", wa: Deno.env.get("WA_AMPARO") || "5493874462320" },
-  { nombre: "Valentina", wa: Deno.env.get("WA_VALENTINA") || "5493875094959" },
-  { nombre: "Dani", wa: Deno.env.get("WA_DANI") || "5493875374699" },
-  { nombre: "Flor", wa: Deno.env.get("WA_FLOR") || "5493875031295" },
-];
+const ESCALACION_EMAIL = Deno.env.get("ESCALACION_EMAIL") || "tlarran@metanoiasmx.com";
+
+async function sendEmailEscalacion(texto: string): Promise<void> {
+  try {
+    const transporter = nodemailer.createTransport({
+      host: Deno.env.get("SMTP_HOST"),
+      port: 465,
+      secure: true,
+      auth: { user: Deno.env.get("SMTP_USER"), pass: Deno.env.get("SMTP_PASS") },
+    });
+    const htmlBody = texto.replace(/\n/g, "<br>").replace(/\*(.*?)\*/g, "<strong>$1</strong>");
+    await transporter.sendMail({
+      from: `"Metanoia SMX" <${Deno.env.get("SMTP_USER")}>`,
+      to: ESCALACION_EMAIL,
+      subject: texto.startsWith("⚠️") ? "⚠️ Alerta bot — Metanoia SMX" : "🚨 Consulta derivada — Metanoia SMX",
+      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fafafa;border-left:4px solid #4a2eb4">${htmlBody}</div>`,
+    });
+  } catch (e) {
+    console.error("sendEmailEscalacion error:", (e as Error).message);
+  }
+}
 
 serve(async (req) => {
   // ── Verificación del webhook (GET) ──────────────────────────────────────────
@@ -192,7 +208,7 @@ serve(async (req) => {
       supabase, fromId, fromName, texto, plataforma: "whatsapp", msgId,
       imageBase64, imageMediaType, imageUrl,
       sendReply: (t) => sendWA(fromId, t),
-      sendEscalacion: (t) => Promise.all(EQUIPO.map(p => sendWA(p.wa, t))).then(() => {}),
+      sendEscalacion: async (t) => { await sendEmailEscalacion(t); },
     });
 
     return new Response("OK", { status: 200 });
@@ -317,7 +333,7 @@ serve(async (req) => {
       supabase, fromId, fromName, texto, plataforma, msgId,
       imageBase64, imageMediaType, imageUrl,
       sendReply: (t) => sendMessenger(fromId, t, pageId, apiToken, isIG),
-      sendEscalacion: (t) => Promise.all(EQUIPO.map(p => sendWA(p.wa, t))).then(() => {}),
+      sendEscalacion: async (t) => { await sendEmailEscalacion(t); },
     });
 
     return new Response("OK", { status: 200 });
