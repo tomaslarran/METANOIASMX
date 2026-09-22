@@ -15585,8 +15585,8 @@ async function confirmarPagoEmpleado(){
       const soc=emp.sociedad||"SUDES";
       const bancoCod=getBancoCodigoPorMedio(medio||"",soc);
       const desc=`Sueldo: ${emp.nombre||""} — ${_mpePeriodo||""}`;
-      const _adS={fecha,sociedad:soc,tipo:"pago_sueldo",origen:"pago_empleado",origen_id:pagoId,descripcion:desc,lineas:[
-        {codigo:"4.2.01.001",debe:monto,desc:`Sueldo ${emp.nombre||""}`},
+      const _adS={fecha,sociedad:soc,tipo:"sueldo",origen:"pago_empleado",origen_id:pagoId,descripcion:desc,lineas:[
+        {codigo:"5.1.01.001",debe:monto,desc:`Sueldo ${emp.nombre||""}`},
         {codigo:bancoCod,haber:monto,desc:`Pago ${medio||"sueldo"}`},
       ]};
       generarAsiento(_adS).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adS);else if(!a)toast("⚠️ Asiento sueldo no generado","err");}).catch(()=>{});
@@ -17229,28 +17229,60 @@ function togglePrestCuotas(id){
 
 // ── MODAL CUENTAS FALTANTES ─────────────────────────────────────────
 let _pendingAsientoData=null;
+// Catálogo de sugerencias para el modal de "cuenta faltante" -- DEBE coincidir con la
+// numeración real de plan_cuentas (4=Ingresos, 5=Egresos; ver seed de julio 2026), no con
+// una convención inventada. Una versión anterior de esta tabla tenía el eje 4/5 invertido
+// (pensaba 4=egreso, 5=ingreso) y eso generó cuentas huérfanas con el tipo contable al
+// revés (ver fix Sep 2026 -- "Intereses y gastos financieros" quedó mal creada por esto).
 const _MCF_META={
-  "1.1.01.001":{nombre:"Caja ARS",tipo:"activo"},
+  "1.1.01.001":{nombre:"Caja efectivo",tipo:"activo"},
   "1.1.01.002":{nombre:"Banco Macro SUDES",tipo:"activo"},
   "1.1.01.003":{nombre:"Banco Macro POINTERS",tipo:"activo"},
-  "1.1.01.004":{nombre:"Mercado Pago",tipo:"activo"},
-  "2.1.01.001":{nombre:"Proveedores a pagar",tipo:"pasivo"},
-  "2.1.02.001":{nombre:"Préstamos bancarios — capital",tipo:"pasivo"},
-  "2.1.03.001":{nombre:"Ret. IIBB a depositar",tipo:"pasivo"},
-  "2.1.03.002":{nombre:"Ret. SICORE / Ganancias a depositar",tipo:"pasivo"},
+  "1.1.01.004":{nombre:"Mercado Pago SUDES",tipo:"activo"},
+  "1.1.03.001":{nombre:"IVA Crédito Fiscal",tipo:"activo"},
+  "2.1.01.001":{nombre:"Proveedores",tipo:"pasivo"},
+  "2.1.02.001":{nombre:"Préstamos a pagar",tipo:"pasivo"},
+  "2.1.03.001":{nombre:"IVA Débito Fiscal",tipo:"pasivo"},
+  "2.1.03.002":{nombre:"Retenciones Ganancias a depositar (SICORE)",tipo:"pasivo"},
+  "2.1.03.003":{nombre:"Percepciones IIBB a depositar",tipo:"pasivo"},
   "3.1.01.001":{nombre:"Capital social",tipo:"patrimonio_neto"},
-  "4.1.01.001":{nombre:"Compras / insumos",tipo:"egreso"},
-  "4.1.02.001":{nombre:"IVA crédito fiscal",tipo:"activo"},
-  "4.2.01.001":{nombre:"Sueldos y honorarios",tipo:"egreso"},
-  "4.2.03.001":{nombre:"Intereses y gastos financieros",tipo:"egreso"},
-  "5.1.01.001":{nombre:"Ingresos por cursos",tipo:"ingreso"},
-  "5.1.02.001":{nombre:"Ingresos por suscripciones",tipo:"ingreso"},
+  "4.1.01.001":{nombre:"Ingresos por cursos SUDES",tipo:"ingreso"},
+  "4.1.02.001":{nombre:"Ingresos por suscripciones (COFRADIA)",tipo:"ingreso"},
+  "4.2.01.001":{nombre:"Ingresos por servicios POINTERS",tipo:"ingreso"},
+  "5.1.01.001":{nombre:"Sueldos y cargas sociales",tipo:"egreso"},
+  "5.2.01.001":{nombre:"Gastos generales de operación",tipo:"egreso"},
+  "5.3.01.001":{nombre:"Intereses pagados",tipo:"egreso"},
 };
 function _mcfTipoByCode(codigo){
   const p=parseInt(codigo.charAt(0));
-  return p===1?"activo":p===2?"pasivo":p===3?"patrimonio_neto":p===4?"egreso":"ingreso";
+  return p===1?"activo":p===2?"pasivo":p===3?"patrimonio_neto":p===4?"ingreso":"egreso";
 }
 function _mcfNaturaleza(tipo){return["activo","egreso"].includes(tipo)?"deudora":"acreedora";}
+// Crea, si faltan, todos los niveles intermedios de un código antes de devolver el id
+// del padre inmediato -- antes se buscaba el padre directo y, si no existía (porque
+// ningún nivel intermedio se había creado todavía), la cuenta nueva quedaba con
+// cuenta_padre_id null: huérfana, rompe la jerarquía y los subtotales del plan.
+async function _mcfAsegurarPadres(parentCodigo,tipo){
+  if(!parentCodigo)return null;
+  const partes=parentCodigo.split(".");
+  let padreId=null;
+  for(let i=1;i<=partes.length;i++){
+    const codigoNivel=partes.slice(0,i).join(".");
+    let cuenta=planCuentas.find(c=>c.codigo===codigoNivel);
+    if(!cuenta){
+      const naturaleza=_mcfNaturaleza(tipo);
+      const[nueva]=await sb("plan_cuentas",{method:"POST",body:JSON.stringify({
+        codigo:codigoNivel,nombre:`Grupo ${codigoNivel}`,tipo,nivel:i,
+        imputable:false,activa:true,naturaleza,cuenta_padre_id:padreId,
+      })});
+      if(!nueva)throw new Error(`no se pudo crear el nivel ${codigoNivel}`);
+      planCuentas.push(nueva);
+      cuenta=nueva;
+    }
+    padreId=cuenta.id;
+  }
+  return padreId;
+}
 function mcfAbrir(faltantes,asientoData){
   _pendingAsientoData={...asientoData,_faltantes:faltantes};
   const lista=document.getElementById("mcf-lista");
@@ -17310,8 +17342,10 @@ async function mcfConfirmar(){
         const nivel=(codigo.match(/\./g)||[]).length+1;
         const naturaleza=_mcfNaturaleza(tipo);
         const parentCodigo=codigo.split(".").slice(0,-1).join(".");
-        const padre=planCuentas.find(c=>c.codigo===parentCodigo);
-        const[nueva]=await sb("plan_cuentas",{method:"POST",body:JSON.stringify({codigo,nombre,tipo,nivel,imputable:true,activa:true,naturaleza,cuenta_padre_id:padre?.id||null})});
+        let padreId=null;
+        try{ padreId=await _mcfAsegurarPadres(parentCodigo,tipo); }
+        catch(e){ toast(`Error creando jerarquía para ${codigo}: ${e.message}`,"err"); return; }
+        const[nueva]=await sb("plan_cuentas",{method:"POST",body:JSON.stringify({codigo,nombre,tipo,nivel,imputable:true,activa:true,naturaleza,cuenta_padre_id:padreId})});
         if(nueva){planCuentas.push(nueva);codigoMap[codigo]=codigo;}
         else{toast(`Error creando cuenta ${codigo}`,"err");return;}
       }
@@ -17406,7 +17440,7 @@ async function confirmarPagoCuota(){
         const cap=capital>0?capital:0;
         const intereses=Math.max(0,Math.round((total-cap)*100)/100);
         if(cap>0)lineas.push({codigo:"2.1.02.001",debe:cap,desc:"Capital cuota"});
-        if(intereses>0)lineas.push({codigo:"4.2.03.001",debe:intereses,desc:cap>0&&Math.abs(total-(cap+(parseFloat(c.intereses)||0)))>1?"Intereses (ajustado por demora)":"Intereses"});
+        if(intereses>0)lineas.push({codigo:"5.3.01.001",debe:intereses,desc:cap>0&&Math.abs(total-(cap+(parseFloat(c.intereses)||0)))>1?"Intereses (ajustado por demora)":"Intereses"});
         lineas.push({codigo:getBancoCodigoPorMedio(medio,soc),haber:total,desc:`Pago ${medio||"cuota"}`});
         const desc=`Cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${prest.nombre||"Préstamo"}`;
         const _adC={fecha,sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:cuotaId,descripcion:desc,lineas};
@@ -21440,18 +21474,34 @@ async function backfillAsientos(){
     // 2. Comprobantes pagados con OP → pago_compra
     for(const c of(comprobantes||[]).filter(c=>c.estado==="pagado"&&c.estado!=="cerrado"&&!c.tipo?.startsWith("NC"))){
       const op=(ordenesGanancias||[]).find(o=>o.comprobante_id===c.id);
-      if(!op?.id||yaExiste.has(`orden_pago:${op.id}`))continue;
-      const bruto=Math.round((parseFloat(c.total)||0)*100)/100;
-      const ret=Math.round((parseFloat(op.monto_retencion)||0)*100)/100;
-      const neto=Math.round((parseFloat(op.neto_a_pagar)||bruto-ret)*100)/100;
-      const medio=op.medio_pago||c.medio_pago||"";
-      const soc=c.sociedad||"SUDES";
-      const lineas=[
-        {codigo:"2.1.01.001",debe:bruto,desc:"Cancelación proveedor"},
-        {codigo:getBancoCodigoPorMedio(medio,soc),haber:neto,desc:`Pago ${medio}`},
-      ];
-      if(ret>0)lineas.push({codigo:"2.1.03.002",haber:ret,desc:`Ret. SICORE ${op.codigo_sicore||""}`});
-      await hacer({fecha:op.fecha_pago||c.fecha_pago||today(),sociedad:soc,tipo:"pago_compra",origen:"orden_pago",origen_id:op.id,descripcion:`Pago: ${c.proveedor||""} — ${op.numero||""}`,lineas},`Pago OP ${op.numero||""} — ${c.proveedor||c.id}`);
+      if(op?.id){
+        if(yaExiste.has(`orden_pago:${op.id}`))continue;
+        const bruto=Math.round((parseFloat(c.total)||0)*100)/100;
+        const ret=Math.round((parseFloat(op.monto_retencion)||0)*100)/100;
+        const neto=Math.round((parseFloat(op.neto_a_pagar)||bruto-ret)*100)/100;
+        const medio=op.medio_pago||c.medio_pago||"";
+        const soc=c.sociedad||"SUDES";
+        const lineas=[
+          {codigo:"2.1.01.001",debe:bruto,desc:"Cancelación proveedor"},
+          {codigo:getBancoCodigoPorMedio(medio,soc),haber:neto,desc:`Pago ${medio}`},
+        ];
+        if(ret>0)lineas.push({codigo:"2.1.03.002",haber:ret,desc:`Ret. SICORE ${op.codigo_sicore||""}`});
+        await hacer({fecha:op.fecha_pago||c.fecha_pago||today(),sociedad:soc,tipo:"pago_compra",origen:"orden_pago",origen_id:op.id,descripcion:`Pago: ${c.proveedor||""} — ${op.numero||""}`,lineas},`Pago OP ${op.numero||""} — ${c.proveedor||c.id}`);
+      } else {
+        // Pagado sin Orden de Pago formal (botón "Pagar" directo) -- antes se saltaba
+        // por completo acá, dejando el pago sin ningún asiento contable (Proveedores
+        // quedaba sobreestimado en los libros).
+        if(yaExiste.has(`comprobante_pago:${c.id}`))continue;
+        const monto=Math.round((parseFloat(c.total)||0)*100)/100;
+        if(!monto)continue;
+        const soc=c.sociedad||"SUDES";
+        const medio=c.medio_pago||"";
+        const lineas=[
+          {codigo:"2.1.01.001",debe:monto,desc:"Cancelación proveedor"},
+          {codigo:getBancoCodigoPorMedio(medio,soc),haber:monto,desc:`Pago ${medio}`},
+        ];
+        await hacer({fecha:c.fecha_pago||c.fecha||today(),sociedad:soc,tipo:"pago_compra",origen:"comprobante_pago",origen_id:c.id,descripcion:`Pago: ${c.proveedor||""} — Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""}`,lineas},`Pago directo — ${c.proveedor||c.id}`);
+      }
     }
 
     // 3. Cuotas pagadas → pago_cuota_prestamo
@@ -21466,20 +21516,20 @@ async function backfillAsientos(){
       const cap=capital>0?capital:total-intereses;
       const lineas=[];
       if(cap>0)lineas.push({codigo:"2.1.02.001",debe:cap,desc:"Capital cuota"});
-      if(intereses>0)lineas.push({codigo:"4.2.03.001",debe:intereses,desc:"Intereses"});
+      if(intereses>0)lineas.push({codigo:"5.3.01.001",debe:intereses,desc:"Intereses"});
       lineas.push({codigo:getBancoCodigoPorMedio("",soc),haber:total,desc:"Pago cuota"});
       await hacer({fecha:c.fecha_pago||c.fecha||today(),sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:c.id,descripcion:`Cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${prest.nombre||"Préstamo"}`,lineas},`Cuota #${c.nro_cuota||"?"} — ${prest.nombre||"Préstamo"}`);
     }
 
-    // 4. Sueldos pagados → pago_sueldo
+    // 4. Sueldos pagados → sueldo
     for(const pago of(cfPagosEmpleados||[]).filter(p=>p.pagado&&(p.monto||0)>0&&!yaExiste.has(`pago_empleado:${p.id}`))){
       const emp=(cfEmpleados||[]).find(e=>e.id===pago.empleado_id);
       if(!emp)continue;
       const soc=emp.sociedad||"SUDES";
       const monto=parseFloat(pago.monto);
       const bancoCod=getBancoCodigoPorMedio(pago.medio_pago||"",soc);
-      await hacer({fecha:pago.fecha_pago||today(),sociedad:soc,tipo:"pago_sueldo",origen:"pago_empleado",origen_id:pago.id,descripcion:`Sueldo: ${emp.nombre||""} — ${pago.periodo||""}`,lineas:[
-        {codigo:"4.2.01.001",debe:monto,desc:`Sueldo ${emp.nombre||""}`},
+      await hacer({fecha:pago.fecha_pago||today(),sociedad:soc,tipo:"sueldo",origen:"pago_empleado",origen_id:pago.id,descripcion:`Sueldo: ${emp.nombre||""} — ${pago.periodo||""}`,lineas:[
+        {codigo:"5.1.01.001",debe:monto,desc:`Sueldo ${emp.nombre||""}`},
         {codigo:bancoCod,haber:monto,desc:`Pago ${pago.medio_pago||"sueldo"}`},
       ]},`Sueldo ${emp.nombre||""} — ${pago.periodo||""}`);
     }
@@ -21528,7 +21578,7 @@ async function renderLibroDiario(){
         <option value="devengado_compra"${f.tipo==="devengado_compra"?" selected":""}>Devengado compra</option>
         <option value="pago_compra"${f.tipo==="pago_compra"?" selected":""}>Pago compra</option>
         <option value="pago_cuota_prestamo"${f.tipo==="pago_cuota_prestamo"?" selected":""}>Cuota préstamo</option>
-        <option value="pago_sueldo"${f.tipo==="pago_sueldo"?" selected":""}>Sueldo</option>
+        <option value="sueldo"${f.tipo==="sueldo"?" selected":""}>Sueldo</option>
         <option value="ajuste_manual"${f.tipo==="ajuste_manual"?" selected":""}>Ajuste manual</option>
       </select>
     </div>
@@ -21550,8 +21600,8 @@ async function _ldCargar(){
   try{
     const asientos=await sb(q);
     if(!asientos.length){body.innerHTML=`<div style="color:var(--tx3);font-size:12px;padding:24px 0;text-align:center">Sin asientos para el período seleccionado</div>`;return;}
-    const tipoLabel={devengado_compra:"Devengado compra",pago_compra:"Pago compra",pago_cuota_prestamo:"Cuota préstamo",pago_sueldo:"Sueldo",ajuste_manual:"Ajuste manual"};
-    const tipoBadge={devengado_compra:"var(--al)",pago_compra:"var(--gr)",pago_cuota_prestamo:"#818CF8",pago_sueldo:"#F472B6",ajuste_manual:"var(--ac)"};
+    const tipoLabel={devengado_compra:"Devengado compra",pago_compra:"Pago compra",pago_cuota_prestamo:"Cuota préstamo",sueldo:"Sueldo",ajuste_manual:"Ajuste manual",devengado_venta:"Devengado venta",cobro_venta:"Cobro venta",ajuste:"Ajuste",apertura:"Apertura"};
+    const tipoBadge={devengado_compra:"var(--al)",pago_compra:"var(--gr)",pago_cuota_prestamo:"#818CF8",sueldo:"#F472B6",ajuste_manual:"var(--ac)",devengado_venta:"var(--al)",cobro_venta:"var(--gr)",ajuste:"var(--ac)",apertura:"var(--tx3)"};
     body.innerHTML=`<div style="margin-bottom:8px;font-size:11px;color:var(--tx3)">${asientos.length} asiento${asientos.length!==1?"s":""}</div>`+
       asientos.map(a=>{
         const col=tipoBadge[a.tipo]||"var(--tx3)";
@@ -22670,6 +22720,23 @@ async function confirmarPagoComp(){
     closeModal("modal-pagar-comp");
     renderComprobantes();updateCompStats();
     toast(`💰 Pagada · ${medio} · $${Math.round(c.total||0).toLocaleString("es-AR")}`,"ok");
+
+    // Asiento de pago -- este camino de "pago rápido" (sin Orden de Pago formal) nunca
+    // generaba el asiento contable, solo el movimiento de caja. Eso dejaba "Proveedores"
+    // sobreestimado en los libros para cualquier factura pagada por acá en vez de por OP.
+    const montoAsiento=Math.abs(parseFloat(c.total)||0);
+    if(montoAsiento>0){
+      const bancoCod=getBancoCodigoPorMedio(medio,c.sociedad||"SUDES");
+      const lineasPago=esNC
+        ?[{codigo:bancoCod,debe:montoAsiento,desc:`Cobro NC ${medio}`},{codigo:"2.1.01.001",haber:montoAsiento,desc:"Cancelación proveedor (NC)"}]
+        :[{codigo:"2.1.01.001",debe:montoAsiento,desc:"Cancelación proveedor"},{codigo:bancoCod,haber:montoAsiento,desc:`Pago ${medio}`}];
+      const descPagoAsiento=`Pago: ${c.proveedor||""} — Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""}`;
+      // origen "comprobante_pago" (no "comprobante") a propósito: el devengado de este mismo
+      // comprobante ya usa origen:"comprobante"+este id -- si el pago usara el mismo origen,
+      // el backfill de históricos los confundiría como si fueran el mismo asiento.
+      const _adPagoDirecto={fecha,sociedad:c.sociedad||"SUDES",tipo:"pago_compra",origen:"comprobante_pago",origen_id:id,descripcion:descPagoAsiento,lineas:lineasPago};
+      generarAsiento(_adPagoDirecto).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adPagoDirecto);else if(!a)toast("⚠️ Asiento de pago no generado","err");}).catch(e=>toast("⚠️ Error asiento pago: "+e.message.slice(0,50),"err"));
+    }
   }catch(e){toast("Error: "+e.message,"err");}
 }
 async function marcarEstadoComp(id,estado){
