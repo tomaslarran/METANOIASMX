@@ -2627,6 +2627,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="notif-row"><span class="notif-label">Me asignan una tarea</span><label class="toggle"><input type="checkbox" id="n-asig" checked><span class="tslider"></span></label></div>
       <div class="notif-row nr-admin nr-comu nr-inst"><span class="notif-label">Curso sin responsable</span><label class="toggle"><input type="checkbox" id="n-curso" checked><span class="tslider"></span></label></div>
       <div class="notif-row nr-admin nr-comu nr-inst"><span class="notif-label">Nuevo curso / modificación</span><label class="toggle"><input type="checkbox" id="n-nuevo-curso"><span class="tslider"></span></label></div>
+      <div class="notif-row nr-admin nr-comu"><span class="notif-label">📨 Escalaciones del bot (email)</span><label class="toggle"><input type="checkbox" id="n-escal-bot"><span class="tslider"></span></label></div>
       <div class="notif-card-title" style="margin-top:14px">📧 Email</div>
       <div class="notif-row"><span class="notif-label">Dirección</span><input class="notif-input" type="email" id="n-email" placeholder="tu@email.com" style="width:180px"></div>
       <div class="notif-info">✅ Envíos automáticos activos. Cada usuario recibe el resumen en el día y hora que configure acá.</div>
@@ -11274,6 +11275,7 @@ function selectNotifUser(id,btn){
   document.getElementById("n-asig").checked=cfg.alerta_asignacion!==false;
   document.getElementById("n-curso").checked=cfg.alerta_curso!==false;
   document.getElementById("n-nuevo-curso").checked=cfg.alerta_nuevo_curso===true;
+  document.getElementById("n-escal-bot").checked=cfg.escal_bot_email===true;
   document.getElementById("n-rs-comp").checked=cfg.rs_comprobantes!==false;
   document.getElementById("n-rs-venc").checked=cfg.rs_vencimientos!==false;
   document.getElementById("n-rs-cobr").checked=cfg.rs_cobranzas!==false;
@@ -11285,7 +11287,7 @@ function selectNotifUser(id,btn){
 }
 async function saveNotif(){
   if(!curNotifUser){toast("Seleccioná un usuario","err");return}
-  const data={usuario_id:curNotifUser,email:document.getElementById("n-email").value,aviso_vencimiento:document.getElementById("n-venc").checked,dias_antes:parseInt(document.getElementById("n-dias").value)||3,resumen_semanal:document.getElementById("n-semanal").checked,dia_semana:parseInt(document.getElementById("n-dia").value)||1,hora_envio:document.getElementById("n-hora").value,alerta_bloqueado:document.getElementById("n-block").checked,alerta_asignacion:document.getElementById("n-asig").checked,alerta_curso:document.getElementById("n-curso").checked,alerta_nuevo_curso:document.getElementById("n-nuevo-curso").checked,rs_comprobantes:document.getElementById("n-rs-comp").checked,rs_vencimientos:document.getElementById("n-rs-venc").checked,rs_cobranzas:document.getElementById("n-rs-cobr").checked,rs_prestamos:document.getElementById("n-rs-prest").checked,rs_sueldos:document.getElementById("n-rs-sue").checked,rs_tareas:document.getElementById("n-rs-tareas").checked,updated_at:new Date().toISOString()};
+  const data={usuario_id:curNotifUser,email:document.getElementById("n-email").value,aviso_vencimiento:document.getElementById("n-venc").checked,dias_antes:parseInt(document.getElementById("n-dias").value)||3,resumen_semanal:document.getElementById("n-semanal").checked,dia_semana:parseInt(document.getElementById("n-dia").value)||1,hora_envio:document.getElementById("n-hora").value,alerta_bloqueado:document.getElementById("n-block").checked,alerta_asignacion:document.getElementById("n-asig").checked,alerta_curso:document.getElementById("n-curso").checked,alerta_nuevo_curso:document.getElementById("n-nuevo-curso").checked,escal_bot_email:document.getElementById("n-escal-bot").checked,rs_comprobantes:document.getElementById("n-rs-comp").checked,rs_vencimientos:document.getElementById("n-rs-venc").checked,rs_cobranzas:document.getElementById("n-rs-cobr").checked,rs_prestamos:document.getElementById("n-rs-prest").checked,rs_sueldos:document.getElementById("n-rs-sue").checked,rs_tareas:document.getElementById("n-rs-tareas").checked,updated_at:new Date().toISOString()};
   try{
     await sb(`notificaciones_config?usuario_id=eq.${curNotifUser}`,{method:"PATCH",body:JSON.stringify(data)});
     const idx=notifConfigs.findIndex(n=>n.usuario_id===curNotifUser);if(idx>=0)notifConfigs[idx]={...notifConfigs[idx],...data};else notifConfigs.push(data);
