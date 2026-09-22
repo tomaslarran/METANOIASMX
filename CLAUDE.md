@@ -319,8 +319,8 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 **Hoja de ruta contable (4 fases, acumulativa):**
 1. ✅ `medios_pago` — catálogo de cuentas bancarias y tarjetas por sociedad (Jul 2026)
 2. ✅ **Fase 0** — Reporte exportable Excel: facturas pagadas (bruto/neto/retenciones SICORE+IIBB), sueldos, cuotas préstamos, resumen. Botón "📄 Exportar Excel" en Historial de pagos (Jul 2026)
-3. [ ] **Fase 1** — `plan_cuentas` + `parametros_impositivos` (reemplaza `IVA_TASA=0.21` hardcodeada en línea ~15057 y `SICORE_CAT`) + `proveedor_id` en comprobantes + CUIT y condición fiscal en tabla `proveedores`. 3 preguntas pendientes para la contadora (ver spec sección 6). **IVA confirmado:** cursos y prácticas exentos/no alcanzados; suscripciones COFRADIA sí gravadas.
-4. [ ] **Fase 2** — Asientos automáticos doble entrada: tablas `asientos_contables` + `asientos_movimientos`. Se disparan al pasar comprobante a "revisado" (devengado) y al pagar OP (pago). Gap más barato: 100% interno, no depende de Finnegans.
+3. ✅ **Fase 1** — `plan_cuentas` (44 cuentas, jerarquía 4 niveles), `parametros_impositivos` (IVA 21/10,5/27%, SICORE 029/031). Implementado y poblado desde 17/07/2026 — **este roadmap no lo reflejaba, ver sección "Auditoría módulo contable (21 Sep 2026)" para el detalle completo y los bugs encontrados/corregidos**. Pendiente real: `proveedor_id`/CUIT/condición fiscal en `proveedores` (sección 8 del spec) — eso sí sigue sin hacerse.
+4. ✅ **Fase 2** — Asientos automáticos doble entrada (`asientos_contables` + `asientos_movimientos`), disparados al revisar comprobante (devengado) y al pagar (OP o pago directo). Implementado desde 17/07/2026, mismo caso que arriba — ver auditoría del 21 Sep 2026. 110 asientos generados a la fecha, todos balanceados.
 5. [ ] **Fase 3** — `cuenta_corriente_alumnos` + importador Finnegans (cruce por CUIT). Conecta inscripciones con facturación real.
 6. [ ] **Fase 4** — Libro IVA ARCA, balance/estado de resultados desde asientos, reemplazo Finnegans (bloqueado por facturación electrónica CAE).
 
@@ -1189,6 +1189,37 @@ ALTER TABLE ia_uso ADD COLUMN IF NOT EXISTS cache_read_input_tokens int DEFAULT 
 **No se sabe hace cuánto estaba roto** — no hay forma de saber desde cuándo (no quedó registrado en `panel_errores`, que es de errores del panel, no de edge functions). Cualquier respuesta histórica del bot sobre cupos/precio/fecha de un curso específico pudo haber sido una improvisación de la IA sin datos reales de por medio, no una alucinación aislada.
 
 **Deploy pendiente (Supabase Dashboard → Edge Functions):** `agente-mensajes`.
+
+---
+
+## Auditoría módulo contable (21 Sep 2026) — Fase 1 y 2 ya existían, sin documentar
+
+**Motivación:** Tomás quería evaluar orientar el plan de cuentas a la numeración de Tango Gestión (el nuevo equipo de contadores usa Tango, más simple que Finnegans) y pidió analizar a fondo el estado real de la contabilidad de partida doble antes de seguir. Al revisar la base directamente se descubrió que **la Fase 1 y la Fase 2 del roadmap contable (`plan_modulo_contable_metanoia.md`) ya estaban implementadas y funcionando desde el 17/07/2026** — 44 cuentas en `plan_cuentas`, `parametros_impositivos` cargado, 110 asientos contables reales generados automáticamente. Ninguna sesión anterior lo dejó anotado acá, así que el roadmap decía "pendiente" hace más de dos meses.
+
+**Lo que funciona bien:** los 110 asientos existentes están **perfectamente balanceados** (debe=haber sin excepción, verificado sumando todos los `asientos_movimientos` por asiento). El motor de partida doble (`generarAsiento()`) en sí es correcto.
+
+**Bugs reales encontrados y corregidos (commit `c5d0a6b`):**
+
+1. **Los asientos de pago de sueldo fallaban el 100% de las veces, en silencio.** El código mandaba `tipo:"pago_sueldo"` pero el `CHECK` constraint de `asientos_contables.tipo` solo acepta `'sueldo'` (verificado con inserts de prueba directos contra Supabase). El `.catch(()=>{})` que envolvía la llamada se tragaba el error sin ningún aviso — **0 asientos de sueldo existían en la base** pese a que se pagan sueldos regularmente.
+
+2. **Causa raíz de fondo:** `_MCF_META` (el catálogo de cuentas sugeridas cuando el modal de "cuenta faltante" se dispara) tenía el eje 4/5 **invertido** respecto al `plan_cuentas` real — asumía 4=Egresos/5=Ingresos, cuando el plan poblado en julio es al revés (4=Ingresos, 5=Egresos). Esto hizo que el código de sueldo (`4.2.01.001`) y el de intereses de préstamo (`4.2.03.001`) apuntaran a cuentas de **Ingresos** en vez de Egresos. Corregidos a los códigos reales (`5.1.01.001` Sueldos y cargas sociales, `5.3.01.001` Intereses pagados) en los 4 lugares que generan estos asientos. `_MCF_META`/`_mcfTipoByCode` reescritos para coincidir con la numeración real.
+
+3. **12 de 18 comprobantes marcados "pagado" nunca generaban su asiento de pago.** Existe un botón "Pagar" directo (`confirmarPagoComp`, sin Orden de Pago formal) que solo movía `caja_movimientos`, nunca la contabilidad — a diferencia del flujo de OP formal, que sí genera el asiento. Resultado: la cuenta "Proveedores" en los libros estaba sobreestimada (mostraba deuda de facturas ya pagadas). Agregado el asiento también en ese camino, con `origen:"comprobante_pago"` (distinto de `"comprobante"`, que ya usa el devengado del mismo comprobante) para no colisionar en la deduplicación del backfill.
+
+4. **`mcfConfirmar()` no creaba los niveles intermedios faltantes del plan de cuentas.** Si una cuenta nueva necesitaba un padre que no existía todavía, quedaba huérfana (`cuenta_padre_id: null`), rompiendo la jerarquía y los subtotales. Encontrado en producción: la cuenta `4.2.03.001 "Intereses y gastos financieros"` (creada 15/09/2026) estaba huérfana por este motivo — verificado que no tenía movimientos asociados y se borró. Nuevo helper `_mcfAsegurarPadres()` crea la cadena completa de ancestros antes de crear la cuenta imputable.
+
+**SQL pendiente (correr en Supabase SQL editor)** — el código ya usa `'pago_cuota_prestamo'` y `'ajuste_manual'` como tipos legítimos y distintos (con su propio label/color en el Libro Diario), pero nunca se agregaron al constraint original:
+```sql
+ALTER TABLE asientos_contables DROP CONSTRAINT IF EXISTS asientos_contables_tipo_check;
+ALTER TABLE asientos_contables ADD CONSTRAINT asientos_contables_tipo_check
+  CHECK (tipo IN ('devengado_compra','pago_compra','devengado_venta','cobro_venta','sueldo','ajuste','apertura','pago_cuota_prestamo','ajuste_manual'));
+```
+
+**Pendiente — correr backfill después del SQL:** botón admin "🔄 Generar históricos" (tab Libro Diario, dentro de Impuestos) — ahora también cubre los 12 pagos directos sin OP y debería poder generar los asientos de sueldo que fallaban. Todavía no se corrió después de este fix.
+
+**Sin hacer todavía (no es bug, es alcance):** el lado de ingresos (ventas/cursos/alumnos) — `devengado_venta`/`cobro_venta` — nunca se implementó. Coincide con la Fase 3 del roadmap (`cuenta_corriente_alumnos` + importador Finnegans), que sigue pendiente. Hoy los libros contables solo tienen la mitad de la película: compras sí, ventas no.
+
+**Decisión pendiente de Tomás — numeración estilo Tango:** todavía no se tocó el plan de cuentas para alinearlo a Tango Gestión. Paso siguiente sugerido: pedirle al equipo de contadores el export/pantallazo del plan de cuentas real que usan en su instancia de Tango, para calcarlo en vez de aproximarlo — cada instalación personaliza su propia numeración.
 
 ---
 
