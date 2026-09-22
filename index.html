@@ -16238,6 +16238,7 @@ function renderCFInversiones(){
         ${invs.length===0?"":`<div style="padding:8px 12px;display:flex;flex-direction:column;gap:6px">
           ${invs.map(inv=>{
             const movs=cfInvMovs.filter(m=>m.inversion_id===inv.id);
+            const regs=rendDiarios.filter(r=>r.inversion_id===inv.id).slice().sort((a,b)=>b.fecha.localeCompare(a.fecha));
             const icap=getCapHist(inv);
             const ival=getCapActivo(inv);
             const isActiva=inv.estado==="Activa";
@@ -16283,6 +16284,7 @@ function renderCFInversiones(){
                     <span>Rend./prom.: <strong style="color:${cp.tasaTotal>=0?"var(--gr)":"var(--re)"}">${cp.tasaTotal>=0?"+":""}${cp.tasaTotal.toFixed(1)}%</strong></span>
                   </div>`:""}
                   ${movs.length?`<button onclick="toggleInvHistory('${inv.id}')" style="background:none;border:none;color:var(--ac);font-size:11px;cursor:pointer;padding:4px 0;margin-top:4px">📋 Ver historial (${movs.length} movimiento${movs.length!==1?"s":""})</button>`:""}
+                  ${regs.length?`<button onclick="toggleInvValores('${inv.id}')" style="background:none;border:none;color:var(--ac);font-size:11px;cursor:pointer;padding:4px 0;margin-top:4px;margin-left:10px">📈 Ver/editar valores diarios (${regs.length})</button>`:""}
                 </div>
                 <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
                   ${isActiva?`<button class="btn sm" style="background:var(--gr);color:#fff" onclick="openAgregarCapital('${inv.id}')">💰 + Capital</button>`:""}
@@ -16335,6 +16337,16 @@ function renderCFInversiones(){
                   <span style="color:${rendReal>=0?"var(--gr)":"var(--re)"}">${rendReal>=0?"+":""}$${Math.round(Math.abs(rendReal)).toLocaleString("es-AR")}</span>
                 </div>
               </div>
+              <!-- Valores diarios registrados (colapsable, editable) -->
+              <div id="inv-vals-${inv.id}" style="display:none;margin-top:10px;border-top:1px solid var(--b);padding-top:10px">
+                <div style="font-size:11px;font-weight:600;color:var(--tx3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Valores diarios registrados</div>
+                ${regs.map(r=>`<div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--surf2);font-size:12px">
+                  <span style="color:var(--tx3);min-width:90px">${fmt(r.fecha)}</span>
+                  <input type="number" id="rv-${r.id}" value="${r.valor}" onkeydown="if(event.key==='Enter')guardarValorDiario('${r.id}','${inv.id}')" style="flex:1;max-width:160px;background:var(--surf2);border:1px solid var(--b2);border-radius:4px;padding:3px 8px;font-family:var(--f);font-size:12px;color:var(--tx)">
+                  <button onclick="guardarValorDiario('${r.id}','${inv.id}')" style="background:none;border:none;cursor:pointer;color:var(--gr);font-size:13px;padding:2px 4px" title="Guardar corrección">✓</button>
+                  <button onclick="delValorDiario('${r.id}','${inv.id}')" style="background:none;border:none;cursor:pointer;color:var(--tx3);font-size:13px;padding:2px 4px" title="Eliminar registro">🗑</button>
+                </div>`).join("")}
+              </div>
             </div>`;
           }).join("")}
         </div>`}
@@ -16356,6 +16368,56 @@ function renderCFInversiones(){
 function toggleInvHistory(id){
   const el=document.getElementById(`inv-hist-${id}`);
   if(el)el.style.display=el.style.display==="none"?"":"none";
+}
+
+function toggleInvValores(id){
+  const el=document.getElementById(`inv-vals-${id}`);
+  if(el)el.style.display=el.style.display==="none"?"":"none";
+}
+
+// Corregir un registro de rendimientos_diarios cargado mal (ej. un 0 de más) -- antes no
+// había forma de editar un valor histórico, solo "+ Registrar hoy" para el día de hoy.
+async function guardarValorDiario(regId,invId){
+  const input=document.getElementById(`rv-${regId}`);
+  const nuevoValor=parseFloat(input?.value);
+  if(isNaN(nuevoValor)||nuevoValor<0){toast("Ingresá un valor válido","err");return;}
+  try{
+    await sb(`rendimientos_diarios?id=eq.${regId}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({valor:nuevoValor})});
+    const r=rendDiarios.find(x=>x.id===regId);
+    if(r)r.valor=nuevoValor;
+    // Si es el registro más reciente de la inversión, sincronizar también valor_actual --
+    // la card de arriba y todos los cálculos de rendimiento leen ese campo, no el historial.
+    const regsInv=rendDiarios.filter(x=>x.inversion_id===invId).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+    const ultimo=regsInv[regsInv.length-1];
+    if(ultimo?.id===regId){
+      await sb(`cf_inversiones?id=eq.${invId}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({valor_actual:nuevoValor})});
+      const inv=cfInversiones.find(i=>i.id===invId);
+      if(inv)inv.valor_actual=nuevoValor;
+    }
+    toast("Valor corregido ✓","ok");
+    renderCFInversiones();
+    const el=document.getElementById(`inv-vals-${invId}`);if(el)el.style.display="";
+  }catch(e){toast("Error: "+e.message,"err")}
+}
+
+async function delValorDiario(regId,invId){
+  confirmDel("¿Eliminar este registro de valor diario?",async()=>{
+    try{
+      await sb(`rendimientos_diarios?id=eq.${regId}`,{method:"DELETE"});
+      rendDiarios=rendDiarios.filter(x=>x.id!==regId);
+      // Si era el registro más reciente, valor_actual pasa a reflejar el que queda como último
+      const regsInv=rendDiarios.filter(x=>x.inversion_id===invId).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+      const nuevoUltimo=regsInv[regsInv.length-1];
+      if(nuevoUltimo){
+        await sb(`cf_inversiones?id=eq.${invId}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({valor_actual:nuevoUltimo.valor})});
+        const inv=cfInversiones.find(i=>i.id===invId);
+        if(inv)inv.valor_actual=nuevoUltimo.valor;
+      }
+      toast("Registro eliminado","ok");
+      renderCFInversiones();
+      const el=document.getElementById(`inv-vals-${invId}`);if(el)el.style.display="";
+    }catch(e){toast("Error: "+e.message,"err")}
+  });
 }
 
 function toggleInvPanel(socKey){
