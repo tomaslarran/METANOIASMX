@@ -30,7 +30,10 @@ async function chequearLimiteIA(supabase: any) {
   return { bloqueado: false, mensaje: null as string | null, organizacionId: organizacion.id };
 }
 
-const ESCALACION_EMAIL = Deno.env.get("ESCALACION_EMAIL") || "tlarran@metanoiasmx.com";
+// Siempre incluye el mail personal de Tomás además de lo que diga el secret (si el secret
+// ESCALACION_EMAIL ya está seteado en Supabase con un solo mail, igual se suma acá para no
+// depender de que alguien vaya a actualizar el secret).
+const ESCALACION_EMAIL = [Deno.env.get("ESCALACION_EMAIL") || "tlarran@metanoiasmx.com", "tomaslarran@gmail.com"].join(",");
 
 async function sendEmailEscalacion(texto: string): Promise<void> {
   try {
