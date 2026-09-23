@@ -603,6 +603,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 .cal-event.ev-cobr{background:rgba(16,185,129,.15);color:#6EE7B7;border-left:2px solid #10B981}
 .cal-event.ev-prest{background:rgba(239,68,68,.15);color:#FCA5A5;border-left:2px solid #EF4444}
 .cal-event.ev-inv{background:rgba(245,158,11,.15);color:#FCD34D;border-left:2px solid #F59E0B}
+.cal-event.ev-especial{background:rgba(236,72,153,.18);color:#F9A8D4;border-left:2px solid #EC4899}
+.cal-event.ev-cumple{background:rgba(244,114,182,.2);color:#FBCFE8;border-left:2px solid #F472B6}
 .cal-event.ev-evento{background:rgba(0,181,163,.25);color:#5EEAD4;border-left:2px solid #00B5A3;border-radius:3px}
 .cal-event.ev-evento.ep-start{margin-right:-4px;border-radius:3px 0 0 3px}
 .cal-event.ev-evento.ep-mid{margin:0 -4px;border-radius:0;border-left:none;font-size:0;padding:3px 0}
@@ -1649,6 +1651,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:10px;height:10px;border-radius:50%;background:#10B981;flex-shrink:0"></span>Fin de curso</span>
     <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:10px;height:10px;border-radius:50%;background:#3B82F6;flex-shrink:0"></span>Tarea de curso</span>
     <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:10px;height:10px;border-radius:50%;background:#F59E0B;flex-shrink:0"></span>Catering del curso</span>
+    <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx2)"><span style="width:10px;height:10px;border-radius:50%;background:#EC4899;flex-shrink:0"></span>Fecha especial</span>
   </div>
 
   <!-- FILTROS -->
@@ -1659,6 +1662,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="fb" id="cal-btn-venc" onclick="calSetFiltro('venc',this)">Solo vencimientos</button>
     <button class="fb" id="cal-btn-finanzas" onclick="calSetFiltro('finanzas',this)">💰 Finanzas</button>
     <button class="fb" id="cal-btn-eventos" onclick="calSetFiltro('eventos',this)">📅 Eventos</button>
+    <button class="fb" id="cal-btn-especiales" onclick="calSetFiltro('especiales',this)">🎉 Fechas especiales</button>
+    <button class="btn sm sec" style="margin-left:auto" onclick="abrirGestionDiasEspeciales()">⚙️ Gestionar fechas especiales</button>
   </div>
 
   <!-- GRID DEL CALENDARIO — un único grid para header + body -->
@@ -1672,6 +1677,37 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </div>
     <div id="cal-day-events"></div>
   </div>
+</div>
+
+<!-- ══ MODAL — Gestionar fechas especiales ══ -->
+<div class="mov" id="modal-dias-especiales" onclick="if(event.target===this&&_movDown===this)closeModal('modal-dias-especiales')">
+<div class="modal" style="max-width:640px">
+  <div class="mt">🎉 Fechas especiales del calendario</div>
+  <div style="font-size:12px;color:var(--tx3);margin-bottom:14px">Feriados, festividades de Salta y días de la medicina/salud — se repiten todos los años en la misma fecha. Agregá las que falten o borrá las que no sirvan.</div>
+  <div class="form-grid-2" style="margin-bottom:16px">
+    <div class="fg"><label class="fl">Día</label><input class="fi" id="de-dia" type="number" min="1" max="31" placeholder="ej. 23"></div>
+    <div class="fg"><label class="fl">Mes</label>
+      <select class="fi" id="de-mes">
+        <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option><option value="4">Abril</option>
+        <option value="5">Mayo</option><option value="6">Junio</option><option value="7">Julio</option><option value="8">Agosto</option>
+        <option value="9">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+      </select>
+    </div>
+    <div class="fg" style="grid-column:1/-1"><label class="fl">Nombre</label><input class="fi" id="de-nombre" placeholder="ej. Día del Residente"></div>
+    <div class="fg" style="grid-column:1/-1"><label class="fl">Categoría</label>
+      <select class="fi" id="de-categoria">
+        <option value="medicina">⚕️ Día de la medicina/simulación</option>
+        <option value="salud_mundial">🌎 Día mundial de la salud</option>
+        <option value="feriado_nacional">🇦🇷 Feriado nacional</option>
+        <option value="feriado_salta">📍 Feriado/festividad de Salta</option>
+        <option value="institucional">🎓 Institucional</option>
+      </select>
+    </div>
+  </div>
+  <button class="btn pri" style="width:100%;margin-bottom:16px" onclick="guardarDiaEspecial()">+ Agregar</button>
+  <div style="border-top:1px solid var(--b);padding-top:12px;max-height:320px;overflow-y:auto" id="de-lista"></div>
+  <div class="ma"><button class="bc" onclick="closeModal('modal-dias-especiales')">Cerrar</button></div>
+</div>
 </div>
 
 <!-- ══ GRÁFICOS ══ -->
@@ -3954,6 +3990,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <label class="fl">Teléfono</label>
         <input class="fi" id="pf-telefono" placeholder="Ej: 387 5551234">
       </div>
+      <div class="fg">
+        <label class="fl">🎂 Fecha de nacimiento <span style="color:var(--tx3);font-weight:400">(para saludarte el día de tu cumpleaños)</span></label>
+        <input class="fi" id="pf-nacimiento" type="date">
+      </div>
       <div id="pf-instructor-wrap" style="display:none;border-top:1px solid var(--b);padding-top:14px;display:flex;flex-direction:column;gap:14px">
         <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px">Ficha de instructor</div>
         <div class="form-grid-2">
@@ -5069,6 +5109,7 @@ async function renderAlertas(){
   if(!wrap)return;
   wrap.innerHTML=`<div style="padding:40px;text-align:center;color:var(--tx3)"><div class="loader" style="margin:0 auto 12px"></div>Actualizando...</div>`;
   if(!cfPrestamos.length)await loadCF().catch(()=>{});
+  if(!diasEspeciales.length)await loadDiasEspeciales().catch(()=>{});
 
   const now=new Date();
   const h=now.getHours();
@@ -5348,6 +5389,33 @@ async function renderAlertas(){
         onclick:`goPage('oportunidades',document.getElementById('nav-oportunidades'))`});
     });
   }
+
+  // Fechas especiales próximas (feriados, festividades de Salta, días de la medicina) --
+  // horizonte de 14 días para dar tiempo suficiente a preparar la publicación.
+  diasEspeciales.forEach(de=>{
+    const fecha=_diaEspecialProximaFecha(de.mes,de.dia,now);
+    if(!fecha)return;
+    const d=Math.round((fecha-new Date(now.getFullYear(),now.getMonth(),now.getDate()))/86400000);
+    if(d>14)return;
+    const cat=DIAESP_CAT[de.categoria]||DIAESP_CAT.medicina;
+    const fechaStr=`${fecha.getFullYear()}-${String(fecha.getMonth()+1).padStart(2,"0")}-${String(fecha.getDate()).padStart(2,"0")}`;
+    alertas.push({tipo:"especial",icon:cat.icon,urgencia:d<=0?"hoy":d<=3?"semana":"mes",d,
+      titulo:de.nombre,sub:cat.label,fecha:fechaStr,
+      onclick:`goPage('calendario',document.getElementById('nav-calendario'))`});
+  });
+
+  // Cumpleaños del equipo próximos (7 días) -- carga desde Mi Perfil, no es obligatorio
+  (users||[]).filter(u=>u.fecha_nacimiento&&u.estado!=="inactivo").forEach(u=>{
+    const[,mm,dd]=u.fecha_nacimiento.split("-");
+    const fecha=_diaEspecialProximaFecha(parseInt(mm),parseInt(dd),now);
+    if(!fecha)return;
+    const d=Math.round((fecha-new Date(now.getFullYear(),now.getMonth(),now.getDate()))/86400000);
+    if(d>7)return;
+    const fechaStr=`${fecha.getFullYear()}-${mm}-${dd}`;
+    alertas.push({tipo:"cumple",icon:"🎂",urgencia:d<=0?"hoy":"semana",d,
+      titulo:`Cumpleaños de ${u.nombre}`,sub:"Cumpleaños del equipo",fecha:fechaStr,
+      onclick:`goPage('calendario',document.getElementById('nav-calendario'))`});
+  });
 
   alertas.sort((a,b)=>(a.d??999)-(b.d??999));
 
@@ -5657,7 +5725,7 @@ function goPage(name,el){
       const bc=document.getElementById("cal-btn-cursos");
       if(bc){bc.classList.add("on");bc.style.display="";}
     }
-    Promise.all([loadCursoTareasCalendario(),loadCF(),loadVEPs()]).then(()=>renderCalendario());
+    Promise.all([loadCursoTareasCalendario(),loadCF(),loadVEPs(),loadDiasEspeciales()]).then(()=>renderCalendario());
   }
   if(name==="rutinas"){
     // Recargar rutinas frescas al navegar
@@ -11461,11 +11529,11 @@ async function pollNotificaciones(){
 }
 
 function tipoNotifLabel(tipo){
-  const map={asignacion:"Nueva asignación",modificacion:"Tarea modificada",comentario:"Nuevo comentario",vencimiento:"Vencimiento próximo",colaboracion_chat:"Invitación a chat",mensaje_interno:"Mensaje interno"};
+  const map={asignacion:"Nueva asignación",modificacion:"Tarea modificada",comentario:"Nuevo comentario",vencimiento:"Vencimiento próximo",colaboracion_chat:"Invitación a chat",mensaje_interno:"Mensaje interno",cumpleanos:"Cumpleaños"};
   return map[tipo]||"Notificación";
 }
 function tipoNotifIcon(tipo){
-  const map={asignacion:"👤",modificacion:"✏️",comentario:"💬",vencimiento:"⏰",colaboracion_chat:"👥",mensaje_interno:"💬"};
+  const map={asignacion:"👤",modificacion:"✏️",comentario:"💬",vencimiento:"⏰",colaboracion_chat:"👥",mensaje_interno:"💬",cumpleanos:"🎂"};
   return map[tipo]||"🔔";
 }
 function tiempoAtras(iso){
@@ -16390,6 +16458,63 @@ function toggleInvHistory(id){
   if(el)el.style.display=el.style.display==="none"?"":"none";
 }
 
+async function abrirGestionDiasEspeciales(){
+  await loadDiasEspeciales();
+  document.getElementById("de-dia").value="";
+  document.getElementById("de-nombre").value="";
+  document.getElementById("de-mes").value=String(new Date().getMonth()+1);
+  document.getElementById("de-categoria").value="medicina";
+  renderListaDiasEspeciales();
+  openModal("modal-dias-especiales");
+}
+
+function renderListaDiasEspeciales(){
+  const el=document.getElementById("de-lista");if(!el)return;
+  if(!diasEspeciales.length){el.innerHTML=`<div style="color:var(--tx3);font-size:12px;text-align:center;padding:20px">Todavía no hay fechas cargadas.</div>`;return;}
+  const ordenadas=[...diasEspeciales].sort((a,b)=>a.mes-b.mes||a.dia-b.dia);
+  el.innerHTML=ordenadas.map(de=>{
+    const cat=DIAESP_CAT[de.categoria]||DIAESP_CAT.medicina;
+    return`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--surf2);font-size:12px">
+      <span style="color:var(--tx3);min-width:60px">${String(de.dia).padStart(2,"0")}/${String(de.mes).padStart(2,"0")}</span>
+      <span style="flex:1;color:var(--tx)">${cat.icon} ${esc(de.nombre)}</span>
+      <span style="font-size:10px;color:${cat.color};background:${cat.color}22;border:1px solid ${cat.color}44;border-radius:4px;padding:1px 6px;white-space:nowrap">${cat.label}</span>
+      <button onclick="delDiaEspecial('${de.id}')" style="background:none;border:none;cursor:pointer;color:var(--tx3);font-size:13px;padding:2px 4px" title="Eliminar">🗑</button>
+    </div>`;
+  }).join("");
+}
+
+async function guardarDiaEspecial(){
+  const dia=parseInt(document.getElementById("de-dia").value);
+  const mes=parseInt(document.getElementById("de-mes").value);
+  const nombre=document.getElementById("de-nombre").value.trim();
+  const categoria=document.getElementById("de-categoria").value;
+  if(!nombre){toast("Ponele un nombre a la fecha","err");return;}
+  if(!dia||dia<1||dia>31){toast("Ingresá un día válido (1-31)","err");return;}
+  const test=new Date(2024,mes-1,dia); // 2024 es bisiesto, para no rechazar 29/feb
+  if(test.getMonth()!==mes-1){toast("Ese día no existe en ese mes","err");return;}
+  try{
+    const[created]=await sb("dias_especiales",{method:"POST",body:JSON.stringify({dia,mes,nombre,categoria,activo:true})});
+    if(created)diasEspeciales.push(created);
+    document.getElementById("de-dia").value="";
+    document.getElementById("de-nombre").value="";
+    toast("Fecha agregada ✓","ok");
+    renderListaDiasEspeciales();
+    if(curPage==="calendario")renderCalendario();
+  }catch(e){toast("Error: "+e.message,"err")}
+}
+
+async function delDiaEspecial(id){
+  confirmDel("¿Eliminar esta fecha especial?",async()=>{
+    try{
+      await sb(`dias_especiales?id=eq.${id}`,{method:"DELETE"});
+      diasEspeciales=diasEspeciales.filter(d=>d.id!==id);
+      renderListaDiasEspeciales();
+      if(curPage==="calendario")renderCalendario();
+      toast("Fecha eliminada","ok");
+    }catch(e){toast("Error: "+e.message,"err")}
+  });
+}
+
 function toggleInvValores(id){
   const el=document.getElementById(`inv-vals-${id}`);
   if(el)el.style.display=el.style.display==="none"?"":"none";
@@ -19068,8 +19193,32 @@ let calMonth=new Date().getMonth();
 let calFiltro="todo";
 let calSelectedDay=null;
 let allCursoTareasCache=[];
+let diasEspeciales=[];
 
 const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+const DIAESP_CAT={
+  feriado_nacional:{label:"Feriado nacional",icon:"🇦🇷",color:"#3B82F6"},
+  feriado_salta:{label:"Feriado/festividad Salta",icon:"📍",color:"#F59E0B"},
+  salud_mundial:{label:"Día mundial de la salud",icon:"🌎",color:"#10B981"},
+  medicina:{label:"Día de la medicina/simulación",icon:"⚕️",color:"#EC4899"},
+  institucional:{label:"Institucional",icon:"🎓",color:"#7C3AED"},
+};
+
+async function loadDiasEspeciales(force){
+  if(diasEspeciales.length&&!force)return;
+  try{diasEspeciales=await sb("dias_especiales?select=*&activo=eq.true&order=mes.asc,dia.asc")||[];}catch(_){diasEspeciales=[];}
+}
+// Devuelve la próxima ocurrencia (Date) de un mes/dia recurrente a partir de "desde" --
+// si ya pasó este año, salta al año que viene. Cuidado con 29/feb en años no bisiestos.
+function _diaEspecialProximaFecha(mes,dia,desde){
+  const base=desde||new Date();
+  const hoy0=new Date(base.getFullYear(),base.getMonth(),base.getDate());
+  let y=base.getFullYear();
+  let d=new Date(y,mes-1,dia);
+  if(d.getMonth()!==mes-1)return null; // fecha inválida (ej. 30/02)
+  if(d<hoy0){y++;d=new Date(y,mes-1,dia);}
+  return d;
+}
 
 function calPrev(){calMonth--;if(calMonth<0){calMonth=11;calYear--}renderCalendario()}
 function calNext(){calMonth++;if(calMonth>11){calMonth=0;calYear++}renderCalendario()}
@@ -19186,6 +19335,24 @@ function buildEventos(){
     tasks.filter(t=>esEvento(t)).forEach(t=>_addEventoSpan(t));
   }
 
+  if(calFiltro==="todo"||calFiltro==="especiales"){
+    diasEspeciales.forEach(de=>{
+      const d=new Date(calYear,de.mes-1,de.dia);
+      if(d.getMonth()!==de.mes-1)return; // fecha inválida para ese año (29/feb, etc.)
+      const fechaStr=`${calYear}-${String(de.mes).padStart(2,"0")}-${String(de.dia).padStart(2,"0")}`;
+      const cat=DIAESP_CAT[de.categoria]||DIAESP_CAT.medicina;
+      addEvento(fechaStr,{tipo:"ev-especial",dot:cat.color,nombre:`${cat.icon} ${de.nombre}`,sub:cat.label,id:de.id});
+    });
+    (users||[]).filter(u=>u.fecha_nacimiento&&u.estado!=="inactivo").forEach(u=>{
+      const[,mm,dd]=u.fecha_nacimiento.split("-");
+      const mes=parseInt(mm),dia=parseInt(dd);
+      const d=new Date(calYear,mes-1,dia);
+      if(d.getMonth()!==mes-1)return;
+      const fechaStr=`${calYear}-${mm}-${dd}`;
+      addEvento(fechaStr,{tipo:"ev-cumple",dot:"#F472B6",nombre:`🎂 Cumpleaños de ${u.nombre}`,sub:"Cumpleaños del equipo"});
+    });
+  }
+
   return eventos;
 }
 
@@ -19292,7 +19459,7 @@ function renderDayPanel(fecha,evs){
   const dt=new Date(parseInt(y),parseInt(m)-1,parseInt(d));
   document.getElementById("cal-day-title").textContent=`${nombres[dt.getDay()]} ${parseInt(d)} de ${MESES[parseInt(m)-1]} ${y}`;
   if(!evs.length){document.getElementById("cal-day-events").innerHTML=`<div class="empty" style="padding:16px"><div class="ei" style="font-size:20px">📅</div>Sin eventos este día</div>`;panel.style.display="block";return}
-  const colorMap={"ev-venc":"#EF4444","ev-curso-ini":"#7C3AED","ev-curso-fin":"#10B981","ev-tarea-curso":"#3B82F6","ev-after":"#F59E0B","ev-ini":"#7C3AED","ev-fin":"#10B981","ev-ct":"#3B82F6","ev-cobr":"#10B981","ev-prest":"#EF4444","ev-inv":"#F59E0B"};
+  const colorMap={"ev-venc":"#EF4444","ev-curso-ini":"#7C3AED","ev-curso-fin":"#10B981","ev-tarea-curso":"#3B82F6","ev-after":"#F59E0B","ev-ini":"#7C3AED","ev-fin":"#10B981","ev-ct":"#3B82F6","ev-cobr":"#10B981","ev-prest":"#EF4444","ev-inv":"#F59E0B","ev-especial":"#EC4899","ev-cumple":"#F472B6"};
   // Ordenar por hora (tareas con hora primero, resto al final)
   const sorted=[...evs].sort((a,b)=>{const ah=a.hora||"23:59",bh=b.hora||"23:59";return ah<bh?-1:ah>bh?1:0;});
   document.getElementById("cal-day-events").innerHTML=sorted.map(ev=>{
@@ -20076,6 +20243,7 @@ async function abrirPerfil(){
   document.getElementById("pf-nombre").value=loggedUser?.nombre||"";
   document.getElementById("pf-email").value=loggedUser?.email||"";
   document.getElementById("pf-telefono").value=loggedUser?.telefono||"";
+  document.getElementById("pf-nacimiento").value=loggedUser?.fecha_nacimiento||"";
   const wrap=document.getElementById("pf-instructor-wrap");
   _miInstructorRow=await _buscarMiInstructor();
   if(_miInstructorRow){
@@ -20107,12 +20275,13 @@ async function guardarPerfilDatos(){
   errEl.style.display="none";
   const nombre=document.getElementById("pf-nombre").value.trim();
   const telefono=document.getElementById("pf-telefono").value.trim();
+  const fechaNacimiento=document.getElementById("pf-nacimiento").value||null;
   if(!nombre){errEl.textContent="El nombre no puede quedar vacío.";errEl.style.display="block";return;}
   btn.disabled=true;btn.textContent="Guardando...";
   try{
     if(loggedUser?.id){
-      await sb(`usuarios?id=eq.${loggedUser.id}`,{method:"PATCH",body:JSON.stringify({nombre,telefono:telefono||null})});
-      loggedUser.nombre=nombre;loggedUser.telefono=telefono||null;
+      await sb(`usuarios?id=eq.${loggedUser.id}`,{method:"PATCH",body:JSON.stringify({nombre,telefono:telefono||null,fecha_nacimiento:fechaNacimiento})});
+      loggedUser.nombre=nombre;loggedUser.telefono=telefono||null;loggedUser.fecha_nacimiento=fechaNacimiento;
       const un=document.getElementById("umenu-nombre");if(un)un.textContent=nombre;
       const tn=document.getElementById("topbar-user-nombre");if(tn)tn.textContent=nombre;
     }
