@@ -9907,8 +9907,8 @@ async function eliminarChatCurso(id){
 let _cursoDocumentos=[];
 
 function _buildDocumentoCard(doc,idx){
-  const ICNS={ficha_diseno:'📋',programa:'📝',examen:'📄',manual_facilitador:'📖',cronograma:'📅',presentacion:'📊',planilla_prebrief:'🎯',planilla_debrief:'💬',instrumento_eval:'📏',consentimiento:'✍️'};
-  const NOMS={ficha_diseno:'Ficha de diseño PEV1',programa:'Programa académico',examen:'Evaluación teórica',manual_facilitador:'Manual del facilitador',cronograma:'Cronograma de rotaciones',presentacion:'Presentación PPT',planilla_prebrief:'Planilla prebriefing',planilla_debrief:'Planilla debriefing PEARLS',instrumento_eval:'Instrumento de evaluación',consentimiento:'Consentimiento de grabación'};
+  const ICNS={ficha_diseno:'📋',programa:'📝',examen:'📄',manual_facilitador:'📖',cronograma:'📅',presentacion:'📊',planilla_prebrief:'🎯',planilla_debrief:'💬',instrumento_eval:'📏',consentimiento:'✍️',contenido_teorico:'📚'};
+  const NOMS={ficha_diseno:'Ficha de diseño PEV1',programa:'Programa académico',examen:'Evaluación teórica',manual_facilitador:'Manual del facilitador',cronograma:'Cronograma de rotaciones',presentacion:'Presentación PPT',planilla_prebrief:'Planilla prebriefing',planilla_debrief:'Planilla debriefing PEARLS',instrumento_eval:'Instrumento de evaluación',consentimiento:'Consentimiento de grabación',contenido_teorico:'Contenido teórico asincrónico'};
   const icon=ICNS[doc.tipo]||'📄';
   const nom=NOMS[doc.tipo]||doc.tipo;
   const publicoBtn=(doc.tipo==='ficha_diseno'&&doc.datos?.publico_objetivo)
@@ -10107,6 +10107,24 @@ ${nota}`;
 <table><tr>${hdrs}</tr>${trs||'<tr><td>—</td></tr>'}</table>
 <p>Duración por estación: <strong>${d.duracion_estacion_min||'—'} min</strong> &nbsp;|&nbsp; Grupos: <strong>${d.grupos_count||'—'}</strong> &nbsp;|&nbsp; Participantes: <strong>${d.participantes_total||'—'}</strong></p>
 ${nota}`;
+  }
+
+  else if(tipo==='contenido_teorico'){
+    const d=datos;
+    const mods=(d.modulos||[]).map(m=>{
+      const secs=(m.secciones||[]).map(s=>`<h3>${e(s.titulo||'')}</h3><p>${e(s.contenido||'').replace(/\n/g,'<br>')}</p>`).join('');
+      const pregs=(m.examen||[]).map(p=>`<p><strong>${p.n||''}. ${e(p.pregunta||'')}</strong></p>${ul(p.opciones||[])}<p style="color:#2563EB;font-size:9pt">Correcta: ${e(String(p.correcta||''))}</p>`).join('');
+      return `<div style="border-left:3px solid #4a2eb4;padding-left:12px;margin-bottom:24px">
+<h2>Módulo ${m.numero||''} — ${e(m.titulo||'')}</h2>
+<p class="meta">Duración estimada: ${e(m.duracion_estimada||'—')} &nbsp;|&nbsp; Formato: ${e(m.formato||'—')} &nbsp;|&nbsp; Objetivo: ${e(m.objetivo||'—')}</p>
+${secs}
+${pregs?`<div style="background:#f0f4ff;border:1px solid #c7d2fe;border-radius:6px;padding:12px;margin-top:12px"><h3 style="color:#4a2eb4;margin-top:0">Examen de autocomprobación</h3>${pregs}</div>`:''}
+</div>`;
+    }).join('');
+    body=`<h1>${e(titulo||'Contenido Teórico Asincrónico')}</h1>
+<p class="meta">Código: ${e(d.codigo_interno||'')} &nbsp;|&nbsp; Estado: <span class="badge">PEV1 — Borrador</span></p>
+<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:12px;margin-bottom:20px"><strong>⚠ ALCANCE DE ESTE DOCUMENTO</strong><br>${e(d.nota_alcance||'Este contenido fue generado con apoyo de IA a partir del marco acordado. Requiere revisión clínica línea por línea, especialmente cifras, umbrales y protocolos locales. No debe distribuirse a participantes sin curaduría de Dirección Médica.')}</div>
+${mods}${nota}`;
   }
 
   else{
