@@ -6349,6 +6349,7 @@ async function selectCurso(id){
         <button class="btn" onclick="confirmDel('¿Eliminar el curso &quot;${esc(curso.nombre)}&quot;?',()=>delCurso('${id}'))"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
       </div>
     </div>
+    ${(()=>{if(curso.publicacion_aprobada)return '<div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:8px;padding:8px 14px;font-size:12px;color:var(--tx);display:flex;align-items:center;gap:8px;margin:8px 0">✅ Aprobado para publicar por <strong>'+esc(curso.aprobado_para_publicar_por||'')+'</strong>'+(curso.aprobado_para_publicar_en?' · '+new Date(curso.aprobado_para_publicar_en).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}):'')+' </div>';if(loggedUser?.rol==='admin')return '<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:8px 14px;font-size:12px;color:var(--tx);display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0"><span>⏳ Borrador pendiente de aprobación — los instructores no pueden ver este curso hasta que lo apruebes</span><button onclick="aprobarPublicacionCurso(\''+id+'\')" style="background:#F59E0B;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer;white-space:nowrap;flex-shrink:0;margin-left:auto">✅ Aprobar para publicar</button></div>';return '<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:8px 14px;font-size:12px;color:var(--tx);margin:8px 0">⏳ Borrador pendiente de aprobación de un administrador</div>';})()}
     <div class="cd-tabs">
       <div class="cd-tab on" onclick="showCdTab(this,'cd-info-${id}')">Información</div>
       <div class="cd-tab cd-tab-adm" onclick="showCdTab(this,'cd-tareas-${id}')">Checklist (${tareasCurso.length})</div>
@@ -8277,6 +8278,12 @@ function toggleEstadoDD(id){
 
 async function setEstadoCurso(id,nuevo){
   document.querySelectorAll("[id^='estado-dd-']").forEach(el=>el.style.display="none");
+  const _sc=cursos.find(c=>c.id===id);
+  const _bloq=['Convocatoria','Inscripciones','En curso','Educación médica continua'];
+  if(_sc&&!_sc.publicacion_aprobada&&_bloq.includes(nuevo)&&loggedUser?.rol!=='admin'){
+    toast('Este curso requiere aprobación de un administrador antes de publicarse','err');
+    return;
+  }
   await updateCursoField(id,"estado",nuevo);
   renderCursos();
 }
@@ -8309,6 +8316,18 @@ async function guardarNombreCurso(id){
     selectCurso(id);
     renderCursos();
   }catch(e){toast("Error al renombrar: "+e.message,"err");}
+}
+
+async function aprobarPublicacionCurso(id){
+  try{
+    const res=await fetch(`${SB}/functions/v1/aprobar-publicacion-curso`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},body:JSON.stringify({curso_id:id})});
+    const data=await res.json();
+    if(!res.ok)throw new Error(data.error||'Error al aprobar');
+    const c=cursos.find(x=>x.id===id);
+    if(c){c.publicacion_aprobada=true;c.aprobado_para_publicar_por=loggedUser?.nombre;c.aprobado_para_publicar_en=new Date().toISOString();}
+    toast('✅ Curso aprobado — el equipo fue notificado por email','ok');
+    selectCurso(id);
+  }catch(e){toast('Error al aprobar: '+e.message,'err');}
 }
 
 async function delCurso(id){
@@ -8347,7 +8366,10 @@ async function createCurso(){
   const afterChecked=document.getElementById("c-after").checked;
   const data={
     nombre,tipo:document.getElementById("c-tipo").value,modalidad:document.getElementById("c-modalidad").value,
-    estado:document.getElementById("c-estado").value,
+    estado:loggedUser?.rol==='admin'?document.getElementById("c-estado").value:'Borrador',
+    publicacion_aprobada:loggedUser?.rol==='admin',
+    aprobado_para_publicar_por:loggedUser?.rol==='admin'?loggedUser?.nombre:null,
+    aprobado_para_publicar_en:loggedUser?.rol==='admin'?new Date().toISOString():null,
     fecha_inicio:document.getElementById("c-inicio").value||null,fecha_fin:document.getElementById("c-fin").value||null,
     duracion_horas:document.getElementById("c-horas").value?Number(document.getElementById("c-horas").value):null,
     cupos_max:document.getElementById("c-cupos").value?Number(document.getElementById("c-cupos").value):null,
