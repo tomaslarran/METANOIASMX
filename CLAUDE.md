@@ -1227,6 +1227,41 @@ ALTER TABLE asientos_contables ADD CONSTRAINT asientos_contables_tipo_check
 
 ---
 
+## Implementado (24 Sep 2026) — Aprobación de cursos + escalación bot por email dinámica
+
+### Aprobación de cursos para publicar
+- ✅ **Cursos creados por no-admins** siempre se crean en `Borrador` con `publicacion_aprobada=false`
+- ✅ **Admins que crean cursos**: auto-aprobados (sin fricción para el flujo habitual de Tomás/Mario/Amparo)
+- ✅ **Banner de estado de aprobación** en el detalle de curso (entre cd-header y cd-tabs):
+  - 🟡 Ámbar para admins: "⏳ Borrador pendiente..." + botón "✅ Aprobar para publicar"
+  - 🟡 Ámbar para no-admins: "⏳ Borrador pendiente de aprobación de un administrador" (sin botón)
+  - 🟢 Verde: "✅ Aprobado para publicar por [nombre] · [fecha]"
+- ✅ **`setEstadoCurso` bloqueado** para no-admins: no pueden pasar a Convocatoria/Inscripciones/En curso/Educación médica continua si `publicacion_aprobada=false`
+- ✅ **Edge function `aprobar-publicacion-curso`**: PATCH + email SMTP a todos los admins activos + al creador del curso (match por `usuarios.nombre`)
+- ✅ **SQL corrido (24 Sep 2026)**: 3 columnas + backfill (`publicacion_aprobada=true` para cursos que ya no son Borrador)
+
+```sql
+ALTER TABLE cursos ADD COLUMN IF NOT EXISTS publicacion_aprobada boolean DEFAULT false;
+ALTER TABLE cursos ADD COLUMN IF NOT EXISTS aprobado_para_publicar_por text;
+ALTER TABLE cursos ADD COLUMN IF NOT EXISTS aprobado_para_publicar_en timestamptz;
+UPDATE cursos SET publicacion_aprobada = true WHERE estado != 'Borrador';
+```
+
+### Escalación bot por email — destinatarios dinámicos
+- ✅ `sendEmailEscalacion` en `agente-mensajes` ya no usa emails hardcodeados — lee `notificaciones_config.escal_bot_email=true` y envía a esos usuarios
+- ✅ Toggle "📨 Escalaciones del bot (email)" en pg-notif, visible solo para admins y comunicaciones
+- Fallback: si nadie tiene el toggle activado, envía a `tlarran@metanoiasmx.com`
+
+### Estándar de documentos del agente de cursos (4 entregables)
+- ✅ `ESTANDAR_DOCUMENTOS` en `agente-cursos` — calidad mínima basada en los 4 documentos presentados en el congreso (ficha PEV1, contenido teórico, manual de facilitador, cronograma)
+- ✅ Tipo `contenido_teorico` — módulos con secciones en prosa + examen por módulo, renderer Word
+- ✅ Sistema de aprobación de cursos agendado para cuando se incorporen instructores SASIM
+
+### Pendiente agendado
+- [ ] **Biblioteca de PDFs + búsqueda semántica para agentes** — ver discusión del 24 Sep 2026. Opción B (texto full-text search en PostgreSQL sin embeddings) como primera iteración. Cuando la biblioteca de material médico crezca y la búsqueda quede corta, migrar a pgvector.
+
+---
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:
