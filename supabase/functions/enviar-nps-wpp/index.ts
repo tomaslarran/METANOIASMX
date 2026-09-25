@@ -70,13 +70,6 @@ serve(async (req) => {
           template: {
             name: "nps_post_curso",
             language: { code: "es" },
-            components: [{
-              type: "body",
-              parameters: [
-                { type: "text", text: nombre },
-                { type: "text", text: cursoNombre },
-              ],
-            }],
           },
         }),
       });
