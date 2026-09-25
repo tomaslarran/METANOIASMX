@@ -6746,12 +6746,13 @@ async function _fetchFirmantesConFirma(cursoId){
     }
   }catch(e){}
 
-  // Si no hay firmantes personalizados, usar el instructor del curso como antes
+  // Si no hay firmantes personalizados, usar los instructores del curso
   if(!firmantes.length){
     try{
-      const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(id,nombre,apellido,firma_url,genero)&limit=1`);
-      if(ci[0]){
-        const ins=ci[0].instructores;
+      const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(id,nombre,apellido,firma_url,genero)`);
+      for(const row of (ci||[])){
+        const ins=row.instructores;
+        if(!ins)continue;
         const nombre=`${ins.nombre||""} ${ins.apellido||""}`.trim();
         const genero=ins.genero||"";
         const prefijo=genero==="F"?"Dra. ":genero==="M"?"Dr. ":"";
@@ -7707,9 +7708,9 @@ async function diplomaCanvasBase64(datos){
       });
 
       if(sigFirmantes.length>0){
-        // Borrar zona de firmas del fondo para dibujar dinámicamente
+        // Borrar zona de firmas del fondo (ancho completo, hasta el borde inferior)
         ctx.fillStyle="#FFFFFF";
-        ctx.fillRect(s(280),s(2060),s(2960),s(390));
+        ctx.fillRect(0,s(2060),W,H-s(2060));
         ctx.fillStyle="rgb(52,48,90)";
 
         const N=sigFirmantes.length;

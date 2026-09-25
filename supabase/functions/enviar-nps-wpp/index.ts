@@ -56,7 +56,8 @@ serve(async (req) => {
     const waPhone = formatWAPhone(alumno.telefono);
     if (!waPhone) { results.sin_telefono++; continue; }
 
-    const nombre = [alumno.nombre, alumno.apellido].filter(Boolean).join(" ") || "Alumno";
+    const nombre = ([alumno.nombre, alumno.apellido].filter(Boolean).join(" ") || "Alumno").slice(0, 60);
+    const cursoNombre = (curso?.nombre || "el curso").slice(0, 100);
 
     try {
       const res = await fetch(WA_API, {
@@ -73,7 +74,7 @@ serve(async (req) => {
               type: "body",
               parameters: [
                 { type: "text", text: nombre },
-                { type: "text", text: curso?.nombre || "el curso" },
+                { type: "text", text: cursoNombre },
               ],
             }],
           },
