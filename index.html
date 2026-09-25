@@ -7708,8 +7708,11 @@ async function diplomaCanvasBase64(datos){
       });
 
       if(sigFirmantes.length>0){
-        // Borrar zona de firmas del fondo (ancho completo, hasta el borde inferior)
-        ctx.fillStyle="#FFFFFF";
+        // Borrar zona de firmas con el gradiente del fondo (el fondo es lavanda, nunca blanco)
+        const _bgGrad=ctx.createLinearGradient(0,0,W,0);
+        _bgGrad.addColorStop(0,"rgb(170,169,187)");
+        _bgGrad.addColorStop(1,"rgb(184,179,192)");
+        ctx.fillStyle=_bgGrad;
         ctx.fillRect(0,s(2060),W,H-s(2060));
         ctx.fillStyle="rgb(52,48,90)";
 
