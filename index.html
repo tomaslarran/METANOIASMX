@@ -185,6 +185,11 @@ body.light-mode .sel option{background:#ffffff;color:#1A1D2E}
 .dot2{width:5px;height:5px;border-radius:50%;flex-shrink:0}
 .da{background:var(--re)}.dm{background:var(--am)}.db{background:var(--tx3)}
 .apill{font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;border:1px solid rgba(124,58,237,.25);color:#C4B5FD;background:rgba(124,58,237,.1)}
+.esp-pills-wrap{display:flex;flex-wrap:wrap;gap:6px;padding:8px 0;min-height:36px;align-items:center}
+.esp-pill{cursor:pointer;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:500;background:var(--surf2);color:var(--tx2);border:1.5px solid var(--b);transition:all .15s;user-select:none}
+.esp-pill:hover{border-color:var(--ac);color:var(--ac)}
+.esp-pill.on{background:rgba(99,102,241,.12);color:#818CF8;border-color:rgba(99,102,241,.4)}
+.esp-tag{font-size:10px;font-weight:600;padding:1px 7px;border-radius:99px;background:rgba(99,102,241,.1);color:#818CF8;border:1px solid rgba(99,102,241,.25)}
 .due{font-size:11px;display:flex;align-items:center;gap:3px}
 .due.ov{color:#FCA5A5}.due.sn{color:#FCD34D}.due.ok{color:var(--tx3)}
 .chev{color:var(--tx3);transition:transform .2s;flex-shrink:0}
@@ -3997,7 +4002,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div id="pf-instructor-wrap" style="display:none;border-top:1px solid var(--b);padding-top:14px;display:flex;flex-direction:column;gap:14px">
         <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px">Ficha de instructor</div>
         <div class="form-grid-2">
-          <div class="fg"><label class="fl">Especialidad</label><input class="fi" id="pf-esp"></div>
+          <div class="fg form-full"><label class="fl">Especialidades</label><div id="pf-esp-pills" class="esp-pills-wrap"></div></div>
           <div class="fg"><label class="fl">Matrícula</label><input class="fi" id="pf-matricula"></div>
         </div>
         <div class="fg"><label class="fl">Institución</label><input class="fi" id="pf-institucion"></div>
@@ -4662,7 +4667,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="form-grid-2">
     <div class="fg"><label class="fl">Nombre *</label><input class="fi" id="i-nombre" type="text" placeholder="Nombre"></div>
     <div class="fg"><label class="fl">Apellido *</label><input class="fi" id="i-apellido" type="text" placeholder="Apellido"></div>
-    <div class="fg"><label class="fl">Especialidad</label><input class="fi" id="i-esp" type="text" placeholder="Ej: ACLS, RCP, Trauma"></div>
+    <div class="fg form-full"><label class="fl">Especialidades</label><div id="i-esp-pills" class="esp-pills-wrap"></div></div>
     <div class="fg"><label class="fl">Matrícula</label><input class="fi" id="i-matricula" type="text" placeholder="Nro. matrícula profesional"></div>
     <div class="fg"><label class="fl">Género <span style="color:var(--tx3);font-weight:400">(para Dr./Dra. en el diploma)</span></label>
       <select class="sel" id="i-genero">
@@ -4881,6 +4886,7 @@ let _cursoDetalleId=null;
 let oportFilter='all', oportSearch="", oportArchivosTemp=[], oportChatHistorial=[];
 let inventario=[],invFilter="all",invSearch="",editInvId=null;
 let instSearch="",instActivo="",provSearch="";
+let especialidades=[],instructorEsps=[],_instEspSel=[],_pfEspSel=[];
 let curUser="",curF="all",curCat="",q="",aq="",cursoFilter="all",cursoSort="fecha",cursoLinea="",cursoSearch="";
 let charts={};
 const UC=["#7C3AED","#3B82F6","#10B981","#F59E0B","#EC4899","#14B8A6"];
@@ -4942,7 +4948,7 @@ async function loadAll(){
   const rb=document.getElementById("rbtn");rb.classList.add("spin");
   toast("Conectando con Supabase...","inf");
   try{
-    [tasks,users,cursos,alumnos,proveedores,instructores,plantillas,notifConfigs,rutinas,paramImpositivos,planCuentas]=await Promise.all([
+    [tasks,users,cursos,alumnos,proveedores,instructores,plantillas,notifConfigs,rutinas,paramImpositivos,planCuentas,especialidades,instructorEsps]=await Promise.all([
       sb("tareas?select=*&order=created_at.desc"),
       sb("usuarios?select=*&order=nombre"),
       sb("cursos?select=*&order=created_at.desc"),
@@ -4953,7 +4959,9 @@ async function loadAll(){
       sb("notificaciones_config?select=*").catch(()=>[]),
       sb("rutinas?select=*&order=dia_del_mes").catch(()=>[]),
       sb("parametros_impositivos?select=*&order=tipo,codigo").catch(()=>[]),
-      sb("plan_cuentas?select=*&order=codigo").catch(()=>[])
+      sb("plan_cuentas?select=*&order=codigo").catch(()=>[]),
+      sb("especialidades?select=*&activo=eq.true&order=orden,nombre").catch(()=>[]),
+      sb("instructor_especialidades?select=*").catch(()=>[])
     ]);
     fillGlobal();
     if(loggedUser?.rol==="instructor")await loadMisCursosInstructor();
@@ -5783,7 +5791,7 @@ function openNewModal(){
   }
   else if(curPage==="alumnos"){document.getElementById("alum-edit-id").value="";document.getElementById("modal-alum-title").textContent="Nuevo Alumno";["a-nombre","a-apellido","a-dni","a-cuit","a-matricula","a-esp","a-inst","a-email","a-tel","a-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("alum-cursos-section").style.display="none";openModal("modal-alumno")}
   else if(curPage==="proveedores"){document.getElementById("prov-edit-id").value="";document.getElementById("modal-prov-title").textContent="Nuevo Proveedor";["p-nombre","p-email","p-tel","p-esp","p-notas","p-cuit","p-domicilio","p-cp"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("p-tipo").value="Empresa";document.getElementById("p-condicion-iva").value="";document.getElementById("p-provincia").value="";document.getElementById("p-situacion-iibb").value="";document.getElementById("p-revisado").checked=false;openModal("modal-proveedor")}
-  else if(curPage==="instructores"){document.getElementById("inst-edit-id").value="";document.getElementById("modal-inst-title").textContent="Nuevo Instructor";["i-nombre","i-apellido","i-esp","i-matricula","i-email","i-tel","i-inst","i-notas","i-genero"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("i-activo").checked=true;document.getElementById("ibtn-del").style.display="none";openModal("modal-instructor")}
+  else if(curPage==="instructores"){document.getElementById("inst-edit-id").value="";document.getElementById("modal-inst-title").textContent="Nuevo Instructor";["i-nombre","i-apellido","i-matricula","i-email","i-tel","i-inst","i-notas","i-genero"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("i-activo").checked=true;document.getElementById("ibtn-del").style.display="none";_instEspSel=[];renderEspPills("i-esp-pills",_instEspSel);openModal("modal-instructor")}
   else if(curPage==="comunicaciones")openModalNuevoPost();
 }
 function openModal(id){const el=document.getElementById(id);el.style.display="flex";el.classList.add("on")}
@@ -10867,6 +10875,25 @@ function renderMaestroFiscal(){
   </table>`;
 }
 
+// ── ESPECIALIDADES ──
+function renderEspPills(containerId, selectedIds){
+  const el=document.getElementById(containerId);if(!el)return;
+  if(!especialidades.length){el.innerHTML=`<span style="font-size:11px;color:var(--tx3)">Cargando especialidades...</span>`;return;}
+  const isInst=containerId==="i-esp-pills";
+  el.innerHTML=especialidades.map(e=>{
+    const sel=selectedIds.includes(e.id);
+    const fn=isInst?"_toggleInstEsp":"_togglePfEsp";
+    return `<span class="esp-pill${sel?" on":""}" onclick="${fn}('${e.id}')">${esc(e.nombre)}</span>`;
+  }).join("");
+}
+function _toggleInstEsp(id){const i=_instEspSel.indexOf(id);if(i>=0)_instEspSel.splice(i,1);else _instEspSel.push(id);renderEspPills("i-esp-pills",_instEspSel);}
+function _togglePfEsp(id){const i=_pfEspSel.indexOf(id);if(i>=0)_pfEspSel.splice(i,1);else _pfEspSel.push(id);renderEspPills("pf-esp-pills",_pfEspSel);}
+function _getInstEspTags(instructorId){
+  const ids=instructorEsps.filter(r=>r.instructor_id===instructorId).map(r=>r.especialidad_id);
+  if(!ids.length)return "";
+  return ids.map(id=>{const e=especialidades.find(x=>x.id===id);return e?`<span class="esp-tag">${esc(e.nombre)}</span>`:""}).filter(Boolean).join("");
+}
+
 // ── INSTRUCTORES ──
 function instGetVisible(){
   let list=instructores;
@@ -10888,7 +10915,7 @@ function renderInstructores(){
       <div class="entity-avatar" style="background:${colores[i%colores.length]}22;color:${colores[i%colores.length]}">${initials((p.nombre||"")+" "+(p.apellido||""))}</div>
       ${!p.activo?`<span style="position:absolute;top:10px;right:10px;font-size:10px;background:#33333380;color:var(--tx3);border-radius:4px;padding:2px 6px">Inactivo</span>`:""}
       <div class="entity-name">${esc(p.apellido)}, ${esc(p.nombre)}</div>
-      <div class="entity-sub">${p.especialidad?esc(p.especialidad):"Sin especialidad"}${p.matricula?` · Mat. ${esc(p.matricula)}`:""}</div>
+      <div class="entity-sub" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-height:20px">${_getInstEspTags(p.id)||`<span style="color:var(--tx3);font-size:11px">Sin especialidad</span>`}${p.matricula?`<span style="color:var(--tx3);font-size:11px">· Mat. ${esc(p.matricula)}</span>`:""}</div>
       <div class="entity-meta">
         ${p.institucion?`<div class="entity-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>${esc(p.institucion)}</div>`:""}
         ${p.email?`<div class="entity-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>${esc(p.email)}</div>`:""}
@@ -10898,13 +10925,12 @@ function renderInstructores(){
     </div>`).join("")}</div>`;
 }
 
-function editInstructor(id){
+async function editInstructor(id){
   const p=instructores.find(i=>i.id===id);if(!p)return;
   document.getElementById("inst-edit-id").value=id;
   document.getElementById("modal-inst-title").textContent="Editar Instructor";
   document.getElementById("i-nombre").value=p.nombre||"";
   document.getElementById("i-apellido").value=p.apellido||"";
-  document.getElementById("i-esp").value=p.especialidad||"";
   document.getElementById("i-matricula").value=p.matricula||"";
   document.getElementById("i-email").value=p.email||"";
   document.getElementById("i-tel").value=p.telefono||"";
@@ -10913,6 +10939,8 @@ function editInstructor(id){
   document.getElementById("i-activo").checked=p.activo!==false;
   document.getElementById("i-notas").value=p.notas||"";
   document.getElementById("ibtn-del").style.display="inline-flex";
+  _instEspSel=instructorEsps.filter(r=>r.instructor_id===id).map(r=>r.especialidad_id);
+  renderEspPills("i-esp-pills",_instEspSel);
   openModal("modal-instructor");
 }
 
@@ -10921,11 +10949,25 @@ async function saveInstructor(){
   const apellido=document.getElementById("i-apellido").value.trim();
   if(!nombre||!apellido){toast("Nombre y apellido son obligatorios","err");return}
   const id=document.getElementById("inst-edit-id").value;
-  const data={nombre,apellido,especialidad:document.getElementById("i-esp").value||null,matricula:document.getElementById("i-matricula").value||null,email:document.getElementById("i-email").value||null,telefono:document.getElementById("i-tel").value||null,institucion:document.getElementById("i-inst").value||null,genero:document.getElementById("i-genero").value||null,activo:document.getElementById("i-activo").checked,notas:document.getElementById("i-notas").value||null,updated_at:new Date().toISOString()};
+  const espNombres=_instEspSel.map(eid=>especialidades.find(e=>e.id===eid)?.nombre).filter(Boolean).join(", ");
+  const data={nombre,apellido,especialidad:espNombres||null,matricula:document.getElementById("i-matricula").value||null,email:document.getElementById("i-email").value||null,telefono:document.getElementById("i-tel").value||null,institucion:document.getElementById("i-inst").value||null,genero:document.getElementById("i-genero").value||null,activo:document.getElementById("i-activo").checked,notas:document.getElementById("i-notas").value||null,updated_at:new Date().toISOString()};
   const ibtn=document.getElementById("ibtn");ibtn.disabled=true;ibtn.textContent="Guardando...";
   try{
-    if(id){await sb(`instructores?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(data)});const i=instructores.findIndex(x=>x.id===id);if(i>=0)instructores[i]={...instructores[i],...data};}
-    else{const [created]=await sb("instructores",{method:"POST",body:JSON.stringify(data)});instructores.push(created);}
+    let instId=id;
+    if(id){
+      await sb(`instructores?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(data)});
+      const i=instructores.findIndex(x=>x.id===id);if(i>=0)instructores[i]={...instructores[i],...data};
+    }else{
+      const [created]=await sb("instructores",{method:"POST",body:JSON.stringify(data)});
+      instructores.push(created);instId=created.id;
+    }
+    // Sync junction table
+    await sb(`instructor_especialidades?instructor_id=eq.${instId}`,{method:"DELETE"}).catch(()=>{});
+    if(_instEspSel.length){
+      await sb("instructor_especialidades",{method:"POST",body:JSON.stringify(_instEspSel.map(eid=>({instructor_id:instId,especialidad_id:eid})))});
+    }
+    instructorEsps=instructorEsps.filter(r=>r.instructor_id!==instId);
+    _instEspSel.forEach(eid=>instructorEsps.push({instructor_id:instId,especialidad_id:eid}));
     closeModal("modal-instructor");renderInstructores();updateSideBadges();fillInstructoresDatalist();
     toast("Instructor guardado","ok");
   }catch(e){toast("Error al guardar","err")}
@@ -20277,7 +20319,8 @@ async function abrirPerfil(){
   _miInstructorRow=await _buscarMiInstructor();
   if(_miInstructorRow){
     wrap.style.display="flex";
-    document.getElementById("pf-esp").value=_miInstructorRow.especialidad||"";
+    _pfEspSel=instructorEsps.filter(r=>r.instructor_id===_miInstructorRow.id).map(r=>r.especialidad_id);
+    renderEspPills("pf-esp-pills",_pfEspSel);
     document.getElementById("pf-matricula").value=_miInstructorRow.matricula||"";
     document.getElementById("pf-institucion").value=_miInstructorRow.institucion||"";
     document.getElementById("pf-genero").value=_miInstructorRow.genero||"";
@@ -20315,13 +20358,20 @@ async function guardarPerfilDatos(){
       const tn=document.getElementById("topbar-user-nombre");if(tn)tn.textContent=nombre;
     }
     if(_miInstructorRow){
+      const espNombres=_pfEspSel.map(eid=>especialidades.find(e=>e.id===eid)?.nombre).filter(Boolean).join(", ");
       const upd={
-        especialidad:document.getElementById("pf-esp").value.trim()||null,
+        especialidad:espNombres||null,
         matricula:document.getElementById("pf-matricula").value.trim()||null,
         institucion:document.getElementById("pf-institucion").value.trim()||null,
         genero:document.getElementById("pf-genero").value||null
       };
       await sb(`instructores?id=eq.${_miInstructorRow.id}`,{method:"PATCH",body:JSON.stringify(upd)});
+      await sb(`instructor_especialidades?instructor_id=eq.${_miInstructorRow.id}`,{method:"DELETE"}).catch(()=>{});
+      if(_pfEspSel.length){
+        await sb("instructor_especialidades",{method:"POST",body:JSON.stringify(_pfEspSel.map(eid=>({instructor_id:_miInstructorRow.id,especialidad_id:eid})))});
+      }
+      instructorEsps=instructorEsps.filter(r=>r.instructor_id!==_miInstructorRow.id);
+      _pfEspSel.forEach(eid=>instructorEsps.push({instructor_id:_miInstructorRow.id,especialidad_id:eid}));
       const idx=instructores.findIndex(i=>i.id===_miInstructorRow.id);
       if(idx>=0)instructores[idx]={...instructores[idx],...upd};
     }
