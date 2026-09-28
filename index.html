@@ -16945,13 +16945,16 @@ function calcRendStats(){
     activas.forEach(inv=>{
       const regH=regInvEn(inv,hoy);
       const regB=regInvEn(inv,fechaBase);
-      if(regH&&regB){
+      // Si el registro más reciente es el mismo para hoy y la fecha base (no se registró
+      // nada nuevo desde esa fecha), no hay comparación real — evita que movimientos del
+      // período (aportes/rescates) se cuenten como rendimiento cuando faltan datos.
+      if(regH&&regB&&regH.id!==regB.id){
         // Neteamos los aportes/rescates desde la fecha REAL del registro base (no desde
         // fechaBase nominal) hasta hoy -- si no, un movimiento que cae en un hueco entre
         // el último registro real y fechaBase queda "perdido": ni en el valor base ni
         // neteado, y se ve como ganancia/pérdida de cartera cuando es plata que entró o
         // salió. Antes solo se neteaba desde fechaBase, dejando afuera justo esos casos.
-        const movsPeriodo=cfInvMovs.filter(m=>m.inversion_id===inv.id&&m.fecha>regB.fecha&&m.fecha<=hoy);
+        const movsPeriodo=cfInvMovs.filter(m=>m.inversion_id===inv.id&&m.fecha>=regB.fecha&&m.fecha<=hoy);
         const netoMovs=movsPeriodo.reduce((s,m)=>s+(m.tipo==="Aporte de capital"?(m.monto||0):-(m.monto||0)),0);
         dHoy+=regH.valor;dBase+=regB.valor+netoMovs;tieneComparacion=true;
       }
