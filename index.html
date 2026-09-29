@@ -17018,9 +17018,13 @@ async function renderBenchmark(){
   const el=document.getElementById("benchmark-tabla");
   if(!el)return;
   const getCapActivo=(inv)=>inv.valor_actual!=null?inv.valor_actual:(inv.capital||0);
-  // Últimos 12 meses calendario
+  // Últimos 12 meses calendario. Fijamos el día en 1 antes de restar meses -- si no, un "hoy"
+  // con día 29/30/31 se desborda al restarle un mes que no tiene ese día (ej. 29 de marzo menos
+  // un mes = 29 de febrero, que no existe en año no bisiesto, y JS lo corrige saltando a marzo)
+  // duplicando un mes y perdiéndose otro en la lista.
   const meses=[];
   const d=new Date();
+  d.setDate(1);
   for(let i=0;i<12;i++){
     const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0");
     meses.push(`${y}-${m}`);
