@@ -784,6 +784,97 @@ CREATE POLICY "Solo autenticados" ON elearning_sync_log FOR ALL TO authenticated
 - [ ] Botón "Publicar en e-learning" en detalle de curso del panel
 - [ ] `agente-mensajes` lee `elearning_cursos` para responder preguntas de fechas/cupos/precios en tiempo real
 
+### Estado de cuenta de clientes vía e-learning (29 Sep 2026)
+
+**Contexto:** reunión con Agustín (técnico de la plataforma). La plataforma ya trae el plugin de Finnegans (credenciales configuradas, catálogos cargados, factura automática al aprobar pago). Decisiones: se agrega `condicion_fiscal` al registro de alumnos → **Factura A solo a responsables inscriptos, B al resto**; Viumi se suma como medio de pago alternativo a MercadoPago; Agustín prueba en sandbox si "provincia de destino" es obligatoria. Tomás quedó en completar la spec de la API con el módulo de estado de cuenta.
+
+- ✅ `spec_api_elearning_laravel.md` sección 6 — eventos al panel por el mismo webhook (`action: "webhook_evento"`): `cliente.creado/actualizado`, `pago.aprobado/rechazado`, `factura.emitida/error`, `suscripcion.por_vencer` (7 días antes)/`vencida`/`renovada`. Idempotencia por `evento.id`, reintentos con backoff, endpoint `GET /api/alumnos/{cuit}/estado-cuenta` para reconciliar, `GET /api/eventos` opcional
+- ✅ `sync-elearning` — procesa `webhook_evento`: upsert en `elearning_clientes` (por CUIT normalizado a 11 dígitos), `elearning_pagos` (pago + factura en la misma fila), `elearning_suscripciones`; log en `elearning_eventos`. Suscripción por vencer/vencida y factura con error → notificación de campanita a todos los admins activos
+- 🐛 **Fix seguridad:** el webhook nunca validaba `X-Webhook-Secret` — cualquiera con la URL podía cargar inscripciones. Ahora compara contra `ELEARNING_WEBHOOK_SECRET` (comparación en tiempo constante, falla cerrado si el secret no está cargado) y las acciones `webhook_*` solo se aceptan por webhook y las de sync solo desde el panel con JWT
+- ✅ Tipos de notificación nuevos en `tipoNotifLabel`/`tipoNotifIcon`
+- ✅ **Ficha completa del registro del campus** (pedido de Tomás: que el panel quede con los mismos datos que la plataforma): `nombre_completo`, email, DNI/cédula, CUIT, matrícula, profesión y documentos legales aceptados (versión + fecha, evidencia de consentimiento). La spec le pide a Agustín **sumar al formulario**: `condicion_fiscal`, `tipo_persona` (+ `razon_social` para empresas/laboratorios), `provincia` (completa "provincia de destino" de la factura) y `telefono` (no aparece en el formulario actual — necesario para seguimiento por WhatsApp)
+- ✅ `elearning_clientes.alumno_id` se vincula solo si ya existe un alumno en el panel con ese CUIT (con o sin guiones). **No crea alumnos nuevos** en `alumnos`: la plataforma manda "nombre completo" en un solo campo y `alumnos` exige nombre y apellido por separado — partirlo automático falla con apellidos compuestos. Decidir más adelante si se pide a Agustín separar los campos o se crea el alumno a mano desde la ficha
+- ✅ Evento `pago.pendiente` (orden de pago creada sin pagar) — mismo `pago_id` que el aprobado que lo resuelve; un pendiente que llega tarde por reintento no pisa un pago ya aprobado. Base para el seguimiento de "se registraron y no pagaron" (casos reales de la reunión: Agostina Sarmiento, Giovanna Massaglia, Nicolás Pérez)
+- ✅ Avisos de vencimiento **agrupados por fecha** — la promo "Nivel 11 sin cargo" vence para todos el 30/10/2026, así que el 23/10 llegarían decenas de `suscripcion.por_vencer` juntos. En vez de una notificación por alumno, se mantiene una sola por fecha (en `notificaciones.meta.clave`) y se actualiza el texto con el conteo ("N suscripciones vencen el 30/10")
+- Del resto de la reunión (fuera del alcance del panel): Agustín prueba en sandbox si "provincia de destino" es obligatoria en Finnegans, evalúa Viumi (3-6 cuotas sin interés con Macro, acredita directo en la cuenta Macro), hace el botón de actualizar cursos sin duplicar (el panel ya actualiza por `elearning_id`), y revisa Wix para dejar solo el registro del dominio
+
+**SQL pendiente (correr junto con el SQL de arriba de `elearning_*`):**
+```sql
+CREATE TABLE IF NOT EXISTS elearning_eventos (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  evento_id text UNIQUE NOT NULL,
+  tipo text NOT NULL,
+  alumno_cuit text,
+  ocurrido_en timestamptz,
+  payload jsonb,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE elearning_eventos ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Solo autenticados" ON elearning_eventos FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+CREATE TABLE IF NOT EXISTS elearning_clientes (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  cuit text UNIQUE NOT NULL,
+  elearning_alumno_id text,
+  nombre_completo text, email text, dni text, telefono text,
+  matricula text, profesion text,
+  condicion_fiscal text,            -- responsable_inscripto | monotributista | exento | consumidor_final
+  tipo_persona text,                -- fisica | juridica
+  razon_social text,
+  provincia text,
+  documentos_aceptados jsonb,       -- [{documento, version, aceptado_en}] evidencia de consentimiento
+  registrado_en timestamptz,
+  finnegans_cliente_codigo text,
+  alumno_id uuid REFERENCES alumnos(id),
+  raw jsonb,
+  updated_at timestamptz DEFAULT now(),
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE elearning_clientes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Solo autenticados" ON elearning_clientes FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+CREATE TABLE IF NOT EXISTS elearning_pagos (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  pago_id text UNIQUE NOT NULL,
+  cuit text,
+  concepto text, elearning_curso_id text, suscripcion_id text,
+  monto numeric, moneda text DEFAULT 'ARS', medio_pago text, referencia_externa text,
+  fecha_pago timestamptz, estado text,
+  factura_estado text, factura_tipo text, factura_punto_venta text, factura_numero text, factura_fecha date,
+  factura_neto numeric, factura_iva numeric, factura_total numeric,
+  cae text, cae_vencimiento date, finnegans_comprobante_id text, factura_pdf_url text, factura_error text,
+  updated_at timestamptz DEFAULT now(),
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE elearning_pagos ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Solo autenticados" ON elearning_pagos FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+CREATE TABLE IF NOT EXISTS elearning_suscripciones (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  suscripcion_id text UNIQUE NOT NULL,
+  cuit text,
+  plan text, periodicidad text, monto numeric,
+  fecha_inicio date, fecha_vencimiento date,
+  renovacion_automatica boolean,
+  estado text,
+  aviso_por_vencer_en timestamptz,
+  updated_at timestamptz DEFAULT now(),
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE elearning_suscripciones ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Solo autenticados" ON elearning_suscripciones FOR ALL TO authenticated USING (true) WITH CHECK (true);
+```
+
+**Pendiente:**
+- [x] Spec v2 lista para mandar a Agustín (29 Sep 2026); el secret va por WhatsApp
+- [x] Secrets `ELEARNING_WEBHOOK_SECRET` y `ELEARNING_URL` cargados, `sync-elearning` deployada (29 Sep 2026)
+- [ ] Secret `ELEARNING_API_TOKEN` — esperando que Agustín genere el token Sanctum
+- [ ] Correr SQL de las tablas `elearning_*` (bloque de arriba del 7 Sep + este bloque)
+- [ ] Vista en el panel: estado de cuenta en la ficha del alumno (pagos, facturas, suscripción) + listado de suscripciones por vencer + listado de pagos pendientes para seguimiento
+- [ ] Mail de seguimiento a los que se registraron y no pagaron (Agostina Sarmiento, Giovanna Massaglia, Nicolás Pérez y otros) — tarea de Tomás de la reunión del 29/09
+- [ ] Mensaje automático de renovación (WhatsApp template o email) al recibir `suscripcion.por_vencer` — hoy solo avisa al equipo por campanita
+- [ ] Cruce `elearning_clientes.alumno_id` ↔ `alumnos` por CUIT (base de la Fase 3 contable: `devengado_venta`/`cobro_venta`)
+
 ---
 
 ## Implementado (23 Jun 2026) — Agente mensajes y mejoras continuas

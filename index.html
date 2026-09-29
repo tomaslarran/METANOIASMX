@@ -11597,11 +11597,11 @@ async function pollNotificaciones(){
 }
 
 function tipoNotifLabel(tipo){
-  const map={asignacion:"Nueva asignación",modificacion:"Tarea modificada",comentario:"Nuevo comentario",vencimiento:"Vencimiento próximo",colaboracion_chat:"Invitación a chat",mensaje_interno:"Mensaje interno",cumpleanos:"Cumpleaños"};
+  const map={asignacion:"Nueva asignación",modificacion:"Tarea modificada",comentario:"Nuevo comentario",vencimiento:"Vencimiento próximo",colaboracion_chat:"Invitación a chat",mensaje_interno:"Mensaje interno",cumpleanos:"Cumpleaños",elearning_suscripcion_por_vencer:"Suscripción por vencer",elearning_suscripcion_vencida:"Suscripción vencida",elearning_factura_error:"Error de facturación"};
   return map[tipo]||"Notificación";
 }
 function tipoNotifIcon(tipo){
-  const map={asignacion:"👤",modificacion:"✏️",comentario:"💬",vencimiento:"⏰",colaboracion_chat:"👥",mensaje_interno:"💬",cumpleanos:"🎂"};
+  const map={asignacion:"👤",modificacion:"✏️",comentario:"💬",vencimiento:"⏰",colaboracion_chat:"👥",mensaje_interno:"💬",cumpleanos:"🎂",elearning_suscripcion_por_vencer:"⏰",elearning_suscripcion_vencida:"⌛",elearning_factura_error:"🧾"};
   return map[tipo]||"🔔";
 }
 function tiempoAtras(iso){
