@@ -16591,6 +16591,7 @@ function toggleInvValores(id){
 // Corregir un registro de rendimientos_diarios cargado mal (ej. un 0 de más) -- antes no
 // había forma de editar un valor histórico, solo "+ Registrar hoy" para el día de hoy.
 async function guardarValorDiario(regId,invId){
+  if(!regId||regId==="undefined"){toast("Este registro todavía no tiene id (recién cargado) — refrescá la página e intentá de nuevo","err");return;}
   const input=document.getElementById(`rv-${regId}`);
   const nuevoValor=parseFloat(input?.value);
   if(isNaN(nuevoValor)||nuevoValor<0){toast("Ingresá un valor válido","err");return;}
@@ -16614,6 +16615,7 @@ async function guardarValorDiario(regId,invId){
 }
 
 async function delValorDiario(regId,invId){
+  if(!regId||regId==="undefined"){toast("Este registro todavía no tiene id (recién cargado) — refrescá la página e intentá de nuevo","err");return;}
   confirmDel("¿Eliminar este registro de valor diario?",async()=>{
     try{
       await sb(`rendimientos_diarios?id=eq.${regId}`,{method:"DELETE"});
@@ -17466,16 +17468,20 @@ async function saveRendDiarios(){
       return isNaN(val)?null:{inversion_id:inv.id,fecha:hoy,valor:val};
     }).filter(Boolean);
     if(!upserts.length){toast("Ingresá al menos un valor","err");btn.disabled=false;return;}
-    await Promise.all(upserts.map(u=>
-      sb("rendimientos_diarios?on_conflict=inversion_id,fecha",{method:"POST",headers:{"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(u)})
+    // return=representation (no "minimal") -- necesitamos el id real que devuelve el upsert,
+    // si no la fila queda en memoria sin id hasta el próximo refresh y editarla/borrarla en la
+    // misma sesión manda "id=undefined" al servidor (22P02 invalid input syntax for type uuid).
+    const results=await Promise.all(upserts.map(u=>
+      sb("rendimientos_diarios?on_conflict=inversion_id,fecha",{method:"POST",headers:{"Prefer":"resolution=merge-duplicates,return=representation"},body:JSON.stringify(u)})
     ));
     // Actualizar valor_actual en cf_inversiones
     await Promise.all(upserts.map(u=>
       sb(`cf_inversiones?id=eq.${u.inversion_id}`,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({valor_actual:u.valor})})
     ));
-    upserts.forEach(u=>{
+    upserts.forEach((u,i)=>{
+      const creado=Array.isArray(results[i])?results[i][0]:results[i];
       rendDiarios=rendDiarios.filter(r=>!(r.inversion_id===u.inversion_id&&r.fecha===u.fecha));
-      rendDiarios.push({inversion_id:u.inversion_id,fecha:hoy,valor:u.valor});
+      rendDiarios.push(creado&&creado.id?creado:{inversion_id:u.inversion_id,fecha:hoy,valor:u.valor});
       const idx=cfInversiones.findIndex(i=>i.id===u.inversion_id);
       if(idx>=0)cfInversiones[idx].valor_actual=u.valor;
     });
