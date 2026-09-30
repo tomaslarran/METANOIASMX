@@ -22863,7 +22863,7 @@ let proveedoresFinn=[];
 let cuentaCorriente=[];
 let cuentaProveedorId=null;
 let compFilter="all";
-let compMesFilter="all";
+let compMesFilter=today().slice(0,7);
 let compCargadoFilter="all";
 let compArchivoUrl=null;
 let editCompId=null;
@@ -22898,14 +22898,16 @@ function buildCompMesSelect(){
       meses.set(ym,nombre.charAt(0).toUpperCase()+nombre.slice(1));
     }
   });
-  const current=sel.value;
   sel.innerHTML=`<option value="all">Todos los meses</option>`;
   [...meses.entries()].sort((a,b)=>b[0].localeCompare(a[0])).forEach(([ym,label])=>{
     const opt=document.createElement("option");
     opt.value=ym;opt.textContent=label;
     sel.appendChild(opt);
   });
-  if(current&&current!=="all")sel.value=current;
+  // Restaura el mes seleccionado (por defecto, el mes en curso — ver compMesFilter);
+  // si ese mes no tiene comprobantes todavía, no hay option para elegirlo y se cae a "all"
+  if(compMesFilter!=="all"&&[...sel.options].some(o=>o.value===compMesFilter))sel.value=compMesFilter;
+  else compMesFilter=sel.value;
 }
 
 function setCompFilter(f,btn){
@@ -24161,7 +24163,7 @@ async function procesarImportArca(){
       const creados=await sb("comprobantes_compra",{method:"POST",body:JSON.stringify(lote)});
       comprobantes.unshift(...creados);
     }
-    buildCompCargadoSelect();renderComprobantes();updateCompStats();updateSideBadges();
+    buildCompMesSelect();buildCompCargadoSelect();renderComprobantes();updateCompStats();updateSideBadges();
     closeModal("modal-import-arca");
     toast(`${nuevos.length} comprobantes importados de ARCA${omitidosDup?` · ${omitidosDup} ya existían`:""}`,"ok");
   }catch(e){
