@@ -56,8 +56,11 @@ serve(async (req) => {
     const waPhone = formatWAPhone(alumno.telefono);
     if (!waPhone) { results.sin_telefono++; continue; }
 
-    const nombre = ([alumno.nombre, alumno.apellido].filter(Boolean).join(" ") || "Alumno").slice(0, 60);
-    const cursoNombre = (curso?.nombre || "el curso").slice(0, 100);
+    // WhatsApp rechaza parametros de plantilla con tabs/saltos de linea o 4+ espacios seguidos
+    // (error 132018) - saneamos por si el dato en la base viene sucio (ej. un tab pegado del Excel).
+    const sanear = (s: string) => s.replace(/[\t\n\r]+/g, " ").replace(/ {2,}/g, " ").trim();
+    const nombre = sanear(([alumno.nombre, alumno.apellido].filter(Boolean).join(" ") || "Alumno").slice(0, 60));
+    const cursoNombre = sanear((curso?.nombre || "el curso").slice(0, 100));
 
     try {
       const res = await fetch(WA_API, {
