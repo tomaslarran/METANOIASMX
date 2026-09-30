@@ -24065,7 +24065,7 @@ function _arcaFecha(s){
   return `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}`;
 }
 function _arcaNum(v){const n=parseFloat(v);return isNaN(n)?0:n;}
-function _arcaNumero(pv,nd){return `${parseInt(pv,10)||0}-${parseInt(nd,10)||0}`;}
+function _arcaNumero(pv,nd){return `${String(parseInt(pv,10)||0).padStart(4,"0")}-${String(parseInt(nd,10)||0).padStart(8,"0")}`;}
 function _arcaKey(cuit,tipo,numero){
   const norm=numero.split("-").map(s=>String(parseInt(s,10)||0)).join("-");
   return `${(cuit||"").replace(/\D/g,"")}|${tipo}|${norm}`;
