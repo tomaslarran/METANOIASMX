@@ -30,13 +30,17 @@ async function chequearLimiteIA(supabase: any) {
   return { bloqueado: false, mensaje: null as string | null, organizacionId: organizacion.id };
 }
 
-// Siempre incluye el mail personal de Tomás además de lo que diga el secret (si el secret
-// ESCALACION_EMAIL ya está seteado en Supabase con un solo mail, igual se suma acá para no
-// depender de que alguien vaya a actualizar el secret).
-const ESCALACION_EMAIL = [Deno.env.get("ESCALACION_EMAIL") || "tlarran@metanoiasmx.com", "tomaslarran@gmail.com"].join(",");
-
-async function sendEmailEscalacion(texto: string): Promise<void> {
+async function sendEmailEscalacion(texto: string, supabase: any): Promise<void> {
   try {
+    // Buscar usuarios con escal_bot_email=true en notificaciones_config
+    const { data: rows } = await supabase
+      .from("notificaciones_config")
+      .select("usuarios(email)")
+      .eq("escal_bot_email", true);
+    let emails: string[] = (rows || []).map((r: any) => r.usuarios?.email).filter(Boolean);
+    // Fallback si nadie tiene el toggle activado aún
+    if (emails.length === 0) emails = ["tlarran@metanoiasmx.com"];
+
     const transporter = nodemailer.createTransport({
       host: Deno.env.get("SMTP_HOST"),
       port: 465,
@@ -46,7 +50,7 @@ async function sendEmailEscalacion(texto: string): Promise<void> {
     const htmlBody = texto.replace(/\n/g, "<br>").replace(/\*(.*?)\*/g, "<strong>$1</strong>");
     await transporter.sendMail({
       from: `"Metanoia SMX" <${Deno.env.get("SMTP_USER")}>`,
-      to: ESCALACION_EMAIL,
+      to: emails.join(","),
       subject: texto.startsWith("⚠️") ? "⚠️ Alerta bot — Metanoia SMX" : "🚨 Consulta derivada — Metanoia SMX",
       html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fafafa;border-left:4px solid #4a2eb4">${htmlBody}</div>`,
     });
@@ -211,7 +215,7 @@ serve(async (req) => {
       supabase, fromId, fromName, texto, plataforma: "whatsapp", msgId,
       imageBase64, imageMediaType, imageUrl,
       sendReply: (t) => sendWA(fromId, t),
-      sendEscalacion: async (t) => { await sendEmailEscalacion(t); },
+      sendEscalacion: async (t) => { await sendEmailEscalacion(t, supabase); },
     });
 
     return new Response("OK", { status: 200 });
@@ -336,7 +340,7 @@ serve(async (req) => {
       supabase, fromId, fromName, texto, plataforma, msgId,
       imageBase64, imageMediaType, imageUrl,
       sendReply: (t) => sendMessenger(fromId, t, pageId, apiToken, isIG),
-      sendEscalacion: async (t) => { await sendEmailEscalacion(t); },
+      sendEscalacion: async (t) => { await sendEmailEscalacion(t, supabase); },
     });
 
     return new Response("OK", { status: 200 });

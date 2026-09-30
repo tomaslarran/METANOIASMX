@@ -3180,6 +3180,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
         Enviar Email
       </button>
+      <button class="btn sec" onclick="openImportArca()" title="Importa el Excel 'Mis Comprobantes Recibidos' de ARCA (ex AFIP)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Importar ARCA
+      </button>
       <button class="btn sec" onclick="openNuevoComprobante()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Nueva factura
@@ -3477,6 +3481,30 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <button class="bk" id="comp-save-btn" onclick="saveComprobante()">Guardar</button>
     </div>
   </div>
+</div>
+
+<!-- ══ IMPORTAR ARCA (ex AFIP) — Mis Comprobantes Recibidos ══ -->
+<div class="mov" id="modal-import-arca" onclick="if(event.target===this&&_movDown===this)closeModal('modal-import-arca')">
+<div class="modal" style="max-width:480px">
+  <div class="mt">📥 Importar desde ARCA</div>
+  <div style="font-size:12px;color:var(--tx3);margin-bottom:14px">Subí el Excel "Mis Comprobantes Recibidos" que se descarga de ARCA (ex AFIP). Se crean como comprobantes <b>pendientes de revisar</b> — sin desglose de producto ni archivo adjunto, para completar a mano cuando los revisés.</div>
+  <div class="fg" style="margin-bottom:12px">
+    <label class="fl">Sociedad de este archivo</label>
+    <select class="fi" id="arca-sociedad">
+      <option value="SUDES">SUDES</option>
+      <option value="POINTERS">POINTERS</option>
+    </select>
+  </div>
+  <div class="fg">
+    <label class="fl">Archivo Excel de ARCA</label>
+    <input class="fi" id="arca-file" type="file" accept=".xlsx,.xls">
+  </div>
+  <div id="arca-import-status" style="font-size:12px;color:var(--tx3);margin-top:10px"></div>
+  <div class="ma">
+    <button class="bc" onclick="closeModal('modal-import-arca')">Cancelar</button>
+    <button class="bk" id="arca-import-btn" onclick="procesarImportArca()">Importar</button>
+  </div>
+</div>
 </div>
 
 <!-- ══ COFRADIA ══ -->
@@ -22958,6 +22986,7 @@ function renderComprobantes(){
         ${c.concepto?`<div style="font-size:11px;color:var(--tx3);margin-top:1px">${esc(c.concepto)}</div>`:""}
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:3px">
           ${esDeProveedor?`<span style="font-size:10px;background:rgba(124,58,237,.12);color:#A78BFA;padding:1px 6px;border-radius:6px">📤 ${esc(c.cargado_por)}</span>`:""}
+          ${c.importado_arca?`<span style="font-size:10px;background:rgba(56,189,248,.15);color:#38BDF8;padding:1px 6px;border-radius:6px">📥 Importado de ARCA — sin comprobante físico</span>`:""}
           ${faltaDesglose?`<span style="font-size:10px;background:rgba(245,158,11,.15);color:#FCD34D;padding:1px 6px;border-radius:6px">⚠️ Completar desglose</span>`:""}
         </div>
       </div>
@@ -24021,6 +24050,125 @@ async function enviarEmailFinnegans(){
     toast("❌ Error al enviar: "+(e.message||JSON.stringify(e)),"err");
   }finally{
     if(btn){btn.disabled=false;btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg> Enviar Email';}
+  }
+}
+
+// ── Importar comprobantes desde ARCA (ex AFIP) — "Mis Comprobantes Recibidos" ──
+const ARCA_TIPO_MAP={"1":"A","6":"B","11":"C","51":"M","3":"NC-A","8":"NC-B","13":"NC-C","53":"NC-M"};
+function _arcaMapTipo(tipoStr){
+  const m=String(tipoStr||"").match(/^(\d+)/);
+  return m?(ARCA_TIPO_MAP[m[1]]||null):null;
+}
+function _arcaFecha(s){
+  const p=String(s||"").split("/");
+  if(p.length!==3)return null;
+  return `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}`;
+}
+function _arcaNum(v){const n=parseFloat(v);return isNaN(n)?0:n;}
+function _arcaNumero(pv,nd){return `${parseInt(pv,10)||0}-${parseInt(nd,10)||0}`;}
+function _arcaKey(cuit,tipo,numero){
+  const norm=numero.split("-").map(s=>String(parseInt(s,10)||0)).join("-");
+  return `${(cuit||"").replace(/\D/g,"")}|${tipo}|${norm}`;
+}
+
+function openImportArca(){
+  document.getElementById("arca-file").value="";
+  document.getElementById("arca-import-status").textContent="";
+  openModal("modal-import-arca");
+}
+
+async function procesarImportArca(){
+  const fileInput=document.getElementById("arca-file");
+  const sociedad=document.getElementById("arca-sociedad").value;
+  const status=document.getElementById("arca-import-status");
+  const btn=document.getElementById("arca-import-btn");
+  const file=fileInput.files[0];
+  if(!file){toast("Elegí el archivo Excel de ARCA","err");return;}
+  btn.disabled=true;btn.textContent="Procesando...";status.textContent="Leyendo archivo...";
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:"array"});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+    // Detectar fila de encabezados (la primera fila es un título general)
+    const headerIdx=rows.findIndex(r=>String(r[0]||"").trim().toLowerCase()==="fecha");
+    if(headerIdx<0)throw new Error('No se encontró el encabezado ("Fecha"...). ¿Es el archivo "Mis Comprobantes Recibidos" de ARCA?');
+    const headers=rows[headerIdx].map(h=>String(h||"").trim());
+    const col=name=>headers.indexOf(name);
+    const idx={
+      fecha:col("Fecha"),tipo:col("Tipo"),pv:col("Punto de Venta"),nd:col("Número Desde"),
+      cae:col("Cód. Autorización"),tipoDocEm:col("Tipo Doc. Emisor"),cuit:col("Nro. Doc. Emisor"),
+      emisor:col("Denominación Emisor"),
+      neto0:col("Neto Grav. IVA 0%"),neto25:col("Neto Grav. IVA 2,5%"),neto5:col("Neto Grav. IVA 5%"),
+      neto105:col("Neto Grav. IVA 10,5%"),neto21:col("Neto Grav. IVA 21%"),neto27:col("Neto Grav. IVA 27%"),
+      noGravado:col("Neto No Gravado"),exentas:col("Op. Exentas"),otrosTrib:col("Otros Tributos"),
+      totalIva:col("Total IVA"),total:col("Imp. Total")
+    };
+    if(idx.fecha<0||idx.cuit<0||idx.total<0)throw new Error("El archivo no tiene las columnas esperadas de ARCA.");
+
+    const existentes=new Set(comprobantes.map(c=>_arcaKey(c.cuit,c.tipo,c.numero||"")));
+    const nuevos=[];let omitidosDup=0,noSoportados=0,sinFecha=0;
+
+    for(let i=headerIdx+1;i<rows.length;i++){
+      const r=rows[i];
+      if(!r||!r[idx.fecha]){continue;}
+      const fecha=_arcaFecha(r[idx.fecha]);
+      if(!fecha){sinFecha++;continue;}
+      const tipo=_arcaMapTipo(r[idx.tipo]);
+      if(!tipo){noSoportados++;continue;}
+      const numero=_arcaNumero(r[idx.pv],r[idx.nd]);
+      const cuit=String(r[idx.cuit]||"").replace(/\D/g,"");
+      const key=_arcaKey(cuit,tipo,numero);
+      if(existentes.has(key)){omitidosDup++;continue;}
+      existentes.add(key);
+
+      const neto21=_arcaNum(r[idx.neto21]),neto105=_arcaNum(r[idx.neto105]),neto27=_arcaNum(r[idx.neto27]);
+      let exento=_arcaNum(r[idx.exentas]);
+      const noGravOtros=_arcaNum(r[idx.neto0])+_arcaNum(r[idx.neto25])+_arcaNum(r[idx.neto5])+_arcaNum(r[idx.noGravado])+_arcaNum(r[idx.otrosTrib]);
+      const totalRow=_arcaNum(r[idx.total]),ivaRow=_arcaNum(r[idx.totalIva]);
+      // Facturas C (monotributo) y algunas otras no discriminan IVA por alícuota — sin este fallback el importe se pierde
+      if(neto21===0&&neto105===0&&neto27===0&&exento===0&&noGravOtros===0&&totalRow>0){
+        exento=parseFloat((totalRow-ivaRow).toFixed(2));
+      }
+
+      nuevos.push({
+        proveedor:String(r[idx.emisor]||"").trim()||null,
+        fecha,fecha_imputacion:fecha,
+        tipo,numero,sociedad,cuit:cuit||null,
+        monto_neto:parseFloat((neto21+neto105+neto27+exento).toFixed(2)),
+        iva:_arcaNum(r[idx.totalIva]),
+        neto_21:neto21,neto_105:neto105,neto_27:neto27,neto_exento:exento,
+        otros_impuestos:parseFloat(noGravOtros.toFixed(2)),
+        total:_arcaNum(r[idx.total]),
+        notas:`Importado de ARCA — Mis Comprobantes Recibidos${r[idx.cae]?` (CAE ${r[idx.cae]})`:""}`,
+        archivo_url:null,
+        cargado_por:loggedUser?.nombre||null,
+        importado_arca:true,
+        estado:"pendiente"
+      });
+    }
+
+    if(!nuevos.length){
+      status.textContent=`Nada nuevo para importar (${omitidosDup} ya cargados, ${noSoportados} tipos no soportados).`;
+      toast("No hay comprobantes nuevos para importar","inf");
+      return;
+    }
+
+    status.textContent=`Importando ${nuevos.length} comprobantes...`;
+    const CHUNK=200;
+    for(let i=0;i<nuevos.length;i+=CHUNK){
+      const lote=nuevos.slice(i,i+CHUNK);
+      const creados=await sb("comprobantes_compra",{method:"POST",body:JSON.stringify(lote)});
+      comprobantes.unshift(...creados);
+    }
+    buildCompCargadoSelect();renderComprobantes();updateCompStats();updateSideBadges();
+    closeModal("modal-import-arca");
+    toast(`${nuevos.length} comprobantes importados de ARCA${omitidosDup?` · ${omitidosDup} ya existían`:""}`,"ok");
+  }catch(e){
+    status.textContent="Error: "+e.message;
+    toast("Error al importar: "+e.message,"err");
+  }finally{
+    btn.disabled=false;btn.textContent="Importar";
   }
 }
 

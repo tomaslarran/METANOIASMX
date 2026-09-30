@@ -335,6 +335,72 @@ Virasoro, Juárez Muas, De la Vega, Passarell, Jaime, Van Cawlaert — validan c
 MSP representa 76% ingresos Año 1. Meta: <40% dependencia. 4 cursos/mes desde 2027 baja MSP a ~23% Año 4.
 `;
 
+// ── Estándar de calidad de documentos (modelo Congreso, agosto 2026) ─────────
+const ESTANDAR_DOCUMENTOS = `
+## 8. PAQUETE COMPLETO DE DISEÑO — Estándar de calidad Metanoia
+
+Cuando una sesión de diseño avanza lo suficiente (bloques A+B+C+D+E confirmados: necesidad, público, objetivos, nivel, equipamiento), ofrecé proactivamente generar el PAQUETE COMPLETO: 4 entregables que juntos cubren todo lo que el equipo necesita para avanzar a PEV2.
+
+Este estándar surge de la sesión de diseño del Curso de Nutrición Enteral (agosto 2026), presentada en congreso y validada como modelo de calidad institucional. Usarlo como piso mínimo en toda sesión de diseño que llegue a ese nivel de detalle.
+
+---
+
+### Los 4 entregables del paquete
+
+**1. Ficha de Diseño PEV1** (tipo: ficha_diseno)
+Código interno obligatorio: MSX-PEV1-[SIGLA DOMINIO]-[AÑO]-[NNN] (ej: MSX-PEV1-NE-2026-001)
+Campos que NO pueden faltar:
+- **Naturaleza del pedido**: ¿es del convenio MSP, externa al convenio, comercial, EMC? ¿tiene instrumento contractual propio?
+- **Quién solicitó**: nombre, cargo, institución
+- **Brecha de desempeño documentada**: no "queremos aprender X" sino "indicadores negativos en Y en población Z"
+- **Línea de negocio Metanoia**: MSP/Convenio | Colmedsa | Comercial | EMC-Gratuito
+- **Estimación económica**: arancel/participante × participantes estimados = subtotal, con flag explícito de qué falta confirmar (impuestos, forma de pago, instrumento legal)
+- **Nota de consolidación** si el documento integra múltiples sesiones o versiones
+- **Recuadro ⚠️ ALCANCE** obligatorio: "Este documento consolida un borrador PEV1. Todo el contenido clínico requiere validación antes de usarse con participantes reales."
+- Todos los ítems sin dato confirmado marcados como [a confirmar] — nunca inventar
+
+**2. Contenido Teórico Asincrónico** (tipo: contenido_teorico)
+Para cursos con módulos teóricos previos a la jornada práctica.
+Estructura por módulo:
+- Número, título, duración estimada, formato (ej: video + PDF de referencia)
+- Objetivo de aprendizaje cubierto
+- Contenido desarrollado en prosa (no solo títulos — escribir el texto base que sirva para grabar los videos y como material de lectura)
+- Examen de autocomprobación al cierre (4–6 preguntas de opción múltiple con correcta identificada)
+Recuadro ⚠️ ALCANCE al inicio: "Redactado con IA a partir del marco acordado. Requiere revisión clínica línea por línea, especialmente cifras, umbrales y protocolos locales."
+Código: [código_interno]-TEO
+
+**3. Manual de Estaciones — Guía del Facilitador** (tipo: manual_facilitador)
+- Vista consolidada al inicio: tabla resumen de TODAS las estaciones (nombre, equipo, nivel Metanoia, Miller, grupos simultáneos, duración, readiness 🟢🟡🔴)
+- Nota logística crítica si hay equipo compartido entre estaciones (ej: "KERi™ es unidad única, compartida entre E-B y E-D — la tabla de rotación garantiza que nunca coincidan")
+- Por estación: encuadre completo (equipo, nivel, grupos, duración, ratio instructor), objetivo, materiales con cantidades, secuencia interna con timing (tabla pasos), instrumento de evaluación, errores comunes a anticipar
+Código: [código_interno]-EST
+
+**4. Planilla de Cronograma y Rotaciones** (tipo: cronograma)
+La planilla completa tiene 6 hojas:
+1. Carátula + índice de contenido
+2. Tabla maestra de rotación: N turnos × N grupos — VALIDADA para que ningún equipo único esté en dos grupos simultáneamente. Columna "equipo único en uso" por turno.
+3. Cronograma hora a hora de la jornada: acreditación → prebriefing plenario → turnos con pausas → almuerzo/reset → debriefing PEARLS → cierre administrativo
+4. Matriz de estaciones con readiness (🟢🟡🔴) y notas de equipamiento
+5. Checklist de insumos fungibles por jornada con columna "Cantidad real (completar tras piloto)"
+6. Planificación de jornadas múltiples si aplica: tracker con fecha, hospital/institución, participantes, estado, arancel unitario y subtotal — ⚠️ marcando lo que falta confirmar
+
+---
+
+### Cuándo ofrecer el paquete completo
+- Al completar ≥ bloques A+B+C+D+E del intake
+- Al confirmar estructura de estaciones (cantidad, duración, equipo por estación)
+- Proactivamente, sin esperar que lo pidan: "Tenemos suficiente información para armar el paquete completo de 4 documentos — ¿los generamos?"
+- Se genera de a uno (el usuario elige el orden) o en secuencia recomendada: ficha → contenido teórico → manual → planilla
+
+### Marcadores de calidad obligatorios en TODO documento del paquete
+- ⚠️ Recuadro de alcance al inicio con las limitaciones del borrador y qué requiere validación
+- 🟢🟡🔴 Readiness por estación/equipo donde corresponda
+- Código interno en formato MSX-PEV1-[SIGLA]-[AÑO]-[NNN]
+- Nota al pie: "Borrador generado con apoyo de IA. No aprobado para uso. Requiere curaduría (Dirección Médica) y aprobación PEV plenaria."
+- Items sin dato confirmado → placeholder [a confirmar], nunca un número inventado
+- Implicancias contractuales o económicas → siempre declarar qué está confirmado y qué falta definir
+`;
+
 // Chequea el límite mensual de tokens de IA de la organización y del usuario.
 // email=null (funciones sin JWT, ej. webhooks/cron) asume la única organización activa (single-tenant hoy).
 async function chequearLimiteIA(supabase: any, email: string | null) {
@@ -468,6 +534,7 @@ Tipos disponibles y cuándo ofrecerlos:
 - **planilla_prebrief** → Guía de prebriefing. Datos: {curso, duracion_min, secciones:[{titulo,contenido,puntos:[]}], nota_pie}
 - **planilla_debrief** → Planilla PEARLS de debriefing. Datos: {curso, duracion_min, secciones:[{sigla,titulo,descripcion,preguntas:[],puntos_clave:[]}], nota_pie}
 - **instrumento_eval** → Instrumento de evaluación (OSATS/GOALS/checklist). Datos: {curso, estacion, tipo, items:[{n,descripcion,escala}], escala_descripcion:{}, nota_formativa, nota_pie}
+- **contenido_teorico** → Programa teórico asincrónico (videos + PDFs) con módulos desarrollados en prosa y examen por módulo. Ofrecer cuando hay componente teórico previo a la jornada práctica. Datos: {codigo_interno, modulos:[{numero,titulo,duracion_estimada,formato,objetivo,secciones:[{titulo,contenido}],examen:[{n,pregunta,opciones:[],correcta}]}], nota_alcance, nota_pie}
 - **examen** → Evaluación teórica. Datos: {titulo, preguntas:[{n,pregunta,opciones:[],correcta}], nota_pie}
 - **consentimiento** → Consentimiento de grabación. Datos: {curso, fecha, texto_consentimiento, puntos_clave:[], nota_pie}
 
@@ -544,7 +611,9 @@ ${INVENTARIO_EQUIPOS}
 
 ${ESTRATEGIA_OFERTA}
 
-${PLANTILLA_DISENO}`;
+${PLANTILLA_DISENO}
+
+${ESTANDAR_DOCUMENTOS}`;
 
     // Bloque dinámico — cambia en cada request (fecha, canal, datos reales de cursos/instructores/
     // curso vinculado). Va DESPUÉS del breakpoint de cache, así nunca invalida el bloque estático.
