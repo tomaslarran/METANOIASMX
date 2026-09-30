@@ -7032,6 +7032,21 @@ function _renderNPSPanel(el,cursoId,respuestas,insc,envios=[]){
 
   const respMap={};respuestas.forEach(r=>{if(r.alumno_id)respMap[r.alumno_id]=r;});
 
+  const conComentario=respuestas.filter(r=>r.comentario&&r.comentario.trim());
+  const listaComentarios=conComentario.length?`<div style="margin-bottom:20px">
+    <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">💬 Comentarios (${conComentario.length})</div>
+    ${conComentario.map(r=>{
+      const col=r.score>=9?'var(--gr)':r.score>=7?'var(--al)':'var(--re)';
+      return`<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 10px;background:var(--surf2);border:1px solid var(--b);border-radius:8px;margin-bottom:5px">
+        <div style="font-size:16px;font-weight:900;color:${col};min-width:22px;text-align:center;flex-shrink:0">${r.score}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;font-weight:600;color:var(--tx2)">${esc(r.alumno_nombre||'Anónimo')}</div>
+          <div style="font-size:12px;color:var(--tx);font-style:italic">"${esc(r.comentario)}"</div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`:'';
+
   const filas=insc.map(i=>{
     const a=i.alumnos||{};if(!a.id)return'';
     const nombre=`${esc(a.apellido||'')}, ${esc(a.nombre||'')}`.replace(/^,\s*/,'');
@@ -7081,7 +7096,7 @@ function _renderNPSPanel(el,cursoId,respuestas,insc,envios=[]){
     <div style="font-size:10px;color:var(--tx3);margin-top:6px;font-style:italic">Requiere template Meta <code>nps_experiencia_metanoia</code> aprobado. El alumno responde con un número y el bot lo registra automáticamente; después le pregunta qué podemos mejorar.</div>
   </div>`;
 
-  el.innerHTML=`${waPanel}${summary}
+  el.innerHTML=`${waPanel}${summary}${listaComentarios}
     <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Respuestas por alumno inscripto</div>
     ${filas||`<p style="color:var(--tx3);font-size:13px;margin:0 0 8px">No hay inscriptos.</p>`}
     <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px">Respuesta adicional / anónima</div>
