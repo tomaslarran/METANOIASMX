@@ -7075,7 +7075,7 @@ function _renderNPSPanel(el,cursoId,respuestas,insc,envios=[]){
       </button>
     </div>
     ${sinTelefono>0?`<div style="font-size:11px;color:var(--al);margin-top:8px">⚠ ${sinTelefono} alumno${sinTelefono!==1?'s':''} sin teléfono registrado no recibirán la encuesta.</div>`:''}
-    <div style="font-size:10px;color:var(--tx3);margin-top:6px;font-style:italic">Requiere template Meta <code>nps_post_curso</code> aprobado. El alumno responde con un número y el bot lo registra automáticamente.</div>
+    <div style="font-size:10px;color:var(--tx3);margin-top:6px;font-style:italic">Requiere template Meta <code>nps_experiencia_metanoia</code> aprobado. El alumno responde con un número y el bot lo registra automáticamente; después le pregunta qué podemos mejorar.</div>
   </div>`;
 
   el.innerHTML=`${waPanel}${summary}
