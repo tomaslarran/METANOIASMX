@@ -100,7 +100,9 @@ serve(async (req) => {
         results.sent++;
       } else {
         results.failed++;
-        results.errors.push(`${nombre}: ${data.error?.message || `HTTP ${res.status}`}`);
+        const detalle = data.error?.error_data?.details;
+        console.error("Meta NPS send error, respuesta completa:", JSON.stringify(data.error || data));
+        results.errors.push(`${nombre}: ${data.error?.message || `HTTP ${res.status}`}${detalle ? ` — ${detalle}` : ""}`);
       }
     } catch (e) {
       results.failed++;
