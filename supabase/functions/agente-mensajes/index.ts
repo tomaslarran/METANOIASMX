@@ -101,6 +101,21 @@ serve(async (req) => {
   // ── WhatsApp ─────────────────────────────────────────────────────────────────
   if (object === "whatsapp_business_account") {
     const value = body?.entry?.[0]?.changes?.[0]?.value;
+
+    // ── Aviso de estado de mensaje (entregado/leído/fallido) — Meta lo manda en un payload
+    // aparte, sin "messages". Hoy solo nos importa "failed" para detectar NPS que nunca llegaron.
+    const statusUpd = value?.statuses?.[0];
+    if (statusUpd) {
+      if (statusUpd.status === "failed") {
+        const motivo = statusUpd.errors?.[0]?.title || statusUpd.errors?.[0]?.message || "Error desconocido";
+        await supabase.from("nps_envios")
+          .update({ estado: "fallido", error_detalle: motivo })
+          .eq("wa_message_id", statusUpd.id)
+          .eq("estado", "enviado");
+      }
+      return new Response("OK", { status: 200 });
+    }
+
     if (!value?.messages?.[0]) return new Response("OK", { status: 200 });
 
     const msg = value.messages[0];

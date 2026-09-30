@@ -7059,13 +7059,14 @@ function _renderNPSPanel(el,cursoId,respuestas,insc,envios=[]){
   const ultimoEnvio=envios[0];
   const enviadosCount=envios.length;
   const respondidosCount=envios.filter(e=>e.estado==='respondido').length;
+  const fallidosCount=envios.filter(e=>e.estado==='fallido').length;
   const waPanel=`<div style="border:1px solid var(--b);border-radius:10px;padding:14px;margin-bottom:20px;background:var(--surf2)">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <div>
         <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:3px">📱 Encuesta por WhatsApp</div>
         <div style="font-size:11px;color:var(--tx3)">
           ${conTelefono} alumno${conTelefono!==1?'s':''} con teléfono · ${sinTelefono} sin teléfono
-          ${enviadosCount?` · <span style="color:var(--al)">${enviadosCount} enviado${enviadosCount!==1?'s':''}</span> · <span style="color:var(--gr)">${respondidosCount} respondido${respondidosCount!==1?'s':''}</span>`:''}
+          ${enviadosCount?` · <span style="color:var(--al)">${enviadosCount} enviado${enviadosCount!==1?'s':''}</span> · <span style="color:var(--gr)">${respondidosCount} respondido${respondidosCount!==1?'s':''}</span>${fallidosCount?` · <span style="color:var(--re)">⚠️ ${fallidosCount} fallido${fallidosCount!==1?'s':''}</span>`:''}`:''}
           ${ultimoEnvio?` · Último envío ${fmt(ultimoEnvio.created_at?.slice(0,10))}`:''}
         </div>
       </div>
