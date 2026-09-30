@@ -178,20 +178,23 @@ serve(async (req) => {
       return new Response("OK", { status: 200 });
     }
 
-    // ── Detectar respuesta NPS (número 0-10) ──────────────────────────────────
+    // ── Flujo NPS por WhatsApp: nota → pregunta de seguimiento → datos faltantes + oferta ──
     if (msg.type === "text" && texto) {
-      const npsScore = parseInt(texto);
-      if (!isNaN(npsScore) && npsScore >= 0 && npsScore <= 10 && texto === String(npsScore)) {
-        const { data: pendingNPS } = await supabase
-          .from("nps_envios")
-          .select("*")
-          .eq("telefono", fromId)
-          .eq("estado", "enviado")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      const { data: pendingNPS } = await supabase
+        .from("nps_envios")
+        .select("*")
+        .eq("telefono", fromId)
+        .in("estado", ["enviado", "esperando_comentario"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-        if (pendingNPS) {
+      // Paso 1: todavía no registró nota — reconoce el número aunque venga con texto alrededor
+      // (ej. "9/10", "le doy un 8", "un 7 nomás"), siempre que el mensaje sea corto.
+      if (pendingNPS?.estado === "enviado" && texto.length <= 60) {
+        const m = texto.match(/\b(10|[0-9])\b/);
+        if (m) {
+          const npsScore = parseInt(m[1]);
           await supabase.from("nps_respuestas").insert({
             curso_id: pendingNPS.curso_id,
             alumno_id: pendingNPS.alumno_id,
@@ -199,15 +202,61 @@ serve(async (req) => {
             score: npsScore,
             canal: "whatsapp",
           });
-          await supabase.from("nps_envios").update({ estado: "respondido" }).eq("id", pendingNPS.id);
+          await supabase.from("nps_envios").update({ estado: "esperando_comentario" }).eq("id", pendingNPS.id);
           await supabase.from("mensajes_publico").insert({
             plataforma: "whatsapp", from_id: fromId, from_name: fromName,
             mensaje: texto, estado: "respondido",
             respuesta: `[NPS ${npsScore}/10 registrado]`, wa_message_id: msgId,
           });
-          await sendWA(fromId, `¡Gracias por tu respuesta! Tu calificación (${npsScore}/10) fue registrada. ¡Hasta la próxima! 🙌`);
+          await sendWA(fromId, `¡Gracias por tu calificación (${npsScore}/10)! 🙌 Nos ayuda mucho a seguir mejorando.\n\n¿Nos contás en pocas palabras qué fue lo que más te gustó o qué podríamos mejorar?`);
           return new Response("OK", { status: 200 });
         }
+      }
+
+      // Paso 2: ya tiene nota registrada y está esperando el comentario — lo que responda ahora
+      // se guarda como comentario cualitativo, y de paso pedimos datos faltantes y avisamos de
+      // próximos cursos/promos vigentes.
+      if (pendingNPS?.estado === "esperando_comentario") {
+        const { data: respRow } = await supabase
+          .from("nps_respuestas")
+          .select("id")
+          .eq("alumno_id", pendingNPS.alumno_id)
+          .eq("curso_id", pendingNPS.curso_id)
+          .eq("canal", "whatsapp")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (respRow) await supabase.from("nps_respuestas").update({ comentario: texto }).eq("id", respRow.id);
+
+        let pideDatos = "";
+        if (pendingNPS.alumno_id) {
+          const { data: alumno } = await supabase.from("alumnos").select("dni,cuit").eq("id", pendingNPS.alumno_id).maybeSingle();
+          if (alumno && (!alumno.dni || !alumno.cuit)) {
+            pideDatos = "\n\nAprovechamos para pedirte un dato: ¿nos pasás tu DNI y CUIT para completar tu perfil? Lo vamos a necesitar para futuras certificaciones.";
+          }
+        }
+
+        let oferta = "";
+        const { data: proximosCursos } = await supabase
+          .from("cursos")
+          .select("nombre,fecha_inicio")
+          .in("estado", ["Convocatoria", "Inscripciones"])
+          .eq("publicacion_aprobada", true)
+          .order("fecha_inicio", { ascending: true })
+          .limit(2);
+        if (proximosCursos && proximosCursos.length) {
+          const lista = proximosCursos.map((c: any) => `• ${c.nombre}${c.fecha_inicio ? ` (${new Date(c.fecha_inicio + "T00:00:00").toLocaleDateString("es-AR")})` : ""}`).join("\n");
+          oferta = `\n\nAprovechamos para contarte que ya tenemos inscripciones abiertas para:\n${lista}\nSi te interesa alguno, escribinos y te pasamos toda la info. 😊`;
+        }
+
+        await supabase.from("nps_envios").update({ estado: "respondido" }).eq("id", pendingNPS.id);
+        await supabase.from("mensajes_publico").insert({
+          plataforma: "whatsapp", from_id: fromId, from_name: fromName,
+          mensaje: texto, estado: "respondido",
+          respuesta: "[Comentario NPS registrado]", wa_message_id: msgId,
+        });
+        await sendWA(fromId, `¡Muchas gracias por tu comentario! Lo tenemos en cuenta para seguir mejorando.${pideDatos}${oferta}`);
+        return new Response("OK", { status: 200 });
       }
     }
 
