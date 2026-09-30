@@ -80,8 +80,8 @@ serve(async (req) => {
               {
                 type: "body",
                 parameters: [
-                  { type: "text", text: nombre },
-                  { type: "text", text: cursoNombre },
+                  { type: "text", parameter_name: "nombre", text: nombre },
+                  { type: "text", parameter_name: "curso", text: cursoNombre },
                 ],
               },
             ],
