@@ -68,8 +68,20 @@ serve(async (req) => {
           to: waPhone,
           type: "template",
           template: {
-            name: "nps_post_curso",
+            // Personalizada con nombre del alumno + nombre del curso/evento — pendiente de
+            // aprobación de Meta (WhatsApp Manager). NO deployar esta función hasta que
+            // "nps_experiencia_metanoia" figure como Activa/Aprobada, o los envios van a fallar.
+            name: "nps_experiencia_metanoia",
             language: { code: "es" },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  { type: "text", text: nombre },
+                  { type: "text", text: cursoNombre },
+                ],
+              },
+            ],
           },
         }),
       });
