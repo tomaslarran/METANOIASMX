@@ -4471,6 +4471,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg" id="mmp-banco-wrap"><label class="fl">Banco</label><input class="fi" id="mmp-banco" type="text" placeholder="Ej: Banco Macro"></div>
     <div class="fg"><label class="fl">Orden</label><input class="fi" id="mmp-orden" type="number" value="0" min="0"></div>
     <div class="fg" style="grid-column:1/-1"><label class="fl">Detalle / CBU / Nro. tarjeta (opcional)</label><input class="fi" id="mmp-detalle" type="text" placeholder="Ej: CBU 070..., terminada en 1234"></div>
+    <div class="fg" style="grid-column:1/-1;display:flex;align-items:center;gap:8px">
+      <label class="toggle" style="margin:0"><input type="checkbox" id="mmp-personal"><span class="tslider"></span></label>
+      <span style="font-size:12px;color:var(--tx2)">⚠️ Es una cuenta/tarjeta personal (no de la empresa)</span>
+    </div>
   </div>
   <div class="ma"><button class="bc" onclick="closeModal('modal-medio-pago')">Cancelar</button><button class="bk" onclick="saveMedioPago()">Guardar</button></div>
 </div>
@@ -5370,6 +5374,24 @@ async function renderAlertas(){
       sub:`Período ${esc(c.periodo)} · fecha tope`,fecha:c.fecha_tope,
       onclick:`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('auren')`});
   });
+
+  // ── Alerta de gastos pagados con medio personal (independencia patrimonial) ──
+  try{
+    if(!comprobantes.length)comprobantes=await sb("comprobantes_compra?select=*&order=fecha.desc").catch(()=>[]);
+    if(!mediosPago.length)mediosPago=await sb("medios_pago?select=*&order=orden").catch(()=>[]);
+    const personales=new Set(mediosPago.filter(m=>m.es_personal).map(m=>m.nombre));
+    if(personales.size){
+      const mesActual=today().slice(0,7);
+      const delMes=comprobantes.filter(c=>c.estado==="pagado"&&c.medio_pago&&personales.has(c.medio_pago)&&(c.fecha_pago||"").startsWith(mesActual));
+      if(delMes.length){
+        const total=delMes.reduce((s,c)=>s+(Number(c.total)||0),0);
+        alertas.push({tipo:"impuesto",icon:"⚠️",urgencia:"semana",d:0,
+          titulo:`${delMes.length} pago${delMes.length!==1?"s":""} con cuenta/tarjeta personal este mes`,
+          sub:`$${Math.round(total).toLocaleString("es-AR")} — migrar a débito automático de la empresa`,fecha:null,
+          onclick:`goPage('comprobantes',document.getElementById('nav-comprobantes'))`});
+      }
+    }
+  }catch(_){}
 
   // ── Alertas de tokens API ──
   try{
@@ -13399,6 +13421,7 @@ function renderMediosPago(){
             <div style="font-weight:600;font-size:13px">${esc(m.nombre)}</div>
             <div style="font-size:11px;color:var(--tx3)">${m.banco?esc(m.banco)+" · ":""}${esc(m.sociedad||"Ambas")}${m.detalle?" · "+esc(m.detalle):""}${(()=>{const c=m.cuenta_contable_id&&planCuentas.find(x=>x.id===m.cuenta_contable_id);return c?` · <span style="font-family:monospace;background:var(--surf2);padding:1px 5px;border-radius:4px">${esc(c.codigo)}</span>`:' · <span style="color:var(--re);font-size:10px">sin cuenta contable</span>';})()}</div>
           </div>
+          ${m.es_personal?`<span class="badge" style="font-size:10px;background:var(--re);color:#fff">⚠️ Personal</span>`:""}
           <span class="badge" style="font-size:10px;background:${m.activo?"var(--gr)":"var(--tx3)"};color:#fff">${m.activo?"Activo":"Inactivo"}</span>
           <button class="btn sm" onclick="openModalMedioPago('${m.id}')">✏️</button>
           <button class="btn sm" onclick="toggleMedioPago('${m.id}',${!m.activo})">${m.activo?"Desactivar":"Activar"}</button>
@@ -13417,6 +13440,7 @@ function openModalMedioPago(id){
   document.getElementById("mmp-banco").value=m?.banco||"";
   document.getElementById("mmp-detalle").value=m?.detalle||"";
   document.getElementById("mmp-orden").value=m?.orden??0;
+  document.getElementById("mmp-personal").checked=!!m?.es_personal;
   toggleMmpBanco();
   openModal("modal-medio-pago");
 }
@@ -13438,6 +13462,7 @@ async function saveMedioPago(){
     banco:document.getElementById("mmp-banco").value.trim()||null,
     detalle:document.getElementById("mmp-detalle").value.trim()||null,
     orden:parseInt(document.getElementById("mmp-orden").value)||0,
+    es_personal:document.getElementById("mmp-personal").checked,
     activo:true
   };
   try{
@@ -23171,7 +23196,7 @@ function renderComprobantes(){
         <div style="font-size:14px;font-weight:700;color:var(--tx)">${total}</div>
         ${iva?`<div style="font-size:10px;color:var(--tx3)">IVA ${iva}</div>`:""}
         <div style="margin-top:4px">${estadoBadge(c.estado)}</div>
-        ${c.estado==="pagado"&&c.medio_pago?`<div style="font-size:10px;color:var(--tx3);margin-top:2px">💳 ${esc(c.medio_pago)}</div>`:""}
+        ${c.estado==="pagado"&&c.medio_pago?`<div style="font-size:10px;color:${mediosPago.find(m=>m.nombre===c.medio_pago)?.es_personal?"var(--re)":"var(--tx3)"};margin-top:2px">${mediosPago.find(m=>m.nombre===c.medio_pago)?.es_personal?"⚠️ ":"💳 "}${esc(c.medio_pago)}</div>`:""}
         ${c.importado_finnegans?`<div style="font-size:10px;color:#60A5FA;margin-top:2px">🔗 En Finnegans</div>`:""}
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
@@ -23229,7 +23254,7 @@ function abrirPagarComp(id){
   const sel=document.getElementById("pagar-comp-medio");
   const activos=mediosPago.filter(m=>m.activo&&(m.sociedad==="Ambas"||!soc||m.sociedad===soc));
   if(activos.length){
-    sel.innerHTML=activos.map(m=>`<option value="${esc(m.nombre)}">${esc(m.nombre)}${m.banco?` — ${esc(m.banco)}`:""}</option>`).join("");
+    sel.innerHTML=activos.map(m=>`<option value="${esc(m.nombre)}">${m.es_personal?"⚠️ ":""}${esc(m.nombre)}${m.banco?` — ${esc(m.banco)}`:""}${m.es_personal?" (personal)":""}</option>`).join("");
   } else {
     sel.innerHTML=`<option value="Transferencia">Transferencia bancaria</option><option value="Efectivo">Efectivo</option><option value="Tarjeta">Tarjeta</option><option value="Cheque">Cheque</option>`;
   }
@@ -23242,6 +23267,8 @@ async function confirmarPagoComp(){
   const obs=document.getElementById("pagar-comp-obs").value.trim();
   const c=comprobantes.find(x=>x.id===id);
   if(!c)return;
+  const medioObj=mediosPago.find(m=>m.nombre===medio);
+  if(medioObj?.es_personal&&!confirm(`⚠️ "${medio}" está marcado como cuenta/tarjeta PERSONAL, no de la empresa.\n\n¿Registrar igual este pago con ese medio?`))return;
   try{
     await sb(`comprobantes_compra?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({
       estado:"pagado",medio_pago:medio,fecha_pago:fecha,updated_at:new Date().toISOString()
