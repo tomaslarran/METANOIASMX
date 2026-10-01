@@ -5854,7 +5854,7 @@ function renderCentroControl(){
   // ── 1. Reuniones con tareas sin convertir ──
   const reunionesPendientes=_ccReuniones.map(r=>{
     const items=(r.tareas_extraidas||[]).map((t,i)=>({...t,_idx:i}));
-    const sinConvertir=items.filter(t=>!t.convertida);
+    const sinConvertir=items.filter(t=>!t.convertida&&!t.descartada);
     return{...r,items,sinConvertir};
   }).filter(r=>r.sinConvertir.length>0);
   const totalTareasReunion=reunionesPendientes.reduce((s,r)=>s+r.sinConvertir.length,0);
@@ -5901,6 +5901,7 @@ function renderCentroControl(){
         ${r.sinConvertir.map(t=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--surf2);border-radius:8px;margin-bottom:4px">
           <div style="flex:1;min-width:0;font-size:12.5px;color:var(--tx2)">${esc(t.tarea)}${t.responsable?` <span style="color:var(--tx3)">· ${esc(t.responsable)}</span>`:""}</div>
           <button class="btn sm pri" onclick="convertirTareaReunion('${r.id}',${t._idx})">✓ Crear tarea</button>
+          <button class="btn sm" style="color:var(--tx3)" onclick="descartarTareaReunion('${r.id}',${t._idx})" title="No hace falta crear tarea para esto">✕ Descartar</button>
         </div>`).join("")}
       </div>`).join("");
 
@@ -5912,7 +5913,10 @@ function renderCentroControl(){
         const nombre=u?.nombre||"Sin asignar";
         return`<div style="margin-bottom:10px">
           <div style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:5px">${esc(nombre)} <span style="color:var(--re);font-weight:400">· ${ts.length} vencida${ts.length!==1?"s":""}</span></div>
-          ${ts.map(t=>`<div style="font-size:12.5px;color:var(--tx2);padding:4px 10px">• ${esc(t.nombre)} <span style="color:var(--tx3)">(vencía ${fmt(t.fecha_vencimiento)})</span></div>`).join("")}
+          ${ts.map(t=>`<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--tx2);padding:4px 10px">
+            <div style="flex:1;min-width:0">• ${esc(t.nombre)} <span style="color:var(--tx3)">(vencía ${fmt(t.fecha_vencimiento)})</span></div>
+            <button class="btn sm" style="color:var(--re);padding:2px 8px" onclick="eliminarTareaDesdeControl('${t.id}')" title="Eliminar tarea">🗑</button>
+          </div>`).join("")}
         </div>`;
       }).join("");
 
@@ -5971,7 +5975,7 @@ async function convertirTareaReunion(reunionId,idx){
   if(!r)return;
   const items=[...(r.tareas_extraidas||[])];
   const item=items[idx];
-  if(!item||item.convertida)return;
+  if(!item||item.convertida||item.descartada)return;
   const responsableMatch=item.responsable?users.find(u=>(u.nombre||"").toLowerCase().includes(item.responsable.toLowerCase())||item.responsable.toLowerCase().includes((u.nombre||"").toLowerCase())):null;
   const fechaVenc=(item.fecha_sugerida&&/^\d{4}-\d{2}-\d{2}$/.test(item.fecha_sugerida))?item.fecha_sugerida:null;
   try{
@@ -5988,6 +5992,28 @@ async function convertirTareaReunion(reunionId,idx){
     toast("✓ Tarea creada en el Kanban","ok");
     renderCentroControl();
   }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function descartarTareaReunion(reunionId,idx){
+  const r=_ccReuniones.find(x=>x.id===reunionId);
+  if(!r)return;
+  const items=[...(r.tareas_extraidas||[])];
+  const item=items[idx];
+  if(!item||item.convertida||item.descartada)return;
+  try{
+    items[idx]={...item,descartada:true};
+    await sb(`reuniones?id=eq.${reunionId}`,{method:"PATCH",body:JSON.stringify({tareas_extraidas:items})});
+    r.tareas_extraidas=items;
+    toast("Descartada","ok");
+    renderCentroControl();
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function eliminarTareaDesdeControl(id){
+  confirmDel("¿Eliminar esta tarea? No se puede deshacer.",async()=>{
+    await delTask(id);
+    renderCentroControl();
+  });
 }
 
 async function agregarVisita(){
