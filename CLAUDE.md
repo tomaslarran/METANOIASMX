@@ -293,6 +293,9 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 
 ## Pendientes / Roadmap
 
+### Pendiente de decisión (esperando reunión con Auren)
+- [ ] **Rol `contable` de solo lectura** — propuesta armada el 1 Oct 2026 (ver `resumen_auren.html` / artefacto "Automatizaciones Auren") para ofrecerle a Auren acceso directo al panel en vez de mandarles archivos por mail: solo lectura a Comprobantes, Cuentas Corrientes, Impuestos (incl. calendario Auren) y Libro Diario/Plan de Cuentas; sin acceso a Cursos/Alumnos/Comunicaciones ni a ninguna acción de carga/edición. Mismo mecanismo que `instructor`/`logistica` (clase CSS + rol en `usuarios`). **Diferido a propósito** hasta la próxima reunión con Auren — confirmar con ellos si les sirve este acceso antes de construirlo, y de paso consultarles qué formato de archivos necesitan (Libro IVA ARCA, padrón de retenciones, numeración estilo Tango) — preguntas completas en el resumen.
+
 ### Bloqueados por externos
 - [ ] LinkedIn sync — esperando aprobación Community Management API (app "Metanoia CMS", enviado 2 Jun 2026)
 - [ ] **Meta Business — Human Agent (Instagram DM)** — Revisión del 27 Jul 2026: 3/4 aprobados (`instagram_business_basic`, `manage_messages`, `manage_insights` ✅). `Human Agent` rechazado: Meta no pudo acceder al panel (requiere login — faltaron credenciales de prueba). Para resubmitir: crear usuario rol `comunicaciones` para revisores + instrucciones paso a paso (URL → Login → Comunicaciones → tab Mensajes). Impacto bajo: escalación ya va por WhatsApp. **Diferido.**
