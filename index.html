@@ -3142,6 +3142,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="fb" id="itab-autonomos" onclick="setImpTab('autonomos',this)">Autónomos</button>
     <button class="fb" id="itab-ganancias" onclick="setImpTab('ganancias',this)">Ganancias</button>
     <button class="fb" id="itab-vep" onclick="setImpTab('vep',this)">📄 VEPs</button>
+    <button class="fb" id="itab-auren" onclick="setImpTab('auren',this)">📅 Calendario Auren</button>
     <button class="fb admin-only-el" id="itab-parametros" onclick="setImpTab('parametros',this)">⚙️ Parámetros</button>
     <button class="fb admin-only-el" id="itab-plancuentas" onclick="setImpTab('plancuentas',this)">📋 Plan de Cuentas</button>
     <button class="fb admin-only-el" id="itab-libro" onclick="setImpTab('libro',this)">📒 Libro Diario</button>
@@ -3152,6 +3153,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div id="imp-tab-autonomos" style="display:none"></div>
   <div id="imp-tab-ganancias" style="display:none"></div>
   <div id="imp-tab-vep" style="display:none"></div>
+  <div id="imp-tab-auren" style="display:none"></div>
   <div id="imp-tab-parametros" style="display:none"></div>
   <div id="imp-tab-plancuentas" style="display:none"></div>
   <div id="imp-tab-libro" style="display:none"></div>
@@ -5146,6 +5148,7 @@ async function renderAlertas(){
   wrap.innerHTML=`<div style="padding:40px;text-align:center;color:var(--tx3)"><div class="loader" style="margin:0 auto 12px"></div>Actualizando...</div>`;
   if(!cfPrestamos.length)await loadCF().catch(()=>{});
   if(!diasEspeciales.length)await loadDiasEspeciales().catch(()=>{});
+  if(!calendarioAuren.length)await loadCalendarioAuren().catch(()=>{});
 
   const now=new Date();
   const h=now.getHours();
@@ -5333,6 +5336,16 @@ async function renderAlertas(){
       titulo:`VEP ${v.tipo_impuesto}${v.periodo?" "+v.periodo.replace(/(\d{4})-(\d{2})/,"$2/$1"):""}${v.sociedad?" — "+v.sociedad:""}`,
       sub:`$${Math.round(v.monto||0).toLocaleString("es-AR")}`,fecha:v.fecha_vencimiento,
       onclick:`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('vep')`});
+  });
+
+  // ── Alertas de fechas tope del calendario impositivo (info a Auren) ──
+  (calendarioAuren||[]).filter(c=>!c.enviado).forEach(c=>{
+    const d=days(c.fecha_tope);
+    if(d===null||d>7)return;
+    alertas.push({tipo:"impuesto",icon:"📅",urgencia:d<0?"critica":d===0?"hoy":"semana",d,
+      titulo:`Enviar a Auren: ${esc(c.tipo)} ${esc(c.sociedad)}`,
+      sub:`Período ${esc(c.periodo)} · fecha tope`,fecha:c.fecha_tope,
+      onclick:`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('auren')`});
   });
 
   // ── Alertas de tokens API ──
@@ -21389,7 +21402,7 @@ const GANANCIAS_TASA=0.35; // SRL
 
 function setImpTab(tab,btn){
   impTab=tab;
-  ["iva","iibb","autonomos","ganancias","vep","parametros","plancuentas","libro","resultados"].forEach(t=>{
+  ["iva","iibb","autonomos","ganancias","vep","auren","parametros","plancuentas","libro","resultados"].forEach(t=>{
     const el=document.getElementById("imp-tab-"+t);
     const b=document.getElementById("itab-"+t);
     if(el)el.style.display=t===tab?"":"none";
@@ -21400,10 +21413,66 @@ function setImpTab(tab,btn){
   if(tab==="autonomos")renderImpAutonomos();
   if(tab==="ganancias")renderImpGanancias();
   if(tab==="vep")renderVEPs();
+  if(tab==="auren")renderCalendarioAuren();
   if(tab==="parametros")renderParametrosImpositivos();
   if(tab==="plancuentas")renderPlanCuentas();
   if(tab==="libro")renderLibroDiario();
   if(tab==="resultados")renderEstadoResultados();
+}
+
+/* ══ CALENDARIO IMPOSITIVO (fechas tope Auren) ══ */
+let calendarioAuren=[];
+
+async function loadCalendarioAuren(){
+  try{ calendarioAuren=await sb("calendario_impositivo?select=*&order=fecha_tope.asc"); }catch(e){ calendarioAuren=[]; }
+}
+
+function renderCalendarioAuren(){
+  const el=document.getElementById("imp-tab-auren");
+  if(!el)return;
+  if(!calendarioAuren.length){
+    el.innerHTML=`<div class="empty"><div class="ei">📅</div><div class="et">Sin calendario cargado</div><div class="es">Cargá las fechas tope del calendario impositivo que manda Auren.</div></div>`;
+    return;
+  }
+  const hoy=today();
+  const pendientes=calendarioAuren.filter(c=>!c.enviado).sort((a,b)=>a.fecha_tope.localeCompare(b.fecha_tope));
+  const enviados=calendarioAuren.filter(c=>c.enviado).sort((a,b)=>b.fecha_tope.localeCompare(a.fecha_tope));
+
+  const fila=c=>{
+    const d=days(c.fecha_tope);
+    const col=c.enviado?"var(--tx3)":d<0?"var(--re)":d<=3?"var(--al)":"var(--tx)";
+    const fechaFmt=new Date(c.fecha_tope+"T00:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"});
+    return`<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--surf);border:1px solid var(--b);border-radius:var(--r);margin-bottom:6px">
+      <div style="font-size:11px;font-weight:700;color:var(--pu);min-width:72px">${esc(c.sociedad)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--tx)">${esc(c.tipo)}</div>
+        <div style="font-size:11px;color:var(--tx3)">Período ${esc(c.periodo)}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:13px;font-weight:700;color:${col}">${fechaFmt}</div>
+        <div style="font-size:10px;color:${col}">${c.enviado?"✓ Enviado":d<0?`Vencido hace ${Math.abs(d)}d`:d===0?"Hoy":`En ${d}d`}</div>
+      </div>
+      ${c.enviado
+        ?`<button onclick="marcarCalendarioAurenPendiente('${c.id}')" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:5px 10px;cursor:pointer">Deshacer</button>`
+        :`<button onclick="marcarCalendarioAurenEnviado('${c.id}')" class="btn pri" style="font-size:11px;padding:5px 10px">✓ Marcar enviado</button>`}
+    </div>`;
+  };
+
+  el.innerHTML=`<div style="font-size:12px;color:var(--tx3);margin-bottom:14px">Fechas tope para mandarle la información a Auren de cada obligación (antes del vencimiento real). Fuente: calendario impositivo 2026 de Auren.</div>
+    <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Pendientes (${pendientes.length})</div>
+    ${pendientes.map(fila).join("")||`<p style="color:var(--tx3);font-size:13px">Nada pendiente 🎉</p>`}
+    ${enviados.length?`<div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 8px">Ya enviados (${enviados.length})</div>${enviados.map(fila).join("")}`:""}`;
+}
+
+async function marcarCalendarioAurenEnviado(id){
+  await sb(`calendario_impositivo?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({enviado:true,enviado_en:new Date().toISOString()})});
+  const i=calendarioAuren.findIndex(c=>c.id===id);if(i>=0){calendarioAuren[i].enviado=true;}
+  renderCalendarioAuren();
+}
+async function marcarCalendarioAurenPendiente(id){
+  await sb(`calendario_impositivo?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({enviado:false,enviado_en:null})});
+  const i=calendarioAuren.findIndex(c=>c.id===id);if(i>=0){calendarioAuren[i].enviado=false;}
+  renderCalendarioAuren();
 }
 
 /* ══ VEPs ══ */
@@ -22211,6 +22280,7 @@ async function loadImpuestos(){
     ]);
     if(!comprobantes.length) comprobantes=await sb("comprobantes_compra?select=*&order=fecha.desc").catch(()=>[]);
     await loadVEPs();
+    await loadCalendarioAuren();
   }catch(e){impuestosIngresos=[];autonomosCuotas=[];gananciasAnticipos=[];}
   setImpTab(impTab);
 }
