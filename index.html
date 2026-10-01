@@ -5176,6 +5176,7 @@ async function renderAlertas(){
   if(!cfPrestamos.length)await loadCF().catch(()=>{});
   if(!diasEspeciales.length)await loadDiasEspeciales().catch(()=>{});
   if(!calendarioAuren.length)await loadCalendarioAuren().catch(()=>{});
+  if(!rutinas.length)await loadRutinas().catch(()=>{});
 
   const now=new Date();
   const h=now.getHours();
@@ -5392,6 +5393,17 @@ async function renderAlertas(){
       }
     }
   }catch(_){}
+
+  // ── Alertas de rutinas próximas (checklists recurrentes — ej. circuito semanal de pagos) ──
+  rutinas.filter(r=>r.activa).forEach(r=>{
+    const fv=calcFechaVenc(r);
+    const d=days(fv);
+    const horizonte=r.dias_antes_aviso??(r.frecuencia==="Semanal"?1:3);
+    if(d===null||d>horizonte)return;
+    alertas.push({tipo:"rutina",icon:CAT_ICON2[r.categoria]||"📌",urgencia:d<0?"critica":d===0?"hoy":"semana",d,
+      titulo:r.nombre,sub:`Rutina ${r.frecuencia.toLowerCase()}${d===0?" — hoy":d>0?` — en ${d}d`:""}`,fecha:fv,
+      onclick:`goPage('rutinas',document.getElementById('nav-rutinas'))`});
+  });
 
   // ── Alertas de tokens API ──
   try{
