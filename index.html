@@ -962,6 +962,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     Dashboard
     <span class="sitem-badge" id="badge-alertas" style="display:none"></span>
   </div>
+  <div class="sitem" onclick="goPage('control',this)" id="nav-control">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    Centro de Control
+    <span class="sitem-badge" id="badge-control" style="display:none"></span>
+  </div>
   <div class="sdivider"></div>
   <div class="sgroup" id="sg-principal">
     <div class="sgroup-label" onclick="toggleSGroup('sg-principal')">Principal<svg class="sg-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
@@ -1157,6 +1162,38 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 <div id="pg-alertas">
   <div id="alertas-wrap">
     <div class="loading"><div class="loader"></div><div class="lt">Cargando dashboard...</div></div>
+  </div>
+</div>
+
+<!-- ══ CENTRO DE CONTROL SEMANAL ══ -->
+<div id="pg-control" style="display:none">
+  <div class="pg-header">
+    <div>
+      <div class="pg-title">Centro de Control semanal</div>
+      <div class="pg-title-sub">Un solo lugar para repasar todo, una vez por semana — no reemplaza el Dashboard, lo completa</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn sec" onclick="toggleControlAyuda()" id="btn-control-ayuda">❓ Cómo usar esto</button>
+      <button class="btn sec" onclick="loadCentroControl()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Actualizar
+      </button>
+    </div>
+  </div>
+
+  <div id="control-ayuda" style="display:none;background:var(--surf2);border:1px solid var(--b);border-radius:var(--rlg);padding:18px 22px;margin-bottom:20px;font-size:13px;color:var(--tx2);line-height:1.7">
+    <div style="font-size:14px;font-weight:700;color:var(--tx);margin-bottom:10px">Cómo usar el Centro de Control</div>
+    <p style="margin:0 0 8px"><b>Cuándo:</b> una vez por semana — un ratito fijo, por ejemplo el lunes a la mañana con el café. No es para mirar todos los días; para eso está el Dashboard con las alertas urgentes.</p>
+    <p style="margin:0 0 8px"><b>Cómo:</b> recorré los 5 bloques de arriba abajo. Cada uno tiene una sola acción posible — conversión de tarea, marcar aprobada, marcar enviada, marcar vencida como resuelta, marcar visita como realizada. La idea es vaciar cada bloque, no acumular.</p>
+    <p style="margin:0 0 8px"><b>Reuniones con tareas sin convertir:</b> cada reunión transcripta deja una lista de tareas en texto plano. Acá las vas pasando una por una al Kanban real (con responsable y fecha si la reunión la sugirió) — así no se pierden en el resumen de la reunión.</p>
+    <p style="margin:0 0 8px"><b>Tareas vencidas por persona:</b> quién se atrasó y en qué — para destrabar en la conversación semanal con el equipo, no para perseguir a nadie.</p>
+    <p style="margin:0">Si un bloque queda siempre vacío y nunca te aporta nada, decímelo — lo sacamos o lo cambiamos. Esto tiene que ahorrarte tiempo, no sumarte otra pantalla para revisar.</p>
+  </div>
+
+  <div id="control-resumen" class="stats" style="grid-template-columns:repeat(5,1fr);margin-bottom:20px"></div>
+
+  <div id="control-body">
+    <div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>
   </div>
 </div>
 
@@ -5774,6 +5811,208 @@ async function renderAlertas(){
     });
   });
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// CENTRO DE CONTROL SEMANAL
+// Consolida 5 cosas que antes vivían sueltas en distintos módulos, para
+// repasar una vez por semana en un solo lugar. No reemplaza el Dashboard de
+// alertas (eso es para lo urgente del día a día) — esto es la revisión
+// semanal de fondo.
+// ══════════════════════════════════════════════════════════════════════════
+function toggleControlAyuda(){
+  const el=document.getElementById("control-ayuda");
+  el.style.display=el.style.display==="none"?"block":"none";
+}
+
+async function loadCentroControl(){
+  const body=document.getElementById("control-body");
+  body.innerHTML=`<div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>`;
+  try{
+    const [reunionesData,promos,cursosData,nps,visitas]=await Promise.all([
+      sb("reuniones?select=id,titulo,fecha,tareas_extraidas&order=fecha.desc&limit=20"),
+      sb("promociones_pago?select=*&estado=eq.pendiente&order=created_at.desc"),
+      sb("cursos?select=id,nombre,estado,fecha_fin&estado=eq.Completado&order=fecha_fin.desc&limit=15"),
+      sb("nps_envios?select=curso_id"),
+      sb("visitas_programadas?select=*&order=fecha.asc").catch(()=>[])
+    ]);
+    if(!tasks.length)tasks=await sb("tareas?select=*").catch(()=>[]);
+    if(!users.length)users=await sb("usuarios?select=*").catch(()=>[]);
+    _ccReuniones=reunionesData||[];
+    _ccPromos=promos||[];
+    _ccCursosCompletados=cursosData||[];
+    _ccNpsCursoIds=new Set((nps||[]).map(n=>n.curso_id));
+    _ccVisitas=visitas||[];
+    renderCentroControl();
+  }catch(e){
+    body.innerHTML=`<p style="color:var(--re);padding:20px">Error al cargar: ${esc(e.message)}</p>`;
+  }
+}
+
+let _ccReuniones=[],_ccPromos=[],_ccCursosCompletados=[],_ccNpsCursoIds=new Set(),_ccVisitas=[];
+
+function renderCentroControl(){
+  // ── 1. Reuniones con tareas sin convertir ──
+  const reunionesPendientes=_ccReuniones.map(r=>{
+    const items=(r.tareas_extraidas||[]).map((t,i)=>({...t,_idx:i}));
+    const sinConvertir=items.filter(t=>!t.convertida);
+    return{...r,items,sinConvertir};
+  }).filter(r=>r.sinConvertir.length>0);
+  const totalTareasReunion=reunionesPendientes.reduce((s,r)=>s+r.sinConvertir.length,0);
+
+  // ── 2. Tareas vencidas por persona ──
+  const hoy=today();
+  const vencidas=tasks.filter(t=>t.status!=="Listo"&&t.fecha_vencimiento&&t.fecha_vencimiento<hoy);
+  const porPersona={};
+  vencidas.forEach(t=>{
+    const ids=t.assignees?.length?t.assignees:[t.assignee_id||"_sin"];
+    ids.forEach(id=>{
+      if(!porPersona[id])porPersona[id]=[];
+      porPersona[id].push(t);
+    });
+  });
+
+  // ── 3. Promociones por aprobar — ya en _ccPromos ──
+
+  // ── 4. NPS pendientes de enviar ──
+  const npsPendientes=_ccCursosCompletados.filter(c=>!_ccNpsCursoIds.has(c.id));
+
+  // ── 5. Visitas próximas ──
+  const visitasPendientes=_ccVisitas.filter(v=>v.estado!=="realizada").sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||""));
+
+  // Resumen arriba
+  document.getElementById("control-resumen").innerHTML=`
+    <div class="sc"><div class="sc-l">Tareas de reunión</div><div class="sc-v" style="color:${totalTareasReunion?"var(--am)":"var(--gr)"}">${totalTareasReunion}</div><div class="sc-s">sin convertir</div></div>
+    <div class="sc"><div class="sc-l">Tareas vencidas</div><div class="sc-v" style="color:${vencidas.length?"var(--re)":"var(--gr)"}">${vencidas.length}</div><div class="sc-s">por persona</div></div>
+    <div class="sc"><div class="sc-l">Promociones</div><div class="sc-v" style="color:${_ccPromos.length?"var(--am)":"var(--gr)"}">${_ccPromos.length}</div><div class="sc-s">por aprobar</div></div>
+    <div class="sc"><div class="sc-l">NPS</div><div class="sc-v" style="color:${npsPendientes.length?"var(--am)":"var(--gr)"}">${npsPendientes.length}</div><div class="sc-s">sin enviar</div></div>
+    <div class="sc"><div class="sc-l">Visitas</div><div class="sc-v vb">${visitasPendientes.length}</div><div class="sc-s">próximas</div></div>
+  `;
+
+  const seccion=(icono,titulo,contenido)=>`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:18px 20px;margin-bottom:16px">
+    <div style="font-size:14px;font-weight:700;color:var(--tx);margin-bottom:12px">${icono} ${titulo}</div>
+    ${contenido}
+  </div>`;
+
+  // 1. Reuniones
+  const htmlReuniones=!reunionesPendientes.length
+    ?`<p style="color:var(--tx3);font-size:13px;margin:0">Todas las reuniones recientes ya tienen sus tareas convertidas 🎉</p>`
+    :reunionesPendientes.map(r=>`<div style="margin-bottom:14px">
+        <div style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:6px">${esc(r.titulo||"Reunión")} <span style="color:var(--tx3);font-weight:400">· ${fmt(r.fecha)}</span></div>
+        ${r.sinConvertir.map(t=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--surf2);border-radius:8px;margin-bottom:4px">
+          <div style="flex:1;min-width:0;font-size:12.5px;color:var(--tx2)">${esc(t.tarea)}${t.responsable?` <span style="color:var(--tx3)">· ${esc(t.responsable)}</span>`:""}</div>
+          <button class="btn sm pri" onclick="convertirTareaReunion('${r.id}',${t._idx})">✓ Crear tarea</button>
+        </div>`).join("")}
+      </div>`).join("");
+
+  // 2. Tareas vencidas por persona
+  const htmlVencidas=!Object.keys(porPersona).length
+    ?`<p style="color:var(--tx3);font-size:13px;margin:0">Nadie tiene tareas vencidas 🎉</p>`
+    :Object.entries(porPersona).map(([id,ts])=>{
+        const u=users.find(x=>x.id===id);
+        const nombre=u?.nombre||"Sin asignar";
+        return`<div style="margin-bottom:10px">
+          <div style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:5px">${esc(nombre)} <span style="color:var(--re);font-weight:400">· ${ts.length} vencida${ts.length!==1?"s":""}</span></div>
+          ${ts.map(t=>`<div style="font-size:12.5px;color:var(--tx2);padding:4px 10px">• ${esc(t.nombre)} <span style="color:var(--tx3)">(vencía ${fmt(t.fecha_vencimiento)})</span></div>`).join("")}
+        </div>`;
+      }).join("");
+
+  // 3. Promociones
+  const htmlPromos=!_ccPromos.length
+    ?`<p style="color:var(--tx3);font-size:13px;margin:0">Sin promociones pendientes de revisión</p>`
+    :_ccPromos.map(p=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surf2);border-radius:8px;margin-bottom:5px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;color:var(--tx)">${esc(p.titulo)}</div>
+          <div style="font-size:11px;color:var(--tx3)">${esc(p.fuente||"")}${p.cuotas_sin_interes?` · ${p.cuotas_sin_interes} cuotas s/interés`:""}${p.descuento_pct?` · ${p.descuento_pct}% off`:""}</div>
+        </div>
+        <button class="btn sm" style="color:var(--gr)" onclick="goPage('cashflow',document.getElementById('nav-cashflow'));setCFTab('promos')">Revisar</button>
+      </div>`).join("");
+
+  // 4. NPS pendientes
+  const htmlNps=!npsPendientes.length
+    ?`<p style="color:var(--tx3);font-size:13px;margin:0">Todos los cursos completados recientes ya tienen encuesta enviada</p>`
+    :npsPendientes.map(c=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surf2);border-radius:8px;margin-bottom:5px">
+        <div style="flex:1;min-width:0;font-size:13px;color:var(--tx)">${esc(c.nombre)} <span style="color:var(--tx3);font-weight:400">· finalizó ${fmt(c.fecha_fin)}</span></div>
+        <button class="btn sm pri" onclick="_ccIrACurso('${c.id}')">Enviar NPS</button>
+      </div>`).join("");
+
+  // 5. Visitas
+  const htmlVisitas=`
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--b)">
+      <input class="fi" id="visita-nombre" placeholder="Nombre / institución" style="flex:1;min-width:140px">
+      <input class="fi" id="visita-motivo" placeholder="Motivo" style="flex:1;min-width:140px">
+      <input class="fi" id="visita-fecha" type="date" style="width:150px">
+      <button class="btn pri sm" onclick="agregarVisita()">+ Agregar</button>
+    </div>
+    ${!visitasPendientes.length?`<p style="color:var(--tx3);font-size:13px;margin:0">Sin visitas programadas</p>`:
+    visitasPendientes.map(v=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surf2);border-radius:8px;margin-bottom:5px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;color:var(--tx)">${esc(v.nombre)}</div>
+          <div style="font-size:11px;color:var(--tx3)">${esc(v.motivo||"")}${v.fecha?` · ${fmt(v.fecha)}`:" · sin fecha"}</div>
+        </div>
+        <button class="btn sm" style="color:var(--gr)" onclick="marcarVisitaRealizada('${v.id}')">✓ Realizada</button>
+      </div>`).join("")}
+  `;
+
+  document.getElementById("control-body").innerHTML=
+    seccion("📋","Reuniones con tareas sin convertir"+(totalTareasReunion?` (${totalTareasReunion})`:""),htmlReuniones)+
+    seccion("⏰","Tareas vencidas por persona"+(vencidas.length?` (${vencidas.length})`:""),htmlVencidas)+
+    seccion("🎁","Promociones por aprobar"+(_ccPromos.length?` (${_ccPromos.length})`:""),htmlPromos)+
+    seccion("⭐","NPS pendientes de enviar"+(npsPendientes.length?` (${npsPendientes.length})`:""),htmlNps)+
+    seccion("🏠","Próximas visitas"+(visitasPendientes.length?` (${visitasPendientes.length})`:""),htmlVisitas);
+}
+
+function _ccIrACurso(cursoId){
+  goPage("cursos",document.getElementById("nav-cursos"));
+  setTimeout(()=>{selectCurso(cursoId);const tab=document.querySelector(`[onclick*="cd-nps-${cursoId}"]`);if(tab)tab.click();},300);
+}
+
+async function convertirTareaReunion(reunionId,idx){
+  const r=_ccReuniones.find(x=>x.id===reunionId);
+  if(!r)return;
+  const items=[...(r.tareas_extraidas||[])];
+  const item=items[idx];
+  if(!item||item.convertida)return;
+  const responsableMatch=item.responsable?users.find(u=>(u.nombre||"").toLowerCase().includes(item.responsable.toLowerCase())||item.responsable.toLowerCase().includes((u.nombre||"").toLowerCase())):null;
+  const fechaVenc=(item.fecha_sugerida&&/^\d{4}-\d{2}-\d{2}$/.test(item.fecha_sugerida))?item.fecha_sugerida:null;
+  try{
+    const[creada]=await sb("tareas",{method:"POST",body:JSON.stringify({
+      nombre:item.tarea,status:"Por Hacer",prioridad:"Media",
+      assignees:responsableMatch?[responsableMatch.id]:[],
+      fecha_vencimiento:fechaVenc,
+      notas:`Convertida desde la reunión "${r.titulo||""}" (${fmt(r.fecha)})`
+    })});
+    tasks.unshift(creada);
+    items[idx]={...item,convertida:true,tarea_id:creada.id};
+    await sb(`reuniones?id=eq.${reunionId}`,{method:"PATCH",body:JSON.stringify({tareas_extraidas:items})});
+    r.tareas_extraidas=items;
+    toast("✓ Tarea creada en el Kanban","ok");
+    renderCentroControl();
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+async function agregarVisita(){
+  const nombre=document.getElementById("visita-nombre").value.trim();
+  const motivo=document.getElementById("visita-motivo").value.trim();
+  const fecha=document.getElementById("visita-fecha").value||null;
+  if(!nombre){toast("Ingresá un nombre","err");return;}
+  try{
+    const[creada]=await sb("visitas_programadas",{method:"POST",body:JSON.stringify({
+      nombre,motivo:motivo||null,fecha,estado:"pendiente",creado_por:loggedUser?.nombre||null
+    })});
+    _ccVisitas.push(creada);
+    document.getElementById("visita-nombre").value="";
+    document.getElementById("visita-motivo").value="";
+    document.getElementById("visita-fecha").value="";
+    toast("Visita agregada","ok");
+    renderCentroControl();
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+async function marcarVisitaRealizada(id){
+  await sb(`visitas_programadas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado:"realizada"})});
+  const v=_ccVisitas.find(x=>x.id===id);if(v)v.estado="realizada";
+  renderCentroControl();
+}
+
 function updateMobileNav(page){
   ["alertas","tareas","cashflow","impuestos","menu"].forEach(k=>{
     const el=document.getElementById("mn-"+k);
@@ -5884,6 +6123,7 @@ function goPage(name,el){
     sb("rutinas?select=*&order=dia_del_mes").then(data=>{rutinas=data;renderRutinas()}).catch(()=>renderRutinas());
   }
   if(name==="alertas"){const load=cfPrestamos.length?Promise.resolve():loadCF().catch(()=>{});load.then(renderAlertas);}
+  if(name==="control")loadCentroControl();
   if(name==="sueldos"){const load=cfEmpleados.length?Promise.resolve():loadCF().catch(()=>{});load.then(renderSueldos);}
   if(name==="cashflow")loadCF().then(()=>setCFTab(cfTab||"resumen"));
   if(name==="instructores")renderInstructores();
