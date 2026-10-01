@@ -3187,6 +3187,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         Importar ARCA
       </button>
+      <button class="btn sec" onclick="abrirCircularizacion()" title="Pedir a los proveedores más significativos que confirmen su saldo (anual, fin de ejercicio)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        Circularización
+      </button>
       <button class="btn sec" onclick="openNuevoComprobante()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Nueva factura
@@ -3508,6 +3512,19 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="ma">
     <button class="bc" onclick="closeModal('modal-import-arca')">Cancelar</button>
     <button class="bk" id="arca-import-btn" onclick="procesarImportArca()">Importar</button>
+  </div>
+</div>
+</div>
+
+<!-- ══ CIRCULARIZACIÓN DE SALDOS (automatización D del diagnóstico Auren) ══ -->
+<div class="mov" id="modal-circularizacion" onclick="if(event.target===this&&_movDown===this)closeModal('modal-circularizacion')">
+<div class="modal" style="max-width:620px">
+  <div class="mt"><span>📧 Circularización de saldos</span><button class="mt-close" onclick="closeModal('modal-circularizacion')">✕</button></div>
+  <div style="font-size:12px;color:var(--tx3);margin-bottom:14px">Pedile a tus proveedores con mayor saldo pendiente que confirmen el monto por email. Práctica recomendada una vez al año, cerca del cierre de ejercicio (30/06). Solo se puede enviar a los que tienen email cargado en Proveedores.</div>
+  <div id="circ-lista" style="max-height:50vh;overflow-y:auto"></div>
+  <div class="ma">
+    <button class="bc" onclick="closeModal('modal-circularizacion')">Cerrar</button>
+    <button class="bk" id="circ-enviar-btn" onclick="enviarCircularizacion()">Enviar a seleccionados</button>
   </div>
 </div>
 </div>
@@ -24449,6 +24466,56 @@ async function procesarImportArca(){
   }finally{
     btn.disabled=false;btn.textContent="Importar";
   }
+}
+
+// ── Circularización de saldos (automatización D del diagnóstico Auren) ──
+let _circDestinatarios=[];
+function abrirCircularizacion(){
+  const porProveedor={};
+  comprobantes.forEach(c=>{
+    if(c.estado==="pagado"||c.estado==="cerrado")return;
+    if(c.tipo?.startsWith("NC"))return;
+    const clave=(c.cuit?.replace(/\D/g,"")||c.proveedor||"").trim();
+    if(!clave)return;
+    if(!porProveedor[clave])porProveedor[clave]={proveedor:c.proveedor||"(sin nombre)",cuit:c.cuit||null,sociedad:c.sociedad,saldo:0};
+    porProveedor[clave].saldo+=Number(c.total)||0;
+  });
+  _circDestinatarios=Object.values(porProveedor).filter(p=>p.saldo>0).map(p=>{
+    let prov=p.cuit?proveedores.find(x=>x.cuit&&x.cuit.replace(/\D/g,"")===p.cuit.replace(/\D/g,"")):null;
+    if(!prov)prov=proveedores.find(x=>(x.nombre||"").trim().toLowerCase()===p.proveedor.trim().toLowerCase());
+    return{...p,email:prov?.email||null,sel:!!prov?.email};
+  }).sort((a,b)=>b.saldo-a.saldo);
+  renderCircularizacion();
+  openModal("modal-circularizacion");
+}
+function renderCircularizacion(){
+  const el=document.getElementById("circ-lista");
+  if(!_circDestinatarios.length){el.innerHTML=`<p style="color:var(--tx3);font-size:13px;padding:20px 0;text-align:center">No hay saldos pendientes con proveedores.</p>`;return;}
+  el.innerHTML=_circDestinatarios.map((d,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--b)">
+    <input type="checkbox" ${d.sel?"checked":""} ${!d.email?"disabled":""} onchange="_circDestinatarios[${i}].sel=this.checked">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;color:var(--tx)">${esc(d.proveedor)}${d.sociedad?` <span style="color:var(--tx3);font-size:10px">· ${esc(d.sociedad)}</span>`:""}</div>
+      <div style="font-size:11px;color:${d.email?"var(--tx3)":"var(--am)"}">${d.email?esc(d.email):"⚠️ Sin email cargado en Proveedores"}</div>
+    </div>
+    <div style="font-size:13px;font-weight:700;color:var(--tx)">$${Math.round(d.saldo).toLocaleString("es-AR")}</div>
+  </div>`).join("");
+}
+async function enviarCircularizacion(){
+  const sel=_circDestinatarios.filter(d=>d.sel&&d.email);
+  if(!sel.length){toast("Seleccioná al menos un proveedor con email","err");return;}
+  const btn=document.getElementById("circ-enviar-btn");btn.disabled=true;btn.textContent="Enviando...";
+  try{
+    const res=await fetch(`${SB}/functions/v1/enviar-circularizacion`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
+      body:JSON.stringify({destinatarios:sel.map(d=>({email:d.email,proveedor:d.proveedor,saldo:d.saldo,sociedad:d.sociedad}))})
+    });
+    const json=await res.json();
+    if(!res.ok)throw new Error(json.error||"Error desconocido");
+    toast(`✉️ Circularización enviada a ${json.enviados} proveedor${json.enviados!==1?"es":""}${json.errores?.length?` · ${json.errores.length} con error`:""}`,"ok");
+    closeModal("modal-circularizacion");
+  }catch(e){toast("Error: "+e.message,"err");}
+  finally{btn.disabled=false;btn.textContent="Enviar a seleccionados";}
 }
 
 async function saveComprobante(){
