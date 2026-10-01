@@ -23574,7 +23574,7 @@ async function confirmarOrdenPago(pagarTambien){
       const _adPago={fecha,sociedad:c.sociedad||"SUDES",tipo:"pago_compra",origen:"orden_pago",origen_id:op?.id,descripcion:descPagoAsiento,lineas:lineasPago};
       generarAsiento(_adPago).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adPago);else if(!a)toast("⚠️ Asiento de pago no generado","err");}).catch(e=>toast("⚠️ Error asiento pago: "+e.message.slice(0,50),"err"));
     }
-    generarPDFOrdenPago({...opData,id:op?.id,numero_comp:c.numero});
+    await generarPDFOrdenPago({...opData,id:op?.id,numero_comp:c.numero});
     closeModal("modal-orden-pago");
     toast(`📄 OP ${numero} generada${pagarTambien?" · Comprobante pagado":""}`,"ok");
     if(pagarTambien)enviarComprobantePagoProveedor(c,{...opData,id:op?.id,numero_comp:c.numero});
@@ -23592,7 +23592,7 @@ async function enviarComprobantePagoProveedor(c,op){
       toast(`ℹ️ "${c.proveedor||"Proveedor"}" no tiene email cargado — no se pudo enviar el comprobante automáticamente`,"inf");
       return;
     }
-    const pdfBase64=generarPDFOrdenPago(op,true);
+    const pdfBase64=await generarPDFOrdenPago(op,true);
     const res=await fetch(`${SB}/functions/v1/enviar-pago-proveedor`,{
       method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
@@ -23604,23 +23604,61 @@ async function enviarComprobantePagoProveedor(c,op){
   }catch(e){toast("⚠️ No se pudo enviar el email al proveedor: "+e.message,"err");}
 }
 
-function generarPDFOrdenPago(op,soloRetornar){
+let _fiscalSociedadCache=null;
+async function getFiscalSociedad(sociedad){
+  if(!_fiscalSociedadCache){
+    try{_fiscalSociedadCache=await sb("datos_fiscales_sociedad?select=*");}catch(e){_fiscalSociedadCache=[];}
+  }
+  return _fiscalSociedadCache.find(f=>f.sociedad===sociedad)||null;
+}
+let _logoSociedadCache={};
+async function getLogoDataUrl(sociedad){
+  if(_logoSociedadCache[sociedad]!==undefined)return _logoSociedadCache[sociedad];
+  const archivo=sociedad==="POINTERS"?"./logo-pointers.png":"./logo-sudes.png";
+  try{
+    const r=await fetch(archivo);
+    if(!r.ok){_logoSociedadCache[sociedad]=null;return null;}
+    const b=await r.blob();
+    const dataUrl=await new Promise(res=>{const rd=new FileReader();rd.onload=()=>res(rd.result);rd.readAsDataURL(b);});
+    _logoSociedadCache[sociedad]=dataUrl;
+    return dataUrl;
+  }catch(e){_logoSociedadCache[sociedad]=null;return null;}
+}
+
+async function generarPDFOrdenPago(op,soloRetornar){
   const{jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
   const W=210,M=20;
+  const sociedad=op.sociedad||"SUDES";
+  const [fiscal,logoUrl]=await Promise.all([getFiscalSociedad(sociedad),getLogoDataUrl(sociedad)]);
   let y=M;
   // Header
-  doc.setFillColor(20,22,35);doc.rect(0,0,W,40,"F");
+  doc.setFillColor(20,22,35);doc.rect(0,0,W,46,"F");
   doc.setTextColor(255,255,255);
-  doc.setFontSize(22);doc.setFont("helvetica","bold");
-  doc.text("ORDEN DE PAGO",M,19);
+  let tx=M;
+  if(logoUrl){
+    try{
+      const props=doc.getImageProperties(logoUrl);
+      const logoH=18,logoW=logoH*(props.width/props.height);
+      doc.addImage(logoUrl,"PNG",M,8,logoW,logoH);
+      tx=M+logoW+6;
+    }catch(e){}
+  }
+  doc.setFontSize(11);doc.setFont("helvetica","bold");
+  doc.text(fiscal?.razon_social||("Metanoia SMX · "+sociedad),tx,14);
+  doc.setFontSize(7.5);doc.setFont("helvetica","normal");doc.setTextColor(195,197,215);
+  let fy=19;
+  if(fiscal?.cuit){doc.text(`CUIT: ${fiscal.cuit}`,tx,fy);fy+=4;}
+  if(fiscal?.condicion_iva){doc.text(fiscal.condicion_iva,tx,fy);fy+=4;}
+  if(fiscal?.domicilio){doc.text(fiscal.domicilio,tx,fy);}
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(19);doc.setFont("helvetica","bold");
+  doc.text("ORDEN DE PAGO",W-M,16,{align:"right"});
   doc.setFontSize(9);doc.setFont("helvetica","normal");
-  doc.text("Metanoia SMX · "+(op.sociedad||"SUDES"),M,27);
-  doc.setFontSize(9);
-  doc.text(`N° ${op.numero}`,W-M,14,{align:"right"});
-  doc.text(`Fecha: ${op.fecha_pago||""}`,W-M,21,{align:"right"});
-  doc.text(`Estado: ${op.estado||"borrador"}`,W-M,28,{align:"right"});
-  y=52;
+  doc.text(`N° ${op.numero}`,W-M,24,{align:"right"});
+  doc.text(`Fecha: ${op.fecha_pago||""}`,W-M,30,{align:"right"});
+  doc.text(`Estado: ${op.estado||"borrador"}`,W-M,36,{align:"right"});
+  y=58;
   doc.setTextColor(20,20,30);
   // Bloque proveedor
   doc.setFillColor(245,246,249);doc.roundedRect(M-2,y-6,W-2*M+4,34,2,2,"F");
