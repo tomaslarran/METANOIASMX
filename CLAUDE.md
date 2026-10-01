@@ -1356,6 +1356,37 @@ UPDATE cursos SET publicacion_aprobada = true WHERE estado != 'Borrador';
 
 ---
 
+## Implementado (1 Oct 2026) — Automatizaciones Auren (A-F), Centro de Control, fixes NPS/diploma/permisos
+
+**Motivación:** Tomás compartió el "DIAGNOSTICO CONTABLE ACTUAL ND.pdf" de Auren (estudio contable externo) — primera evaluación formal de los circuitos administrativo-contables. Se construyeron las 6 automatizaciones propuestas, de más simple a más compleja, y de paso se resolvieron varios pedidos sueltos del mismo día (cuenta puente de socios, Centro de Control semanal, fixes de NPS/diploma/permisos). Detalle completo en memoria (`project_diagnostico_auren_automatizaciones.md`).
+
+### Automatizaciones Auren A-F (todas implementadas y deployadas)
+- **A — Calendario impositivo**: tabla `calendario_impositivo` con fechas tope Auren (SUDES/POINTERS), tab en Impuestos, alertas en dashboard, **y ahora integrado también al Calendario unificado** (filtro Finanzas, dot naranja/rojo según urgencia)
+- **E — "📢 Avisar compra nueva"**: botón en dropdown de usuario (hoy restringido solo a `admin`, ver más abajo) → card pendiente en Comprobantes + notificación al responsable de pagos
+- **F — Medios de pago personales**: toggle "personal" en `medios_pago` + badge + alerta mensual de gasto con plata personal (apoya independencia patrimonial)
+- **B — Checklist semanal "Circuito de pagos (jueves)"**: rutina recurrente con sub-tareas (tabla `rutinas` existente) + alertas de rutinas en dashboard. De paso se encontró y corrigió un bug: el generador de tareas desde rutinas usaba el campo `notas` en vez de `descripcion` para el contenido del checklist.
+- **C — Email automático al proveedor**: edge function `enviar-pago-proveedor` — comprobante de pago + certificado de retención al marcar "pagado" vía OP formal
+- **D — Circularización de saldos**: botón "Circularización" en Comprobantes, edge function `enviar-circularizacion`, email a proveedores con mayor saldo pendiente
+
+### De paso (pedido explícito, no parte del diagnóstico original)
+- ✅ **OP con logo y datos fiscales reales** — `generarPDFOrdenPago` (ahora async) carga `logo-sudes.png`/`logo-pointers.png` + `getFiscalSociedad()` (razón social, CUIT, domicilio, condición IVA) en vez del texto genérico "Metanoia SMX · SUDES"
+- ✅ **Cuenta puente de socios** — para facturas pagadas con plata personal de los socios, con detalle **por socio individual** (no un pozo común): medios de pago nuevos tipo `cuenta_socio` ("Aporte Socios SUDES"/"POINTERS"), tabla `aportes_socios` (socio_id, sociedad, tipo aporte/devolución), cuentas `2.1.05.001`/`002` en plan de cuentas, tab "🤝 Socios" en Cuentas Corrientes con botón de devolución. Se encontró de paso que `medios_pago.cuenta_contable_id` estaba documentado como corrido en julio pero nunca se había ejecutado, y que `getBancoCodigoPorMedio()` adivinaba la cuenta contable por nombre en vez de usar el vínculo real — ambos corregidos.
+
+### Centro de Control semanal (nueva página, `pg-control`)
+- ✅ 5 secciones: reuniones sin convertir a tareas, tareas vencidas por persona (con botón eliminar), promociones por aprobar, NPS pendiente, próximas visitas
+- 🐛 **Bug real encontrado y corregido**: los action items extraídos de transcripciones de reuniones (`reuniones.tareas_extraidas`, JSONB) nunca se convertían en tareas reales del Kanban — quedaban como texto muerto para siempre. Ahora cada ítem tiene botón "✓ Crear tarea" que inserta en `tareas` y marca `convertida:true` in-place en el JSONB.
+
+### Fix NPS — feedback sin nota numérica se perdía
+- 🐛 Alumnos que respondían con comentario cualitativo sin enviar nunca un número 0-10 (caso real: Bryanna Ortiz) nunca generaban fila en `nps_respuestas` — el flujo solo actuaba si podía parsear un número. Nuevo estado `pidiendo_nota` en `nps_envios`: si llega comentario sustantivo sin número, el bot lo guarda y vuelve a pedir la nota; si el alumno nunca la manda, **Tomás puede pedirle a Claude que interprete una nota según el comentario** (criterio explícito del usuario) en vez de dejarlo sin puntuar.
+
+### Fixes de permisos y diploma (1 Oct 2026)
+- ✅ **"📢 Avisar compra nueva"** ahora oculto para `comunicaciones`/`instructor`/`logistica`/`proveedor` (mismo patrón CSS `body.rol-X`) — queda solo para `admin`, preparado para el futuro rol `contable`
+- ✅ **Diploma — solo firman los instructores `rol=titular`** de `curso_instructores` (no asistentes/invitados) — confirmado que la columna `rol` ya existe en producción con valores `titular`/`asistente`/`invitado`
+
+**Pendiente de cierre:** armar el resumen final de todo lo automatizado + propuesta para elevar a los contadores de Auren, y preguntarles qué archivos/exports les sirven (rol `contable` sigue diferido hasta esa reunión, ver sección de arriba).
+
+---
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:
