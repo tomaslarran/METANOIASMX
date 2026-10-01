@@ -6142,7 +6142,7 @@ function goPage(name,el){
       const bc=document.getElementById("cal-btn-cursos");
       if(bc){bc.classList.add("on");bc.style.display="";}
     }
-    Promise.all([loadCursoTareasCalendario(),loadCF(),loadVEPs(),loadDiasEspeciales()]).then(()=>renderCalendario());
+    Promise.all([loadCursoTareasCalendario(),loadCF(),loadVEPs(),loadDiasEspeciales(),loadCalendarioAuren()]).then(()=>renderCalendario());
   }
   if(name==="rutinas"){
     // Recargar rutinas frescas al navegar
@@ -19845,6 +19845,16 @@ function buildEventos(){
         nombre:`⚠️ VEP ${v.tipo_impuesto}${v.periodo?" "+v.periodo.replace(/(\d{4})-(\d{2})/,"$2/$1"):""}`,
         sub:`$${Math.round(v.monto||0).toLocaleString("es-AR")} — ${v.sociedad||""}`,
         onclick:`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('vep')`
+      });
+    });
+    // Fechas tope del calendario impositivo de Auren
+    (calendarioAuren||[]).filter(c=>!c.enviado&&c.fecha_tope).forEach(c=>{
+      const dv=days(c.fecha_tope);
+      const urgente=dv!==null&&dv<=3&&dv>=-1;
+      addEvento(c.fecha_tope,{tipo:"ev-auren",dot:urgente?"#DC2626":"#A78BFA",
+        nombre:`📅 Auren: ${c.tipo}`,
+        sub:`${c.sociedad} — período ${c.periodo}`,
+        onclick:`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('auren')`
       });
     });
   }
