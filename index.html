@@ -47,6 +47,13 @@ body.rol-instructor #mn-impuestos,
 body.rol-logistica #mn-cashflow,
 body.rol-logistica #mn-impuestos{display:none!important}
 
+/* "Avisar compra nueva" — solo admin (y futuro rol contable) */
+body.rol-comunicaciones #umenu-avisocompra,
+body.rol-instructor #umenu-avisocompra,
+body.rol-logistica #umenu-avisocompra,
+body.rol-contable #umenu-avisocompra,
+body.rol-proveedor #umenu-avisocompra{display:none!important}
+
 /* ── MODO CLARO ── */
 body.light-mode{
   --bg:#F4F5F7;--bg2:#ECEDF0;--bg3:#E4E6EB;--surf:#FFFFFF;--surf2:#F0F1F4;
@@ -917,7 +924,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
           <div style="font-size:11px;color:var(--tx3)" id="umenu-email">—</div>
         </div>
         <button onclick="abrirPerfil();toggleUserMenu()" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;color:var(--tx);font-size:13px;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">👤 Mi Perfil</button>
-        <button onclick="abrirAvisoCompra();toggleUserMenu()" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;color:var(--tx);font-size:13px;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">📢 Avisar compra nueva</button>
+        <button id="umenu-avisocompra" onclick="abrirAvisoCompra();toggleUserMenu()" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;color:var(--tx);font-size:13px;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">📢 Avisar compra nueva</button>
         <button onclick="logout()" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;color:var(--re);font-size:13px;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">🚪 Cerrar sesión</button>
       </div>
     </div>
@@ -7167,7 +7174,7 @@ async function _fetchFirmantesConFirma(cursoId){
   // Si no hay firmantes personalizados, usar los instructores del curso
   if(!firmantes.length){
     try{
-      const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&select=*,instructores(id,nombre,apellido,firma_url,genero)`);
+      const ci=await sb(`curso_instructores?curso_id=eq.${cursoId}&rol=eq.titular&select=*,instructores(id,nombre,apellido,firma_url,genero)`);
       for(const row of (ci||[])){
         const ins=row.instructores;
         if(!ins)continue;
