@@ -917,6 +917,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
           <div style="font-size:11px;color:var(--tx3)" id="umenu-email">—</div>
         </div>
         <button onclick="abrirPerfil();toggleUserMenu()" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;color:var(--tx);font-size:13px;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">👤 Mi Perfil</button>
+        <button onclick="abrirAvisoCompra();toggleUserMenu()" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;color:var(--tx);font-size:13px;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">📢 Avisar compra nueva</button>
         <button onclick="logout()" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:none;border:none;color:var(--re);font-size:13px;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background='none'">🚪 Cerrar sesión</button>
       </div>
     </div>
@@ -3193,6 +3194,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </div>
   </div>
 
+  <div id="avisos-compra-wrap"></div>
+
   <!-- Stats -->
   <div class="stats" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px" id="comp-stats">
     <div class="sc"><div class="sc-l">Total del mes</div><div class="sc-v vb" id="comp-stat-total">—</div><div class="sc-s" id="comp-stat-mes">cargando...</div></div>
@@ -3998,6 +4001,26 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       </div>
     </div>
   </div>
+</div>
+
+<!-- ══ AVISO DE COMPRA NUEVA (servicio/gasto recurrente nuevo) ══ -->
+<div class="mov" id="modal-aviso-compra" onclick="if(event.target===this&&_movDown===this)closeModal('modal-aviso-compra')">
+<div class="modal" style="max-width:460px">
+  <div class="mt"><span>📢 Avisar compra o servicio nuevo</span><button class="mt-close" onclick="closeModal('modal-aviso-compra')">✕</button></div>
+  <div style="font-size:12px;color:var(--tx3);margin-bottom:14px">¿Compraste un bien de uso o contrataste un servicio continuo nuevo? Avisale al responsable de pagos para que pueda pedirle al proveedor la factura y el legajo impositivo.</div>
+  <div class="fg" style="margin-bottom:12px"><label class="fl">¿Qué compraste o contrataste? *</label><input class="fi" id="ac-descripcion" placeholder="Ej: Suscripción anual a..."></div>
+  <div class="fgrid" style="margin-bottom:12px">
+    <div class="fg"><label class="fl">Monto estimado</label><input class="fi" id="ac-monto" type="number" placeholder="0"></div>
+    <div class="fg"><label class="fl">Sociedad</label>
+      <select class="fi" id="ac-sociedad"><option value="">—</option><option value="SUDES">SUDES</option><option value="POINTERS">POINTERS</option></select>
+    </div>
+  </div>
+  <div class="fg" style="margin-bottom:12px"><label class="fl">Proveedor / contacto</label><input class="fi" id="ac-proveedor" placeholder="Nombre y/o contacto del proveedor"></div>
+  <div class="ma">
+    <button class="bc" onclick="closeModal('modal-aviso-compra')">Cancelar</button>
+    <button class="bk" id="ac-save-btn" onclick="guardarAvisoCompra()">Avisar</button>
+  </div>
+</div>
 </div>
 
 <!-- ══ MODAL PERFIL (unifica Datos, Firma, Seguridad y Preferencias) ══ -->
@@ -11657,11 +11680,11 @@ async function pollNotificaciones(){
 }
 
 function tipoNotifLabel(tipo){
-  const map={asignacion:"Nueva asignación",modificacion:"Tarea modificada",comentario:"Nuevo comentario",vencimiento:"Vencimiento próximo",colaboracion_chat:"Invitación a chat",mensaje_interno:"Mensaje interno",cumpleanos:"Cumpleaños",elearning_suscripcion_por_vencer:"Suscripción por vencer",elearning_suscripcion_vencida:"Suscripción vencida",elearning_factura_error:"Error de facturación"};
+  const map={asignacion:"Nueva asignación",modificacion:"Tarea modificada",comentario:"Nuevo comentario",vencimiento:"Vencimiento próximo",colaboracion_chat:"Invitación a chat",mensaje_interno:"Mensaje interno",cumpleanos:"Cumpleaños",elearning_suscripcion_por_vencer:"Suscripción por vencer",elearning_suscripcion_vencida:"Suscripción vencida",elearning_factura_error:"Error de facturación",aviso_compra:"Compra nueva avisada"};
   return map[tipo]||"Notificación";
 }
 function tipoNotifIcon(tipo){
-  const map={asignacion:"👤",modificacion:"✏️",comentario:"💬",vencimiento:"⏰",colaboracion_chat:"👥",mensaje_interno:"💬",cumpleanos:"🎂",elearning_suscripcion_por_vencer:"⏰",elearning_suscripcion_vencida:"⌛",elearning_factura_error:"🧾"};
+  const map={asignacion:"👤",modificacion:"✏️",comentario:"💬",vencimiento:"⏰",colaboracion_chat:"👥",mensaje_interno:"💬",cumpleanos:"🎂",elearning_suscripcion_por_vencer:"⏰",elearning_suscripcion_vencida:"⌛",elearning_factura_error:"🧾",aviso_compra:"📢"};
   return map[tipo]||"🔔";
 }
 function tiempoAtras(iso){
@@ -11728,6 +11751,10 @@ async function clickNotif(id,tareaId,tipo){
   }
   if(tipo==="mensaje_interno"){
     goPage("mensajes",document.getElementById("nav-mensajes"));
+    return;
+  }
+  if(tipo==="aviso_compra"){
+    goPage("comprobantes",document.getElementById("nav-comprobantes"));
     return;
   }
   // Rol comunicaciones: no redirigir a tareas
@@ -20379,6 +20406,40 @@ async function doChangePassword(){
   finally{btn.disabled=false;btn.textContent="Guardar";}
 }
 
+// ── AVISO DE COMPRA NUEVA (automatización E del diagnóstico Auren) ─────────
+function abrirAvisoCompra(){
+  document.getElementById("ac-descripcion").value="";
+  document.getElementById("ac-monto").value="";
+  document.getElementById("ac-sociedad").value="";
+  document.getElementById("ac-proveedor").value="";
+  openModal("modal-aviso-compra");
+}
+async function guardarAvisoCompra(){
+  const descripcion=document.getElementById("ac-descripcion").value.trim();
+  if(!descripcion){toast("Contá qué compraste o contrataste","err");return;}
+  const monto=parseFloat(document.getElementById("ac-monto").value)||null;
+  const sociedad=document.getElementById("ac-sociedad").value||null;
+  const proveedor=document.getElementById("ac-proveedor").value.trim()||null;
+  const btn=document.getElementById("ac-save-btn");btn.disabled=true;btn.textContent="Avisando...";
+  try{
+    await sb("avisos_compra",{method:"POST",body:JSON.stringify({
+      descripcion,monto_estimado:monto,sociedad,proveedor_contacto:proveedor,
+      avisado_por:loggedUser?.nombre||null,estado:"pendiente"
+    })});
+    try{
+      const admins=users.filter(u=>u.rol==="admin"&&u.estado!=="inactivo"&&u.id!==loggedUser?.id);
+      await Promise.all(admins.map(u=>sb("notificaciones",{method:"POST",body:JSON.stringify({
+        usuario_id:u.id,tipo:"aviso_compra",
+        mensaje:`📢 ${loggedUser?.nombre||"Alguien"} avisó una compra/servicio nuevo: "${descripcion}"${proveedor?` — ${proveedor}`:""}`,
+        leida:false
+      })})));
+    }catch(_){}
+    toast("Avisado — el responsable de pagos va a pedir la factura y el CUIT","ok");
+    closeModal("modal-aviso-compra");
+  }catch(e){toast("Error: "+e.message,"err");}
+  finally{btn.disabled=false;btn.textContent="Avisar";}
+}
+
 // ── PERFIL (unifica Datos, Firma, Seguridad y Preferencias) ─────────────────
 async function abrirPerfil(){
   document.getElementById("pf-nombre").value=loggedUser?.nombre||"";
@@ -22957,20 +23018,45 @@ let compCargadoFilter="all";
 let compArchivoUrl=null;
 let editCompId=null;
 
+let avisosCompra=[];
 async function loadComprobantes(){
   try{
-    const [data,provsFinn]=await Promise.all([
+    const [data,provsFinn,avisos]=await Promise.all([
       sb("comprobantes_compra?select=*&order=fecha.desc,created_at.desc"),
-      proveedoresFinn.length?Promise.resolve(proveedoresFinn):sb("proveedores_finnegans?select=nombre,cuit,codigo&order=nombre.asc").catch(()=>[])
+      proveedoresFinn.length?Promise.resolve(proveedoresFinn):sb("proveedores_finnegans?select=nombre,cuit,codigo&order=nombre.asc").catch(()=>[]),
+      sb("avisos_compra?select=*&estado=eq.pendiente&order=created_at.desc").catch(()=>[])
     ]);
     comprobantes=data;
     if(!proveedoresFinn.length)proveedoresFinn=provsFinn;
+    avisosCompra=avisos||[];
     buildCompMesSelect();
     buildCompCargadoSelect();
     renderComprobantes();
+    renderAvisosCompra();
     updateCompStats();
     updateSideBadges();
   }catch(e){document.getElementById("comp-lista").innerHTML=`<div class="empty"><div class="ei">⚠️</div>Error al cargar</div>`;}
+}
+
+function renderAvisosCompra(){
+  const el=document.getElementById("avisos-compra-wrap");
+  if(!el)return;
+  if(!avisosCompra.length){el.innerHTML="";return;}
+  el.innerHTML=`<div style="background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.3);border-radius:var(--r);padding:12px 14px;margin-bottom:16px">
+    <div style="font-size:12px;font-weight:700;color:var(--tx);margin-bottom:8px">📢 Compras/servicios nuevos avisados (${avisosCompra.length}) — pedir factura y CUIT</div>
+    ${avisosCompra.map(a=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid rgba(139,92,246,.15)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;color:var(--tx)">${esc(a.descripcion)}${a.proveedor_contacto?` · <span style="color:var(--tx3)">${esc(a.proveedor_contacto)}</span>`:""}</div>
+        <div style="font-size:10px;color:var(--tx3)">Avisó ${esc(a.avisado_por||"—")}${a.sociedad?` · ${esc(a.sociedad)}`:""}${a.monto_estimado?` · ~$${Math.round(a.monto_estimado).toLocaleString("es-AR")}`:""}</div>
+      </div>
+      <button onclick="resolverAvisoCompra('${a.id}')" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:4px 10px;cursor:pointer">✓ Resuelto</button>
+    </div>`).join("")}
+  </div>`;
+}
+async function resolverAvisoCompra(id){
+  await sb(`avisos_compra?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado:"resuelto"})});
+  avisosCompra=avisosCompra.filter(a=>a.id!==id);
+  renderAvisosCompra();
 }
 
 function buildCompMesSelect(){
