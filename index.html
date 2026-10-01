@@ -2839,9 +2839,14 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       Actualizar
     </button>
   </div>
+  <div class="fbar" style="margin-bottom:16px">
+    <button class="fb on" id="cuentas-tab-prov" onclick="setCuentasTab('prov',this)">Proveedores</button>
+    <button class="fb" id="cuentas-tab-socios" onclick="setCuentasTab('socios',this)">🤝 Socios</button>
+  </div>
   <div id="cuentas-list" style="max-width:640px">
     <div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>
   </div>
+  <div id="cuentas-socios-list" style="max-width:640px;display:none"></div>
 </div>
 
 <!-- ══ NOMENCLADOR ══ -->
@@ -3525,6 +3530,23 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="ma">
     <button class="bc" onclick="closeModal('modal-circularizacion')">Cerrar</button>
     <button class="bk" id="circ-enviar-btn" onclick="enviarCircularizacion()">Enviar a seleccionados</button>
+  </div>
+</div>
+</div>
+
+<!-- ══ DEVOLUCIÓN A SOCIO (cierre de cuenta puente de aportes) ══ -->
+<div class="mov" id="modal-devolucion-socio" onclick="if(event.target===this&&_movDown===this)closeModal('modal-devolucion-socio')">
+<div class="modal" style="max-width:420px">
+  <div class="mt"><span>💸 Registrar devolución a socio</span><button class="mt-close" onclick="closeModal('modal-devolucion-socio')">✕</button></div>
+  <input type="hidden" id="dev-socio-id">
+  <input type="hidden" id="dev-sociedad">
+  <div style="font-size:12px;color:var(--tx3);margin-bottom:14px" id="dev-socio-info"></div>
+  <div class="fg" style="margin-bottom:12px"><label class="fl">Monto a devolver *</label><input class="fi" id="dev-monto" type="number" placeholder="0"></div>
+  <div class="fg" style="margin-bottom:12px"><label class="fl">Medio de pago (cuenta/caja real) *</label><select class="fs" id="dev-medio"></select></div>
+  <div class="fg"><label class="fl">Fecha</label><input class="fi" id="dev-fecha" type="date"></div>
+  <div class="ma">
+    <button class="bc" onclick="closeModal('modal-devolucion-socio')">Cancelar</button>
+    <button class="bk" onclick="confirmarDevolucionSocio()">Registrar devolución</button>
   </div>
 </div>
 </div>
@@ -4475,6 +4497,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <option value="tarjeta">Tarjeta</option>
         <option value="efectivo">Efectivo</option>
         <option value="cheque">Cheque</option>
+        <option value="cuenta_socio">Cuenta puente — aporte de socios</option>
       </select>
     </div>
     <div class="fg"><label class="fl">Sociedad</label>
@@ -4503,7 +4526,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <input type="hidden" id="pagar-comp-id">
   <div class="form-grid" style="grid-template-columns:1fr">
     <div class="fg"><label class="fl">Medio de pago *</label>
-      <select class="fs" id="pagar-comp-medio"></select>
+      <select class="fs" id="pagar-comp-medio" onchange="toggleSocioPagoComp()"></select>
+    </div>
+    <div class="fg" id="pagar-comp-socio-wrap" style="display:none"><label class="fl">¿Qué socio puso la plata? *</label>
+      <select class="fs" id="pagar-comp-socio"></select>
     </div>
     <div class="fg"><label class="fl">Fecha de pago</label><input class="fi" id="pagar-comp-fecha" type="date"></div>
     <div class="fg"><label class="fl">Observaciones</label><input class="fi" id="pagar-comp-obs" type="text" placeholder="Opcional — referencia, CBU, etc."></div>
@@ -4574,7 +4600,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
   <div class="form-grid" style="grid-template-columns:1fr 1fr">
     <div class="fg"><label class="fl">Fecha de pago *</label><input class="fi" id="mop-fecha" type="date"></div>
-    <div class="fg"><label class="fl">Medio de pago *</label><select class="fs" id="mop-medio"></select></div>
+    <div class="fg"><label class="fl">Medio de pago *</label><select class="fs" id="mop-medio" onchange="toggleSocioOP()"></select></div>
+    <div class="fg" id="mop-socio-wrap" style="display:none;grid-column:1/-1"><label class="fl">¿Qué socio puso la plata? *</label>
+      <select class="fs" id="mop-socio"></select>
+    </div>
     <div class="fg" style="grid-column:1/-1"><label class="fl">CBU / Referencia</label>
       <input class="fi" id="mop-cbu" type="text" placeholder="CBU, número de cuenta, cheque Nº...">
     </div>
@@ -13519,6 +13548,7 @@ async function autoCrearCuentaContable(medio){
       cuenta_bancaria:{tipo:"activo", naturaleza:"deudora"},
       cheque:         {tipo:"activo", naturaleza:"deudora"},
       tarjeta:        {tipo:"pasivo", naturaleza:"acreedora"},
+      cuenta_socio:   {tipo:"pasivo", naturaleza:"acreedora"},
     };
     const cfg=CFG[medio.tipo]||{tipo:"activo",naturaleza:"deudora"};
 
@@ -21280,6 +21310,107 @@ async function loadCuentasPage(){
   }
 }
 
+function setCuentasTab(tab,btn){
+  document.querySelectorAll("#pg-cuentas .fb").forEach(b=>b.classList.remove("on"));
+  if(btn)btn.classList.add("on");
+  document.getElementById("cuentas-list").style.display=tab==="prov"?"":"none";
+  document.getElementById("cuentas-socios-list").style.display=tab==="socios"?"":"none";
+  if(tab==="socios")loadSociosCuentas();
+}
+
+// ── Cuentas de socios (cuenta puente de aportes personales) ──
+async function loadSociosCuentas(){
+  const el=document.getElementById("cuentas-socios-list");
+  el.innerHTML=`<div class="loading"><div class="loader"></div><div class="lt">Cargando...</div></div>`;
+  try{
+    if(!mediosPago.length)mediosPago=await sb("medios_pago?select=*&order=orden").catch(()=>[]);
+    if(!planCuentas.length)planCuentas=await sb("plan_cuentas?select=*&order=codigo").catch(()=>[]);
+    const aportes=await sb("aportes_socios?select=*&order=fecha.desc");
+    renderSociosCuentas(aportes);
+  }catch(e){el.innerHTML=`<p style="color:var(--re);padding:20px">Error al cargar.</p>`;}
+}
+function renderSociosCuentas(aportes){
+  const el=document.getElementById("cuentas-socios-list");
+  const porSocio={};
+  aportes.forEach(a=>{
+    const clave=a.socio_id+"|"+a.sociedad;
+    if(!porSocio[clave])porSocio[clave]={socio_id:a.socio_id,sociedad:a.sociedad,saldo:0,cant:0};
+    porSocio[clave].saldo+=(a.tipo==="devolucion"?-1:1)*(Number(a.monto)||0);
+    porSocio[clave].cant++;
+  });
+  const filas=Object.values(porSocio).filter(p=>p.cant>0);
+  if(!filas.length){
+    el.innerHTML=`<div style="text-align:center;padding:60px 20px;color:var(--tx3)">
+      <div style="font-size:36px;margin-bottom:12px">🤝</div>
+      <div style="font-size:15px;font-weight:600;color:var(--tx)">Sin aportes de socios registrados</div>
+      <div style="font-size:13px;margin-top:6px">Cuando se pague una factura con el medio "Aporte Socios", va a aparecer acá.</div>
+    </div>`;
+    return;
+  }
+  el.innerHTML=`<div style="display:flex;flex-direction:column;gap:12px">`+
+  filas.sort((a,b)=>b.saldo-a.saldo).map(p=>{
+    const u=users.find(x=>x.id===p.socio_id);
+    const nombre=u?.nombre||"(usuario eliminado)";
+    const initials=(nombre||"?").split(" ").map(n=>n[0]).slice(0,2).join("").toUpperCase();
+    const debe=p.saldo>0.01;
+    return`<div style="background:var(--surf);border:1px solid var(--b);border-radius:var(--rlg);padding:16px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <div style="width:42px;height:42px;border-radius:50%;background:#7C3AED;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;flex-shrink:0">${initials}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:15px;font-weight:600;color:var(--tx)">${esc(nombre)} <span style="font-size:10px;color:var(--tx3)">· ${esc(p.sociedad)}</span></div>
+        <div style="font-size:12px;margin-top:4px;color:${debe?"#EF4444":"var(--tx3)"};font-weight:600">${debe?`La empresa le debe: $${Math.abs(p.saldo).toLocaleString("es-AR",{minimumFractionDigits:2})}`:"Sin saldo pendiente"}</div>
+      </div>
+      ${debe?`<button class="btn pri" style="font-size:12px;flex-shrink:0" onclick="abrirDevolucionSocio('${p.socio_id}','${esc(p.sociedad)}','${esc(nombre)}',${p.saldo})">💸 Registrar devolución</button>`:""}
+    </div>`;
+  }).join("")+`</div>`;
+}
+function abrirDevolucionSocio(socioId,sociedad,nombre,saldo){
+  document.getElementById("dev-socio-id").value=socioId;
+  document.getElementById("dev-sociedad").value=sociedad;
+  document.getElementById("dev-socio-info").textContent=`${nombre} · ${sociedad} · Saldo pendiente: $${Math.round(saldo).toLocaleString("es-AR")}`;
+  document.getElementById("dev-monto").value=Math.round(saldo*100)/100;
+  document.getElementById("dev-fecha").value=today();
+  const activos=mediosPago.filter(m=>m.activo&&m.tipo!=="cuenta_socio"&&(m.sociedad==="Ambas"||m.sociedad===sociedad));
+  document.getElementById("dev-medio").innerHTML=activos.map(m=>`<option value="${esc(m.nombre)}">${esc(m.nombre)}${m.banco?` — ${esc(m.banco)}`:""}</option>`).join("");
+  openModal("modal-devolucion-socio");
+}
+async function confirmarDevolucionSocio(){
+  const socioId=document.getElementById("dev-socio-id").value;
+  const sociedad=document.getElementById("dev-sociedad").value;
+  const monto=parseFloat(document.getElementById("dev-monto").value)||0;
+  const medio=document.getElementById("dev-medio").value;
+  const fecha=document.getElementById("dev-fecha").value||today();
+  if(!monto||!medio){toast("Completá monto y medio de pago","err");return;}
+  const socio=users.find(u=>u.id===socioId);
+  try{
+    await sb("aportes_socios",{method:"POST",body:JSON.stringify({
+      socio_id:socioId,sociedad,fecha,tipo:"devolucion",monto,
+      concepto:`Devolución a ${socio?.nombre||"socio"}`,medio_devolucion:medio,creado_por:loggedUser?.nombre||null
+    })});
+    const medioObj=mediosPago.find(m=>m.nombre===medio);
+    const esBanco=medioObj?.tipo==="cuenta_bancaria";
+    const desc=`Devolución aporte — ${socio?.nombre||"socio"}`;
+    if(esBanco){
+      await sb("banco_movimientos",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify({
+        sociedad,fecha,concepto:desc,importe:-monto,saldo:null,conciliado:false,referencia:"Devolución socio"
+      })}).catch(()=>{});
+    }else{
+      await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
+        sociedad,fecha,tipo:"egreso",concepto:desc,categoria:"Socios",monto,medio_pago:medio,creado_por:loggedUser?.nombre||null
+      })});
+    }
+    const bancoCod=getBancoCodigoPorMedio(medio,sociedad);
+    const cuentaSocioCod=sociedad==="POINTERS"?"2.1.05.002":"2.1.05.001";
+    const _adDev={fecha,sociedad,tipo:"ajuste_manual",origen:"devolucion_socio",descripcion:desc,lineas:[
+      {codigo:cuentaSocioCod,debe:monto,desc:"Cancelación deuda con socio"},
+      {codigo:bancoCod,haber:monto,desc:`Pago ${medio}`},
+    ]};
+    generarAsiento(_adDev).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adDev);else if(!a)toast("⚠️ Asiento de devolución no generado","err");}).catch(e=>toast("⚠️ Error asiento: "+e.message.slice(0,50),"err"));
+    toast("Devolución registrada","ok");
+    closeModal("modal-devolucion-socio");
+    loadSociosCuentas();
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
 function renderCuentasPage(provs,movs){
   const wrap=document.getElementById("cuentas-list");
   if(!provs.length){
@@ -22358,6 +22489,15 @@ function getCuentaId(codigo){
   return planCuentas.find(x=>x.codigo===codigo&&x.activa)?.id||null;
 }
 function getBancoCodigoPorMedio(medio,sociedad){
+  // Preferir la cuenta contable real vinculada al medio (cuenta_contable_id) — antes esta
+  // función solo adivinaba por el nombre y cualquier medio que no matcheara "macro"/"mercado
+  // pago" caía en la cuenta de caja genérica, sin importar su tipo real (ej. tarjetas, o la
+  // cuenta puente de aportes de socios, quedaban mal imputadas).
+  const medioObj=mediosPago.find(m=>m.nombre===medio);
+  if(medioObj?.cuenta_contable_id){
+    const cta=planCuentas.find(c=>c.id===medioObj.cuenta_contable_id);
+    if(cta)return cta.codigo;
+  }
   const m=(medio||"").toLowerCase();
   if(m.includes("macro")&&sociedad==="POINTERS")return"1.1.01.003";
   if(m.includes("macro"))return"1.1.01.002";
@@ -23287,7 +23427,21 @@ function abrirPagarComp(id){
   } else {
     sel.innerHTML=`<option value="Transferencia">Transferencia bancaria</option><option value="Efectivo">Efectivo</option><option value="Tarjeta">Tarjeta</option><option value="Cheque">Cheque</option>`;
   }
+  toggleSocioPagoComp();
   openModal("modal-pagar-comp");
+}
+function _poblarSelectSocios(sel){
+  if(!sel)return;
+  const socios=users.filter(u=>u.rol==="admin"&&u.estado!=="inactivo");
+  sel.innerHTML=socios.map(u=>`<option value="${u.id}">${esc(u.nombre)}</option>`).join("");
+}
+function toggleSocioPagoComp(){
+  const medio=document.getElementById("pagar-comp-medio").value;
+  const medioObj=mediosPago.find(m=>m.nombre===medio);
+  const wrap=document.getElementById("pagar-comp-socio-wrap");
+  const esSocio=medioObj?.tipo==="cuenta_socio";
+  wrap.style.display=esSocio?"":"none";
+  if(esSocio)_poblarSelectSocios(document.getElementById("pagar-comp-socio"));
 }
 async function confirmarPagoComp(){
   const id=document.getElementById("pagar-comp-id").value;
@@ -23298,40 +23452,57 @@ async function confirmarPagoComp(){
   if(!c)return;
   const medioObj=mediosPago.find(m=>m.nombre===medio);
   if(medioObj?.es_personal&&!confirm(`⚠️ "${medio}" está marcado como cuenta/tarjeta PERSONAL, no de la empresa.\n\n¿Registrar igual este pago con ese medio?`))return;
+  const esCuentaSocio=medioObj?.tipo==="cuenta_socio";
+  const socioId=esCuentaSocio?document.getElementById("pagar-comp-socio").value:null;
+  if(esCuentaSocio&&!socioId){toast("Elegí qué socio puso la plata","err");return;}
   try{
     await sb(`comprobantes_compra?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({
       estado:"pagado",medio_pago:medio,fecha_pago:fecha,updated_at:new Date().toISOString()
     })});
     c.estado="pagado";c.medio_pago=medio;c.fecha_pago=fecha;
-    // Egreso en caja (anti-duplicado)
-    const existe=await sb(`caja_movimientos?observaciones=like.*comp-${id}*&limit=1`).catch(()=>[]);
     const esNC=c.tipo?.startsWith("NC");
     const tipoMov=esNC?"ingreso":"egreso";
-    const prefijo=esNC?`NC ${c.tipo.replace("NC-","")}`:`Fact. ${c.tipo||""}`;
-    const descCaja=`${prefijo}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"}`;
-    const obsStr=`${medio}${obs?` · ${obs}`:""} · comp-${id}`;
-    if(existe?.length){
-      await sb(`caja_movimientos?observaciones=like.*comp-${id}*`,{method:"PATCH",body:JSON.stringify({observaciones:obsStr,tipo:tipoMov})});
-    } else {
-      await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
-        sociedad:c.sociedad||"SUDES",fecha,tipo:tipoMov,concepto:descCaja,
-        categoria:"Proveedor",monto:Math.abs(parseFloat(c.total)||0),
-        observaciones:obsStr,creado_por:loggedUser?.nombre||null
+    const montoAbs=Math.abs(parseFloat(c.total)||0);
+    if(esCuentaSocio){
+      // Pagado con plata de un socio -- no sale plata real de la caja/banco de la empresa
+      // todavía, así que no se toca caja_movimientos/banco_movimientos. Lo que sí se registra
+      // es la deuda con ese socio puntual, para poder devolvérsela después (ver "Socios" en
+      // Cuentas Corrientes).
+      const socio=users.find(u=>u.id===socioId);
+      await sb("aportes_socios",{method:"POST",body:JSON.stringify({
+        socio_id:socioId,sociedad:c.sociedad||"SUDES",fecha,tipo:"aporte",monto:montoAbs,
+        concepto:`Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"}`,
+        comprobante_id:id,creado_por:loggedUser?.nombre||null
       })});
+      toast(`💰 Pagada con plata de ${socio?.nombre||"un socio"} · $${Math.round(c.total||0).toLocaleString("es-AR")}`,"ok");
+    }else{
+      // Egreso en caja (anti-duplicado)
+      const existe=await sb(`caja_movimientos?observaciones=like.*comp-${id}*&limit=1`).catch(()=>[]);
+      const prefijo=esNC?`NC ${c.tipo.replace("NC-","")}`:`Fact. ${c.tipo||""}`;
+      const descCaja=`${prefijo}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"}`;
+      const obsStr=`${medio}${obs?` · ${obs}`:""} · comp-${id}`;
+      if(existe?.length){
+        await sb(`caja_movimientos?observaciones=like.*comp-${id}*`,{method:"PATCH",body:JSON.stringify({observaciones:obsStr,tipo:tipoMov})});
+      } else {
+        await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
+          sociedad:c.sociedad||"SUDES",fecha,tipo:tipoMov,concepto:descCaja,
+          categoria:"Proveedor",monto:montoAbs,
+          observaciones:obsStr,creado_por:loggedUser?.nombre||null
+        })});
+      }
+      toast(`💰 Pagada · ${medio} · $${Math.round(c.total||0).toLocaleString("es-AR")}`,"ok");
     }
     closeModal("modal-pagar-comp");
     renderComprobantes();updateCompStats();
-    toast(`💰 Pagada · ${medio} · $${Math.round(c.total||0).toLocaleString("es-AR")}`,"ok");
 
     // Asiento de pago -- este camino de "pago rápido" (sin Orden de Pago formal) nunca
     // generaba el asiento contable, solo el movimiento de caja. Eso dejaba "Proveedores"
     // sobreestimado en los libros para cualquier factura pagada por acá en vez de por OP.
-    const montoAsiento=Math.abs(parseFloat(c.total)||0);
-    if(montoAsiento>0){
+    if(montoAbs>0){
       const bancoCod=getBancoCodigoPorMedio(medio,c.sociedad||"SUDES");
       const lineasPago=esNC
-        ?[{codigo:bancoCod,debe:montoAsiento,desc:`Cobro NC ${medio}`},{codigo:"2.1.01.001",haber:montoAsiento,desc:"Cancelación proveedor (NC)"}]
-        :[{codigo:"2.1.01.001",debe:montoAsiento,desc:"Cancelación proveedor"},{codigo:bancoCod,haber:montoAsiento,desc:`Pago ${medio}`}];
+        ?[{codigo:bancoCod,debe:montoAbs,desc:`Cobro NC ${medio}`},{codigo:"2.1.01.001",haber:montoAbs,desc:"Cancelación proveedor (NC)"}]
+        :[{codigo:"2.1.01.001",debe:montoAbs,desc:"Cancelación proveedor"},{codigo:bancoCod,haber:montoAbs,desc:`Pago ${medio}`}];
       const descPagoAsiento=`Pago: ${c.proveedor||""} — Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""}`;
       // origen "comprobante_pago" (no "comprobante") a propósito: el devengado de este mismo
       // comprobante ya usa origen:"comprobante"+este id -- si el pago usara el mismo origen,
@@ -23493,8 +23664,18 @@ async function abrirOrdenPago(compId,fromPendientes=false){
     :`<option value="Transferencia">Transferencia bancaria</option><option value="Efectivo">Efectivo</option><option value="Cheque">Cheque</option>`;
   mopActualizarTipo();
   mopRecalcular();
+  toggleSocioOP();
   document.getElementById("mop-btn-solo-pdf").style.display=fromPendientes?"none":"";
   openModal("modal-orden-pago");
+}
+
+function toggleSocioOP(){
+  const medio=document.getElementById("mop-medio").value;
+  const medioObj=mediosPago.find(m=>m.nombre===medio);
+  const wrap=document.getElementById("mop-socio-wrap");
+  const esSocio=medioObj?.tipo==="cuenta_socio";
+  wrap.style.display=esSocio?"":"none";
+  if(esSocio)_poblarSelectSocios(document.getElementById("mop-socio"));
 }
 
 function mopActualizarTipo(){
@@ -23542,6 +23723,10 @@ async function confirmarOrdenPago(pagarTambien){
   const obs=document.getElementById("mop-obs-op").value.trim();
   if(!bruto){toast("Ingresá el monto bruto","err");return;}
   if(!medio){toast("Seleccioná un medio de pago","err");return;}
+  const medioObjPrevio=mediosPago.find(m=>m.nombre===medio);
+  const esCuentaSocio=medioObjPrevio?.tipo==="cuenta_socio";
+  const socioId=esCuentaSocio?document.getElementById("mop-socio").value:null;
+  if(pagarTambien&&esCuentaSocio&&!socioId){toast("Elegí qué socio puso la plata","err");return;}
   const [cod]=(sicoreVal?sicoreVal.split("|"):["",""]);
   const sicoreDesc=cod?getSicoreCat()[cod]?.desc||"":"";
   const numero=`OP-${fecha.slice(0,7).replace("-","")}-${String(Date.now()).slice(-4)}`;
@@ -23566,7 +23751,17 @@ async function confirmarOrdenPago(pagarTambien){
       const esBanco=medioObj?.tipo==="cuenta_bancaria";
       const descPago=`Fact. ${tipo}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"}`;
       const obsStr=`${medio}${obs?` · ${obs}`:""} · comp-${compId}`;
-      if(esBanco){
+      if(esCuentaSocio){
+        // Pagado con plata de un socio -- no sale plata real de caja/banco todavía, se
+        // registra la deuda con ese socio en vez de un movimiento de caja/banco (ver F).
+        const socio=users.find(u=>u.id===socioId);
+        await sb("aportes_socios",{method:"POST",body:JSON.stringify({
+          socio_id:socioId,sociedad:c.sociedad||"SUDES",fecha,tipo:"aporte",monto:neto,
+          concepto:`Fact. ${tipo}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"} (OP ${numero})`,
+          comprobante_id:compId,creado_por:loggedUser?.nombre||null
+        })});
+        toast(`💰 Pagada con plata de ${socio?.nombre||"un socio"}`,"inf");
+      }else if(esBanco){
         await sb("banco_movimientos",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify({
           sociedad:c.sociedad||"SUDES",fecha,concepto:descPago,importe:-neto,
           saldo:null,conciliado:false,referencia:c.numero||"OP"
