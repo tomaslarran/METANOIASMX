@@ -23577,10 +23577,34 @@ async function confirmarOrdenPago(pagarTambien){
     generarPDFOrdenPago({...opData,id:op?.id,numero_comp:c.numero});
     closeModal("modal-orden-pago");
     toast(`📄 OP ${numero} generada${pagarTambien?" · Comprobante pagado":""}`,"ok");
+    if(pagarTambien)enviarComprobantePagoProveedor(c,{...opData,id:op?.id,numero_comp:c.numero});
   }catch(e){toast("Error: "+e.message,"err");}
 }
 
-function generarPDFOrdenPago(op){
+// Automatización C del diagnóstico Auren: email automático al proveedor con el
+// comprobante de pago (incluye el detalle de retención) al confirmar el pago.
+async function enviarComprobantePagoProveedor(c,op){
+  try{
+    let prov=c.proveedor_maestro_id?proveedores.find(p=>p.id===c.proveedor_maestro_id):null;
+    if(!prov&&c.cuit)prov=proveedores.find(p=>p.cuit&&p.cuit.replace(/\D/g,"")===c.cuit.replace(/\D/g,""));
+    if(!prov&&c.proveedor)prov=proveedores.find(p=>(p.nombre||"").trim().toLowerCase()===c.proveedor.trim().toLowerCase());
+    if(!prov?.email){
+      toast(`ℹ️ "${c.proveedor||"Proveedor"}" no tiene email cargado — no se pudo enviar el comprobante automáticamente`,"inf");
+      return;
+    }
+    const pdfBase64=generarPDFOrdenPago(op,true);
+    const res=await fetch(`${SB}/functions/v1/enviar-pago-proveedor`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
+      body:JSON.stringify({email:prov.email,proveedor:c.proveedor,numero:op.numero,neto:op.neto_a_pagar,fecha:op.fecha_pago,sociedad:op.sociedad,pdf_base64:pdfBase64})
+    });
+    const json=await res.json();
+    if(!res.ok||json.error)throw new Error(json.error||"Error desconocido");
+    toast(`✉️ Comprobante enviado a ${prov.email}`,"ok");
+  }catch(e){toast("⚠️ No se pudo enviar el email al proveedor: "+e.message,"err");}
+}
+
+function generarPDFOrdenPago(op,soloRetornar){
   const{jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
   const W=210,M=20;
@@ -23656,6 +23680,7 @@ function generarPDFOrdenPago(op){
   doc.setFillColor(245,246,249);doc.rect(0,282,W,15,"F");
   doc.setFontSize(7);doc.setTextColor(155,157,175);
   doc.text(`Generado por Panel Metanoia SMX · ${op.numero} · ${op.fecha_pago||""}`,W/2,289,{align:"center"});
+  if(soloRetornar)return doc.output("datauristring");
   doc.save(`OP_${op.numero}.pdf`);
 }
 // ────────────────────────────────────────────────────────────────────────────
