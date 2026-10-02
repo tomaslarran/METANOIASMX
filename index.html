@@ -3290,6 +3290,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
         Circularización
       </button>
+      <button class="btn sec admin-only-el" onclick="abrirProductosFinn()" title="Actualizar el catálogo de productos de Finnegans desde su export">🔄 Productos Finnegans</button>
       <button class="btn sec" onclick="openNuevoComprobante()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Nueva factura
@@ -4676,6 +4677,21 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="bc" style="color:var(--re)" onclick="anularOP(_opPagar&&_opPagar.id)">🗑 Anular orden</button>
     <button class="bc" onclick="closeModal('modal-pagar-op')">Cancelar</button>
     <button class="bk" onclick="confirmarPagarOP()">💸 Confirmar pago</button>
+  </div>
+</div>
+</div>
+
+<!-- MODAL PRODUCTOS FINNEGANS -->
+<div class="mov" id="modal-prod-finn" onclick="if(event.target===this&&_movDown===this)closeModal('modal-prod-finn')">
+<div class="modal" style="max-width:640px">
+  <div class="mt">🔄 Productos de Finnegans <button class="mt-close" onclick="closeModal('modal-prod-finn')">✕</button></div>
+  <div id="pf-resumen" style="font-size:12px;color:var(--tx2);margin-bottom:10px"></div>
+  <div style="background:rgba(139,92,246,.10);border:1px solid rgba(139,92,246,.3);border-radius:8px;padding:8px 10px;font-size:11px;color:var(--tx2);margin-bottom:12px">En Finnegans exportá el listado de <b>Productos</b> (PDF o Excel con las columnas Nombre, Código y Stockeable) y subilo acá. El panel compara con lo que tiene y te muestra qué cambia antes de aplicar. En el Excel de importación se usa el <b>Código</b>.</div>
+  <input type="file" id="pf-file" accept=".pdf,.xlsx,.xls,.csv" onchange="pfLeerArchivo(this)" class="fi" style="margin-bottom:12px">
+  <div id="pf-diff" style="max-height:340px;overflow:auto"></div>
+  <div class="ma" style="gap:8px">
+    <button class="bc" onclick="closeModal('modal-prod-finn')">Cerrar</button>
+    <button class="bk" id="pf-aplicar-btn" style="display:none" onclick="pfAplicar()">Aplicar cambios</button>
   </div>
 </div>
 </div>
@@ -6293,7 +6309,7 @@ function goPage(name,el){
   if(name==="inventario")loadInventario();
   if(name==="planes")loadPlanes();
   if(name==="elearning")loadElearning();
-  if(name==="comprobantes")loadComprobantes();
+  if(name==="comprobantes"){loadComprobantes();cargarProductosFinn();}
   if(name==="impuestos")loadImpuestos();
   if(name==="notif"){renderNotifPage();loadMfaStatus();}
   if(name==="reuniones")loadReuniones();
@@ -26715,6 +26731,155 @@ document.addEventListener("click",e=>{
   const wrap=document.querySelector("#modal-comprobante .fg[style*='position:relative']");
   if(wrap&&!wrap.contains(e.target))closeProvDd();
 });
+
+// ══════════════════════════════════════════════════════════════════════
+// PRODUCTOS DE FINNEGANS: catálogo en la base (productos_finnegans). El CÓDIGO es lo que va en la columna
+// PRODUCTO del Excel de importación. Las opciones fijas del formulario se mantienen; el catálogo suma debajo
+// las que falten ("Otros productos de Finnegans"). Se actualiza importando el export de Finnegans (PDF/Excel).
+// ══════════════════════════════════════════════════════════════════════
+let productosFinn=[],_pfDiff=null;
+const _normProd=s=>String(s??"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").trim();
+
+async function cargarProductosFinn(){
+  try{productosFinn=await sb("productos_finnegans?select=*&order=codigo.asc&limit=1000");}catch(e){productosFinn=[];}
+  _poblarProductosFinn();
+}
+
+function _poblarProductosFinn(){
+  const MAP={"comp-prod21":["21",null],"comp-prod105":["10.5",null],"comp-prod27":["27"],"comp-prod-exento":["exento",null],"comp-prod-nograv":["nograv"]};
+  Object.entries(MAP).forEach(([id,ivas])=>{
+    const sel=document.getElementById(id);if(!sel)return;
+    const actual=sel.value;
+    sel.querySelectorAll("optgroup[data-finn]").forEach(g=>g.remove());
+    const ya=new Set([...sel.options].map(o=>_normProd(o.value)));
+    const extra=productosFinn.filter(p=>p.activo&&p.uso==="compra"&&ivas.includes(p.iva??null)&&!ya.has(_normProd(p.codigo)));
+    if(!extra.length)return;
+    const g=document.createElement("optgroup");g.label="Otros productos de Finnegans";g.dataset.finn="1";
+    extra.forEach(p=>{const o=document.createElement("option");o.value=p.codigo;o.textContent=p.codigo+(p.nombre&&_normProd(p.nombre)!==_normProd(p.codigo)?` — ${p.nombre}`:"");g.appendChild(o);});
+    sel.appendChild(g);
+    if(actual)sel.value=actual;
+  });
+}
+
+// ── Lectura del export de Finnegans ──
+async function _pfLeerPDF(file){
+  await _extCargarPdfJs();
+  const doc=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+  const filas=[];let geo=null;
+  for(let p=1;p<=doc.numPages;p++){
+    const tc=await (await doc.getPage(p)).getTextContent();
+    const items=tc.items.filter(i=>i.str&&i.str.trim()).map(i=>({s:i.str.trim(),a:i.transform[4],b:i.transform[5]}));
+    const hN=items.find(i=>/^nombre$/i.test(i.s)),hC=items.find(i=>/^c[oó]digo$/i.test(i.s)),hS=items.find(i=>/^stockeable$/i.test(i.s));
+    if(hN&&hC){
+      // las columnas varían a lo largo del eje donde los encabezados difieren (el PDF puede venir rotado)
+      const rot=Math.abs(hN.a-hC.a)<Math.abs(hN.b-hC.b);
+      const col=rot?"b":"a",row=rot?"a":"b";
+      geo={rot,col,row,hRow:hN[row],cols:[{k:"nombre",pos:hN[col]},{k:"codigo",pos:hC[col]},...(hS?[{k:"stock",pos:hS[col]}]:[])].sort((x,y)=>x.pos-y.pos)};
+    }
+    if(!geo)continue;
+    const cuerpo=items.filter(i=>geo.rot?i[geo.row]>geo.hRow+1:i[geo.row]<geo.hRow-1);
+    cuerpo.sort((x,y)=>geo.rot?x[geo.row]-y[geo.row]:y[geo.row]-x[geo.row]);
+    const grupos=[];
+    cuerpo.forEach(it=>{const g=grupos.find(g=>Math.abs(g.r-it[geo.row])<=2.5);if(g)g.items.push(it);else grupos.push({r:it[geo.row],items:[it]});});
+    grupos.forEach(g=>{
+      const f={nombre:[],codigo:[],stock:[]};
+      g.items.sort((x,y)=>x[geo.col]-y[geo.col]).forEach(it=>{
+        let k=geo.cols[0].k;
+        geo.cols.forEach(c=>{if(c.pos<=it[geo.col]+2)k=c.k;});
+        f[k].push(it.s);
+      });
+      const codigo=f.codigo.join(" ").trim();
+      if(codigo)filas.push({codigo,nombre:f.nombre.join(" ").trim(),stockeable:/^s/i.test(f.stock.join(" ").trim())});
+    });
+  }
+  return filas;
+}
+async function _pfLeerExcel(file){
+  await _loadXLSX();
+  const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});
+  const filas=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
+  const clave=(r,re)=>Object.keys(r).find(k=>re.test(_normProd(k)));
+  return filas.map(r=>{
+    const kc=clave(r,/^codigo$/),kn=clave(r,/^nombre$/),ks=clave(r,/^stockeable$/);
+    return{codigo:String(r[kc]??"").trim(),nombre:String(r[kn]??"").trim(),stockeable:/^s/i.test(String(r[ks]??"").trim())};
+  }).filter(r=>r.codigo);
+}
+
+// Clasificación inicial de un producto nuevo (se puede corregir después en la base)
+function _pfClasificar(codigo,nombre){
+  const t=_normProd(codigo+" "+nombre);
+  if(/percepcion|iibb|tish/.test(t))return{uso:"interno",iva:null};
+  if(/curso|beca|suscrip|capacit|dictado|saldos iniciales|\bsi\b|difcam|diferencia de cambio/.test(t))return{uso:"venta",iva:null};
+  let iva=null;
+  if(/no gravado/.test(t))iva="nograv";
+  else if(/exent|excent|consumidor final/.test(t))iva="exento";
+  else if(/27\s*%/.test(t))iva="27";
+  else if(/10[.,]5/.test(t))iva="10.5";
+  else if(/\b21\b/.test(t))iva="21";
+  return{uso:"compra",iva};
+}
+
+async function abrirProductosFinn(){
+  await cargarProductosFinn();
+  _pfDiff=null;
+  document.getElementById("pf-file").value="";
+  document.getElementById("pf-diff").innerHTML="";
+  document.getElementById("pf-aplicar-btn").style.display="none";
+  const act=productosFinn.filter(p=>p.activo);
+  const ult=productosFinn.map(p=>p.actualizado_en||"").sort().pop();
+  document.getElementById("pf-resumen").innerHTML=productosFinn.length
+    ?`Catálogo actual: <b>${act.length}</b> productos activos (${act.filter(p=>p.uso==="compra").length} de compra)${ult?` · última actualización ${esc(String(ult).slice(0,10).split("-").reverse().join("/"))}`:""}.`
+    :`El catálogo todavía no está cargado en la base (corré <code>sql_productos_finnegans.sql</code>) o está vacío: se usan las opciones fijas del formulario.`;
+  openModal("modal-prod-finn");
+}
+
+async function pfLeerArchivo(inp){
+  const f=inp.files?.[0];if(!f)return;
+  const out=document.getElementById("pf-diff");
+  out.innerHTML=`<div style="color:var(--tx3);font-size:12px">Leyendo ${esc(f.name)}…</div>`;
+  try{
+    const filas=/\.pdf$/i.test(f.name)?await _pfLeerPDF(f):await _pfLeerExcel(f);
+    if(!filas.length){out.innerHTML=`<div style="color:var(--re);font-size:12px">No se encontraron productos. El archivo debe tener las columnas Nombre, Código y Stockeable.</div>`;return;}
+    const vistos=new Map();filas.forEach(r=>{if(!vistos.has(_normProd(r.codigo)))vistos.set(_normProd(r.codigo),r);});
+    const archivo=[...vistos.values()];
+    const actual=new Map(productosFinn.map(p=>[_normProd(p.codigo),p]));
+    const nuevos=[],cambiados=[],reactivar=[];
+    archivo.forEach(r=>{
+      const e=actual.get(_normProd(r.codigo));
+      if(!e)nuevos.push({...r,..._pfClasificar(r.codigo,r.nombre)});
+      else if(!e.activo)reactivar.push({...r,id:e.id});
+      else if((e.nombre||"")!==r.nombre||!!e.stockeable!==!!r.stockeable)cambiados.push({...r,id:e.id,antes:e.nombre});
+    });
+    const enArchivo=new Set(archivo.map(r=>_normProd(r.codigo)));
+    const faltan=productosFinn.filter(p=>p.activo&&!enArchivo.has(_normProd(p.codigo)));
+    _pfDiff={nuevos,cambiados,reactivar,faltan};
+    const lista=(arr,fn)=>arr.length?`<ul style="margin:4px 0 0 18px;padding:0;font-size:12px;line-height:1.5">${arr.map(fn).join("")}</ul>`:"";
+    out.innerHTML=`<div style="font-size:12px;color:var(--tx2);margin-bottom:8px">El archivo trae <b>${archivo.length}</b> productos.</div>
+      <div style="font-size:12px;margin-bottom:8px"><b style="color:var(--gr)">➕ Nuevos (${nuevos.length})</b>${lista(nuevos,n=>`<li><b>${esc(n.codigo)}</b> <span style="color:var(--tx3)">· ${n.uso==="compra"?"compras":n.uso==="venta"?"ventas (no aparece en compras)":"interno"}${n.iva?` · IVA ${n.iva}%`:""}</span></li>`)}</div>
+      <div style="font-size:12px;margin-bottom:8px"><b style="color:var(--am)">✎ Con cambios (${cambiados.length})</b>${lista(cambiados,n=>`<li><b>${esc(n.codigo)}</b>: ${esc(n.antes||"—")} → ${esc(n.nombre)}</li>`)}</div>
+      ${reactivar.length?`<div style="font-size:12px;margin-bottom:8px"><b>♻ Se reactivan (${reactivar.length})</b>${lista(reactivar,n=>`<li>${esc(n.codigo)}</li>`)}</div>`:""}
+      <div style="font-size:12px;margin-bottom:8px"><b style="color:var(--re)">🗑 Ya no están en Finnegans (${faltan.length})</b>${lista(faltan,n=>`<li>${esc(n.codigo)}</li>`)}
+        ${faltan.length?`<label style="display:flex;gap:6px;align-items:center;margin-top:6px;color:var(--tx2)"><input type="checkbox" id="pf-desactivar" checked> Desactivarlos (dejan de ofrecerse; las opciones fijas del formulario no se tocan)</label>`:""}</div>`;
+    document.getElementById("pf-aplicar-btn").style.display=(nuevos.length||cambiados.length||reactivar.length||faltan.length)?"":"none";
+    if(!(nuevos.length||cambiados.length||reactivar.length||faltan.length))out.innerHTML+=`<div style="color:var(--gr);font-size:12px">✓ El catálogo ya está al día.</div>`;
+  }catch(e){out.innerHTML=`<div style="color:var(--re);font-size:12px">No se pudo leer el archivo: ${esc(e.message)}</div>`;}
+}
+
+async function pfAplicar(){
+  if(!_pfDiff)return;
+  const btn=document.getElementById("pf-aplicar-btn");btn.disabled=true;
+  const ahora=new Date().toISOString();
+  try{
+    const {nuevos,cambiados,reactivar,faltan}=_pfDiff;
+    if(nuevos.length)await sb("productos_finnegans",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify(nuevos.map(n=>({codigo:n.codigo,nombre:n.nombre,stockeable:n.stockeable,uso:n.uso,iva:n.iva,activo:true,actualizado_en:ahora})))});
+    for(const c of [...cambiados,...reactivar])await sb(`productos_finnegans?id=eq.${c.id}`,{method:"PATCH",body:JSON.stringify({nombre:c.nombre,stockeable:c.stockeable,activo:true,actualizado_en:ahora})});
+    if(faltan.length&&document.getElementById("pf-desactivar")?.checked)await sb(`productos_finnegans?id=in.(${faltan.map(f=>f.id).join(",")})`,{method:"PATCH",body:JSON.stringify({activo:false,actualizado_en:ahora})});
+    await cargarProductosFinn();
+    closeModal("modal-prod-finn");
+    toast(`✓ Productos de Finnegans actualizados (${nuevos.length} nuevos, ${cambiados.length+reactivar.length} modificados)`,"ok");
+  }catch(e){toast("Error: "+e.message,"err");}
+  finally{btn.disabled=false;}
+}
 
 function sugerirProductosFinn(){
   const prov=(document.getElementById("comp-prov")?.value||"").toLowerCase();

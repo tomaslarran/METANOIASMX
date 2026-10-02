@@ -1479,7 +1479,16 @@ UPDATE cursos SET publicacion_aprobada = true WHERE estado != 'Borrador';
 ALTER TABLE cf_empleados ADD COLUMN IF NOT EXISTS cuit text;
 ALTER TABLE cf_pagos_empleados ADD COLUMN IF NOT EXISTS comprobante_id uuid REFERENCES comprobantes_compra(id) ON DELETE SET NULL;
 ```
-**Pendiente:** cargar el CUIT de los 4 desde ✎ en Sueldos; actualizar los productos de Finnegans en la plataforma (esperando saber de dónde salen: export de Finnegans o catálogo del plugin del técnico).
+**Pendiente:** cargar el CUIT de los 4 desde ✎ en Sueldos.
+
+### 🧾 Catálogo de productos de Finnegans (2 Oct 2026)
+
+**Motivación:** los productos del formulario de facturas estaban fijos en el HTML (18 opciones) y se desactualizaban respecto de Finnegans (el catálogo real tiene 49). **El Excel de importación usa el CÓDIGO del producto** (columna PRODUCTO), no el nombre; los códigos y nombres a veces difieren (ej. nombre "Asesoramiento de logistica y eventos" → código `LOGISTICA`; nombre "Asesoramiento técnico y transferencia de Know How…" → código `ASESORAMIENTO`) y hay un typo real en un código de Finnegans (`Varios materiales construccióin 21%`) que hay que respetar tal cual.
+
+- Tabla `productos_finnegans` (`codigo` único, `nombre`, `stockeable`, `uso` compra/venta/interno, `iva` 21/10.5/27/exento/nograv/null, `activo`). `sql_productos_finnegans.sql` la crea y carga los 49 del export del 2/10/2026 (**correrlo en Supabase**).
+- Las opciones fijas del formulario **se mantienen** (todas existen en el catálogo, verificado por código); el catálogo suma debajo un grupo **"Otros productos de Finnegans"** en cada select según su IVA (los de IVA sin definir aparecen en 21%, 10,5% y exento). Los de `uso` venta/interno (Cursos, Suscripción, Saldos iniciales, percepciones, TESTDELETE…) no aparecen en compras. Sin la tabla, todo sigue como antes.
+- Botón **🔄 Productos Finnegans** (Comprobantes, solo admin): se sube el export de Finnegans (PDF o Excel con Nombre/Código/Stockeable), muestra qué es nuevo / cambió / ya no está (con opción de desactivar) y aplica. El lector de PDF funciona aunque el PDF venga rotado; probado con el export real (49/49). Los productos nuevos se clasifican por el nombre (IVA, compra/venta); se corrige a mano en la tabla si hace falta.
+- **A confirmar con Tomás:** (1) para las facturas C de honorarios (Daniela, Florencia, Agustín, Oscar), ¿el producto correcto es `honorarios profesionales` y va en neto exento? Hoy `sugerirProductosFinn` mapea "honorarios" a `ASESORAMIENTO`; (2) el IVA de los productos genéricos sin tasa en el nombre (seguros, peajes, reparación, etc.).
 
 ---
 
