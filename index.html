@@ -4754,12 +4754,19 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
           <option value="093|2">093 — Servicios médicos y similares (2%)</option>
         </select>
       </div>
-      <div class="fg"><label class="fl">Base de retención</label>
+      <div class="fg"><label class="fl">Situación en Ganancias</label>
+        <select class="fs" id="mop-gan-sit" onchange="mopSelSicore()"><option value="I">Inscripto</option><option value="NI">No inscripto</option></select>
+      </div>
+      <div class="fg"><label class="fl">Tipo de persona</label>
+        <select class="fs" id="mop-gan-pers" onchange="mopSelSicore()"><option value="H">Humana</option><option value="J">Jurídica</option></select>
+      </div>
+      <div class="fg"><label class="fl">Base de retención (neto sin IVA)</label>
         <input class="fi" id="mop-base-ret" type="number" step="0.01" oninput="mopRecalcular()" placeholder="0">
       </div>
-      <div class="fg"><label class="fl">% Retención</label>
+      <div class="fg"><label class="fl">% Retención <span style="color:var(--tx3);font-weight:400">(efectivo)</span></label>
         <input class="fi" id="mop-pct-ret" type="number" step="0.01" oninput="mopRecalcular()" placeholder="0">
       </div>
+      <div id="mop-ret-detalle" style="grid-column:1/-1;font-size:11px;color:var(--tx3);line-height:1.5"></div>
     </div>
       <div class="fg" style="grid-column:1/-1"><label class="fl">N° comprobante de retención <span style="color:var(--tx3);font-weight:400">(SIAM)</span></label>
         <input class="fi" id="mop-nro-ret" type="text" placeholder="Ej: 00001-00000123">
@@ -25978,6 +25985,67 @@ async function desmarcarImportadoFinnegans(id){
 }
 
 // ── ÓRDENES DE PAGO ─────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════
+// RETENCIÓN DE GANANCIAS — RG 830. Tabla oficial del simulador de ARCA (https://servicioscf.afip.gob.ar/calc-rg830/),
+// cargada en rg830_conceptos / rg830_escala (sql_rg830_ganancias.sql). Si las tablas no existen, se usa el catálogo viejo (porcentaje fijo).
+// Reglas (verificadas contra el simulador): base = pagos del mes + este pago; inscriptos descuentan el monto no sujeto, no inscriptos no;
+// % fijo o, si el % es 0, escala mensual; a retener = total − retenido antes en el mes; si es menor al mínimo no se retiene.
+// ══════════════════════════════════════════════════════════════════════
+let rg830Conceptos=[],rg830Escala=[],_rg830Cargado=false,_mopPrev={base:0,ret:0};
+async function cargarRG830(){
+  if(_rg830Cargado)return;
+  try{
+    const [c,e]=await Promise.all([sb("rg830_conceptos?select=*&order=cod_regimen.asc"),sb("rg830_escala?select=*&order=desde.asc")]);
+    rg830Conceptos=(c||[]).map(x=>({...x,cod_regimen:+x.cod_regimen}));
+    rg830Escala=(e||[]).map(x=>({desde:+x.desde,hasta:x.hasta==null?Infinity:+x.hasta,pct:+x.porcentaje}));
+    _rg830Cargado=rg830Conceptos.length>0;
+  }catch(err){rg830Conceptos=[];rg830Escala=[];}
+}
+const _rg830Desc=cod=>{
+  const r=rg830Conceptos.find(x=>x.cod_regimen===(parseInt(cod,10)||-1));
+  if(!r)return"";
+  const t=String(r.concepto||"").replace(/\s+/g," ");
+  return t.length>80?t.slice(0,77).trim()+"…":t;
+};
+function _rg830Escala(base){
+  let r=0;
+  for(const t of rg830Escala){if(base>t.desde)r+=(Math.min(base,t.hasta)-t.desde)*t.pct/100;}
+  return Math.round(r*100)/100;
+}
+function calcRetGanancias({cod,inscripto,persona,neto,prevBase,prevRet}){
+  const r=rg830Conceptos.find(x=>x.cod_regimen===(parseInt(cod,10)||-1));
+  if(!r)return null;
+  const pct=inscripto?+r.pct_inscripto:(persona==="J"?+r.pct_no_insc_juridica:+r.pct_no_insc_humana);
+  const noSuj=inscripto?+r.monto_no_sujeto:0;
+  const acum=(prevBase||0)+(neto||0);
+  const imponible=Math.max(0,Math.round((acum-noSuj)*100)/100);
+  const total=pct>0?Math.round(imponible*pct)/100:_rg830Escala(imponible);
+  let aRet=Math.round((total-(prevRet||0))*100)/100;
+  const min=+r.monto_minimo;
+  const exceso=aRet<0;
+  const bajoMin=aRet>0&&aRet<min;
+  if(exceso||bajoMin)aRet=0;
+  return{pct,noSuj,imponible,total,aRet,bajoMin,exceso,min,escala:pct===0,acum};
+}
+// Pagos y retenciones ya practicados en el mes al mismo proveedor (por CUIT) y régimen: la base y el no sujeto son acumulativos
+async function _mopCargarPrevios(cod){
+  _mopPrev={base:0,ret:0};
+  const compId=document.getElementById("mop-comp-id").value;
+  const c=(typeof comprobantes!=="undefined"?comprobantes:[]).find(x=>x.id===compId);
+  const cuit=String(c?.cuit||"").replace(/\D/g,"");
+  const fecha=document.getElementById("mop-fecha").value||today();
+  if(!cod||cuit.length!==11)return;
+  const mes=fecha.slice(0,7);
+  try{
+    const ops=await sb(`ordenes_pago?sociedad=eq.${c.sociedad||"SUDES"}&codigo_sicore=eq.${parseInt(cod,10)}&fecha_pago=gte.${mes}-01&fecha_pago=lte.${mes}-31&select=comprobante_id,cuit,base_retencion,monto_retencion`);
+    ops.filter(o=>o.comprobante_id!==compId&&String(o.cuit||"").replace(/\D/g,"")===cuit).forEach(o=>{_mopPrev.base+=parseFloat(o.base_retencion)||0;_mopPrev.ret+=parseFloat(o.monto_retencion)||0;});
+  }catch(e){}
+}
+function _mopCalcActual(){
+  const cod=(document.getElementById("mop-sicore").value||"").split("|")[0];
+  if(!cod||!rg830Conceptos.length)return null;
+  return calcRetGanancias({cod,inscripto:document.getElementById("mop-gan-sit").value==="I",persona:document.getElementById("mop-gan-pers").value,neto:parseFloat(document.getElementById("mop-base-ret").value)||0,prevBase:_mopPrev.base,prevRet:_mopPrev.ret});
+}
 const SICORE_CAT={
   "029":{desc:"Locación y prest. de servicios",pct:2},
   "031":{desc:"Industria de la construcción",pct:2},
@@ -25988,6 +26056,7 @@ const SICORE_CAT={
 };
 
 function getSicoreCat(){
+  if(rg830Conceptos.length){const cat={};rg830Conceptos.forEach(r=>{cat[String(r.cod_regimen)]={desc:_rg830Desc(r.cod_regimen),pct:+r.pct_inscripto};});return cat;}
   const activos=paramImpositivos.filter(p=>p.tipo==="sicore_ganancias"&&!p.vigente_hasta);
   if(!activos.length)return SICORE_CAT;
   const cat={};
@@ -26003,6 +26072,7 @@ function getIvaTasa(codigo){
 }
 
 function buildSicoreOptions(){
+  if(rg830Conceptos.length)return `<option value="">— Sin retención —</option>`+rg830Conceptos.map(r=>`<option value="${r.cod_regimen}">${r.cod_regimen} — ${esc(_rg830Desc(r.cod_regimen))}</option>`).join("");
   const cat=getSicoreCat();
   return `<option value="">— Sin retención —</option>`+
     Object.entries(cat).map(([cod,v])=>`<option value="${cod}|${v.pct}">${cod} — ${v.desc} (${v.pct}%)</option>`).join("");
@@ -26023,9 +26093,15 @@ async function abrirOrdenPago(compId,fromPendientes=false){
   document.getElementById("mop-cbu").value="";
   document.getElementById("mop-obs-op").value="";
   document.getElementById("mop-nro-ret").value="";
+  await cargarRG830();
+  _mopPrev={base:0,ret:0};
   document.getElementById("mop-sicore").innerHTML=buildSicoreOptions();
   document.getElementById("mop-sicore").value="";
   document.getElementById("mop-pct-ret").value="";
+  document.getElementById("mop-pct-ret").readOnly=rg830Conceptos.length>0;
+  document.getElementById("mop-gan-sit").value="I";
+  document.getElementById("mop-gan-pers").value=/^(20|23|24|27)/.test(String(c.cuit||"").replace(/\D/g,""))?"H":"J";
+  document.getElementById("mop-ret-detalle").textContent="";
   const tipoVal=c.tipo?.startsWith("NC")?"NC":(c.tipo||"B");
   const tipoSel=document.getElementById("mop-tipo");
   tipoSel.value=["A","B","C","NC"].includes(tipoVal)?tipoVal:"B";
@@ -26052,8 +26128,8 @@ async function abrirOrdenPago(compId,fromPendientes=false){
     document.getElementById("mop-nro-ret").value=opPrev.nro_comprobante_retencion||"";
     if(opPrev.codigo_sicore){
       const so=document.getElementById("mop-sicore");
-      const opt=[...so.options].find(o=>o.value.startsWith(opPrev.codigo_sicore+"|"));
-      if(opt){so.value=opt.value;so.dispatchEvent(new Event("change"));}
+      const opt=[...so.options].find(o=>o.value===String(opPrev.codigo_sicore)||o.value.startsWith(opPrev.codigo_sicore+"|"));
+      if(opt){so.value=opt.value;await mopSelSicore();}
     }
     toggleSocioOP();
   }
@@ -26077,9 +26153,10 @@ function mopActualizarTipo(){
   mopRecalcular();
 }
 
-function mopSelSicore(){
+async function mopSelSicore(){
   const val=document.getElementById("mop-sicore").value;
-  document.getElementById("mop-pct-ret").value=val?val.split("|")[1]:"";
+  if(rg830Conceptos.length){await _mopCargarPrevios(val.split("|")[0]);}
+  else document.getElementById("mop-pct-ret").value=val?val.split("|")[1]:"";
   mopRecalcular();
 }
 
@@ -26087,10 +26164,20 @@ function mopRecalcular(){
   const bruto=parseFloat(document.getElementById("mop-monto-bruto").value)||0;
   const esA=document.getElementById("mop-tipo").value==="A";
   let ret=0;
+  const det=document.getElementById("mop-ret-detalle");
+  if(det)det.textContent="";
   if(esA){
     const base=parseFloat(document.getElementById("mop-base-ret").value)||0;
-    const pct=parseFloat(document.getElementById("mop-pct-ret").value)||0;
-    ret=Math.round(base*pct/100*100)/100;
+    const calc=_mopCalcActual();
+    if(calc){
+      ret=calc.aRet;
+      document.getElementById("mop-pct-ret").value=base>0&&ret>0?(Math.round(ret/base*10000)/100):"";
+      const m=v=>"$"+Math.round(v*100)/100;
+      if(det)det.textContent=`Base ${m(base)}${_mopPrev.base?` + pagos del mes ${m(_mopPrev.base)}`:""}${calc.noSuj?` − no sujeto ${m(calc.noSuj)}`:""} = imponible ${m(calc.imponible)} → ${calc.escala?"escala":calc.pct+"%"} = ${m(calc.total)}${_mopPrev.ret?` − retenido antes ${m(_mopPrev.ret)}`:""}${calc.bajoMin?` · menor al mínimo de ${m(calc.min)}: no se retiene`:""}${calc.exceso?" · ya se retuvo de más en el mes":""}`;
+    }else{
+      const pct=parseFloat(document.getElementById("mop-pct-ret").value)||0;
+      ret=Math.round(base*pct/100*100)/100;
+    }
   }
   const neto=Math.round((bruto-ret)*100)/100;
   document.getElementById("mop-monto-ret").textContent="$"+ret.toLocaleString("es-AR");
@@ -26218,8 +26305,9 @@ async function confirmarOrdenPago(){
   const esA=tipo==="A";
   const sicoreVal=document.getElementById("mop-sicore").value;
   const base=esA?(parseFloat(document.getElementById("mop-base-ret").value)||0):0;
-  const pct=esA?(parseFloat(document.getElementById("mop-pct-ret").value)||0):0;
-  const ret=esA?Math.round(base*pct/100*100)/100:0;
+  const calcRG=esA?_mopCalcActual():null;
+  const ret=esA?(calcRG?calcRG.aRet:Math.round(base*(parseFloat(document.getElementById("mop-pct-ret").value)||0)/100*100)/100):0;
+  const pct=esA?(calcRG?(base>0&&ret>0?Math.round(ret/base*10000)/100:0):(parseFloat(document.getElementById("mop-pct-ret").value)||0)):0;
   const neto=Math.round((bruto-ret)*100)/100;
   const fecha=document.getElementById("mop-fecha").value||today();
   const medio=document.getElementById("mop-medio").value;
@@ -26229,7 +26317,7 @@ async function confirmarOrdenPago(){
   if(!medio){toast("Seleccioná cómo se va a pagar","err");return;}
   if(_pagoMedioTipo(medio)==="tarjeta"){toast("Con tarjeta no corresponde orden de pago (se paga antes de recibir la factura): usá 💳 Pagar.","err");return;}
   const [cod]=(sicoreVal?sicoreVal.split("|"):["",""]);
-  const sicoreDesc=cod?getSicoreCat()[cod]?.desc||"":"";
+  const sicoreDesc=cod?(rg830Conceptos.length?_rg830Desc(cod):getSicoreCat()[cod]?.desc)||"":"";
   let numero=`OP-${fecha.slice(0,7).replace("-","")}-${String(Date.now()).slice(-4)}`;
   const opData={
     comprobante_id:compId,numero,proveedor:c.proveedor||"",cuit:c.cuit||"",
