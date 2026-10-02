@@ -1620,3 +1620,29 @@ CREATE POLICY "Solo autenticados" ON nueva_tabla FOR ALL TO authenticated USING 
 - 🐛 **Bug heredado corregido:** el PDF de la OP se adjuntaba mal — `jsPDF` entrega `data:application/pdf;filename=generated.pdf;base64,…` y la función solo quitaba `data:application/pdf;base64,`, así que el adjunto podía llegar corrupto. Ahora se limpia en el cliente y en la función.
 - **Sueldos:** la ficha de cada persona con CUIT muestra **💸 Pagar OP** cuando tiene una orden de pago pendiente (antes, al pasar la factura a OP pendiente, "desaparecía" de Sueldos); al pagar la OP el mes de sueldo se marca solo y la pantalla se actualiza. Los CUIT de Daniela, Florencia, Oscar y Agustín estaban vacíos en la base: se cargaron desde el maestro de proveedores (por coincidencia de nombre, confirmado).
 - **Préstamo de POINTERS a SUDES por el eCheck de $37.625.055** (rescate de Avantia del 07/07/2026, usado para pagar simuladores Delec): se registró en Cash Flow → Préstamos (SUDES, "POINTERS SAS (empresa vinculada)", saldo $37.625.055, **sin cuotas y fuera de la proyección de caja**). Reemplaza a la factura A 0002-00000081 de SUDES SAS a POINTERS, que se elevó a ARCA sin querer y se anuló con la NC-A 0002-00000001 (se netean). **Pendiente de la contadora:** el asiento intercompany (en POINTERS: Préstamo a SUDES contra Inversiones; en SUDES: contra lo que corresponda a la compra de simuladores — la factura de Delec no figura cargada en SUDES). Las inversiones (Avantia) todavía no tienen asientos (la cuenta 1.1.04.001 no tiene movimientos).
+
+---
+
+## 📌 Cierre de jornada — viernes 2 Oct 2026 (retomar el lunes 5 Oct)
+
+**Hecho hoy (todo en producción salvo lo marcado):** pago único de facturas y OP como instrucción · limpieza de 149 líneas de caja heredadas · sueldos con factura por CUIT · catálogo de productos de Finnegans (49) con importador · retención de Ganancias RG 830 con la tabla oficial de ARCA · 42 proveedores creados y 118 facturas vinculadas por CUIT · estado de cuenta de proveedores por ejercicio + circularización v2 · notas de crédito con asiento de devengado · OP: comprobante de pago + mail al proveedor con OP y certificado de retención · préstamo POINTERS→SUDES ($37.625.055) en Cash Flow.
+
+**A correr / hacer por Tomás (en este orden):**
+1. SQL en Supabase: `sql_proveedores_circularizacion.sql` (tabla `circularizaciones` + disparador por CUIT) y `sql_comprobante_pago.sql` (columna + bucket `comprobantes-pago`). Ya corridos: Sueldos (`cf_empleados.cuit`, `cf_pagos_empleados.comprobante_id`) y `sql_productos_finnegans.sql`. **Falta confirmar:** `sql_rg830_ganancias.sql` (si la OP de Oscar dio $59.310, ya está corrido).
+2. Redeploy de Edge Functions: `enviar-pago-proveedor` (adjuntos + Storage), `enviar-circularizacion` (detalle del saldo). Siguen pendientes de verificar los deploys viejos (`agente-mensajes`, funciones con conteo de tokens).
+3. 🔄 **Generar históricos** (Impuestos → Libro Diario): genera el asiento de la NC-A 0002-00000001 de SUDES SAS ($37,6M) y las cuotas de préstamo / pagos con Visa pendientes. Después el **control contra libros de POINTERS** (📒 Estado de cuenta) debe dar diferencia 0.
+4. Probar el circuito con una orden real chica (mail propio como proveedor): llegan comprobante + OP + certificado.
+5. Cargar emails de proveedores (los 42 nuevos no tienen) y corregir los 4 CUIT inválidos/vacíos en facturas (Productos Químicos Salta, 2 de JACARANDA → 33-61122668-9, Blas Rovaletti).
+6. Importar extractos jul/ago/sep de SUDES y POINTERS; cerrar julio, agosto y septiembre en 🔒 Cierre de mes; renovar certificado MiPyME de SUDES (vence 31/10).
+7. Definir con la contadora: a quién se retiene Ganancias y con qué régimen (nadie se retuvo hasta hoy; Oscar → 119) · asiento del préstamo intercompany POINTERS→SUDES (la factura de Delec no está cargada en SUDES; las inversiones de Avantia no tienen asientos) · tratamiento de la NC por el "préstamo de echeq".
+
+**Pendientes de desarrollo (por prioridad):**
+- Fase 3 contable: ventas/cobros (`devengado_venta`/`cobro_venta`) — espera el token Sanctum del técnico (`ELEARNING_API_TOKEN`) y el SQL `elearning_*`.
+- Cuenta en dólares (cuenta contable USD + importar esa cuenta del extracto).
+- Asientos de inversiones (Avantia): hoy no hay ninguno en la cuenta 1.1.04.001.
+- Rol `contable` de solo lectura (esperando la reunión con Auren) y numeración estilo Tango.
+- Ver el comprobante de pago guardado desde el historial de OP (hoy solo se guarda la ruta en `ordenes_pago.comprobante_pago_path`).
+- IIBB de Salta y SUSS en la orden de pago (solo está Ganancias).
+- Revisar que "Varios construcción" salga solo en el select de 21% (hoy también aparece en 10,5% por ser opción fija del HTML).
+
+**Backups de datos tocados hoy** (en `backups/`): `caja_auto_comprobantes_20261002.json`, `ops_borrador_anuladas_20261002.json`, `proveedores_creados_20261002.json`.
