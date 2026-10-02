@@ -4074,6 +4074,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="fg"><label class="fl">Monto mensual ($)</label><input class="fi" id="emp-monto" type="number" step="0.01" placeholder="0"></div>
       <div class="fg"><label class="fl">Día de pago</label><input class="fi" id="emp-dia" type="number" min="1" max="31" value="5"></div>
     </div>
+    <div class="fg"><label class="fl">CUIT (11 dígitos, sin guiones)</label><input class="fi" id="emp-cuit" type="text" inputmode="numeric" maxlength="13" placeholder="20123456789"><div style="font-size:10px;color:var(--tx3);margin-top:3px">Vincula sus facturas de honorarios con el pago del sueldo.</div></div>
     <div class="fg"><label class="fl">Notas</label><textarea class="fi" id="emp-notas" rows="2" placeholder="Observaciones opcionales"></textarea></div>
     <div class="ma">
       <button id="memp-del-btn" class="bc danger" style="display:none" onclick="delEmpleado()">Eliminar</button>
@@ -4089,10 +4090,12 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="mt"><span id="mpe-title">Confirmar pago</span><button class="mt-close" onclick="closeM('modal-pago-empleado')">✕</button></div>
     <div style="padding:0 20px 20px;display:flex;flex-direction:column;gap:14px">
       <div id="mpe-resumen" style="background:var(--surf2);border-radius:var(--r);padding:12px 14px;font-size:13px;border:1px solid var(--b)"></div>
+      <div class="fg" id="mpe-fact-wrap" style="display:none"><label class="fl">Factura de honorarios</label><select class="fi" id="mpe-fact" onchange="mpeElegirFactura()"></select><div id="mpe-fact-hint" style="font-size:11px;color:var(--tx3);margin-top:4px"></div></div>
       <div class="fg"><label class="fl">Fecha de pago</label><input type="date" id="mpe-fecha" class="fi"></div>
       <div class="fg"><label class="fl">Monto abonado</label><input type="number" id="mpe-monto" class="fi" step="0.01" placeholder="0"></div>
       <div class="fg"><label class="fl">Medio de pago</label><select class="fi" id="mpe-medio"></select></div>
       <div class="fg"><label class="fl">Notas (opcional)</label><input type="text" id="mpe-notas" class="fi" placeholder="Referencia, número de transferencia..."></div>
+      <button id="mpe-op-btn" class="bc" style="display:none" onclick="_pagoEmpleadoGenerarOP()">📄 Necesita orden de pago (retenciones)</button>
       <div style="display:flex;gap:8px;padding-top:4px">
         <button class="bc" onclick="closeM('modal-pago-empleado')" style="flex:1">Cancelar</button>
         <button class="bk" id="mpe-save-btn" onclick="confirmarPagoEmpleado()" style="flex:1">✓ Confirmar pago</button>
@@ -17759,9 +17762,9 @@ async function renderSueldos(){
           </div>
           <div style="display:flex;align-items:center;gap:6px">
             ${pagado
-              ?`<span class="badge bdo" style="font-size:10px;padding:3px 10px">✓ ${cfSueldosMes.slice(0,7)===(new Date().getFullYear()+"-"+String(new Date().getMonth()+1).padStart(2,"0"))?"Este mes":cfSueldosMes} pagado</span>
+              ?`<span class="badge bdo" style="font-size:10px;padding:3px 10px">✓ ${cfSueldosMes.slice(0,7)===(new Date().getFullYear()+"-"+String(new Date().getMonth()+1).padStart(2,"0"))?"Este mes":cfSueldosMes} pagado${pago?.comprobante_id?" · 📄 con factura":""}</span>
                  <button class="btn sm" onclick="desmarcarPagoEmpleado('${emp.id}','${cfSueldosMes}')" style="font-size:10px;padding:2px 8px;color:var(--re)">↩ Desmarcar</button>`
-              :`<span class="badge bpr" style="font-size:10px;padding:3px 10px">Pendiente</span>
+              :`<span class="badge bpr" style="font-size:10px;padding:3px 10px">Pendiente${pago?.comprobante_id?" · 📄 factura vinculada":""}</span>
                  <button class="btn sm" style="background:var(--pu);color:#fff;font-size:10px;padding:3px 10px" onclick="abrirPagoEmpleado('${emp.id}','${cfSueldosMes}')">Pagar</button>`
             }
             <button class="btn sm" onclick="openEditEmpleado('${emp.id}')">✎</button>
@@ -17781,7 +17784,7 @@ function openAddEmpleado(){
   document.getElementById("memp-title").textContent="Nuevo Empleado";
   document.getElementById("memp-save-btn").textContent="Guardar";
   document.getElementById("memp-del-btn").style.display="none";
-  ["emp-nombre","emp-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  ["emp-nombre","emp-notas","emp-cuit"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
   document.getElementById("emp-cat").value="Honorarios Gerenciales";
   document.getElementById("emp-soc").value="SUDES";
   document.getElementById("emp-monto").value="";
@@ -17803,6 +17806,7 @@ function openEditEmpleado(id){
   document.getElementById("emp-monto").value=emp.monto_mensual||"";
   document.getElementById("emp-dia").value=emp.dia_pago||5;
   document.getElementById("emp-notas").value=emp.notas||"";
+  document.getElementById("emp-cuit").value=emp.cuit||"";
   const tipoVar=document.getElementById("emp-tipo-var");
   const tipoFijo=document.getElementById("emp-tipo-fijo");
   if(emp.tipo==="Variable"&&tipoVar)tipoVar.checked=true;
@@ -17815,6 +17819,10 @@ async function saveEmpleado(){
   if(!nombre){toast("Escribí un nombre","err");return;}
   const tipo=document.querySelector('input[name="emp-tipo"]:checked')?.value||"Fijo";
   const data={nombre,categoria:document.getElementById("emp-cat").value,sociedad:document.getElementById("emp-soc").value,tipo,monto_mensual:parseFloat(document.getElementById("emp-monto").value)||0,dia_pago:parseInt(document.getElementById("emp-dia").value)||5,notas:document.getElementById("emp-notas").value.trim()||null,activo:true,updated_at:new Date().toISOString()};
+  const cuit=String(document.getElementById("emp-cuit").value||"").replace(/\D/g,"");
+  if(cuit&&cuit.length!==11){toast("El CUIT debe tener 11 dígitos","err");return;}
+  const empPrev=editEmpId?cfEmpleados.find(e=>e.id===editEmpId):null;
+  if(cuit||empPrev?.cuit)data.cuit=cuit||null;
   const btn=document.getElementById("memp-save-btn");btn.disabled=true;
   try{
     if(editEmpId){
@@ -17866,11 +17874,15 @@ function abrirPagoEmpleado(empId,periodo){
   const mpeSel=document.getElementById("mpe-medio");
   const mpeActivos=mediosPago.filter(m=>m.activo&&(m.sociedad==="Ambas"||m.sociedad===emp.sociedad));
   mpeSel.innerHTML=`<option value="">— Sin especificar —</option>`+(mpeActivos.length?mpeActivos:mediosPago.filter(m=>m.activo)).map(m=>`<option value="${esc(m.nombre)}">${esc(m.nombre)}${m.banco?` — ${esc(m.banco)}`:""}</option>`).join("");
+  document.getElementById("mpe-monto").readOnly=false;
+  document.getElementById("mpe-fact-wrap").style.display="none";
   openM("modal-pago-empleado");
   setTimeout(()=>document.getElementById("mpe-fecha").focus(),80);
+  _mpeCargarFacturas(emp,periodo);
 }
 
 async function confirmarPagoEmpleado(){
+  if(document.getElementById("mpe-fact")?.value)return _pagoEmpleadoConFactura();
   const fecha=document.getElementById("mpe-fecha").value||today();
   const monto=parseFloat(document.getElementById("mpe-monto").value)||null;
   const notas=document.getElementById("mpe-notas").value.trim()||null;
@@ -17907,9 +17919,150 @@ async function confirmarPagoEmpleado(){
   finally{btn.disabled=false;_mpeEmpId=null;_mpePeriodo=null;}
 }
 
+// ── Sueldos / honorarios con factura ───────────────────────────────────
+// El empleado se vincula con sus facturas por CUIT (11 dígitos, sin guiones). Pagar el sueldo de un mes
+// con factura paga ESA factura por el camino único (registrarPagoFactura); pagar la factura desde
+// Comprobantes marca el mes de sueldo como pagado (_sueldoSincronizarPago).
+const _cuit11=c=>String(c||"").replace(/\D/g,"");
+let _mpeFacts=[];
+
+async function _mpeCargarFacturas(emp,periodo){
+  const wrap=document.getElementById("mpe-fact-wrap"),sel=document.getElementById("mpe-fact"),hint=document.getElementById("mpe-fact-hint");
+  const btnOP=document.getElementById("mpe-op-btn");
+  _mpeFacts=[];
+  if(btnOP)btnOP.style.display="none";
+  sel.innerHTML=`<option value="">— Sin factura (pago directo de sueldo) —</option>`;
+  const cuit=_cuit11(emp.cuit);
+  if(cuit.length!==11){
+    wrap.style.display="";
+    hint.innerHTML=`Cargá el <b>CUIT</b> de ${esc(emp.nombre)} en ✎ para vincular sus facturas.`;
+    return;
+  }
+  try{
+    const lista=await sb(`comprobantes_compra?sociedad=eq.${emp.sociedad}&estado=in.(pendiente,revisado)&select=*&order=fecha.desc&limit=400`);
+    _mpeFacts=lista.filter(c=>_cuit11(c.cuit)===cuit&&!c.tipo?.startsWith("NC"));
+    const ops=_mpeFacts.length?await sb(`ordenes_pago?comprobante_id=in.(${_mpeFacts.map(c=>c.id).join(",")})&estado=neq.pagado&select=id,numero,comprobante_id`).catch(()=>[]):[];
+    _mpeFacts.forEach(c=>{c._opPend=ops.find(o=>o.comprobante_id===c.id)||null;});
+    wrap.style.display="";
+    if(!_mpeFacts.length){hint.innerHTML=`No hay facturas pendientes de ${esc(emp.nombre)}. Si ya la cargaste, revisá que el CUIT coincida; si no, se paga como sueldo directo.`;return;}
+    sel.innerHTML+=_mpeFacts.map(c=>`<option value="${c.id}">Fact. ${esc(c.tipo||"")} ${esc(c.numero||"")} · ${fmtNum(c.total,true)} · ${esc(c.fecha||"")}${c._opPend?` · 📄 OP ${esc(c._opPend.numero)} pendiente`:""}</option>`).join("");
+    const delMes=_mpeFacts.filter(c=>(c.fecha||"").slice(0,7)===periodo);
+    const sugerida=delMes.length===1?delMes[0]:(_mpeFacts.length===1?_mpeFacts[0]:null);
+    if(sugerida)sel.value=sugerida.id;
+    hint.innerHTML=sugerida?`Se propone la factura del período: confirmá que sea la correcta.`:`Elegí la factura de este mes (hay ${_mpeFacts.length} pendientes).`;
+    mpeElegirFactura();
+  }catch(e){hint.textContent="No se pudieron buscar las facturas: "+e.message;}
+}
+
+function mpeElegirFactura(){
+  const id=document.getElementById("mpe-fact").value;
+  const c=_mpeFacts.find(x=>x.id===id);
+  const monto=document.getElementById("mpe-monto");
+  const btnOP=document.getElementById("mpe-op-btn");
+  const emp=cfEmpleados.find(e=>e.id===_mpeEmpId);
+  if(c){
+    monto.value=Math.abs(parseFloat(c.total)||0).toFixed(2);monto.readOnly=true;
+    if(btnOP){btnOP.style.display=c._opPend?"none":"";}
+    const hint=document.getElementById("mpe-fact-hint");
+    const dif=emp&&Math.abs((parseFloat(emp.monto_mensual)||0)-Math.abs(parseFloat(c.total)||0))>1;
+    hint.innerHTML=c._opPend
+      ?`Esta factura ya tiene la <b>orden de pago ${esc(c._opPend.numero)}</b>: al confirmar se abre para pagarla.`
+      :`Se paga esta factura${dif?` <span style="color:var(--am)">· ⚠️ el monto difiere del mensual (${fmtNum(emp.monto_mensual,true)})</span>`:""}. Si lleva retenciones, usá "Necesita orden de pago".`;
+  }else{
+    monto.readOnly=false;
+    if(emp)monto.value=emp.monto_mensual!=null?parseFloat(emp.monto_mensual).toFixed(2):"";
+    if(btnOP)btnOP.style.display="none";
+  }
+}
+
+// Asegura que la factura esté en la lista global (abrirOrdenPago y compañía la buscan ahí)
+function _asegurarComprobante(c){if(!comprobantes.find(x=>x.id===c.id))comprobantes.push(c);}
+
+async function _mpeVincular(c,emp,periodo){
+  const ex=(await sb(`cf_pagos_empleados?empleado_id=eq.${emp.id}&periodo=eq.${periodo}&select=*`).catch(()=>[]))[0];
+  const data={empleado_id:emp.id,periodo,monto:Math.abs(parseFloat(c.total)||0),pagado:false,comprobante_id:c.id,updated_at:new Date().toISOString()};
+  if(ex){await sb(`cf_pagos_empleados?id=eq.${ex.id}`,{method:"PATCH",body:JSON.stringify({comprobante_id:c.id,updated_at:data.updated_at})});Object.assign(ex,{comprobante_id:c.id});}
+  else{const[cr]=await sb("cf_pagos_empleados",{method:"POST",body:JSON.stringify(data)});cfPagosEmpleados.push(cr);}
+}
+
+async function _pagoEmpleadoConFactura(){
+  const emp=cfEmpleados.find(e=>e.id===_mpeEmpId);
+  const c=_mpeFacts.find(x=>x.id===document.getElementById("mpe-fact").value);
+  if(!emp||!c)return;
+  const periodo=_mpePeriodo;
+  const fecha=document.getElementById("mpe-fecha").value||today();
+  const medio=document.getElementById("mpe-medio").value;
+  const obs=document.getElementById("mpe-notas").value.trim();
+  const btn=document.getElementById("mpe-save-btn");btn.disabled=true;
+  try{
+    const fresco=await _pagoFresco(c.id);
+    if(fresco?.estado==="pagado"){toast(_pagoYaPagadaMsg(fresco),"err");return;}
+    _asegurarComprobante(c);
+    const opPend=(await sb(`ordenes_pago?comprobante_id=eq.${c.id}&estado=neq.pagado&select=id,numero`).catch(()=>[]))[0];
+    if(opPend){
+      await _mpeVincular(c,emp,periodo);
+      closeM("modal-pago-empleado");renderSueldos();
+      await abrirPagarOP(opPend.id);
+      return;
+    }
+    if(!medio){toast("Elegí el medio de pago","err");return;}
+    if(_pagoMedioTipo(medio)==="cuenta_socio"){toast("Para pagar con plata de un socio usá Comprobantes → 💳 Pagar","err");return;}
+    const mo=mediosPago.find(m=>m.nombre===medio);
+    if(mo?.es_personal&&!confirm(`⚠️ "${medio}" está marcado como cuenta/tarjeta PERSONAL.\n\n¿Registrar igual este pago?`))return;
+    await _mpeVincular(c,emp,periodo);
+    await registrarPagoFactura(c,{fecha,medio,obs});
+    closeM("modal-pago-empleado");
+    toast(`✓ ${emp.nombre} — factura ${c.numero||""} pagada y mes de sueldo registrado`,"ok");
+    renderSueldos();renderCFResumen();updateCompStats?.();
+    if(curPage==="alertas")renderAlertas();
+  }catch(e){toast("Error: "+e.message,"err");}
+  finally{btn.disabled=false;}
+}
+
+async function _pagoEmpleadoGenerarOP(){
+  const emp=cfEmpleados.find(e=>e.id===_mpeEmpId);
+  const c=_mpeFacts.find(x=>x.id===document.getElementById("mpe-fact").value);
+  if(!emp||!c)return;
+  try{
+    _asegurarComprobante(c);
+    await _mpeVincular(c,emp,_mpePeriodo);
+    closeM("modal-pago-empleado");renderSueldos();
+    await abrirOrdenPago(c.id,true);
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+// Pagar una factura (desde Comprobantes, OP o Pagar) marca el mes de sueldo del empleado con ese CUIT
+async function _sueldoSincronizarPago(c,{fecha,medio}){
+  if(c.tipo?.startsWith("NC"))return;
+  const ahora=new Date().toISOString();
+  const patch={pagado:true,fecha_pago:fecha,medio_pago:medio,monto:Math.abs(parseFloat(c.total)||0),comprobante_id:c.id,updated_at:ahora};
+  let row=(await sb(`cf_pagos_empleados?comprobante_id=eq.${c.id}&select=*`).catch(()=>[]))[0];
+  let nombre="";
+  if(row){
+    await sb(`cf_pagos_empleados?id=eq.${row.id}`,{method:"PATCH",body:JSON.stringify(patch)});
+    Object.assign(row,patch);
+  }else{
+    const cuit=_cuit11(c.cuit);
+    if(cuit.length!==11)return;
+    const emps=await sb(`cf_empleados?activo=eq.true&sociedad=eq.${c.sociedad||"SUDES"}&select=id,nombre,cuit`).catch(()=>[]);
+    const emp=emps.find(e=>_cuit11(e.cuit)===cuit);
+    if(!emp)return;
+    nombre=emp.nombre;
+    const periodo=(c.fecha||fecha).slice(0,7);
+    const ex=(await sb(`cf_pagos_empleados?empleado_id=eq.${emp.id}&periodo=eq.${periodo}&select=*`).catch(()=>[]))[0];
+    if(ex?.pagado)return;
+    if(ex){await sb(`cf_pagos_empleados?id=eq.${ex.id}`,{method:"PATCH",body:JSON.stringify(patch)});row=Object.assign(ex,patch);}
+    else{[row]=await sb("cf_pagos_empleados",{method:"POST",body:JSON.stringify({empleado_id:emp.id,periodo,...patch})});}
+  }
+  const i=cfPagosEmpleados.findIndex(p=>p.id===row.id);
+  if(i>=0)cfPagosEmpleados[i]={...cfPagosEmpleados[i],...row};else if(row.id)cfPagosEmpleados.push(row);
+  if(nombre)toast(`👤 Sueldo de ${nombre} (${row.periodo}) marcado como pagado`,"inf");
+}
+
 async function desmarcarPagoEmpleado(empId,periodo){
   const pago=cfPagosEmpleados.find(p=>p.empleado_id===empId&&p.periodo===periodo);
   if(!pago)return;
+  if(pago.comprobante_id&&!confirm("Este mes está vinculado a una factura. Desmarcar solo quita la marca en Sueldos: el pago de la factura NO se revierte. ¿Continuar?"))return;
   try{
     await sb(`cf_pagos_empleados?id=eq.${pago.id}`,{method:"DELETE"});
     cfPagosEmpleados=cfPagosEmpleados.filter(p=>p.id!==pago.id);
@@ -25707,6 +25860,7 @@ async function registrarPagoFactura(c,{fecha,medio,obs,socioId,monto,op}){
     if(op&&op.ret>0)lineas.push({codigo:"2.1.03.002",haber:op.ret,desc:`Ret. SICORE ${op.cod||""}`});
     await _pagoAsiento(c,{fecha,lineas,opId:op?.id,descripcion:op?`Pago: ${c.proveedor||""} — ${op.numero}`:`Pago: ${c.proveedor||""} — Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""}`});
   }
+  try{await _sueldoSincronizarPago(c,{fecha,medio});}catch(e){console.warn("sueldo-sync",e);}
   return via;
 }
 

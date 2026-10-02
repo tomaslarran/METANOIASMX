@@ -1459,7 +1459,27 @@ UPDATE cursos SET publicacion_aprobada = true WHERE estado != 'Borrador';
 - **Cash Flow → Pagar concepto:** si el número de factura tipeado corresponde a una factura cargada, el pago va por el camino único (si ya estaba pagada, avisa y solo actualiza el valor real; si el monto no coincide, pide pagar desde Comprobantes por las retenciones). Sin factura cargada, sigue siendo un gasto suelto, ahora sin duplicarse.
 - Probado con 31 controles sobre una base simulada (generar OP sin pagar, pagar OP por banco/efectivo/socio, doble pago, pagar directo bloqueado con OP pendiente, anular, tarjeta, movimiento ya anotado desde Cash Flow, botones).
 
-**Pendiente (fase 2):** (a) **limpiar los 147 egresos de caja heredados "Auto desde comprobantes"** (85 de POINTERS por ~$110,9M y 62 de SUDES por ~$29,2M) — requiere confirmación de Tomás antes de borrarlos; (b) modal único de pago (Pagar + Orden de pago juntos); (c) columna `comprobante_id` en `banco_movimientos` para enlazar el pago a la factura sin depender del número; (d) asiento para gastos sueltos de Cash Flow sin factura; (e) revisar `delComprobante` y el revertir "revisado" por si borran/limpian la línea de caja.
+**✅ Limpieza de caja hecha (2 Oct 2026, con OK de Tomás):** se borraron 149 líneas "Auto desde comprobantes" (146 egresos de facturas revisadas/cerradas/pagadas por banco/de una factura ya eliminada + 3 ingresos que se habían generado desde notas de crédito, entre ellas una de $37,6M). Se conservó 1: San Lorenzo $13.569,58, pagada en efectivo. Caja resultante: SUDES +$19,1M, POINTERS +$19,3M (antes −$10,1M y −$53,9M). Respaldo restaurable en `backups/caja_auto_comprobantes_20261002.json`.
+
+**Pendiente (fase 2):** (a) ~~limpiar los egresos de caja heredados~~ hecho; (b) modal único de pago (Pagar + Orden de pago juntos); (c) columna `comprobante_id` en `banco_movimientos` para enlazar el pago a la factura sin depender del número; (d) asiento para gastos sueltos de Cash Flow sin factura; (e) revisar `delComprobante` y el revertir "revisado" por si borran/limpian la línea de caja.
+
+### 👤 Sueldos con factura de honorarios (2 Oct 2026)
+
+**Motivación:** Daniela Postigo, Florencia Bustamante, Agustín Cima y Oscar Farah facturan sus honorarios; el sueldo y la factura se pagaban por separado y podían duplicarse. Todo se vincula por **CUIT, 11 dígitos sin guiones** (decisión de Tomás: el CUIT es la clave en todo el panel).
+
+- **Ficha del empleado:** campo `cf_empleados.cuit` (se guarda normalizado; valida 11 dígitos).
+- **Pagar un sueldo** (Sueldos → Pagar): si el empleado tiene CUIT, el modal lista sus facturas pendientes (revisadas/pendientes, de la misma sociedad), propone la del período y avisa si el monto difiere del mensual. Elegir una factura → se paga **esa factura** por `registrarPagoFactura` (un solo movimiento de banco/caja y un solo asiento: no se genera el asiento de sueldo para no duplicar) y el mes queda marcado pagado y vinculado (`cf_pagos_empleados.comprobante_id`). Sin factura → pago directo de sueldo, como antes.
+- **Con retenciones (Oscar):** botón "📄 Necesita orden de pago" vincula la factura al mes y abre el generador de OP; si la factura ya tiene una OP pendiente, al confirmar se abre 💸 Pagar OP. El mes se marca pagado cuando se paga la orden.
+- **Al revés:** pagar la factura desde Comprobantes / Pagar OP marca el mes de sueldo del empleado con ese CUIT (`_sueldoSincronizarPago`; período = mes de la fecha de la factura, no pisa un mes ya pagado).
+- Desmarcar un mes vinculado a factura solo quita la marca de Sueldos (avisa; el pago de la factura no se revierte).
+- Probado con 18 controles sobre una base simulada.
+
+**SQL pendiente (correr en Supabase SQL editor antes de usar):**
+```sql
+ALTER TABLE cf_empleados ADD COLUMN IF NOT EXISTS cuit text;
+ALTER TABLE cf_pagos_empleados ADD COLUMN IF NOT EXISTS comprobante_id uuid REFERENCES comprobantes_compra(id) ON DELETE SET NULL;
+```
+**Pendiente:** cargar el CUIT de los 4 desde ✎ en Sueldos; actualizar los productos de Finnegans en la plataforma (esperando saber de dónde salen: export de Finnegans o catálogo del plugin del técnico).
 
 ---
 
