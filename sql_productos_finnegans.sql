@@ -52,10 +52,10 @@ INSERT INTO productos_finnegans (codigo, nombre, stockeable, uso, iva, activo) V
   ('impuestos internos o no gravado', 'impuestos internos o no gravado', false, 'compra', 'nograv', true),
   ('logistica excenta', 'logistica excenta', false, 'compra', 'exento', true),
   ('mantenimiento de cuenta', 'mantenimiento de cuenta', false, 'compra', '21', true),
-  ('peajes', 'peajes', false, 'compra', NULL, true),
+  ('peajes', 'peajes', false, 'compra', '21', true),
   ('percepcion iva 1.5%', 'percepcion iva 1.5%', false, 'interno', NULL, true),
   ('percepcion iva 3%', 'percepcion iva 3%', false, 'interno', NULL, true),
-  ('prestamos', 'prestamos', false, 'compra', NULL, true),
+  ('prestamos', 'prestamos', false, 'compra', 'exento', true),
   ('seguridad y vigilancia al 10.5', 'seguridad y vigilancia al 10.5', false, 'compra', '10.5', true),
   ('Suscripción', 'suscripción mensual a plataforma E-learning', false, 'venta', NULL, true),
   ('telefonia e internet 27%', 'telefonia e internet 27%', false, 'compra', '27', true),
@@ -72,3 +72,5 @@ UPDATE productos_finnegans SET iva = '21' WHERE codigo = 'Asesoramiento profesio
 UPDATE productos_finnegans SET iva = '21' WHERE codigo IN ('Asesoramiento financiero','ELEMENTOS DE SIMULACIÓN','Logistica y fletes','Prestación de servicio de catering y uso de espacio destinado a');
 UPDATE productos_finnegans SET iva = '21' WHERE codigo IN ('Reparación automotor','SEGUROS','Servicio de aislación','Servicio de consultoria en direccion y gestion empresarial','mantenimiento de cuenta');
 UPDATE productos_finnegans SET iva = 'exento' WHERE codigo = 'Varios representacion/marketing';
+UPDATE productos_finnegans SET iva = '21' WHERE codigo = 'peajes';
+UPDATE productos_finnegans SET iva = 'exento' WHERE codigo = 'prestamos';
