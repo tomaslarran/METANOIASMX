@@ -2665,6 +2665,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <input type="file" accept=".xls,.xlsx" style="display:none" onchange="importarBancoXLS(this)">
       </label>
       <button class="btn sm" onclick="concConciliarAuto()" id="btn-conc-auto">⚡ Auto-conciliar</button>
+      <button class="btn sm" onclick="concCruzarPanelUI()" id="btn-conc-cruzar" title="Cruza lo cargado en el panel contra los extractos importados">🔗 Cruzar con el banco</button>
       <button class="btn sm sec" onclick="concLimpiarMovimientos()" style="color:var(--re);border-color:var(--re)">🗑 Limpiar</button>
       <span id="conc-stats" style="font-size:12px;color:var(--tx3);margin-left:auto"></span>
     </div>
@@ -13323,13 +13324,82 @@ async function loadBancoMovimientos() {
   } catch (_) { bancMovimientos = []; }
 }
 
+let _concSoloDif=false;
+let _concExtractos=[];
+function concToggleSoloDif(v){_concSoloDif=!!v;renderConciliacion();}
+const _concAddDias=(iso,n)=>new Date(Date.parse(iso)+n*86400000).toISOString().slice(0,10);
+
+// Cruza lo que cargó el panel (movimientos sin saldo) con lo que dice el extracto del banco.
+// Mismo signo, mismo importe y fecha a ±5 días; primero exacto y después con tolerancia de 0,5%.
+async function _concCruzarPanel(sociedad,extractos){
+  let pares=0;
+  for(const e of extractos){
+    const desde=_concAddDias(e.periodo_desde,-7),hasta=_concAddDias(e.periodo_hasta,7);
+    const [panel,banco]=await Promise.all([
+      sb(`banco_movimientos?sociedad=eq.${sociedad}&extracto_id=is.null&saldo=is.null&conciliado=eq.false&fecha=gte.${desde}&fecha=lte.${hasta}&select=*`).catch(()=>[]),
+      sb(`banco_movimientos?extracto_id=eq.${e.id}&conciliado=eq.false&select=*`).catch(()=>[]),
+    ]);
+    const libres=banco.filter(b=>!EXT_CATS[b.categoria]?.banco);
+    const usados=new Set();
+    for(const pasada of ["exacta","aprox"]){
+      for(const p of panel){
+        if(p._ok)continue;
+        const ip=parseFloat(p.importe)||0;
+        let best=null,bd=1e9;
+        for(const b of libres){
+          if(usados.has(b.id))continue;
+          const ib=parseFloat(b.importe)||0;
+          if(Math.sign(ib)!==Math.sign(ip))continue;
+          const diff=Math.abs(Math.abs(ib)-Math.abs(ip));
+          if(pasada==="exacta"?diff>0.01:diff>Math.max(1,Math.abs(ip)*0.005))continue;
+          const dd=Math.abs((Date.parse(b.fecha)-Date.parse(p.fecha))/86400000);
+          if(dd>5)continue;
+          if(dd<bd){bd=dd;best=b;}
+        }
+        if(best){
+          usados.add(best.id);p._ok=true;
+          await sb(`banco_movimientos?id=eq.${p.id}`,{method:"PATCH",body:JSON.stringify({conciliado:true,match_tipo:"extracto",match_id:best.id,match_descripcion:`Banco: ${best.concepto}`})});
+          await sb(`banco_movimientos?id=eq.${best.id}`,{method:"PATCH",body:JSON.stringify({conciliado:true,match_tipo:"movimiento_panel",match_id:p.id,match_descripcion:`Panel: ${p.concepto}${pasada==="aprox"?" (importe aproximado)":""}`})});
+          pares++;
+        }
+      }
+    }
+  }
+  return pares;
+}
+
+async function concCruzarPanelUI(){
+  const btn=document.getElementById("btn-conc-cruzar");
+  if(btn){btn.disabled=true;btn.textContent="⏳ Cruzando...";}
+  try{
+    const exts=await sb(`extractos_bancarios?sociedad=eq.${concSociedad}&select=id,periodo_desde,periodo_hasta`).catch(()=>[]);
+    if(!exts.length){toast("No hay extractos importados de "+concSociedad+": importá uno primero","inf");return;}
+    const n=await _concCruzarPanel(concSociedad,exts);
+    toast(n?`🔗 ${n} movimientos del panel cruzados con el banco`:"No encontré cruces nuevos","ok");
+    renderConciliacion();
+  }catch(e){toast("Error: "+e.message,"err");}
+  finally{if(btn){btn.disabled=false;btn.textContent="🔗 Cruzar con el banco";}}
+}
+
 async function renderConciliacion() {
   await loadBancoMovimientos();
-  const movs = bancMovimientos;
+  _concExtractos = await sb(`extractos_bancarios?sociedad=eq.${concSociedad}&select=id,periodo_desde,periodo_hasta`).catch(() => []);
+  const cubierto = f => _concExtractos.some(e => f >= e.periodo_desde && f <= e.periodo_hasta);
+  // el lado "panel" ya cruzado se muestra junto al movimiento del banco, no por separado
+  const movs = bancMovimientos.filter(m => m.match_tipo !== "extracto");
+  const estadoDe = m => {
+    if (m.extracto_id) return m.conciliado ? "ok" : "falta_panel";
+    if (m.saldo == null) return m.conciliado ? "ok" : (cubierto(m.fecha) ? "falta_banco" : "sin_extracto");
+    return m.conciliado ? "ok" : "pendiente";
+  };
+  const conEstado = movs.map(m => ({ m, e: estadoDe(m) }));
+  const nFB = conEstado.filter(x => x.e === "falta_banco").length;
+  const nFP = conEstado.filter(x => x.e === "falta_panel").length;
   const total = movs.length;
   const conciliados = movs.filter(m => m.conciliado).length;
   const pendientes = total - conciliados;
-  const saldo = movs.length ? movs[0].saldo : 0;
+  const conSaldo = movs.find(m => m.saldo != null);
+  const saldo = conSaldo ? conSaldo.saldo : 0;
 
   const fmt = v => (v >= 0 ? "+" : "") + "$" + Math.round(Math.abs(v)).toLocaleString("es-AR");
 
@@ -13348,7 +13418,16 @@ async function renderConciliacion() {
     return;
   }
 
+  const visibles = _concSoloDif ? conEstado.filter(x => x.e === "falta_banco" || x.e === "falta_panel") : conEstado;
+  const chip = (txt, col) => `<span style="background:color-mix(in srgb,${col} 14%,var(--surf));color:${col};padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;white-space:nowrap">${txt}</span>`;
+
   tabla.innerHTML = `
+    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:10px;font-size:12px">
+      ${chip(`⚠ ${nFB} del panel sin match en el banco`, "var(--re)")}
+      ${chip(`⚠ ${nFP} del banco sin cargar en el panel`, "var(--am)")}
+      <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" ${_concSoloDif ? "checked" : ""} onchange="concToggleSoloDif(this.checked)"> Solo diferencias</label>
+      ${_concExtractos.length ? "" : `<span style="color:var(--tx3)">No hay extractos importados de esta sociedad: el cruce con el banco aparece al importar uno.</span>`}
+    </div>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead>
         <tr style="background:var(--surf2);color:var(--tx3);text-transform:uppercase;font-size:10px;letter-spacing:.5px">
@@ -13361,25 +13440,31 @@ async function renderConciliacion() {
         </tr>
       </thead>
       <tbody>
-        ${movs.map(m => {
+        ${visibles.length ? visibles.map(({ m, e }) => {
           const imp = parseFloat(m.importe) || 0;
           const impColor = imp >= 0 ? "var(--gr)" : "var(--re)";
           const estadoBadge = m.conciliado
-            ? `<span style="background:color-mix(in srgb,var(--gr) 15%,var(--surf));color:var(--gr);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600">✓ Conciliado</span>`
-            : `<span style="background:color-mix(in srgb,var(--am) 15%,var(--surf));color:var(--am);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600">⏳ Pendiente</span>`;
-          return `<tr style="border-bottom:1px solid var(--b);cursor:pointer" onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background=''">
+            ? chip("✓ Conciliado", "var(--gr)")
+            : chip("⏳ Pendiente", "var(--am)");
+          const resalta = e === "falta_banco" || e === "falta_panel";
+          const estilo = e === "falta_banco" ? "background:rgba(239,68,68,.10);box-shadow:inset 3px 0 0 var(--re)"
+            : e === "falta_panel" ? "background:rgba(245,158,11,.10);box-shadow:inset 3px 0 0 var(--am)" : "";
+          const aviso = e === "falta_banco" ? `<div style="margin-bottom:3px">${chip("⚠ No aparece en el banco", "var(--re)")}</div>`
+            : e === "falta_panel" ? `<div style="margin-bottom:3px">${chip("⚠ Está en el banco, falta en el panel", "var(--am)")}</div>`
+            : e === "sin_extracto" ? `<div style="margin-bottom:3px;color:var(--tx4);font-size:10px">sin extracto de ese mes</div>` : "";
+          return `<tr style="border-bottom:1px solid var(--b);${estilo}" ${resalta ? "" : `onmouseover="this.style.background='var(--surf2)'" onmouseout="this.style.background=''"`}>
             <td style="padding:8px 10px;color:var(--tx2)">${m.fecha}</td>
             <td style="padding:8px 10px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(m.concepto||'')}">${esc(m.concepto || "—")}</td>
             <td style="padding:8px 10px;text-align:right;font-weight:600;color:${impColor}">${fmt(imp)}</td>
-            <td style="padding:8px 10px;text-align:right;color:var(--tx2)">$${Math.round(Math.abs(parseFloat(m.saldo)||0)).toLocaleString("es-AR")}</td>
-            <td style="padding:8px 10px;color:var(--tx3);font-size:11px">${m.categoria&&EXT_CATS[m.categoria]?`<span style="background:var(--surf2);border:1px solid var(--b);border-radius:6px;padding:1px 6px;font-size:10px;margin-right:4px">${esc(EXT_CATS[m.categoria].label)}</span>`:""}${m.match_descripcion ? esc(m.match_descripcion) : (m.categoria?"":'<span style="color:var(--tx4)">Sin match</span>')}</td>
+            <td style="padding:8px 10px;text-align:right;color:var(--tx2)">${m.saldo == null ? "—" : "$" + Math.round(Math.abs(parseFloat(m.saldo)||0)).toLocaleString("es-AR")}</td>
+            <td style="padding:8px 10px;color:var(--tx3);font-size:11px">${aviso}${m.categoria&&EXT_CATS[m.categoria]?`<span style="background:var(--surf2);border:1px solid var(--b);border-radius:6px;padding:1px 6px;font-size:10px;margin-right:4px">${esc(EXT_CATS[m.categoria].label)}</span>`:""}${m.match_descripcion ? esc(m.match_descripcion) : (m.categoria||resalta?"":'<span style="color:var(--tx4)">Sin match</span>')}</td>
             <td style="padding:8px 10px;text-align:center;white-space:nowrap">
             ${m.categoria==="tarjeta"&&!m.asiento_id?`<button onclick="abrirLiqTarjeta('${m.id}')" style="margin-right:6px;background:var(--ac);border:none;color:#fff;border-radius:6px;font-size:10px;padding:3px 8px;cursor:pointer">💳 Cerrar tarjeta</button>`:""}
             ${estadoBadge}
             ${m.conciliado ? `<button onclick="concAnularMatch('${m.id}')" style="margin-left:6px;background:none;border:1px solid var(--re);color:var(--re);border-radius:6px;font-size:10px;padding:2px 7px;cursor:pointer" title="Anular match">✕</button>` : `<button onclick="concMatchManual('${m.id}')" style="margin-left:6px;background:none;border:1px solid var(--tx4);color:var(--tx3);border-radius:6px;font-size:10px;padding:2px 7px;cursor:pointer" title="Match manual">+ Match</button>`}
           </td>
           </tr>`;
-        }).join("")}
+        }).join("") : `<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--tx3)">No hay diferencias. Todo lo del panel aparece en el banco y viceversa.</td></tr>`}
       </tbody>
     </table>`;
 }
@@ -13387,15 +13472,82 @@ async function renderConciliacion() {
 async function concAnularMatch(id) {
   if (!confirm("¿Anular este match?")) return;
   try {
-    await sb(`banco_movimientos?id=eq.${id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ conciliado: false, match_tipo: null, match_id: null, match_descripcion: null })
-    });
-    const m = bancMovimientos.find(x => x.id === id);
-    if (m) { m.conciliado = false; m.match_tipo = null; m.match_id = null; m.match_descripcion = null; }
-    renderConciliacion();
+    const [m] = await sb(`banco_movimientos?id=eq.${id}&select=*`);
+    const reset = { conciliado: false, match_tipo: null, match_id: null, match_descripcion: null };
+    await sb(`banco_movimientos?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(reset) });
+    // si era un cruce panel↔banco, se libera también el otro lado
+    if (m && (m.match_tipo === "extracto" || m.match_tipo === "movimiento_panel") && m.match_id) {
+      await sb(`banco_movimientos?id=eq.${m.match_id}`, { method: "PATCH", body: JSON.stringify(reset) });
+    }
     toast("Match anulado", "ok");
+    renderConciliacion();
   } catch (e) { toast("Error al anular", "err"); }
+}
+
+// ── LISTA DE CONTROL IMPRIMIBLE (gastos bancarios e impuestos) ──────
+function _extListaHTML({sociedad,desde,hasta,movs,cuentas}){
+  const f2=v=>(Math.round(v*100)/100).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fd=iso=>String(iso).split("-").reverse().join("/");
+  const ars=(cuentas||[]).filter(c=>c.moneda==="ARS");
+  const sum=k=>ars.reduce((s,c)=>s+(c[k]||0),0);
+  const SEC=[
+    {ks:["imp_25413"],t:"Impuesto ley 25.413 — créditos y débitos bancarios",banco:sum("impTotal"),lbl:"Total cobrado según el extracto"},
+    {ks:["sircreb"],t:"IIBB Salta — SIRCREB (retenido sobre créditos)",banco:sum("iibbSircreb"),lbl:"Total recaudado según el extracto"},
+    {ks:["iva_cf","perc_iva"],t:"IVA sobre gastos bancarios y percepciones de IVA"},
+    {ks:["comision","comision_iva_incl"],t:"Comisiones y mantenimiento de cuenta"},
+    {ks:["interes"],t:"Intereses por adelanto en cuenta corriente"},
+    {ks:["impuesto_estatal"],t:"Pagos de impuestos (AFIP / Rentas) — informativo",aparte:true},
+  ];
+  let totalGastos=0,totalImp=0,cuerpo="";
+  SEC.forEach(sec=>{
+    const rows=movs.filter(m=>sec.ks.includes(m.categoria)&&m.moneda!=="USD").sort((a,b)=>a.fecha.localeCompare(b.fecha));
+    if(!rows.length)return;
+    const sub=Math.round(rows.reduce((s,m)=>s-m.importe,0)*100)/100;
+    if(sec.aparte)totalImp+=sub;else totalGastos+=sub;
+    const chequeo=sec.banco!=null&&sec.banco>0?`<tr class="ctl"><td colspan="3">${esc(sec.lbl)}</td><td class="n">${f2(sec.banco)} ${Math.abs(sec.banco-sub)<0.01?"✓ coincide":"✗ DIFERENCIA "+f2(sec.banco-sub)}</td></tr>`:"";
+    cuerpo+=`<h3>${esc(sec.t)}</h3><table>
+      <thead><tr><th style="width:26px"></th><th style="width:78px">Fecha</th><th>Concepto</th><th class="n" style="width:120px">Importe</th></tr></thead><tbody>
+      ${rows.map(m=>`<tr><td class="ck">☐</td><td>${fd(m.fecha)}</td><td>${esc(m.concepto)}</td><td class="n">${f2(-m.importe)}</td></tr>`).join("")}
+      <tr class="sub"><td colspan="3">Subtotal (${rows.length} movimientos)</td><td class="n">${f2(sub)}</td></tr>${chequeo}</tbody></table>`;
+  });
+  if(!cuerpo)cuerpo=`<p>No hay movimientos de gastos bancarios ni impuestos en este período.</p>`;
+  return`<!doctype html><html><head><meta charset="utf-8"><title>Control ${esc(sociedad)} ${fd(desde)}-${fd(hasta)}</title><style>
+    body{font-family:Arial,sans-serif;font-size:11px;color:#111;margin:18px 22px}
+    h1{font-size:16px;margin:0 0 2px} .meta{color:#444;margin-bottom:6px} .tip{background:#fff7d6;border:1px solid #e6cf6d;padding:6px 8px;margin:8px 0 12px;font-size:11px}
+    h3{font-size:12px;margin:16px 0 4px;border-bottom:1.5px solid #111;padding-bottom:2px}
+    table{width:100%;border-collapse:collapse;margin-bottom:4px} th{text-align:left;font-size:10px;text-transform:uppercase;color:#555;border-bottom:1px solid #999;padding:3px 4px}
+    td{padding:3px 4px;border-bottom:1px solid #ddd} .n{text-align:right;font-variant-numeric:tabular-nums} .ck{font-size:15px;line-height:1}
+    tr{page-break-inside:avoid} .sub td{font-weight:700;border-top:1.5px solid #111;border-bottom:none} .ctl td{color:#333;font-style:italic;border-bottom:none}
+    .tot{margin-top:16px;border-top:2px solid #111;padding-top:6px;font-size:12px} .tot div{display:flex;justify-content:space-between;padding:2px 0}
+    @media print{.tip{display:none}}
+  </style></head><body>
+    <h1>Control de gastos bancarios e impuestos — ${esc(sociedad)}</h1>
+    <div class="meta">Banco Macro · Período ${fd(desde)} al ${fd(hasta)} · Impreso el ${new Date().toLocaleDateString("es-AR")}</div>
+    <div class="tip">Tildá cada renglón con el resaltador contra tu resumen impreso: lo que no quede marcado en el resumen es lo que falta revisar.</div>
+    ${cuerpo}
+    <div class="tot">
+      <div><span>Total gastos bancarios e impuestos bancarios</span><b>${f2(totalGastos)}</b></div>
+      ${totalImp?`<div><span>Pagos de impuestos AFIP / Rentas (informativo)</span><b>${f2(totalImp)}</b></div>`:""}
+    </div>
+  </body></html>`;
+}
+function _imprimirHTML(html){
+  const w=window.open("","_blank");
+  if(!w){toast("El navegador bloqueó la ventana: permitila para poder imprimir","err");return;}
+  w.document.write(html);w.document.close();
+  setTimeout(()=>{try{w.focus();w.print();}catch(_){}},500);
+}
+async function imprimirListaControl(extractoId){
+  try{
+    const [e]=await sb(`extractos_bancarios?id=eq.${extractoId}&select=*`);
+    const movs=await sb(`banco_movimientos?extracto_id=eq.${extractoId}&select=fecha,concepto,importe,categoria,cuenta_nro&order=fecha.asc`);
+    _imprimirHTML(_extListaHTML({sociedad:e.sociedad,desde:e.periodo_desde,hasta:e.periodo_hasta,movs,cuentas:e.resumen?.cuentas||[]}));
+  }catch(err){toast("No se pudo armar la lista: "+err.message,"err");}
+}
+function imprimirListaControlRevision(){
+  if(!_extState)return;
+  const {parsed,sociedad}=_extState;
+  _imprimirHTML(_extListaHTML({sociedad,desde:parsed.periodo.desde,hasta:parsed.periodo.hasta,movs:parsed.movs,cuentas:parsed.cuentas}));
 }
 
 async function concMatchManual(id) {
@@ -13809,6 +13961,7 @@ function renderExtractoReview(){
       <span><b>${esc(sociedad)}</b> · CUIT ${esc(parsed.cuit)}</span>
       <span>Período ${esc(parsed.periodo.desde)} → ${esc(parsed.periodo.hasta)}</span>
       <span>${esc(file.name)}</span>
+      <button class="btn sm sec" style="margin-left:auto" onclick="imprimirListaControlRevision()">🖨 Lista para control</button>
     </div>
     ${bloqueado?`<div style="background:rgba(239,68,68,.1);border:1px solid var(--re);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--re)">⛔ El extracto no cuadra, no se puede importar:<br>${parsed.errores.slice(0,5).map(esc).join("<br>")}</div>`:""}
     ${faltan.length?`<div style="background:rgba(245,158,11,.1);border:1px solid var(--am);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--am)">⚠️ Faltan cuentas en el plan: ${faltan.map(esc).join(", ")}</div>`:""}
@@ -13911,7 +14064,8 @@ async function confirmarExtracto(){
       await sb(`banco_movimientos?extracto_id=eq.${ext.id}&categoria=in.(${cats.join(",")})`,{method:"PATCH",body:JSON.stringify({asiento_id:asientoId})});
     }
     closeModal("modal-extracto");
-    toast(`✅ Extracto importado: ${ars.length} movimientos${asientoId?` · asiento por ${_extM(asiento.total)}`:""}`,"ok");
+    const cruces=await _concCruzarPanel(sociedad,[{id:ext.id,periodo_desde:parsed.periodo.desde,periodo_hasta:parsed.periodo.hasta}]).catch(()=>0);
+    toast(`✅ Extracto importado: ${ars.length} movimientos${asientoId?` · asiento por ${_extM(asiento.total)}`:""}${cruces?` · ${cruces} cruzados con el panel`:""}`,"ok");
     const mesEl=document.getElementById("conc-mes");
     if(mesEl)mesEl.value=parsed.periodo.hasta.slice(0,7);
     concSociedad=sociedad;
@@ -13990,6 +14144,7 @@ async function renderResumenesGuardados(){
         <td style="${td}">${_extM(-(g(e,"iva_cf")+g(e,"perc_iva")))}</td>
         <td style="${td}">${e.asiento_id?`<span style="color:var(--gr)">✓ ${_extM(e.resumen?.gastos_bancarios||0)}</span>`:`<span style="color:var(--am)">sin asiento</span>`}</td>
         <td style="${td}">
+          <button class="btn sm" onclick="imprimirListaControl('${e.id}')" title="Lista de gastos bancarios e impuestos para tildar contra el extracto impreso">🖨 Lista de control</button>
           ${e.archivo_path?`<button class="btn sm" onclick="abrirPdfResumen('${e.archivo_path}')">📄 PDF</button>`:`<span style="color:var(--tx4);font-size:11px">sin PDF</span>`}
           <button class="btn sm sec" style="color:var(--re);border-color:var(--re)" onclick="anularExtracto('${e.id}')" title="Anular importación">🗑</button>
         </td></tr>`).join("")+`<tr style="font-weight:700;background:var(--surf2)"><td style="${td};text-align:left" colspan="4">Total del ejercicio</td>
