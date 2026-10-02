@@ -2255,6 +2255,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="cd-tab" id="cftab-cuentas" onclick="setCFTab('cuentas',this)">🏦 Cuentas & Caja</button>
     <button class="cd-tab" id="cftab-pendientes" onclick="setCFTab('pendientes',this)">💸 Pendientes de pago</button>
     <button class="cd-tab" id="cftab-promos" onclick="setCFTab('promos',this)">🎁 Promociones</button>
+    <button class="cd-tab" id="cftab-resumenes" onclick="setCFTab('resumenes',this)">🗂 Resúmenes</button>
   </div>
 
   <!-- TAB: RESUMEN MENSUAL -->
@@ -2656,6 +2657,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       </div>
       <input type="month" id="conc-mes" style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:5px 10px;font-size:12px;color:var(--tx);outline:none" onchange="renderConciliacion()">
       <label class="btn sm pri" style="cursor:pointer">
+        📄 Importar extracto PDF (Macro)
+        <input type="file" accept=".pdf,application/pdf" style="display:none" onchange="importarExtractoPDF(this)">
+      </label>
+      <label class="btn sm sec" style="cursor:pointer">
         📂 Importar XLS
         <input type="file" accept=".xls,.xlsx" style="display:none" onchange="importarBancoXLS(this)">
       </label>
@@ -2683,6 +2688,21 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <button class="btn sm pri" id="btn-buscar-promos" onclick="buscarPromocionesAhora()" style="margin-left:auto">🔄 Buscar ahora</button>
     </div>
     <div id="cf-promos-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando promociones...</div></div></div>
+  </div>
+
+  <!-- TAB: RESÚMENES GUARDADOS (extractos bancarios + liquidaciones de tarjeta) -->
+  <div id="cfpg-resumenes" style="display:none">
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <div class="fbar">
+        <button class="fb on" id="res-soc-todas" onclick="resSetSoc('',this)">Ambas</button>
+        <button class="fb" onclick="resSetSoc('SUDES',this)">SUDES</button>
+        <button class="fb" onclick="resSetSoc('POINTERS',this)">POINTERS</button>
+      </div>
+      <select class="fs" id="res-ejercicio" onchange="renderResumenesGuardados()" style="max-width:190px"></select>
+      <button class="btn sm sec" onclick="exportarResumenesEjercicio()">📥 Exportar ejercicio (Excel)</button>
+      <span style="font-size:12px;color:var(--tx3);margin-left:auto">Ejercicio: 1/07 al 30/06. Acá queda el PDF original de cada resumen, sus totales y el asiento que generó.</span>
+    </div>
+    <div id="res-contenido"><div class="loading"><div class="loader"></div><div class="lt">Cargando resúmenes...</div></div></div>
   </div>
 </div>
 
@@ -4579,6 +4599,24 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg"><label class="fl">Observaciones</label><input class="fi" id="pagar-comp-obs" type="text" placeholder="Opcional — referencia, CBU, etc."></div>
   </div>
   <div class="ma"><button class="bc" onclick="closeModal('modal-pagar-comp')">Cancelar</button><button class="bk" onclick="confirmarPagoComp()">💳 Confirmar pago</button></div>
+</div>
+</div>
+
+<!-- MODAL REVISIÓN EXTRACTO BANCARIO -->
+<div class="mov" id="modal-extracto" onclick="if(event.target===this&&_movDown===this)closeModal('modal-extracto')">
+<div class="modal" style="max-width:860px;max-height:92vh;overflow-y:auto">
+  <div class="mt">📄 Revisar extracto bancario <button class="mt-close" onclick="closeModal('modal-extracto')">✕</button></div>
+  <div id="ext-body"></div>
+  <div class="ma"><button class="bc" onclick="closeModal('modal-extracto')">Cancelar</button><button class="bk" id="ext-btn-confirmar" onclick="confirmarExtracto()">✅ Confirmar e importar</button></div>
+</div>
+</div>
+
+<!-- MODAL CIERRE DE TARJETA -->
+<div class="mov" id="modal-liq-tarjeta" onclick="if(event.target===this&&_movDown===this)closeModal('modal-liq-tarjeta')">
+<div class="modal" style="max-width:640px;max-height:92vh;overflow-y:auto">
+  <div class="mt">💳 Cierre de tarjeta <button class="mt-close" onclick="closeModal('modal-liq-tarjeta')">✕</button></div>
+  <div id="liq-body"></div>
+  <div class="ma"><button class="bc" onclick="closeModal('modal-liq-tarjeta')">Cancelar</button><button class="bk" onclick="confirmarLiqTarjeta()">✅ Registrar pago de tarjeta</button></div>
 </div>
 </div>
 
@@ -13225,7 +13263,7 @@ function setCFTab(tab,btn){
   document.querySelectorAll("#pg-cashflow .cd-tab").forEach(b=>b.classList.remove("on"));
   const tabBtn=btn||document.getElementById("cftab-"+tab);
   if(tabBtn)tabBtn.classList.add("on");
-  ["resumen","prestamos","cobranzas","inversiones","conciliacion","resumen-sem","cuentas","pendientes","promos"].forEach(t=>{
+  ["resumen","prestamos","cobranzas","inversiones","conciliacion","resumen-sem","cuentas","pendientes","promos","resumenes"].forEach(t=>{
     const el=document.getElementById("cfpg-"+t);
     if(el)el.style.display=t===tab?"":"none";
   });
@@ -13238,6 +13276,7 @@ function setCFTab(tab,btn){
   if(tab==="cuentas"){if(cuentasSubTab==="medios")renderMediosPago();else renderCaja();}
   if(tab==="pendientes")renderCFPendientes();
   if(tab==="promos")renderCFPromos();
+  if(tab==="resumenes")renderResumenesGuardados();
 }
 
 // ══════════════════════════════════════════════
@@ -13311,8 +13350,9 @@ async function renderConciliacion() {
             <td style="padding:8px 10px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(m.concepto||'')}">${esc(m.concepto || "—")}</td>
             <td style="padding:8px 10px;text-align:right;font-weight:600;color:${impColor}">${fmt(imp)}</td>
             <td style="padding:8px 10px;text-align:right;color:var(--tx2)">$${Math.round(Math.abs(parseFloat(m.saldo)||0)).toLocaleString("es-AR")}</td>
-            <td style="padding:8px 10px;color:var(--tx3);font-size:11px">${m.match_descripcion ? esc(m.match_descripcion) : '<span style="color:var(--tx4)">Sin match</span>'}</td>
+            <td style="padding:8px 10px;color:var(--tx3);font-size:11px">${m.categoria&&EXT_CATS[m.categoria]?`<span style="background:var(--surf2);border:1px solid var(--b);border-radius:6px;padding:1px 6px;font-size:10px;margin-right:4px">${esc(EXT_CATS[m.categoria].label)}</span>`:""}${m.match_descripcion ? esc(m.match_descripcion) : (m.categoria?"":'<span style="color:var(--tx4)">Sin match</span>')}</td>
             <td style="padding:8px 10px;text-align:center;white-space:nowrap">
+            ${m.categoria==="tarjeta"&&!m.asiento_id?`<button onclick="abrirLiqTarjeta('${m.id}')" style="margin-right:6px;background:var(--ac);border:none;color:#fff;border-radius:6px;font-size:10px;padding:3px 8px;cursor:pointer">💳 Cerrar tarjeta</button>`:""}
             ${estadoBadge}
             ${m.conciliado ? `<button onclick="concAnularMatch('${m.id}')" style="margin-left:6px;background:none;border:1px solid var(--re);color:var(--re);border-radius:6px;font-size:10px;padding:2px 7px;cursor:pointer" title="Anular match">✕</button>` : `<button onclick="concMatchManual('${m.id}')" style="margin-left:6px;background:none;border:1px solid var(--tx4);color:var(--tx3);border-radius:6px;font-size:10px;padding:2px 7px;cursor:pointer" title="Match manual">+ Match</button>`}
           </td>
@@ -13516,6 +13556,583 @@ async function concConciliarAuto() {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "⚡ Auto-conciliar"; }
   }
+}
+
+// ══════════════════════════════════════════════
+// EXTRACTOS BANCARIOS (PDF Banco Macro) · RESÚMENES GUARDADOS · CIERRE DE TARJETA
+// ══════════════════════════════════════════════
+const EXT_CATS={
+  imp_25413:{label:"Impuesto ley 25.413",banco:true},
+  sircreb:{label:"IIBB Salta SIRCREB (a favor)",banco:true},
+  iva_cf:{label:"IVA s/ gastos bancarios",banco:true},
+  perc_iva:{label:"Percepción IVA",banco:true},
+  comision:{label:"Comisiones y mantenimiento",banco:true},
+  comision_iva_incl:{label:"Comisión transferencia (IVA incl.)",banco:true},
+  interes:{label:"Intereses adelanto cta. cte.",banco:true},
+  tarjeta:{label:"Pago de tarjeta",banco:false},
+  prestamo:{label:"Cuota de préstamo",banco:false},
+  seguro:{label:"Seguro (débito automático)",banco:false},
+  impuesto_estatal:{label:"Impuestos AFIP / Rentas",banco:false},
+  sueldos:{label:"Sueldos",banco:false},
+  transf_propia:{label:"Transferencia entre cuentas propias",banco:false},
+  cobro:{label:"Otros cobros",banco:false},
+  pago:{label:"Otros pagos",banco:false},
+};
+let _extState=null;
+let resSociedad="";
+const _extM=v=>"$"+(Math.round((parseFloat(v)||0)*100)/100).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
+const _extNum=s=>parseFloat(String(s).replace(/\./g,"").replace(",","."));
+const _extISO=d=>{const m=String(d).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);return m?`${m[3]}-${m[2]}-${m[1]}`:null};
+
+async function _extCargarPdfJs(){
+  if(window.pdfjsLib)return;
+  await new Promise((res,rej)=>{
+    const s=document.createElement("script");
+    s.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    s.onload=res;s.onerror=()=>rej(new Error("No se pudo cargar el lector de PDF (pdf.js)"));
+    document.head.appendChild(s);
+  });
+  pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+}
+
+async function _extPdfALineas(file){
+  await _extCargarPdfJs();
+  const data=new Uint8Array(await file.arrayBuffer());
+  const doc=await pdfjsLib.getDocument({data}).promise;
+  const all=[];
+  for(let p=1;p<=doc.numPages;p++){
+    const page=await doc.getPage(p);
+    const tc=await page.getTextContent();
+    const items=tc.items.filter(i=>i.str&&i.str.trim()).map(i=>({s:i.str,x:i.transform[4],y:i.transform[5]}));
+    items.sort((a,b)=>b.y-a.y||a.x-b.x);
+    const rows=[];
+    for(const it of items){
+      const r=rows.find(r=>Math.abs(r.y-it.y)<=2.5);
+      if(r)r.items.push(it);else rows.push({y:it.y,items:[it]});
+    }
+    rows.sort((a,b)=>b.y-a.y);
+    for(const r of rows){
+      r.items.sort((a,b)=>a.x-b.x);
+      all.push(r.items.map(i=>i.s.trim()).join(" ").replace(/\s{2,}/g," "));
+    }
+  }
+  return all;
+}
+
+// Lee el extracto del Banco Macro. El signo de cada movimiento sale de la variación del saldo
+// (no de la columna), así que no depende de la posición del importe en la página.
+function _extParsear(lines){
+  const AMT="-?\\d{1,3}(?:\\.\\d{3})*,\\d{2}";
+  const ROW=new RegExp(`^(\\d{2})/(\\d{2})/(\\d{2})\\s+(.*?)\\s+(${AMT})\\s+(${AMT})\\s*$`);
+  const out={cuit:null,periodo:null,cuentas:[],movs:[],errores:[]};
+  const byNro={};let cur=null;
+  for(const raw of lines){
+    const l=raw.replace(/\s+$/,"");
+    if(!out.cuit){const m=l.match(/C\.U\.I\.T\s+(\d{11})/);if(m)out.cuit=m[1];}
+    if(!out.periodo){const m=l.match(/Periodo del Extracto:\s*(\d{2}\/\d{2}\/\d{4})\s+al\s+(\d{2}\/\d{2}\/\d{4})/);if(m)out.periodo={desde:_extISO(m[1]),hasta:_extISO(m[2])};}
+    const h=l.match(/^\s*(CUENTA [A-ZÁÉÍÓÚ ]+?)\s+NRO\.:\s*(\S+)/);
+    if(h){
+      const nro=h[2];
+      if(!byNro[nro]){byNro[nro]={nro,tipo:h[1].trim(),moneda:/DOLARES/.test(h[1])?"USD":"ARS",saldoInicial:null,saldoFinal:null,impTotal:null,impComputable:null,iibbSircreb:null,_prev:null};out.cuentas.push(byNro[nro]);}
+      cur=byNro[nro];continue;
+    }
+    if(!cur)continue;
+    let m;
+    if((m=l.match(/SALDO ULTIMO EXTRACTO AL \S+\s+(-?[\d.]+,\d{2})/))){if(cur.saldoInicial===null)cur.saldoInicial=_extNum(m[1]);cur._prev=cur.saldoInicial;continue;}
+    if((m=l.match(/SALDO FINAL AL DIA \S+\s+(-?[\d.]+,\d{2})/))){cur.saldoFinal=_extNum(m[1]);continue;}
+    if((m=l.match(/TOTAL COBRADO DEL IMP\.S\/CREDS\.\s*Y DEBS\..*?(-?[\d.]+,\d{2})\s*$/))){cur.impTotal=_extNum(m[1]);continue;}
+    if((m=l.match(/IMPUESTO LEY 25413 COMPUTABLE.*?(-?[\d.]+,\d{2})\s*$/))){cur.impComputable=_extNum(m[1]);continue;}
+    if((m=l.match(/IIBB SALTA RECAUDADO SOBRE CREDITOS BANCARIOS.*?(-?[\d.]+,\d{2})\s*$/))){cur.iibbSircreb=_extNum(m[1]);continue;}
+    m=l.match(ROW);
+    if(!m)continue;
+    const fecha=`20${m[3]}-${m[2]}-${m[1]}`;
+    let desc=m[4].trim();
+    const abs=_extNum(m[5]),saldo=_extNum(m[6]);
+    let referencia="";
+    const rm=desc.match(/^(.*\S)\s+(\d+)$/);
+    if(rm){desc=rm[1];referencia=rm[2];}
+    if(cur._prev===null){out.errores.push(`Movimiento sin saldo inicial: ${fecha} ${desc}`);continue;}
+    const delta=Math.round((saldo-cur._prev)*100)/100;
+    if(Math.abs(Math.abs(delta)-abs)>0.005)out.errores.push(`El saldo no cierra en ${fecha} ${desc} (importe ${abs}, variación ${delta})`);
+    cur._prev=saldo;
+    out.movs.push({cuenta:cur.nro,moneda:cur.moneda,fecha,concepto:desc,referencia,importe:delta,saldo});
+  }
+  for(const c of out.cuentas){
+    const ms=out.movs.filter(x=>x.cuenta===c.nro);
+    const s=ms.reduce((a,x)=>a+x.importe,0);
+    c.movimientos=ms.length;
+    c.saldoOk=c.saldoInicial===null||c.saldoFinal===null?null:Math.abs(c.saldoInicial+s-c.saldoFinal)<0.01;
+    c.sum25413=Math.round(ms.filter(x=>/DBCR\s*25413/.test(x.concepto)).reduce((a,x)=>a+Math.abs(x.importe),0)*100)/100;
+    c.sumSircreb=Math.round(ms.filter(x=>/SIRCREB/.test(x.concepto)).reduce((a,x)=>a+Math.abs(x.importe),0)*100)/100;
+    c.imp25413Ok=c.impTotal===null?null:(c.moneda==="USD"?null:Math.abs(c.sum25413-c.impTotal)<0.01);
+    c.sircrebOk=c.iibbSircreb===null?null:Math.abs(c.sumSircreb-c.iibbSircreb)<0.01;
+    delete c._prev;
+  }
+  return out;
+}
+
+function _extClasificar(m,cuitPropio){
+  const c=(m.concepto||"").toUpperCase();
+  if(/DBCR\s*25413/.test(c))return"imp_25413";
+  if(/SIRCREB/.test(c))return"sircreb";
+  if(/DEBITO FISCAL IVA/.test(c))return"iva_cf";
+  if(/RETENCION IVA PERCEPCION|PERCEPCION IVA/.test(c))return"perc_iva";
+  if(/INTER\.?\s*ADEL/.test(c))return"interes";
+  if(/COMISION (TRANSFERE|TRF)/.test(c))return"comision_iva_incl";
+  if(/COMISION|MANTENIMIENTO/.test(c))return"comision";
+  if(/^VISA|DEBITO TARJETA CREDITO|PAGO TARJETA/.test(c))return"tarjeta";
+  if(m.importe<0&&/PRESTAMOS?/.test(c))return"prestamo";
+  if(m.importe<0&&/SEGUROS?\b/.test(c))return"seguro";
+  if(m.importe<0&&/IMP\. AFIP|^AFIP|RENTAS/.test(c))return"impuesto_estatal";
+  if(/REMUNERACIONES/.test(c))return"sueldos";
+  if(cuitPropio&&c.includes("- "+cuitPropio))return"transf_propia";
+  return m.importe>=0?"cobro":"pago";
+}
+
+async function _extAsegurarPlan(){
+  if(!planCuentas.length){const r=await sb("plan_cuentas?select=*&order=codigo").catch(()=>[]);if(r.length)planCuentas=r;}
+  if(!mediosPago.length){const r=await sb("medios_pago?select=*&order=orden").catch(()=>[]);if(r.length)mediosPago=r;}
+}
+function _extCodigoBanco(sociedad){
+  const medio=mediosPago.find(m=>m.tipo==="cuenta_bancaria"&&m.sociedad===sociedad&&/macro/i.test((m.banco||"")+m.nombre)&&m.cuenta_contable_id);
+  const cta=medio&&planCuentas.find(c=>c.id===medio.cuenta_contable_id);
+  return cta?cta.codigo:(sociedad==="POINTERS"?"1.1.01.003":"1.1.01.002");
+}
+
+// Arma el asiento mensual de gastos bancarios. Todo en centavos enteros para que el asiento
+// cierre exacto contra el débito real del banco.
+function _extArmarAsiento(movs,cuentas,bancoCod,mipyme){
+  const cents=v=>Math.round(v*100);
+  const sum={};const imp25={};
+  movs.forEach(m=>{
+    if(!EXT_CATS[m.categoria]?.banco||m.moneda!=="ARS")return;
+    const g=-cents(m.importe);
+    sum[m.categoria]=(sum[m.categoria]||0)+g;
+    if(m.categoria==="imp_25413")imp25[m.cuenta]=(imp25[m.cuenta]||0)+g;
+  });
+  const L={};
+  const add=(cod,c,desc)=>{if(!c)return;(L[cod]=L[cod]||{codigo:cod,c:0,desc}).c+=c;};
+  let comp=0,tot25=0;
+  for(const [nro,t] of Object.entries(imp25)){
+    const cta=cuentas.find(x=>x.nro===nro);
+    let c=mipyme?t:(cta&&cta.impComputable!=null?cents(cta.impComputable):Math.round(t*0.33));
+    c=Math.max(0,Math.min(c,t));comp+=c;tot25+=t;
+  }
+  add("1.1.03.002",comp,mipyme?"Impuesto ley 25.413 a computar (100% MiPyME)":"Impuesto ley 25.413 a computar (33%)");
+  add("5.3.02.001",tot25-comp,"Impuesto ley 25.413 (gasto)");
+  add("1.1.03.004",sum.sircreb,"IIBB Salta SIRCREB a favor");
+  add("1.1.03.001",sum.iva_cf,"IVA s/ gastos bancarios");
+  add("1.1.03.003",sum.perc_iva,"Percepciones de IVA");
+  add("5.3.01.002",sum.comision,"Comisiones y mantenimiento");
+  const inc=sum.comision_iva_incl||0;const neto=Math.round(inc/1.21);
+  add("5.3.01.002",neto,"Comisiones y mantenimiento");
+  add("1.1.03.001",inc-neto,"IVA s/ comisiones de transferencia");
+  add("5.3.01.001",sum.interes,"Intereses adelanto cta. cte.");
+  const lineas=[];let net=0;
+  Object.values(L).forEach(l=>{
+    if(l.c>=0)lineas.push({codigo:l.codigo,debe:l.c/100,desc:l.desc});else lineas.push({codigo:l.codigo,haber:-l.c/100,desc:l.desc});
+    net+=l.c;
+  });
+  if(net>0)lineas.push({codigo:bancoCod,haber:net/100,desc:"Débitos bancarios del período"});
+  else if(net<0)lineas.push({codigo:bancoCod,debe:-net/100,desc:"Créditos bancarios del período"});
+  return{lineas,total:net/100,computable:comp/100};
+}
+
+async function importarExtractoPDF(input){
+  const file=input.files[0];
+  if(!file)return;
+  toast("Leyendo extracto...","inf");
+  try{
+    await _extAsegurarPlan();
+    const lines=await _extPdfALineas(file);
+    const parsed=_extParsear(lines);
+    if(!parsed.cuit||!parsed.periodo||!parsed.cuentas.length){toast("No parece un extracto del Banco Macro: no se encontró CUIT, período o cuentas","err");input.value="";return;}
+    const fiscales=await sb("datos_fiscales_sociedad?select=*").catch(()=>[]);
+    const soc=fiscales.find(f=>String(f.cuit||"").replace(/\D/g,"")===parsed.cuit);
+    if(!soc){toast(`El CUIT ${parsed.cuit} del extracto no coincide con SUDES ni POINTERS`,"err");input.value="";return;}
+    const sociedad=soc.sociedad;
+    const dup=await sb(`extractos_bancarios?sociedad=eq.${sociedad}&periodo_desde=eq.${parsed.periodo.desde}&periodo_hasta=eq.${parsed.periodo.hasta}&select=id`).catch(()=>null);
+    if(dup===null){toast("Falta correr el SQL de extractos bancarios en Supabase (tabla extractos_bancarios)","err");input.value="";return;}
+    if(dup.length){toast(`Ese extracto de ${sociedad} (${parsed.periodo.desde} a ${parsed.periodo.hasta}) ya está importado. Verlo en 🗂 Resúmenes.`,"inf");input.value="";return;}
+    parsed.movs.forEach(m=>{m.categoria=_extClasificar(m,parsed.cuit);});
+    _extState={parsed,sociedad,file,bancoCod:_extCodigoBanco(sociedad),mipyme:!!soc.mipyme_vigente,mipymeVto:soc.mipyme_vencimiento||null};
+    renderExtractoReview();
+    openModal("modal-extracto");
+  }catch(e){toast("Error al leer el extracto: "+e.message,"err");}
+  input.value="";
+}
+
+function extToggleMipyme(v){if(!_extState)return;_extState.mipyme=!!v;renderExtractoReview();}
+function extCambiarCat(idx,val){
+  if(!_extState)return;
+  _extState.parsed.movs[idx].categoria=val;
+  renderExtractoReview();
+}
+
+function renderExtractoReview(){
+  const {parsed,sociedad,file,bancoCod,mipyme,mipymeVto}=_extState;
+  const ars=parsed.movs.filter(m=>m.moneda==="ARS");
+  const usd=parsed.movs.filter(m=>m.moneda==="USD");
+  const asiento=_extArmarAsiento(parsed.movs,parsed.cuentas,bancoCod,mipyme);
+  const nombreCta=cod=>planCuentas.find(c=>c.codigo===cod)?.nombre||"(cuenta inexistente)";
+  const ok=v=>v===true?`<span style="color:var(--gr)">✓</span>`:v===false?`<span style="color:var(--re)">✗</span>`:`<span style="color:var(--tx3)">—</span>`;
+  const bloqueado=parsed.errores.length>0||parsed.cuentas.some(c=>c.moneda==="ARS"&&c.saldoOk===false);
+  const faltan=asiento.lineas.filter(l=>!planCuentas.find(c=>c.codigo===l.codigo)).map(l=>l.codigo);
+  const resumenCat={};
+  ars.forEach(m=>{const r=resumenCat[m.categoria]=resumenCat[m.categoria]||{n:0,t:0};r.n++;r.t+=m.importe;});
+  const th="padding:5px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--tx3)";
+  const td="padding:5px 8px;font-size:12px;border-bottom:1px solid var(--b2)";
+  document.getElementById("ext-body").innerHTML=`
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;color:var(--tx2)">
+      <span><b>${esc(sociedad)}</b> · CUIT ${esc(parsed.cuit)}</span>
+      <span>Período ${esc(parsed.periodo.desde)} → ${esc(parsed.periodo.hasta)}</span>
+      <span>${esc(file.name)}</span>
+    </div>
+    ${bloqueado?`<div style="background:rgba(239,68,68,.1);border:1px solid var(--re);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--re)">⛔ El extracto no cuadra, no se puede importar:<br>${parsed.errores.slice(0,5).map(esc).join("<br>")}</div>`:""}
+    ${faltan.length?`<div style="background:rgba(245,158,11,.1);border:1px solid var(--am);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--am)">⚠️ Faltan cuentas en el plan: ${faltan.map(esc).join(", ")}</div>`:""}
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--tx3);margin-bottom:6px">Controles contra el propio banco</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:14px">
+      <tr><th style="${th}">Cuenta</th><th style="${th}">Moneda</th><th style="${th}">Mov.</th><th style="${th}">Saldo inicial → final</th><th style="${th}">Saldo cierra</th><th style="${th}">Ley 25.413</th><th style="${th}">SIRCREB</th></tr>
+      ${parsed.cuentas.map(c=>`<tr>
+        <td style="${td}">${esc(c.tipo.replace("CUENTA CORRIENTE ","CC "))}<br><span style="color:var(--tx3);font-size:10px">${esc(c.nro)}</span></td>
+        <td style="${td}">${c.moneda}</td><td style="${td}">${c.movimientos}</td>
+        <td style="${td}">${c.saldoInicial==null?"—":_extM(c.saldoInicial)} → ${c.saldoFinal==null?"—":_extM(c.saldoFinal)}</td>
+        <td style="${td}">${ok(c.saldoOk)}</td>
+        <td style="${td}">${ok(c.imp25413Ok)} ${c.impTotal!=null&&c.moneda==="ARS"?_extM(c.impTotal):""}</td>
+        <td style="${td}">${ok(c.sircrebOk)} ${c.iibbSircreb!=null?_extM(c.iibbSircreb):""}</td></tr>`).join("")}
+    </table>
+    ${usd.length?`<div style="font-size:11px;color:var(--tx3);margin-bottom:12px">ℹ️ La cuenta en dólares tiene ${usd.length} movimientos: por ahora no se importan (falta la cuenta contable en USD). Quedan en el PDF archivado.</div>`:""}
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--tx3);margin-bottom:6px">Movimientos en pesos por categoría</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:14px">
+      ${Object.entries(resumenCat).sort((a,b)=>(EXT_CATS[b[0]].banco?1:0)-(EXT_CATS[a[0]].banco?1:0)).map(([k,v])=>`<tr>
+        <td style="${td}">${EXT_CATS[k].banco?"🧾 ":""}${esc(EXT_CATS[k].label)}</td>
+        <td style="${td};text-align:right">${v.n}</td>
+        <td style="${td};text-align:right;font-variant-numeric:tabular-nums;color:${v.t<0?"var(--re)":"var(--gr)"}">${_extM(v.t)}</td>
+        <td style="${td};color:var(--tx3);font-size:11px">${EXT_CATS[k].banco?"genera asiento":"se concilia con su módulo"}</td></tr>`).join("")}
+    </table>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--tx3);margin-bottom:6px">Asiento de gastos bancarios · ${esc(parsed.periodo.hasta)}</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:6px">
+      <tr><th style="${th}">Cuenta</th><th style="${th};text-align:right">Debe</th><th style="${th};text-align:right">Haber</th></tr>
+      ${asiento.lineas.map(l=>`<tr><td style="${td}"><span style="font-family:monospace;color:var(--tx3);font-size:11px">${esc(l.codigo)}</span> ${esc(nombreCta(l.codigo))}</td>
+        <td style="${td};text-align:right;font-variant-numeric:tabular-nums">${l.debe?_extM(l.debe):""}</td>
+        <td style="${td};text-align:right;font-variant-numeric:tabular-nums">${l.haber?_extM(l.haber):""}</td></tr>`).join("")}
+    </table>
+    <div style="font-size:11px;color:var(--tx3);margin-bottom:14px">Ley 25.413: se toma como crédito a computar ${_extM(asiento.computable)} ${mipyme?"(100%, certificado MiPyME)":"(el 33% que informa el banco)"}; el resto va a gasto. SIRCREB y percepciones de IVA quedan como saldo a favor.</div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:14px;cursor:pointer"><input type="checkbox" ${mipyme?"checked":""} onchange="extToggleMipyme(this.checked)"> ${esc(sociedad)} tiene certificado MiPyME vigente (computa el 100% de la ley 25.413)${mipymeVto?` · vence ${esc(mipymeVto)}`:""}</label>
+    <details style="margin-bottom:6px"><summary style="cursor:pointer;font-size:12px;color:var(--ac)">Ver y reclasificar los ${ars.length} movimientos</summary>
+      <div style="max-height:260px;overflow:auto;margin-top:8px">
+      <table style="width:100%;border-collapse:collapse">
+        ${parsed.movs.map((m,i)=>m.moneda!=="ARS"?"":`<tr><td style="${td};white-space:nowrap">${m.fecha}</td><td style="${td}">${esc(m.concepto)}</td>
+          <td style="${td};text-align:right;white-space:nowrap;color:${m.importe<0?"var(--re)":"var(--gr)"}">${_extM(m.importe)}</td>
+          <td style="${td}"><select class="fs" style="font-size:11px;padding:2px 4px" onchange="extCambiarCat(${i},this.value)">${Object.entries(EXT_CATS).map(([k,v])=>`<option value="${k}" ${k===m.categoria?"selected":""}>${esc(v.label)}</option>`).join("")}</select></td></tr>`).join("")}
+      </table></div>
+    </details>`;
+  const btn=document.getElementById("ext-btn-confirmar");
+  if(btn){btn.disabled=bloqueado||faltan.length>0;btn.style.opacity=btn.disabled?".5":"1";}
+}
+
+async function confirmarExtracto(){
+  if(!_extState)return;
+  const {parsed,sociedad,file,bancoCod,mipyme}=_extState;
+  const btn=document.getElementById("ext-btn-confirmar");
+  if(btn){btn.disabled=true;btn.textContent="Guardando...";}
+  try{
+    // 1) PDF original al archivo
+    let archivoPath=null;
+    try{
+      const path=`${sociedad}/${parsed.periodo.desde}_${parsed.periodo.hasta}_${Date.now()}.pdf`;
+      const up=await fetch(`${SB}/storage/v1/object/extractos-bancarios/${path}`,{method:"POST",headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":"application/pdf","x-upsert":"false"},body:file});
+      if(up.ok)archivoPath=path;else toast("⚠️ No se pudo guardar el PDF original (los datos sí se importan)","err");
+    }catch(_){toast("⚠️ No se pudo guardar el PDF original (los datos sí se importan)","err");}
+
+    // 2) registro del extracto
+    const ars=parsed.movs.filter(m=>m.moneda==="ARS");
+    const asiento=_extArmarAsiento(parsed.movs,parsed.cuentas,bancoCod,mipyme);
+    const totales={};
+    ars.forEach(m=>{const t=totales[m.categoria]=totales[m.categoria]||{n:0,total:0};t.n++;t.total=Math.round((t.total+m.importe)*100)/100;});
+    const ctaPpal=parsed.cuentas.find(c=>c.moneda==="ARS"&&c.movimientos>0)||parsed.cuentas.find(c=>c.moneda==="ARS");
+    const [ext]=await sb("extractos_bancarios",{method:"POST",body:JSON.stringify({
+      sociedad,banco:"MACRO",cuit:parsed.cuit,periodo_desde:parsed.periodo.desde,periodo_hasta:parsed.periodo.hasta,
+      archivo_path:archivoPath,nombre_archivo:file.name,
+      saldo_inicial:ctaPpal?.saldoInicial??null,saldo_final:ctaPpal?.saldoFinal??null,
+      cantidad_movimientos:ars.length,
+      resumen:{totales,cuentas:parsed.cuentas.map(c=>({nro:c.nro,tipo:c.tipo,moneda:c.moneda,saldoInicial:c.saldoInicial,saldoFinal:c.saldoFinal,impTotal:c.impTotal,impComputable:c.impComputable,iibbSircreb:c.iibbSircreb,movimientos:c.movimientos})),computable:asiento.computable,mipyme:!!mipyme,gastos_bancarios:asiento.total},
+      estado:"importado",creado_por:loggedUser?.nombre||null
+    })});
+
+    sb(`datos_fiscales_sociedad?sociedad=eq.${sociedad}`,{method:"PATCH",body:JSON.stringify({mipyme_vigente:!!mipyme})}).catch(()=>{});
+
+    // 3) movimientos
+    const filas=ars.map(m=>({
+      sociedad,fecha:m.fecha,referencia:m.referencia||null,concepto:m.concepto,importe:m.importe,saldo:m.saldo,
+      conciliado:!!EXT_CATS[m.categoria]?.banco,
+      match_tipo:EXT_CATS[m.categoria]?.banco?"gasto_bancario":null,
+      match_descripcion:EXT_CATS[m.categoria]?.banco?EXT_CATS[m.categoria].label:null,
+      cuenta_nro:m.cuenta,categoria:m.categoria,extracto_id:ext.id
+    }));
+    for(let i=0;i<filas.length;i+=100)await sb("banco_movimientos",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify(filas.slice(i,i+100))});
+
+    // 4) asiento de gastos bancarios
+    let asientoId=null;
+    if(asiento.lineas.length>=2){
+      const ad={fecha:parsed.periodo.hasta,sociedad,tipo:"gastos_bancarios",origen:"extracto_bancario",origen_id:ext.id,
+        descripcion:`Gastos bancarios Macro ${parsed.periodo.desde} a ${parsed.periodo.hasta}`,lineas:asiento.lineas};
+      const a=await generarAsiento(ad);
+      if(a?._faltantes){mcfAbrir(a._faltantes,ad);toast("Faltan cuentas contables: el asiento no se generó","err");}
+      else if(a?.id)asientoId=a.id;
+      else toast("⚠️ El asiento no se generó (revisá que el tipo 'gastos_bancarios' esté permitido en Supabase)","err");
+    }
+    if(asientoId){
+      await sb(`extractos_bancarios?id=eq.${ext.id}`,{method:"PATCH",body:JSON.stringify({asiento_id:asientoId,estado:"contabilizado"})});
+      const cats=Object.keys(EXT_CATS).filter(k=>EXT_CATS[k].banco);
+      await sb(`banco_movimientos?extracto_id=eq.${ext.id}&categoria=in.(${cats.join(",")})`,{method:"PATCH",body:JSON.stringify({asiento_id:asientoId})});
+    }
+    closeModal("modal-extracto");
+    toast(`✅ Extracto importado: ${ars.length} movimientos${asientoId?` · asiento por ${_extM(asiento.total)}`:""}`,"ok");
+    const mesEl=document.getElementById("conc-mes");
+    if(mesEl)mesEl.value=parsed.periodo.hasta.slice(0,7);
+    concSociedad=sociedad;
+    document.querySelectorAll("#cfpg-conciliacion .fbar .fb").forEach(b=>b.classList.toggle("on",b.textContent.trim()===sociedad));
+    _extState=null;
+    renderConciliacion();
+  }catch(e){toast("Error al importar: "+e.message,"err");}
+  finally{if(btn){btn.disabled=false;btn.textContent="✅ Confirmar e importar";}}
+}
+
+// ── RESÚMENES GUARDADOS ────────────────────────────────────────────
+function resSetSoc(s,btn){
+  resSociedad=s;
+  document.querySelectorAll("#cfpg-resumenes .fbar .fb").forEach(b=>b.classList.remove("on"));
+  if(btn)btn.classList.add("on");
+  renderResumenesGuardados();
+}
+const _ejercicioDe=iso=>{const y=parseInt(iso.slice(0,4)),m=parseInt(iso.slice(5,7));return m>=7?y:y-1;};
+const _MESES_EJ=["Jul","Ago","Sep","Oct","Nov","Dic","Ene","Feb","Mar","Abr","May","Jun"];
+
+async function _resCargar(){
+  const [ext,liq]=await Promise.all([
+    sb("extractos_bancarios?select=*&order=periodo_hasta.desc").catch(()=>null),
+    sb("liquidaciones_tarjeta?select=*&order=fecha.desc").catch(()=>[]),
+  ]);
+  return{ext,liq};
+}
+
+async function renderResumenesGuardados(){
+  const el=document.getElementById("res-contenido");
+  if(!el)return;
+  const {ext,liq}=await _resCargar();
+  if(ext===null){el.innerHTML=`<div class="empty"><div class="ei">🗂</div><div>Falta correr el SQL de extractos bancarios en Supabase.</div></div>`;return;}
+  const selEj=document.getElementById("res-ejercicio");
+  const ejs=[...new Set([...ext.map(e=>_ejercicioDe(e.periodo_hasta)),_ejercicioDe(today())])].sort((a,b)=>b-a);
+  if(selEj&&selEj.dataset.n!==ejs.join(",")){const prev=selEj.value;selEj.innerHTML=ejs.map(y=>`<option value="${y}">Ejercicio ${y}/${y+1}</option>`).join("");selEj.dataset.n=ejs.join(",");if(prev&&ejs.includes(parseInt(prev)))selEj.value=prev;}
+  const ej=parseInt(selEj?.value||ejs[0]);
+  const socs=resSociedad?[resSociedad]:["SUDES","POINTERS"];
+  const enEj=ext.filter(e=>_ejercicioDe(e.periodo_hasta)===ej&&socs.includes(e.sociedad));
+  const liqEj=(liq||[]).filter(l=>_ejercicioDe(l.fecha)===ej&&socs.includes(l.sociedad));
+  const g=(e,k)=>e.resumen?.totales?.[k]?.total||0;
+  const th="padding:6px 8px;text-align:right;font-size:10px;text-transform:uppercase;color:var(--tx3);white-space:nowrap";
+  const td="padding:6px 8px;font-size:12px;border-bottom:1px solid var(--b2);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap";
+  // cobertura de meses
+  const cobertura=socs.map(s=>{
+    const chips=_MESES_EJ.map((nom,i)=>{
+      const y=i<6?ej:ej+1,mm=((i+6)%12)+1;
+      const per=`${y}-${String(mm).padStart(2,"0")}`;
+      const hay=enEj.some(e=>e.sociedad===s&&e.periodo_hasta.slice(0,7)===per);
+      return`<span style="padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600;background:${hay?"rgba(16,185,129,.15)":"var(--surf2)"};color:${hay?"var(--gr)":"var(--tx3)"};border:1px solid ${hay?"var(--gr)":"var(--b)"}">${nom}${hay?" ✓":""}</span>`;
+    }).join(" ");
+    return`<div style="margin-bottom:6px"><b style="font-size:12px;margin-right:8px">${s}</b>${chips}</div>`;
+  }).join("");
+  const tot=enEj.reduce((a,e)=>{
+    a.gb+=-(g(e,"comision")+g(e,"comision_iva_incl")+g(e,"interes"));a.imp+=-g(e,"imp_25413");a.sir+=-g(e,"sircreb");a.iva+=-(g(e,"iva_cf")+g(e,"perc_iva"));a.bruto+=(e.resumen?.gastos_bancarios||0);return a;
+  },{gb:0,imp:0,sir:0,iva:0,bruto:0});
+  el.innerHTML=`
+    <div style="background:var(--surf);border:1px solid var(--b);border-radius:10px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--tx3);margin-bottom:8px">Cobertura del ejercicio ${ej}/${ej+1} — extractos bancarios importados</div>
+      ${cobertura}
+    </div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--tx3);margin-bottom:6px">Extractos bancarios</div>
+    <div style="overflow-x:auto;margin-bottom:18px">
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:var(--surf2)">
+        <th style="${th};text-align:left">Período</th><th style="${th};text-align:left">Sociedad</th><th style="${th}">Saldo inicial</th><th style="${th}">Saldo final</th>
+        <th style="${th}">Comisiones e int.</th><th style="${th}">Ley 25.413</th><th style="${th}">SIRCREB</th><th style="${th}">IVA y percep.</th><th style="${th}">Asiento</th><th style="${th}"></th></tr></thead>
+      <tbody>${enEj.length?enEj.map(e=>`<tr>
+        <td style="${td};text-align:left">${esc(e.periodo_desde)} → ${esc(e.periodo_hasta)}</td>
+        <td style="${td};text-align:left">${esc(e.sociedad)}</td>
+        <td style="${td}">${e.saldo_inicial==null?"—":_extM(e.saldo_inicial)}</td><td style="${td}">${e.saldo_final==null?"—":_extM(e.saldo_final)}</td>
+        <td style="${td}">${_extM(-(g(e,"comision")+g(e,"comision_iva_incl")+g(e,"interes")))}</td>
+        <td style="${td}">${_extM(-g(e,"imp_25413"))}</td><td style="${td}">${_extM(-g(e,"sircreb"))}</td>
+        <td style="${td}">${_extM(-(g(e,"iva_cf")+g(e,"perc_iva")))}</td>
+        <td style="${td}">${e.asiento_id?`<span style="color:var(--gr)">✓ ${_extM(e.resumen?.gastos_bancarios||0)}</span>`:`<span style="color:var(--am)">sin asiento</span>`}</td>
+        <td style="${td}">
+          ${e.archivo_path?`<button class="btn sm" onclick="abrirPdfResumen('${e.archivo_path}')">📄 PDF</button>`:`<span style="color:var(--tx4);font-size:11px">sin PDF</span>`}
+          <button class="btn sm sec" style="color:var(--re);border-color:var(--re)" onclick="anularExtracto('${e.id}')" title="Anular importación">🗑</button>
+        </td></tr>`).join("")+`<tr style="font-weight:700;background:var(--surf2)"><td style="${td};text-align:left" colspan="4">Total del ejercicio</td>
+          <td style="${td}">${_extM(tot.gb)}</td><td style="${td}">${_extM(tot.imp)}</td><td style="${td}">${_extM(tot.sir)}</td><td style="${td}">${_extM(tot.iva)}</td><td style="${td}">${_extM(tot.bruto)}</td><td style="${td}"></td></tr>`
+        :`<tr><td colspan="10" style="padding:24px;text-align:center;color:var(--tx3)">Todavía no hay extractos importados en este ejercicio. Importalos desde Conciliación bancaria → 📄 Importar extracto PDF.</td></tr>`}</tbody>
+    </table></div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--tx3);margin-bottom:6px">Pagos de tarjeta registrados</div>
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:var(--surf2)"><th style="${th};text-align:left">Fecha</th><th style="${th};text-align:left">Sociedad</th><th style="${th};text-align:left">Tarjeta</th><th style="${th}">Pagado al banco</th><th style="${th}">Cargos financieros</th><th style="${th}">Facturas marcadas</th><th style="${th}"></th></tr></thead>
+      <tbody>${liqEj.length?liqEj.map(l=>`<tr><td style="${td};text-align:left">${esc(l.fecha)}</td><td style="${td};text-align:left">${esc(l.sociedad)}</td><td style="${td};text-align:left">${esc(l.medio_pago||"")}</td>
+        <td style="${td}">${_extM(l.monto_banco)}</td><td style="${td}">${_extM(l.cargos_financieros||0)}</td><td style="${td}">${l.cantidad_facturas||0} · ${_extM(l.total_facturas||0)}</td>
+        <td style="${td}"><button class="btn sm sec" style="color:var(--re);border-color:var(--re)" onclick="anularLiqTarjeta('${l.id}')" title="Anular">🗑</button></td></tr>`).join("")
+        :`<tr><td colspan="7" style="padding:18px;text-align:center;color:var(--tx3)">Sin pagos de tarjeta registrados en este ejercicio.</td></tr>`}</tbody>
+    </table></div>`;
+}
+
+async function abrirPdfResumen(path){
+  try{
+    const r=await fetch(`${SB}/storage/v1/object/sign/extractos-bancarios/${path}`,{method:"POST",headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":"application/json"},body:JSON.stringify({expiresIn:300})});
+    const j=await r.json();
+    if(!r.ok||!j.signedURL)throw new Error(j.message||j.error||"no se pudo firmar el enlace");
+    window.open(`${SB}/storage/v1${j.signedURL}`,"_blank");
+  }catch(e){toast("No se pudo abrir el PDF: "+e.message,"err");}
+}
+
+async function anularExtracto(id){
+  const [e]=await sb(`extractos_bancarios?id=eq.${id}&select=*`).catch(()=>[]);
+  if(!e)return;
+  const movs=await sb(`banco_movimientos?extracto_id=eq.${id}&select=id`).catch(()=>[]);
+  if(movs.length){
+    const liq=await sb(`liquidaciones_tarjeta?banco_movimiento_id=in.(${movs.map(m=>m.id).join(",")})&select=id`).catch(()=>[]);
+    if(liq.length){toast("Este extracto tiene pagos de tarjeta registrados: anulalos primero","err");return;}
+  }
+  if(!confirm(`¿Anular la importación del extracto ${e.sociedad} ${e.periodo_desde} → ${e.periodo_hasta}?\n\nSe borran sus ${movs.length} movimientos y se anula el asiento de gastos bancarios. El PDF queda archivado.`))return;
+  try{
+    if(e.asiento_id)await sb(`asientos_contables?id=eq.${e.asiento_id}`,{method:"PATCH",body:JSON.stringify({anulado:true})});
+    await sb(`banco_movimientos?extracto_id=eq.${id}`,{method:"DELETE"});
+    await sb(`extractos_bancarios?id=eq.${id}`,{method:"DELETE"});
+    toast("Importación anulada","ok");
+    renderResumenesGuardados();
+  }catch(err){toast("Error al anular: "+err.message,"err");}
+}
+
+async function exportarResumenesEjercicio(){
+  const {ext,liq}=await _resCargar();
+  if(!ext){toast("Falta correr el SQL de extractos bancarios","err");return;}
+  const ej=parseInt(document.getElementById("res-ejercicio")?.value||_ejercicioDe(today()));
+  const socs=resSociedad?[resSociedad]:["SUDES","POINTERS"];
+  const e1=ext.filter(e=>_ejercicioDe(e.periodo_hasta)===ej&&socs.includes(e.sociedad)).sort((a,b)=>a.periodo_hasta.localeCompare(b.periodo_hasta));
+  if(!window.XLSX){await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+  const g=(e,k)=>e.resumen?.totales?.[k]?.total||0;
+  const filas=e1.map(e=>({Sociedad:e.sociedad,Desde:e.periodo_desde,Hasta:e.periodo_hasta,"Saldo inicial":e.saldo_inicial,"Saldo final":e.saldo_final,
+    "Comisiones y mantenimiento":-g(e,"comision"),"Comisión transferencias (IVA incl.)":-g(e,"comision_iva_incl"),"Intereses":-g(e,"interes"),
+    "Ley 25.413":-g(e,"imp_25413"),"Ley 25.413 computable":e.resumen?.computable||0,"IIBB SIRCREB":-g(e,"sircreb"),"IVA s/ gastos":-g(e,"iva_cf"),"Percepciones IVA":-g(e,"perc_iva"),
+    "Total asiento":e.resumen?.gastos_bancarios||0,"Con asiento":e.asiento_id?"Sí":"No"}));
+  const l1=(liq||[]).filter(l=>_ejercicioDe(l.fecha)===ej&&socs.includes(l.sociedad)).map(l=>({Sociedad:l.sociedad,Fecha:l.fecha,Tarjeta:l.medio_pago,"Pagado al banco":l.monto_banco,"Cargos financieros":l.cargos_financieros||0,"Facturas marcadas":l.cantidad_facturas||0,"Total facturas":l.total_facturas||0}));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(filas),"Extractos bancarios");
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(l1),"Pagos de tarjeta");
+  XLSX.writeFile(wb,`resumenes_ejercicio_${ej}-${ej+1}${resSociedad?"_"+resSociedad:""}.xlsx`);
+}
+
+// ── CIERRE DE TARJETA ───────────────────────────────────────────────
+let _liqState=null;
+async function _saldoCuentaContable(cuentaId){
+  const r=await sb(`asientos_movimientos?select=debe,haber,asientos_contables!inner(anulado)&cuenta_id=eq.${cuentaId}&asientos_contables.anulado=eq.false`).catch(()=>[]);
+  return r.reduce((s,x)=>s+(parseFloat(x.haber)||0)-(parseFloat(x.debe)||0),0);
+}
+async function abrirLiqTarjeta(movId){
+  try{
+    await _extAsegurarPlan();
+    const [mov]=await sb(`banco_movimientos?id=eq.${movId}&select=*`);
+    if(!mov)return;
+    const tarjetas=mediosPago.filter(m=>m.tipo==="tarjeta"&&m.activo&&m.sociedad===mov.sociedad&&m.cuenta_contable_id);
+    if(!tarjetas.length){toast(`No hay una tarjeta de ${mov.sociedad} con cuenta contable vinculada`,"err");return;}
+    _liqState={mov,tarjetas,facturas:[]};
+    await liqCargarTarjeta(tarjetas[0].id);
+    openModal("modal-liq-tarjeta");
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+async function liqCargarTarjeta(medioId){
+  const {mov,tarjetas}=_liqState;
+  const medio=tarjetas.find(t=>t.id===medioId);
+  _liqState.medio=medio;
+  const cta=planCuentas.find(c=>c.id===medio.cuenta_contable_id);
+  let facturas=[];let colFalta=false;
+  try{
+    facturas=await sb(`comprobantes_compra?medio_pago=eq.${encodeURIComponent(medio.nombre)}&sociedad=eq.${mov.sociedad}&estado=eq.pagado&liquidacion_tarjeta_id=is.null&select=id,proveedor,numero,tipo,total,fecha_pago&order=fecha_pago`);
+  }catch(e){colFalta=true;}
+  const saldo=await _saldoCuentaContable(medio.cuenta_contable_id);
+  _liqState.facturas=facturas;_liqState.saldo=saldo;_liqState.cta=cta;
+  const monto=Math.abs(parseFloat(mov.importe)||0);
+  const td="padding:5px 8px;font-size:12px;border-bottom:1px solid var(--b2)";
+  document.getElementById("liq-body").innerHTML=`
+    <div style="font-size:12px;color:var(--tx2);margin-bottom:12px">Débito del banco del <b>${esc(mov.fecha)}</b> · <b>${esc(mov.concepto)}</b> · <b>${_extM(monto)}</b> · ${esc(mov.sociedad)}</div>
+    <div class="form-grid" style="grid-template-columns:1fr 1fr;margin-bottom:10px">
+      <div class="fg"><label class="fl">Tarjeta</label><select class="fs" id="liq-tarjeta" onchange="liqCargarTarjeta(this.value)">${tarjetas.map(t=>`<option value="${t.id}" ${t.id===medio.id?"selected":""}>${esc(t.nombre)}</option>`).join("")}</select></div>
+      <div class="fg"><label class="fl">Cargos financieros incluidos (intereses, sellos, IVA)</label><input class="fi" id="liq-cargos" type="number" step="0.01" min="0" value="0" oninput="liqRecalc()"></div>
+    </div>
+    <div class="fg" style="margin-bottom:10px"><label class="fl">Cuenta de gasto para esos cargos</label>
+      <select class="fs" id="liq-cargos-cta"><option value="5.3.01.001">5.3.01.001 Intereses pagados</option><option value="5.3.01.002">5.3.01.002 Comisiones y gastos bancarios</option><option value="5.2.01.001">5.2.01.001 Gastos generales de operación</option></select></div>
+    <div style="background:var(--surf2);border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:10px">
+      Saldo contable de la tarjeta antes de este pago: <b>${_extM(saldo)}</b> ${saldo<0?"(pagado de más: hay consumos sin factura cargada)":"(lo que figura adeudado)"}<br>
+      <span id="liq-info"></span>
+    </div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--tx3);margin-bottom:6px">Facturas pagadas con esta tarjeta y todavía sin liquidar — marcá las que cubre este resumen</div>
+    ${colFalta?`<div style="color:var(--re);font-size:12px">Falta correr el SQL de liquidaciones de tarjeta en Supabase.</div>`:
+      facturas.length?`<div style="max-height:220px;overflow:auto"><table style="width:100%;border-collapse:collapse">${facturas.map((f,i)=>`<tr>
+        <td style="${td}"><input type="checkbox" class="liq-chk" data-i="${i}" checked onchange="liqRecalc()"></td>
+        <td style="${td}">${esc(f.fecha_pago||"")}</td><td style="${td}">${esc(f.proveedor||"")} <span style="color:var(--tx3)">${esc(f.tipo||"")} ${esc(f.numero||"")}</span></td>
+        <td style="${td};text-align:right">${_extM(f.total)}</td></tr>`).join("")}</table></div>`
+      :`<div style="font-size:12px;color:var(--tx3)">No hay facturas pendientes de liquidar con esta tarjeta.</div>`}`;
+  liqRecalc();
+}
+function liqRecalc(){
+  if(!_liqState)return;
+  const {facturas}=_liqState;
+  const sel=[...document.querySelectorAll(".liq-chk:checked")].map(c=>facturas[parseInt(c.dataset.i)]);
+  const tot=sel.reduce((s,f)=>s+(parseFloat(f.total)||0),0);
+  const monto=Math.abs(parseFloat(_liqState.mov.importe)||0);
+  const cargos=parseFloat(document.getElementById("liq-cargos")?.value)||0;
+  const sinFactura=monto-cargos-tot;
+  _liqState.sel=sel;
+  const info=document.getElementById("liq-info");
+  if(info)info.innerHTML=`Facturas marcadas: <b>${sel.length}</b> por <b>${_extM(tot)}</b> · Pago al banco: <b>${_extM(monto)}</b> · Consumos del resumen sin factura cargada todavía: <b style="color:${sinFactura>0.5?"var(--am)":"var(--gr)"}">${_extM(sinFactura)}</b>`;
+}
+async function confirmarLiqTarjeta(){
+  if(!_liqState)return;
+  const {mov,medio,sel,cta}=_liqState;
+  const monto=Math.round(Math.abs(parseFloat(mov.importe)||0)*100)/100;
+  const cargos=Math.round((parseFloat(document.getElementById("liq-cargos").value)||0)*100)/100;
+  if(cargos<0||cargos>monto){toast("Los cargos financieros no pueden superar el pago","err");return;}
+  const ctaGasto=document.getElementById("liq-cargos-cta").value;
+  const bancoCod=_extCodigoBanco(mov.sociedad);
+  const lineas=[{codigo:cta.codigo,debe:Math.round((monto-cargos)*100)/100,desc:`Pago resumen ${medio.nombre}`}];
+  if(cargos>0)lineas.push({codigo:ctaGasto,debe:cargos,desc:"Cargos financieros del resumen"});
+  lineas.push({codigo:bancoCod,haber:monto,desc:`Débito ${mov.concepto}`});
+  try{
+    const totFact=sel.reduce((s,f)=>s+(parseFloat(f.total)||0),0);
+    const [liq]=await sb("liquidaciones_tarjeta",{method:"POST",body:JSON.stringify({
+      sociedad:mov.sociedad,medio_pago:medio.nombre,fecha:mov.fecha,monto_banco:monto,cargos_financieros:cargos,
+      total_facturas:Math.round(totFact*100)/100,cantidad_facturas:sel.length,banco_movimiento_id:mov.id,creado_por:loggedUser?.nombre||null
+    })});
+    const ad={fecha:mov.fecha,sociedad:mov.sociedad,tipo:"liquidacion_tarjeta",origen:"liquidacion_tarjeta",origen_id:liq.id,descripcion:`Pago resumen ${medio.nombre} — ${mov.fecha}`,lineas};
+    const a=await generarAsiento(ad);
+    if(a?._faltantes){mcfAbrir(a._faltantes,ad);toast("Faltan cuentas contables: el asiento no se generó","err");return;}
+    if(!a?.id){toast("⚠️ El asiento no se generó (revisá que el tipo 'liquidacion_tarjeta' esté permitido en Supabase)","err");return;}
+    await sb(`liquidaciones_tarjeta?id=eq.${liq.id}`,{method:"PATCH",body:JSON.stringify({asiento_id:a.id})});
+    if(sel.length)await sb(`comprobantes_compra?id=in.(${sel.map(f=>f.id).join(",")})`,{method:"PATCH",body:JSON.stringify({liquidacion_tarjeta_id:liq.id})});
+    await sb(`banco_movimientos?id=eq.${mov.id}`,{method:"PATCH",body:JSON.stringify({conciliado:true,match_tipo:"liquidacion_tarjeta",match_id:liq.id,match_descripcion:`Pago ${medio.nombre} · ${sel.length} facturas`,asiento_id:a.id})});
+    closeModal("modal-liq-tarjeta");
+    toast(`✅ Pago de tarjeta registrado · ${_extM(monto)}`,"ok");
+    _liqState=null;
+    renderConciliacion();
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+async function anularLiqTarjeta(id){
+  if(!confirm("¿Anular este pago de tarjeta? Se anula el asiento, se liberan las facturas y el movimiento del banco vuelve a quedar pendiente."))return;
+  try{
+    const [l]=await sb(`liquidaciones_tarjeta?id=eq.${id}&select=*`);
+    if(l?.asiento_id)await sb(`asientos_contables?id=eq.${l.asiento_id}`,{method:"PATCH",body:JSON.stringify({anulado:true})});
+    await sb(`comprobantes_compra?liquidacion_tarjeta_id=eq.${id}`,{method:"PATCH",body:JSON.stringify({liquidacion_tarjeta_id:null})});
+    if(l?.banco_movimiento_id)await sb(`banco_movimientos?id=eq.${l.banco_movimiento_id}`,{method:"PATCH",body:JSON.stringify({conciliado:false,match_tipo:null,match_id:null,match_descripcion:null,asiento_id:null})});
+    await sb(`liquidaciones_tarjeta?id=eq.${id}`,{method:"DELETE"});
+    toast("Pago de tarjeta anulado","ok");
+    renderResumenesGuardados();
+  }catch(e){toast("Error: "+e.message,"err");}
 }
 
 // ── RESUMEN SEMANAL CASH FLOW ─────────────────────────────────────────────────
@@ -22563,6 +23180,8 @@ async function renderLibroDiario(){
         <option value="devengado_compra"${f.tipo==="devengado_compra"?" selected":""}>Devengado compra</option>
         <option value="pago_compra"${f.tipo==="pago_compra"?" selected":""}>Pago compra</option>
         <option value="pago_cuota_prestamo"${f.tipo==="pago_cuota_prestamo"?" selected":""}>Cuota préstamo</option>
+        <option value="gastos_bancarios"${f.tipo==="gastos_bancarios"?" selected":""}>Gastos bancarios</option>
+        <option value="liquidacion_tarjeta"${f.tipo==="liquidacion_tarjeta"?" selected":""}>Pago de tarjeta</option>
         <option value="sueldo"${f.tipo==="sueldo"?" selected":""}>Sueldo</option>
         <option value="ajuste_manual"${f.tipo==="ajuste_manual"?" selected":""}>Ajuste manual</option>
       </select>
@@ -22585,8 +23204,8 @@ async function _ldCargar(){
   try{
     const asientos=await sb(q);
     if(!asientos.length){body.innerHTML=`<div style="color:var(--tx3);font-size:12px;padding:24px 0;text-align:center">Sin asientos para el período seleccionado</div>`;return;}
-    const tipoLabel={devengado_compra:"Devengado compra",pago_compra:"Pago compra",pago_cuota_prestamo:"Cuota préstamo",sueldo:"Sueldo",ajuste_manual:"Ajuste manual",devengado_venta:"Devengado venta",cobro_venta:"Cobro venta",ajuste:"Ajuste",apertura:"Apertura"};
-    const tipoBadge={devengado_compra:"var(--al)",pago_compra:"var(--gr)",pago_cuota_prestamo:"#818CF8",sueldo:"#F472B6",ajuste_manual:"var(--ac)",devengado_venta:"var(--al)",cobro_venta:"var(--gr)",ajuste:"var(--ac)",apertura:"var(--tx3)"};
+    const tipoLabel={devengado_compra:"Devengado compra",pago_compra:"Pago compra",pago_cuota_prestamo:"Cuota préstamo",gastos_bancarios:"Gastos bancarios",liquidacion_tarjeta:"Pago de tarjeta",sueldo:"Sueldo",ajuste_manual:"Ajuste manual",devengado_venta:"Devengado venta",cobro_venta:"Cobro venta",ajuste:"Ajuste",apertura:"Apertura"};
+    const tipoBadge={devengado_compra:"var(--al)",pago_compra:"var(--gr)",pago_cuota_prestamo:"#818CF8",gastos_bancarios:"#F59E0B",liquidacion_tarjeta:"#06B6D4",sueldo:"#F472B6",ajuste_manual:"var(--ac)",devengado_venta:"var(--al)",cobro_venta:"var(--gr)",ajuste:"var(--ac)",apertura:"var(--tx3)"};
     body.innerHTML=`<div style="margin-bottom:8px;font-size:11px;color:var(--tx3)">${asientos.length} asiento${asientos.length!==1?"s":""}</div>`+
       asientos.map(a=>{
         const col=tipoBadge[a.tipo]||"var(--tx3)";
