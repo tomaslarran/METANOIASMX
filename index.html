@@ -2240,7 +2240,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="pgh">
     <div class="pgh-left"><div class="pgt">Cash Flow</div><div class="pgs">SUDES y POINTERS — préstamos, cobranzas y flujo mensual</div></div>
     <div class="pgh-right" id="cf-header-actions">
-      <button class="btn sec" onclick="abrirCierreMes()" style="gap:6px">📋 Cerrar mes</button>
+      <button class="btn sec" onclick="setCFTab('cierre')" style="gap:6px">🔒 Cerrar mes</button>
     </div>
   </div>
 
@@ -2256,6 +2256,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="cd-tab" id="cftab-pendientes" onclick="setCFTab('pendientes',this)">💸 Pendientes de pago</button>
     <button class="cd-tab" id="cftab-promos" onclick="setCFTab('promos',this)">🎁 Promociones</button>
     <button class="cd-tab" id="cftab-resumenes" onclick="setCFTab('resumenes',this)">🗂 Resúmenes</button>
+    <button class="cd-tab" id="cftab-cierre" onclick="setCFTab('cierre',this)">🔒 Cierre de mes</button>
   </div>
 
   <!-- TAB: RESUMEN MENSUAL -->
@@ -2689,6 +2690,21 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <button class="btn sm pri" id="btn-buscar-promos" onclick="buscarPromocionesAhora()" style="margin-left:auto">🔄 Buscar ahora</button>
     </div>
     <div id="cf-promos-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando promociones...</div></div></div>
+  </div>
+
+  <!-- TAB: CIERRE DE MES CONTABLE -->
+  <div id="cfpg-cierre" style="display:none">
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <div class="fbar">
+        <button class="fb on" onclick="cierreSetSoc('SUDES',this)">SUDES</button>
+        <button class="fb" onclick="cierreSetSoc('POINTERS',this)">POINTERS</button>
+      </div>
+      <input type="month" id="cierre-mes-input" onchange="renderCierre()" style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:5px 10px;font-size:12px;color:var(--tx);outline:none">
+      <button class="btn sm" onclick="renderCierre()">🔄 Verificar</button>
+      <button class="btn sm sec" onclick="abrirCierreMes()" title="Checklist operativo (cobranzas, caja, impuestos) y análisis con IA">📋 Checklist operativo + IA</button>
+      <button class="btn sm sec" onclick="imprimirCierre()">🖨 Imprimir</button>
+    </div>
+    <div id="cierre-contenido"></div>
   </div>
 
   <!-- TAB: RESÚMENES GUARDADOS (extractos bancarios + liquidaciones de tarjeta) -->
@@ -13286,7 +13302,7 @@ function setCFTab(tab,btn){
   document.querySelectorAll("#pg-cashflow .cd-tab").forEach(b=>b.classList.remove("on"));
   const tabBtn=btn||document.getElementById("cftab-"+tab);
   if(tabBtn)tabBtn.classList.add("on");
-  ["resumen","prestamos","cobranzas","inversiones","conciliacion","resumen-sem","cuentas","pendientes","promos","resumenes"].forEach(t=>{
+  ["resumen","prestamos","cobranzas","inversiones","conciliacion","resumen-sem","cuentas","pendientes","promos","resumenes","cierre"].forEach(t=>{
     const el=document.getElementById("cfpg-"+t);
     if(el)el.style.display=t===tab?"":"none";
   });
@@ -13300,6 +13316,7 @@ function setCFTab(tab,btn){
   if(tab==="pendientes")renderCFPendientes();
   if(tab==="promos")renderCFPromos();
   if(tab==="resumenes")renderResumenesGuardados();
+  if(tab==="cierre")renderCierre();
 }
 
 // ══════════════════════════════════════════════
@@ -14331,6 +14348,372 @@ async function confirmarMipyme(){
     toast(`✅ Certificado MiPyME de ${soc} registrado · vence ${venc.split("-").reverse().join("/")}`,"ok");
     renderResumenesGuardados();
   }catch(e){toast("Error: "+e.message,"err");}
+}
+
+// ══════════════════════════════════════════════
+// CIERRE DE MES CONTABLE (por sociedad) + VISTA DEL EJERCICIO
+// ══════════════════════════════════════════════
+let cierreSoc="SUDES";
+let cierreMes="";
+let _cierreData=null;
+let _cierreAnual=null;
+let _cierresCache={};
+const _CIERRE_MESES=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+async function _sbAll(path){
+  const out=[];
+  for(let off=0;;off+=1000){
+    const r=await sb(`${path}${path.includes("?")?"&":"?"}limit=1000&offset=${off}`);
+    out.push(...r);
+    if(r.length<1000)break;
+  }
+  return out;
+}
+const _cierreFin=mes=>{const [y,m]=mes.split("-").map(Number);return`${mes}-${String(new Date(y,m,0).getDate()).padStart(2,"0")}`;};
+const _cierreFmtMes=mes=>{const [y,m]=mes.split("-");return`${_CIERRE_MESES[parseInt(m)-1]} ${y}`;};
+const _r2=v=>Math.round((parseFloat(v)||0)*100)/100;
+
+function cierreSetSoc(s,btn){
+  cierreSoc=s;
+  document.querySelectorAll("#cfpg-cierre .fbar .fb").forEach(b=>b.classList.remove("on"));
+  if(btn)btn.classList.add("on");
+  renderCierre();
+}
+
+async function _cierreCargar(soc,mes){
+  const D1=`${mes}-01`,D2=_cierreFin(mes);
+  const vacio=()=>[];
+  const [asientos,cobertura,comps,compsPag,ops,emps,pagosEmp,prest,extr,bm,cal,veps]=await Promise.all([
+    _sbAll(`asientos_contables?sociedad=eq.${soc}&fecha=gte.${D1}&fecha=lte.${D2}&anulado=eq.false&select=id,tipo,fecha,origen,origen_id,descripcion,asientos_movimientos(debe,haber,plan_cuentas(codigo,nombre,tipo))`).catch(vacio),
+    _sbAll(`asientos_contables?anulado=eq.false&origen=in.(comprobante,comprobante_pago,orden_pago,pago_empleado,prestamo_cuota)&select=origen,origen_id`).catch(vacio),
+    sb(`comprobantes_compra?sociedad=eq.${soc}&fecha=gte.${D1}&fecha=lte.${D2}&estado=in.(revisado,pagado)&select=id,proveedor,numero,tipo,total,estado,fecha`).catch(vacio),
+    sb(`comprobantes_compra?sociedad=eq.${soc}&estado=eq.pagado&fecha_pago=gte.${D1}&fecha_pago=lte.${D2}&select=id,proveedor,numero,tipo,total,fecha_pago,medio_pago`).catch(vacio),
+    sb(`ordenes_pago?sociedad=eq.${soc}&select=id,comprobante_id`).catch(vacio),
+    sb(`cf_empleados?sociedad=eq.${soc}&select=id,nombre,activo`).catch(vacio),
+    sb(`cf_pagos_empleados?periodo=eq.${mes}&select=id,empleado_id,pagado,monto,fecha_pago`).catch(vacio),
+    sb(`cf_prestamos?sociedad=eq.${soc}&select=id,nombre`).catch(vacio),
+    sb(`extractos_bancarios?sociedad=eq.${soc}&periodo_hasta=gte.${D1}&periodo_hasta=lte.${D2}&select=*`).catch(vacio),
+    sb(`banco_movimientos?sociedad=eq.${soc}&fecha=gte.${D1}&fecha=lte.${D2}&select=id,fecha,concepto,importe,saldo,conciliado,extracto_id,categoria,asiento_id,match_tipo`).catch(vacio),
+    sb(`calendario_impositivo?sociedad=eq.${soc}&periodo=eq.${mes}&select=*`).catch(vacio),
+    sb(`impuestos_vep?sociedad=eq.${soc}&estado=eq.pendiente&fecha_vencimiento=lte.${D2}&select=tipo_impuesto,periodo,monto,fecha_vencimiento`).catch(vacio),
+  ]);
+  let cuotas=[];
+  if(prest.length)cuotas=await sb(`cf_prestamos_cuotas?prestamo_id=in.(${prest.map(p=>p.id).join(",")})&select=id,prestamo_id,nro_cuota,fecha,fecha_pago,pagada,monto_total`).catch(vacio);
+  let cierre=null,sinTabla=false;
+  try{cierre=(await sb(`cierres_mensuales?sociedad=eq.${soc}&periodo=eq.${mes}&select=*`))[0]||null;}catch(e){sinTabla=true;}
+  return{soc,mes,D1,D2,asientos,cobertura,comps,compsPag,ops,emps,pagosEmp,prest,cuotas,extr,bm,cal,veps,cierre,sinTabla};
+}
+
+function _cierreResumen(d){
+  const por={};
+  let ingresos=0,egresos=0,ivaCredito=0,ivaDebito=0,gastosBanc=0,debeTot=0,haberTot=0,devengadoProv=0;
+  d.asientos.forEach(a=>{
+    (a.asientos_movimientos||[]).forEach(m=>{
+      const c=m.plan_cuentas;if(!c)return;
+      const debe=parseFloat(m.debe)||0,haber=parseFloat(m.haber)||0;
+      const k=por[c.codigo]=por[c.codigo]||{codigo:c.codigo,nombre:c.nombre,tipo:c.tipo,debe:0,haber:0};
+      k.debe+=debe;k.haber+=haber;debeTot+=debe;haberTot+=haber;
+      if(c.tipo==="ingreso")ingresos+=haber-debe;
+      if(c.tipo==="egreso")egresos+=debe-haber;
+      if(c.codigo==="1.1.03.001")ivaCredito+=debe-haber;
+      if(c.codigo==="2.1.03.001")ivaDebito+=haber-debe;
+      if(a.tipo==="gastos_bancarios"&&debe>0)gastosBanc+=debe;
+      if(a.tipo==="devengado_compra"&&c.codigo==="2.1.01.001")devengadoProv+=haber-debe;
+    });
+  });
+  return{cuentas:Object.values(por).sort((a,b)=>a.codigo.localeCompare(b.codigo)),
+    ingresos:_r2(ingresos),egresos:_r2(egresos),resultado:_r2(ingresos-egresos),
+    ivaCredito:_r2(ivaCredito),ivaDebito:_r2(ivaDebito),gastosBanc:_r2(gastosBanc),devengadoProv:_r2(devengadoProv),
+    asientos:{count:d.asientos.length,debe:_r2(debeTot),haber:_r2(haberTot)}};
+}
+
+function _cierreChecks(d){
+  const items=[];
+  const res=_cierreResumen(d);
+  const ID=(o)=>new Set(d.cobertura.filter(c=>c.origen===o).map(c=>c.origen_id));
+  const sComp=ID("comprobante"),sPagoDir=ID("comprobante_pago"),sOP=ID("orden_pago"),sEmp=ID("pago_empleado"),sCuota=ID("prestamo_cuota");
+  const lista=(arr,f,n=6)=>[...arr.slice(0,n).map(f),...(arr.length>n?[`… y ${arr.length-n} más`]:[])];
+  const add=(area,icon,estado,detalle,subitems=[])=>items.push({area,icon,estado,detalle,subitems});
+  const bankCod=d.soc==="POINTERS"?"1.1.01.003":"1.1.01.002";
+  const ex=d.extr[0]||null;
+
+  // 1. Extracto bancario
+  if(!ex)add("Extracto bancario","🏦","error",`No hay extracto de ${d.soc} importado para ${_cierreFmtMes(d.mes)}`,["Importalo en Conciliación bancaria → 📄 Importar extracto PDF"]);
+  else if(!ex.asiento_id)add("Extracto bancario","🏦","alerta",`Extracto ${ex.periodo_desde} → ${ex.periodo_hasta} importado, pero sin asiento de gastos bancarios`);
+  else{
+    const completo=ex.periodo_desde<=d.D1&&ex.periodo_hasta>=d.D2;
+    add("Extracto bancario","🏦",completo?"ok":"alerta",`Extracto ${ex.periodo_desde} → ${ex.periodo_hasta} importado y contabilizado (gastos bancarios ${_extM(ex.resumen?.gastos_bancarios||0)})`,completo?[]:["El extracto no cubre el mes completo"]);
+  }
+
+  // 2. Conciliación panel ↔ banco
+  const faltaBanco=ex?d.bm.filter(m=>!m.extracto_id&&m.saldo==null&&!m.conciliado):[];
+  const faltaPanel=ex?d.bm.filter(m=>m.extracto_id&&!m.conciliado&&!EXT_CATS[m.categoria]?.banco):[];
+  if(!ex)add("Conciliación con el banco","🔗","info","Sin extracto no se puede cruzar lo cargado en el panel contra el banco");
+  else if(!faltaBanco.length&&!faltaPanel.length)add("Conciliación con el banco","🔗","ok","Todo lo del panel aparece en el banco y viceversa");
+  else add("Conciliación con el banco","🔗","alerta",`${faltaBanco.length} del panel sin match en el banco · ${faltaPanel.length} del banco sin cargar en el panel`,
+    [...lista(faltaBanco,m=>`PANEL → ${m.fecha} ${m.concepto} ${_extM(m.importe)}`,4),...lista(faltaPanel,m=>`BANCO → ${m.fecha} ${m.concepto} ${_extM(m.importe)}`,4)]);
+
+  // 3. Tarjetas
+  const tarj=d.bm.filter(m=>m.categoria==="tarjeta");
+  const tarjSin=tarj.filter(m=>!m.asiento_id);
+  if(tarjSin.length)add("Pago de tarjeta","💳","alerta",`${tarjSin.length} pago${tarjSin.length>1?"s":""} de tarjeta sin cerrar (${_extM(tarjSin.reduce((s,m)=>s-m.importe,0))})`,["Usá 💳 Cerrar tarjeta en la conciliación"]);
+  else if(tarj.length)add("Pago de tarjeta","💳","ok",`${tarj.length} pago${tarj.length>1?"s":""} de tarjeta cerrado${tarj.length>1?"s":""} contra el banco`);
+
+  // 4. Comprobantes devengados
+  const sinDev=d.comps.filter(c=>!sComp.has(c.id));
+  const totComps=_r2(d.comps.reduce((s,c)=>s+(c.tipo?.startsWith("NC")?-1:1)*Math.abs(parseFloat(c.total)||0),0));
+  if(sinDev.length)add("Facturas de compra contabilizadas","📄","error",`${sinDev.length} factura${sinDev.length>1?"s":""} del mes sin asiento de devengado`,lista(sinDev,c=>`${c.proveedor||"?"} · ${c.tipo||""} ${c.numero||""} · ${_extM(c.total)}`));
+  else add("Facturas de compra contabilizadas","📄","ok",`${d.comps.length} factura${d.comps.length!==1?"s":""} del mes con asiento de devengado · comprobantes ${_extM(totComps)} / asientos ${_extM(res.devengadoProv)}`,
+    Math.abs(totComps-res.devengadoProv)>1?[`Diferencia de ${_extM(totComps-res.devengadoProv)} entre el importe de las facturas y lo devengado (revisá notas de crédito o asientos manuales)`]:[]);
+
+  // 5. Pagos de facturas
+  const sinPago=d.compsPag.filter(c=>!(sPagoDir.has(c.id)||d.ops.some(o=>o.comprobante_id===c.id&&sOP.has(o.id))));
+  if(sinPago.length)add("Pagos de facturas contabilizados","💸","alerta",`${sinPago.length} pago${sinPago.length>1?"s":""} sin asiento`,[...lista(sinPago,c=>`${c.proveedor||"?"} · ${c.medio_pago||""} · ${_extM(c.total)}`),"Corré 🔄 Generar históricos en el Libro Diario"]);
+  else add("Pagos de facturas contabilizados","💸","ok",`${d.compsPag.length} pago${d.compsPag.length!==1?"s":""} del mes con asiento`);
+
+  // 6. Sueldos
+  const empIds=new Set(d.emps.map(e=>e.id));
+  const pagados=d.pagosEmp.filter(p=>p.pagado&&empIds.has(p.empleado_id));
+  const sinAsSueldo=pagados.filter(p=>!sEmp.has(p.id));
+  const sinPagar=d.emps.filter(e=>e.activo&&!pagados.some(p=>p.empleado_id===e.id));
+  const subS=[...lista(sinAsSueldo,p=>`Pago sin asiento: ${d.emps.find(e=>e.id===p.empleado_id)?.nombre||"?"}`),...lista(sinPagar,e=>`Sin pago en el mes: ${e.nombre}`)];
+  add("Sueldos y honorarios","👥",(sinAsSueldo.length||sinPagar.length)?"alerta":"ok",
+    (sinAsSueldo.length||sinPagar.length)?`${sinAsSueldo.length} pago${sinAsSueldo.length!==1?"s":""} sin asiento · ${sinPagar.length} empleado${sinPagar.length!==1?"s":""} sin pago registrado`:`${pagados.length} pago${pagados.length!==1?"s":""} con asiento, ningún empleado pendiente`,subS);
+
+  // 7. Préstamos
+  const pIds=new Set(d.prest.map(p=>p.id));
+  const delMes=d.cuotas.filter(c=>pIds.has(c.prestamo_id));
+  const pagMes=delMes.filter(c=>c.pagada&&((c.fecha_pago||c.fecha)||"")>=d.D1&&((c.fecha_pago||c.fecha)||"")<=d.D2);
+  const sinAsCuota=pagMes.filter(c=>!sCuota.has(c.id));
+  const vencSin=delMes.filter(c=>!c.pagada&&(c.fecha||"")>=d.D1&&(c.fecha||"")<=d.D2);
+  const nomP=id=>d.prest.find(p=>p.id===id)?.nombre||"Préstamo";
+  const subP=[...lista(sinAsCuota,c=>`Pagada sin asiento: ${nomP(c.prestamo_id)} cuota ${c.nro_cuota||"?"}`),...lista(vencSin,c=>`Vencida sin pagar: ${nomP(c.prestamo_id)} cuota ${c.nro_cuota||"?"} (${c.fecha})`)];
+  if(d.prest.length)add("Cuotas de préstamos","🏦",(sinAsCuota.length||vencSin.length)?"alerta":"ok",
+    (sinAsCuota.length||vencSin.length)?`${sinAsCuota.length} cuota${sinAsCuota.length!==1?"s":""} pagada${sinAsCuota.length!==1?"s":""} sin asiento · ${vencSin.length} vencida${vencSin.length!==1?"s":""} sin pagar`:`${pagMes.length} cuota${pagMes.length!==1?"s":""} del mes pagada${pagMes.length!==1?"s":""} y con asiento`,subP);
+
+  // 8. Asientos balanceados
+  const desb=d.asientos.filter(a=>{const m=a.asientos_movimientos||[];return Math.abs(m.reduce((s,x)=>s+(parseFloat(x.debe)||0)-(parseFloat(x.haber)||0),0))>0.01;});
+  add("Asientos del mes","📒",desb.length?"error":"ok",desb.length?`${desb.length} asiento${desb.length>1?"s":""} desbalanceado${desb.length>1?"s":""}`:`${d.asientos.length} asientos, todos balanceados (debe = haber = ${_extM(res.asientos.debe)})`,lista(desb,a=>`${a.fecha} ${a.descripcion||a.tipo}`));
+
+  // 9. Impuestos y envíos a Auren
+  const calPend=d.cal.filter(c=>!c.enviado);
+  const subI=[...lista(d.veps,v=>`VEP ${v.tipo_impuesto} ${v.periodo||""} vencido el ${v.fecha_vencimiento} · ${_extM(v.monto)}`),...lista(calPend,c=>`Enviar a Auren: ${c.tipo} (tope ${c.fecha_tope})`)];
+  add("Impuestos y envíos a Auren","🧾",subI.length?"alerta":"ok",subI.length?`${d.veps.length} VEP vencido${d.veps.length!==1?"s":""} sin pagar · ${calPend.length} envío${calPend.length!==1?"s":""} a Auren pendiente${calPend.length!==1?"s":""}`:"Sin VEP vencidos ni envíos a Auren pendientes",subI);
+
+  // 10. Variación bancaria (informativa)
+  if(ex&&ex.saldo_inicial!=null&&ex.saldo_final!=null){
+    let libros=0;
+    d.asientos.forEach(a=>(a.asientos_movimientos||[]).forEach(m=>{if(m.plan_cuentas?.codigo===bankCod)libros+=(parseFloat(m.debe)||0)-(parseFloat(m.haber)||0);}));
+    const vExt=_r2(ex.saldo_final-ex.saldo_inicial),dif=_r2(vExt-libros);
+    add("Variación del banco: extracto vs libros","⚖️","info",`El extracto varió ${_extM(vExt)} y en libros el banco varió ${_extM(libros)}. Diferencia ${_extM(dif)}`,
+      ["Es esperable que difiera mientras los cobros de ventas, retiros y transferencias entre cuentas no tengan asiento (falta el lado de ingresos, Fase 3)."]);
+  }
+  return items;
+}
+
+function _cierreCambios(d,res){
+  const s=d.cierre?.snapshot?.asientos;
+  if(!s||d.cierre?.estado!=="cerrado")return null;
+  if(s.count!==res.asientos.count||Math.abs((s.debe||0)-res.asientos.debe)>0.01)
+    return`${res.asientos.count-s.count>=0?"+":""}${res.asientos.count-s.count} asientos y ${_extM(res.asientos.debe-(s.debe||0))} de movimiento desde que se cerró`;
+  return null;
+}
+
+async function renderCierre(){
+  const el=document.getElementById("cierre-contenido");
+  if(!el)return;
+  const inp=document.getElementById("cierre-mes-input");
+  if(inp&&!inp.value){const dt=new Date();dt.setDate(1);dt.setMonth(dt.getMonth()-1);inp.value=dt.toISOString().slice(0,7);}
+  cierreMes=inp?.value||"";
+  if(!cierreMes)return;
+  el.innerHTML=`<div style="padding:40px;text-align:center;color:var(--tx3)"><div class="loader" style="margin:0 auto 12px"></div>Verificando ${esc(_cierreFmtMes(cierreMes))} de ${esc(cierreSoc)}...</div>`;
+  try{
+    await _extAsegurarPlan();
+    const d=await _cierreCargar(cierreSoc,cierreMes);
+    const checks=_cierreChecks(d),res=_cierreResumen(d);
+    _cierreData={d,checks,res};
+    const anual=await _cierreAnualHTML(cierreSoc,_ejercicioDe(cierreMes+"-01"));
+    const n=e=>checks.filter(c=>c.estado===e).length;
+    const cambios=_cierreCambios(d,res);
+    const cerrado=d.cierre?.estado==="cerrado";
+    const col={ok:"var(--gr)",alerta:"var(--am)",error:"var(--re)",info:"var(--ac)"};
+    const ico={ok:"✅",alerta:"⚠️",error:"❌",info:"ℹ️"};
+    const banner=d.sinTabla
+      ?`<div style="background:rgba(239,68,68,.1);border:1px solid var(--re);border-radius:10px;padding:12px 14px;margin-bottom:14px;color:var(--re);font-size:13px">Falta crear la tabla <b>cierres_mensuales</b> en Supabase (está en sql_extractos_bancarios.sql).</div>`
+      :cerrado
+      ?`<div style="background:rgba(16,185,129,.10);border:1px solid var(--gr);border-radius:10px;padding:12px 14px;margin-bottom:14px">
+          <div style="font-size:14px;font-weight:700;color:var(--gr)">🔒 ${esc(_cierreFmtMes(cierreMes))} de ${esc(cierreSoc)} cerrado por ${esc(d.cierre.cerrado_por||"?")} el ${esc((d.cierre.cerrado_en||"").slice(0,10).split("-").reverse().join("/"))}</div>
+          ${d.cierre.notas?`<div style="font-size:12px;color:var(--tx2);margin-top:6px;white-space:pre-wrap">${esc(d.cierre.notas)}</div>`:""}
+          ${cambios?`<div style="font-size:12px;color:var(--am);margin-top:6px;font-weight:600">⚠️ El mes cambió después del cierre: ${esc(cambios)}</div>`:""}
+          <button class="btn sm sec" style="margin-top:8px" onclick="reabrirMesContable()">🔓 Reabrir mes</button>
+        </div>`
+      :`<div style="background:var(--surf);border:1px solid var(--b);border-radius:10px;padding:12px 14px;margin-bottom:14px">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+            <b style="font-size:14px">${esc(_cierreFmtMes(cierreMes))} de ${esc(cierreSoc)} — abierto</b>
+            <span style="color:var(--gr);font-size:12px;font-weight:600">✅ ${n("ok")} OK</span>
+            ${n("alerta")?`<span style="color:var(--am);font-size:12px;font-weight:600">⚠️ ${n("alerta")} pendientes</span>`:""}
+            ${n("error")?`<span style="color:var(--re);font-size:12px;font-weight:600">❌ ${n("error")} críticos</span>`:""}
+          </div>
+          <textarea class="fi" id="cierre-nota" rows="2" placeholder="Nota del cierre (obligatoria si cerrás con pendientes: explicá por qué)" style="width:100%;margin-bottom:8px"></textarea>
+          <button class="btn sm pri" onclick="cerrarMesContable()">🔒 Cerrar ${esc(_cierreFmtMes(cierreMes))}</button>
+        </div>`;
+    const filas=checks.map(c=>`<div style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:10px;background:color-mix(in srgb,${col[c.estado]} 8%,var(--surf));border:1px solid color-mix(in srgb,${col[c.estado]} 30%,transparent);margin-bottom:8px">
+        <span style="font-size:17px;line-height:1.3">${ico[c.estado]}</span>
+        <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">${c.icon} ${esc(c.area)}</div>
+        <div style="font-size:12px;color:${col[c.estado]};margin-top:2px">${esc(c.detalle)}</div>
+        ${c.subitems.length?`<ul style="margin:5px 0 0;padding-left:18px;font-size:11px;color:var(--tx3)">${c.subitems.map(s=>`<li>${esc(s)}</li>`).join("")}</ul>`:""}</div></div>`).join("");
+    const td="padding:5px 8px;font-size:12px;border-bottom:1px solid var(--b2);text-align:right;font-variant-numeric:tabular-nums";
+    const saldo=c=>c.tipo==="pasivo"||c.tipo==="ingreso"||c.tipo==="patrimonio_neto"?c.haber-c.debe:c.debe-c.haber;
+    el.innerHTML=`${banner}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px">
+        <div class="sc"><div class="sc-l">Ingresos</div><div class="sc-v va">${_extM(res.ingresos)}</div><div class="sc-s">asientos del mes</div></div>
+        <div class="sc"><div class="sc-l">Egresos</div><div class="sc-v vr">${_extM(res.egresos)}</div><div class="sc-s">incluye gastos bancarios ${_extM(res.gastosBanc)}</div></div>
+        <div class="sc"><div class="sc-l">Resultado</div><div class="sc-v ${res.resultado>=0?"va":"vr"}">${_extM(res.resultado)}</div><div class="sc-s">solo lo contabilizado</div></div>
+        <div class="sc"><div class="sc-l">IVA del mes</div><div class="sc-v vb">${_extM(res.ivaDebito-res.ivaCredito)}</div><div class="sc-s">débito ${_extM(res.ivaDebito)} − crédito ${_extM(res.ivaCredito)}</div></div>
+      </div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--tx3);margin-bottom:6px">Controles del cierre</div>
+      ${filas}
+      <details style="margin:14px 0"><summary style="cursor:pointer;font-size:12px;color:var(--ac);font-weight:600">Balance de sumas y saldos del mes (${res.cuentas.length} cuentas)</summary>
+        <table style="width:100%;border-collapse:collapse;margin-top:8px"><thead><tr style="color:var(--tx3);font-size:10px;text-transform:uppercase"><th style="${td};text-align:left">Cuenta</th><th style="${td}">Debe</th><th style="${td}">Haber</th><th style="${td}">Saldo</th></tr></thead><tbody>
+        ${res.cuentas.map(c=>`<tr><td style="${td};text-align:left"><span style="font-family:monospace;color:var(--tx3);font-size:11px">${esc(c.codigo)}</span> ${esc(c.nombre)}</td><td style="${td}">${_extM(c.debe)}</td><td style="${td}">${_extM(c.haber)}</td><td style="${td};font-weight:600">${_extM(saldo(c))}</td></tr>`).join("")}
+        <tr style="font-weight:700;background:var(--surf2)"><td style="${td};text-align:left">Totales</td><td style="${td}">${_extM(res.asientos.debe)}</td><td style="${td}">${_extM(res.asientos.haber)}</td><td style="${td}"></td></tr></tbody></table>
+      </details>
+      ${anual}`;
+  }catch(e){el.innerHTML=`<div style="color:var(--re);padding:16px">Error: ${esc(e.message)}</div>`;}
+}
+
+async function cerrarMesContable(){
+  if(!_cierreData)return;
+  const {d,checks,res}=_cierreData;
+  const nErr=checks.filter(c=>c.estado==="error").length,nAl=checks.filter(c=>c.estado==="alerta").length;
+  const nota=document.getElementById("cierre-nota")?.value.trim()||"";
+  if((nErr||nAl)&&!nota){toast("Hay pendientes: escribí una nota explicando por qué cerrás igual","err");document.getElementById("cierre-nota")?.focus();return;}
+  if(!confirm(`¿Cerrar ${_cierreFmtMes(cierreMes)} de ${cierreSoc}?${nErr||nAl?`\n\nTiene ${nErr} crítico(s) y ${nAl} pendiente(s) que quedan registrados en la nota.`:""}\n\nSi después se carga algo en este mes, el panel lo va a avisar.`))return;
+  const body={sociedad:cierreSoc,periodo:cierreMes,estado:"cerrado",cerrado_por:loggedUser?.nombre||null,cerrado_en:new Date().toISOString(),notas:nota||null,
+    snapshot:{asientos:res.asientos,resumen:{ingresos:res.ingresos,egresos:res.egresos,resultado:res.resultado,ivaCredito:res.ivaCredito,ivaDebito:res.ivaDebito,gastosBanc:res.gastosBanc},
+      extracto_id:d.extr[0]?.id||null,controles:checks.map(c=>({area:c.area,estado:c.estado,detalle:c.detalle}))}};
+  try{
+    if(d.cierre)await sb(`cierres_mensuales?id=eq.${d.cierre.id}`,{method:"PATCH",body:JSON.stringify(body)});
+    else await sb("cierres_mensuales",{method:"POST",body:JSON.stringify(body)});
+    delete _cierresCache[cierreSoc];
+    toast(`🔒 ${_cierreFmtMes(cierreMes)} de ${cierreSoc} cerrado`,"ok");
+    renderCierre();
+  }catch(e){toast("Error al cerrar: "+e.message,"err");}
+}
+
+async function reabrirMesContable(){
+  const c=_cierreData?.d?.cierre;
+  if(!c)return;
+  if(!confirm(`¿Reabrir ${_cierreFmtMes(cierreMes)} de ${cierreSoc}?`))return;
+  try{
+    const prev=c.notas?c.notas+"\n":"";
+    await sb(`cierres_mensuales?id=eq.${c.id}`,{method:"PATCH",body:JSON.stringify({estado:"abierto",notas:`${prev}Reabierto por ${loggedUser?.nombre||"?"} el ${new Date().toLocaleDateString("es-AR")}`})});
+    delete _cierresCache[cierreSoc];
+    toast("Mes reabierto","ok");
+    renderCierre();
+  }catch(e){toast("Error: "+e.message,"err");}
+}
+
+// Aviso (no bloqueo) cuando se contabiliza algo en un mes que ya está cerrado.
+async function _cierreAvisarSiCerrado(fecha,sociedad){
+  if(!fecha||!sociedad)return;
+  const c=_cierresCache[sociedad];
+  if(!c||Date.now()-c.t>60000){
+    const rows=await sb(`cierres_mensuales?sociedad=eq.${sociedad}&estado=eq.cerrado&select=periodo`).catch(()=>[]);
+    _cierresCache[sociedad]={t:Date.now(),set:new Set(rows.map(r=>r.periodo))};
+  }
+  const per=String(fecha).slice(0,7);
+  if(_cierresCache[sociedad].set.has(per))toast(`⚠️ Se registró un asiento en ${_cierreFmtMes(per)} de ${sociedad}, que ya está cerrado. Revisá el cierre.`,"err");
+}
+
+// ── Vista del ejercicio (1/07 al 30/06) ──────────────────────────────
+async function _cierreAnualCargar(soc,ej){
+  const desde=`${ej}-07-01`,hasta=`${ej+1}-06-30`;
+  const [asientos,extr,cierres]=await Promise.all([
+    _sbAll(`asientos_contables?sociedad=eq.${soc}&fecha=gte.${desde}&fecha=lte.${hasta}&anulado=eq.false&select=id,tipo,fecha,asientos_movimientos(debe,haber,plan_cuentas(codigo,nombre,tipo))`).catch(()=>[]),
+    sb(`extractos_bancarios?sociedad=eq.${soc}&periodo_hasta=gte.${desde}&periodo_hasta=lte.${hasta}&select=id,periodo_hasta,asiento_id`).catch(()=>[]),
+    sb(`cierres_mensuales?sociedad=eq.${soc}&periodo=gte.${ej}-07&periodo=lte.${ej+1}-06&select=periodo,estado,cerrado_por,cerrado_en`).catch(()=>[]),
+  ]);
+  const filas=[];
+  for(let i=0;i<12;i++){
+    const y=i<6?ej:ej+1,mm=((i+6)%12)+1,per=`${y}-${String(mm).padStart(2,"0")}`;
+    const as=asientos.filter(a=>a.fecha.slice(0,7)===per);
+    let ing=0,egr=0,iva=0,n=as.length;
+    as.forEach(a=>(a.asientos_movimientos||[]).forEach(m=>{
+      const c=m.plan_cuentas;if(!c)return;
+      const dh=(parseFloat(m.debe)||0)-(parseFloat(m.haber)||0);
+      if(c.tipo==="ingreso")ing-=dh;if(c.tipo==="egreso")egr+=dh;
+      if(c.codigo==="2.1.03.001")iva-=dh;if(c.codigo==="1.1.03.001")iva-=dh;
+    }));
+    const cz=cierres.find(c=>c.periodo===per);
+    filas.push({per,label:_cierreFmtMes(per),extracto:extr.some(e=>e.periodo_hasta.slice(0,7)===per),contab:extr.some(e=>e.periodo_hasta.slice(0,7)===per&&e.asiento_id),
+      asientos:n,ingresos:_r2(ing),egresos:_r2(egr),resultado:_r2(ing-egr),iva:_r2(iva),estado:cz?.estado||null,por:cz?.cerrado_por||null});
+  }
+  const cuentas={};
+  asientos.forEach(a=>(a.asientos_movimientos||[]).forEach(m=>{
+    const c=m.plan_cuentas;if(!c)return;
+    const k=cuentas[c.codigo]=cuentas[c.codigo]||{codigo:c.codigo,nombre:c.nombre,tipo:c.tipo,debe:0,haber:0};
+    k.debe+=parseFloat(m.debe)||0;k.haber+=parseFloat(m.haber)||0;
+  }));
+  return{soc,ej,filas,cuentas:Object.values(cuentas).sort((a,b)=>a.codigo.localeCompare(b.codigo))};
+}
+
+async function _cierreAnualHTML(soc,ej){
+  const A=await _cierreAnualCargar(soc,ej);
+  _cierreAnual=A;
+  const td="padding:6px 8px;font-size:12px;border-bottom:1px solid var(--b2);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap";
+  const cerr=A.filas.filter(f=>f.estado==="cerrado").length;
+  const tot=A.filas.reduce((t,f)=>({ing:t.ing+f.ingresos,egr:t.egr+f.egresos,res:t.res+f.resultado,iva:t.iva+f.iva,n:t.n+f.asientos}),{ing:0,egr:0,res:0,iva:0,n:0});
+  return`<div style="margin-top:18px;border-top:1px solid var(--b);padding-top:14px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <b style="font-size:13px">📅 Ejercicio ${ej}/${ej+1} — ${esc(soc)}</b>
+      <span style="font-size:12px;color:${cerr===12?"var(--gr)":"var(--tx3)"}">${cerr} de 12 meses cerrados</span>
+      <button class="btn sm sec" style="margin-left:auto" onclick="exportarCierreEjercicio()">📥 Exportar ejercicio (Excel)</button>
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:var(--surf2);color:var(--tx3);font-size:10px;text-transform:uppercase">
+        <th style="${td};text-align:left">Mes</th><th style="${td};text-align:center">Extracto</th><th style="${td}">Asientos</th><th style="${td}">Ingresos</th><th style="${td}">Egresos</th><th style="${td}">Resultado</th><th style="${td}">IVA</th><th style="${td};text-align:center">Cierre</th></tr></thead>
+      <tbody>${A.filas.map(f=>`<tr style="cursor:pointer;${f.per===cierreMes?"background:var(--surf2)":""}" onclick="document.getElementById('cierre-mes-input').value='${f.per}';renderCierre()">
+        <td style="${td};text-align:left;font-weight:${f.per===cierreMes?700:400}">${esc(f.label)}</td>
+        <td style="${td};text-align:center">${f.contab?"✅":f.extracto?"⚠️":"—"}</td>
+        <td style="${td}">${f.asientos||"—"}</td><td style="${td}">${f.asientos?_extM(f.ingresos):"—"}</td><td style="${td}">${f.asientos?_extM(f.egresos):"—"}</td>
+        <td style="${td};font-weight:600;color:${f.resultado<0?"var(--re)":"inherit"}">${f.asientos?_extM(f.resultado):"—"}</td><td style="${td}">${f.asientos?_extM(f.iva):"—"}</td>
+        <td style="${td};text-align:center">${f.estado==="cerrado"?`🔒 <span style="font-size:10px;color:var(--tx3)">${esc(f.por||"")}</span>`:f.estado==="abierto"?"🔓":"—"}</td></tr>`).join("")}
+      <tr style="font-weight:700;background:var(--surf2)"><td style="${td};text-align:left">Total ejercicio</td><td style="${td}"></td><td style="${td}">${tot.n}</td><td style="${td}">${_extM(tot.ing)}</td><td style="${td}">${_extM(tot.egr)}</td><td style="${td}">${_extM(tot.res)}</td><td style="${td}">${_extM(tot.iva)}</td><td style="${td}"></td></tr></tbody>
+    </table></div>
+    <div style="font-size:11px;color:var(--tx3);margin-top:6px">Los ingresos del ejercicio recién se completan cuando se contabilice el lado de ventas (cuentas corrientes de alumnos). El resultado refleja solo lo contabilizado. Tocá un mes para verificarlo.</div>
+  </div>`;
+}
+
+async function exportarCierreEjercicio(){
+  if(!_cierreAnual){toast("Primero verificá un mes","inf");return;}
+  if(!window.XLSX){await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+  const A=_cierreAnual;
+  const meses=A.filas.map(f=>({Mes:f.label,Extracto:f.contab?"Importado y contabilizado":f.extracto?"Importado sin asiento":"Falta",Asientos:f.asientos,Ingresos:f.ingresos,Egresos:f.egresos,Resultado:f.resultado,IVA:f.iva,Cierre:f.estado==="cerrado"?`Cerrado por ${f.por||""}`:f.estado==="abierto"?"Reabierto":"Abierto"}));
+  const sumas=A.cuentas.map(c=>{const nat=c.tipo==="pasivo"||c.tipo==="ingreso"||c.tipo==="patrimonio_neto";return{Código:c.codigo,Cuenta:c.nombre,Tipo:c.tipo,Debe:_r2(c.debe),Haber:_r2(c.haber),Saldo:_r2(nat?c.haber-c.debe:c.debe-c.haber)};});
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(meses),"Cierres por mes");
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(sumas),"Sumas y saldos");
+  XLSX.writeFile(wb,`cierre_ejercicio_${A.ej}-${A.ej+1}_${A.soc}.xlsx`);
+}
+
+function imprimirCierre(){
+  if(!_cierreData){toast("Primero verificá un mes","inf");return;}
+  const {d,checks,res}=_cierreData;
+  const ico={ok:"✔",alerta:"⚠",error:"✘",info:"ℹ"};
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>Cierre ${esc(cierreMes)} ${esc(d.soc)}</title><style>
+    body{font-family:Arial,sans-serif;font-size:11px;color:#111;margin:18px 22px} h1{font-size:16px;margin:0 0 2px} h3{font-size:12px;margin:14px 0 4px;border-bottom:1.5px solid #111}
+    .it{padding:4px 0;border-bottom:1px solid #ddd} .it b{display:inline-block;width:18px} ul{margin:2px 0 0 36px;padding:0;color:#444} table{width:100%;border-collapse:collapse} td{padding:3px 4px;border-bottom:1px solid #ddd} .n{text-align:right}
+  </style></head><body>
+    <h1>Cierre de mes — ${esc(d.soc)} — ${esc(_cierreFmtMes(d.mes))}</h1>
+    <div>${d.cierre?.estado==="cerrado"?`Cerrado por ${esc(d.cierre.cerrado_por||"")} el ${esc((d.cierre.cerrado_en||"").slice(0,10).split("-").reverse().join("/"))}`:"Mes abierto"} · Impreso el ${new Date().toLocaleDateString("es-AR")}</div>
+    ${d.cierre?.notas?`<div style="margin-top:4px;white-space:pre-wrap">Nota: ${esc(d.cierre.notas)}</div>`:""}
+    <h3>Resumen</h3><table><tr><td>Ingresos</td><td class="n">${_extM(res.ingresos)}</td></tr><tr><td>Egresos</td><td class="n">${_extM(res.egresos)}</td></tr><tr><td><b>Resultado</b></td><td class="n"><b>${_extM(res.resultado)}</b></td></tr>
+      <tr><td>IVA débito / crédito</td><td class="n">${_extM(res.ivaDebito)} / ${_extM(res.ivaCredito)}</td></tr><tr><td>Gastos bancarios</td><td class="n">${_extM(res.gastosBanc)}</td></tr></table>
+    <h3>Controles</h3>${checks.map(c=>`<div class="it"><b>${ico[c.estado]}</b> <u>${esc(c.area)}</u> — ${esc(c.detalle)}${c.subitems.length?`<ul>${c.subitems.map(s=>`<li>${esc(s)}</li>`).join("")}</ul>`:""}</div>`).join("")}
+    <h3>Balance de sumas y saldos del mes</h3><table>${res.cuentas.map(c=>`<tr><td>${esc(c.codigo)} ${esc(c.nombre)}</td><td class="n">${_extM(c.debe)}</td><td class="n">${_extM(c.haber)}</td></tr>`).join("")}</table>
+  </body></html>`;
+  _imprimirHTML(html);
 }
 
 // ── CIERRE DE TARJETA ───────────────────────────────────────────────
@@ -19098,7 +19481,7 @@ async function confirmarPagoCuota(){
         lineas.push({codigo:getBancoCodigoPorMedio(medio,soc),haber:total,desc:`Pago ${medio||"cuota"}`});
         const desc=`Cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${prest.nombre||"Préstamo"}`;
         const _adC={fecha,sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:cuotaId,descripcion:desc,lineas};
-        generarAsiento(_adC).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adC);else if(!a)toast("⚠️ Asiento no generado","err");}).catch(()=>{});
+        generarAsiento(_adC).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adC);else if(!a)toast("⚠️ Asiento no generado","err");}).catch(e=>toast("⚠️ Error al generar el asiento de la cuota: "+(e.message||"").slice(0,70),"err"));
       }
     }
     closeM("modal-pago-cuota");
@@ -23359,6 +23742,12 @@ async function backfillAsientos(){
     // Cargar asientos existentes para dedup
     const existentes=await sb("asientos_contables?select=origen,origen_id");
     const yaExiste=new Set(existentes.map(a=>`${a.origen}:${a.origen_id}`));
+    // Datos propios: antes dependía de listas que solo se cargan al visitar Cash Flow y, corrido desde Impuestos, no encontraba cuotas ni sueldos
+    const [_cuotas,_prestamos,_pagosEmp,_empleados]=await Promise.all([
+      sb("cf_prestamos_cuotas?select=*&pagada=eq.true"),sb("cf_prestamos?select=*"),
+      sb("cf_pagos_empleados?select=*&pagado=eq.true"),sb("cf_empleados?select=*"),
+    ]);
+    const INICIO_CONTABLE="2026-07-01";
     let gen=0;const errores=[];
     const hacer=async(opts,label)=>{try{const a=await generarAsiento(opts);if(a)gen++;else errores.push(`⚠️ ${label} — código de cuenta no encontrado en Plan de Cuentas`);}catch(e){errores.push(`❌ ${label} — ${e.message?.slice(0,60)||"error"}`);}};
 
@@ -23412,8 +23801,8 @@ async function backfillAsientos(){
     }
 
     // 3. Cuotas pagadas → pago_cuota_prestamo
-    for(const c of(cfPrestCuotas||[]).filter(c=>c.pagada&&!yaExiste.has(`prestamo_cuota:${c.id}`))){
-      const prest=(cfPrestamos||[]).find(p=>p.id===c.prestamo_id);
+    for(const c of _cuotas.filter(c=>!yaExiste.has(`prestamo_cuota:${c.id}`)&&(c.fecha_pago||c.fecha||"")>=INICIO_CONTABLE)){
+      const prest=_prestamos.find(p=>p.id===c.prestamo_id);
       if(!prest)continue;
       const capital=Math.round((parseFloat(c.capital)||0)*100)/100;
       const intereses=Math.round((parseFloat(c.intereses)||0)*100)/100;
@@ -23429,8 +23818,8 @@ async function backfillAsientos(){
     }
 
     // 4. Sueldos pagados → sueldo
-    for(const pago of(cfPagosEmpleados||[]).filter(p=>p.pagado&&(p.monto||0)>0&&!yaExiste.has(`pago_empleado:${p.id}`))){
-      const emp=(cfEmpleados||[]).find(e=>e.id===pago.empleado_id);
+    for(const pago of _pagosEmp.filter(p=>(p.monto||0)>0&&!yaExiste.has(`pago_empleado:${p.id}`))){
+      const emp=_empleados.find(e=>e.id===pago.empleado_id);
       if(!emp)continue;
       const soc=emp.sociedad||"SUDES";
       const monto=parseFloat(pago.monto);
@@ -23728,6 +24117,7 @@ async function generarAsiento({fecha,sociedad,tipo,origen,origen_id,descripcion,
   })});
   if(!asiento?.id)return null;
   await sb("asientos_movimientos",{method:"POST",body:JSON.stringify(movs.map(m=>({...m,asiento_id:asiento.id})))});
+  _cierreAvisarSiCerrado(fecha,sociedad).catch(()=>{});
   return asiento;
 }
 
