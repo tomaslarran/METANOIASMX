@@ -13384,8 +13384,8 @@ async function renderCFPendientes(){
               <td style="padding:8px 12px;text-align:center;color:${days(fv)<0?"var(--re)":days(fv)<=7?"#F97316":"var(--tx3)"}">${fv?fmt(fv):"—"}</td>
               <td style="padding:8px 6px;text-align:center">
                 <div style="display:flex;gap:4px;justify-content:center">
-                  ${!c.tipo?.startsWith("NC")
-                    ?`<button onclick="abrirOrdenPago('${c.id}',true)" style="background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);border-radius:6px;color:#A78BFA;font-size:11px;padding:4px 10px;cursor:pointer;white-space:nowrap;font-weight:600">📄 Orden de Pago</button>`
+                  ${!c.tipo?.startsWith("NC")&&c.tipo==="A"
+                    ?`<button onclick="abrirOrdenPago('${c.id}',true)" title="Facturas A pagadas por transferencia, efectivo o cheque: llevan orden de pago por las retenciones" style="background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);border-radius:6px;color:#A78BFA;font-size:11px;padding:4px 10px;cursor:pointer;white-space:nowrap;font-weight:600">📄 Orden de Pago</button><button onclick="abrirPagarComp('${c.id}')" title="Tarjeta o montos chicos sin retención: se paga sin orden de pago" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:6px;color:var(--gr);font-size:11px;padding:4px 10px;cursor:pointer;white-space:nowrap">💳 Pagar</button>`
                     :`<button onclick="abrirPagarComp('${c.id}')" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:6px;color:var(--gr);font-size:11px;padding:4px 10px;cursor:pointer;white-space:nowrap">💳 Pagar</button>`
                   }
                 </div>
@@ -18196,20 +18196,44 @@ async function confirmarRegistrarCobro(){
       if(!concepto){toast("Ingresá un concepto","err");btn.disabled=false;return;}
       if(!montoLibre){toast("Ingresá el monto","err");btn.disabled=false;return;}
       const conceptoFull=`${concepto}${factura?` · Fac. ${factura}`:""}`;
-      const medioObj=mediosPago.find(m=>m.nombre===medio);
-      const esBanco=medioObj?.tipo==="cuenta_bancaria";
       let msg;
-      if(esBanco){
-        await sb("banco_movimientos",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify({
-          sociedad:soc,fecha,concepto:conceptoFull,importe:-montoLibre,saldo:null,conciliado:false,referencia:factura||"Manual"
-        })}).catch(()=>{});
-        msg="💸 Pagado · movimiento en banco pendiente de conciliación";
-      } else {
-        await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
-          sociedad:soc,fecha,tipo:"egreso",concepto:conceptoFull,categoria:"CF Egresos",
-          monto:montoLibre,medio_pago:medio,observaciones:obs||null,creado_por:loggedUser?.nombre||null
-        })});
-        msg="💸 Pagado · egreso en caja";
+      // Si el número de factura corresponde a una factura cargada, el pago se registra por el
+      // camino único (así no se duplica con "Pagar" ni con la orden de pago).
+      const compVinc=factura?await _pagoBuscarFactura(factura,soc):null;
+      if(compVinc){
+        const fresco=await _pagoFresco(compVinc.id);
+        if(fresco?.estado==="pagado"){
+          if(!confirm(`${_pagoYaPagadaMsg(fresco)}\n\n¿Actualizar solo el valor real del concepto, sin crear otro movimiento?`)){btn.disabled=false;return;}
+          msg="Valor real actualizado · la factura ya estaba pagada, no se duplicó el movimiento";
+        }else if(_pagoMedioTipo(medio)==="cuenta_socio"){
+          toast("Para pagos con plata de un socio, pagá desde la factura (Comprobantes)","err");btn.disabled=false;return;
+        }else if(Math.abs(Math.abs(parseFloat(compVinc.total)||0)-montoLibre)>1){
+          toast(`El monto ($${Math.round(montoLibre).toLocaleString("es-AR")}) no coincide con la factura ($${Math.round(Math.abs(compVinc.total||0)).toLocaleString("es-AR")}). Pagala desde Comprobantes para registrar retenciones o diferencias.`,"err");btn.disabled=false;return;
+        }else{
+          const via=await registrarPagoFactura(compVinc,{fecha,medio,obs});
+          msg=`💸 Factura ${compVinc.numero||""} pagada desde Cash Flow (${via})`;
+        }
+      }else{
+        // Gasto suelto (sin factura cargada): se evita registrar dos veces el mismo movimiento
+        const medioObj=mediosPago.find(m=>m.nombre===medio);
+        const esBanco=medioObj?.tipo==="cuenta_bancaria";
+        if(esBanco){
+          const previo=await sb(`banco_movimientos?sociedad=eq.${soc}&fecha=eq.${fecha}&extracto_id=is.null&saldo=is.null&select=id,importe,concepto`).catch(()=>[]);
+          const dup=previo.find(x=>Math.abs((parseFloat(x.importe)||0)+montoLibre)<0.01&&x.concepto===conceptoFull);
+          if(dup){msg="Ese movimiento de banco ya estaba registrado: no se duplicó";}
+          else{
+            await sb("banco_movimientos",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify({
+              sociedad:soc,fecha,concepto:conceptoFull,importe:-montoLibre,saldo:null,conciliado:false,referencia:factura||"Manual"
+            })}).catch(()=>{});
+            msg="💸 Pagado · movimiento en banco pendiente de conciliación";
+          }
+        } else {
+          await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
+            sociedad:soc,fecha,tipo:"egreso",concepto:conceptoFull,categoria:"CF Egresos",
+            monto:montoLibre,medio_pago:medio,observaciones:obs||null,creado_por:loggedUser?.nombre||null
+          })});
+          msg="💸 Pagado · egreso en caja";
+        }
       }
       // Actualizar monto_real en cf_valores para que el resumen muestre el valor real
       const cncId=document.getElementById("rcob-concepto-id").value;
@@ -25496,7 +25520,8 @@ function renderComprobantes(){
       <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
         ${c.archivo_url?`<button onclick="window.open('${c.archivo_url}','_blank')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Ver archivo">👁</button>`:""}
         <button onclick="editComprobante('${c.id}')" style="background:none;border:1px solid ${faltaDesglose?"rgba(245,158,11,.6)":"var(--b)"};border-radius:5px;color:${faltaDesglose?"#FCD34D":"var(--tx3)"};font-size:10px;padding:3px 7px;cursor:pointer" title="${faltaDesglose?"Completar para Finnegans":"Editar"}">${faltaDesglose?"✏️":"✎"}</button>
-        ${c.estado==="revisado"&&!c.tipo?.startsWith("NC")?`<button onclick="abrirOrdenPago('${c.id}')" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.4);border-radius:5px;color:#A78BFA;font-size:10px;padding:3px 7px;cursor:pointer" title="Generar Orden de Pago">📄 OP</button>`:""}
+        ${c.estado==="revisado"&&c.tipo==="A"?`<button onclick="abrirOrdenPago('${c.id}')" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.4);border-radius:5px;color:#A78BFA;font-size:10px;padding:3px 7px;cursor:pointer" title="Orden de Pago (facturas A pagadas por transferencia, efectivo o cheque: retenciones)">📄 OP</button>`:""}
+        ${c.estado==="revisado"?`<button onclick="abrirPagarComp('${c.id}')" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.4);border-radius:5px;color:var(--gr);font-size:10px;padding:3px 7px;cursor:pointer" title="Pagar sin orden de pago (tarjeta, montos chicos, facturas B/C)">💳 Pagar</button>`:""}
         ${c.estado==="pendiente"
           ?`<button onclick="marcarEstadoComp('${c.id}','revisado')" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.4);border-radius:5px;color:#059669;font-size:10px;padding:3px 7px;cursor:pointer" title="Marcar como revisado — habilita OP y Finnegans">✓ OK</button>`
           :c.estado==="enviado_finnegans"
@@ -25568,6 +25593,109 @@ function toggleSocioPagoComp(){
   wrap.style.display=esSocio?"":"none";
   if(esSocio)_poblarSelectSocios(document.getElementById("pagar-comp-socio"));
 }
+// ══════════════════════════════════════════════════════════════════════
+// PAGO ÚNICO DE FACTURAS
+// Todos los caminos que pagan una factura (Pagar, Orden de pago, Cash Flow) pasan por acá:
+// no se paga dos veces la misma factura, se registra UN movimiento de tesorería según el medio
+// de pago y UN asiento contable.
+//   banco → Banco · efectivo / cheques de terceros → Caja · tarjeta → nada (la deuda queda en la
+//   tarjeta hasta cerrarla contra el banco) · cuenta de socio → aporte del socio.
+// La orden de pago solo corresponde a facturas A pagadas por transferencia, efectivo o cheque
+// (por las retenciones). Con tarjeta se paga antes de recibir la factura: no lleva orden de pago.
+// ══════════════════════════════════════════════════════════════════════
+function _pagoMedioTipo(nombre){
+  const m=mediosPago.find(x=>x.nombre===nombre);
+  if(m?.tipo)return m.tipo;
+  const n=String(nombre||"").toLowerCase();
+  if(/socio/.test(n))return"cuenta_socio";
+  if(/tarjeta|visa|master|amex/.test(n))return"tarjeta";
+  if(/efectivo|caja/.test(n))return"efectivo";
+  if(/cheque|tercero/.test(n))return"cheque";
+  return"cuenta_bancaria";
+}
+function _pagoOPAplica(c,medio){
+  if(c.tipo!=="A")return false;
+  return ["cuenta_bancaria","efectivo","cheque"].includes(_pagoMedioTipo(medio));
+}
+async function _pagoFresco(compId){
+  const r=await sb(`comprobantes_compra?id=eq.${compId}&select=id,estado,medio_pago,fecha_pago`).catch(()=>[]);
+  return r[0]||null;
+}
+const _pagoYaPagadaMsg=f=>`Esta factura ya figura pagada${f.fecha_pago?` el ${String(f.fecha_pago).split("-").reverse().join("/")}`:""}${f.medio_pago?` con ${f.medio_pago}`:""}: no se registra de nuevo.`;
+
+async function _pagoBuscarFactura(texto,sociedad){
+  const t=_concTokenFactura({referencia:texto,concepto:""});
+  if(!t)return null;
+  const parte=t.split("-")[1];
+  const cand=await sb(`comprobantes_compra?sociedad=eq.${sociedad}&numero=ilike.*${parte.padStart(8,"0").slice(-6)}*&select=*`).catch(()=>[]);
+  return cand.find(x=>_concTokenFactura({referencia:x.numero,concepto:""})===t)||null;
+}
+
+async function _pagoTesoreria(c,{fecha,medio,monto,obs,socioId,conceptoSocio}){
+  const tipoMedio=_pagoMedioTipo(medio);
+  const esNC=!!c.tipo?.startsWith("NC");
+  const sociedad=c.sociedad||"SUDES";
+  const marca=`comp-${c.id}`;
+  const desc=`${esNC?`NC ${c.tipo.replace("NC-","")}`:`Fact. ${c.tipo||""}`}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"}`;
+  const previas=await sb(`caja_movimientos?observaciones=like.*${marca}*&select=id&order=created_at`).catch(()=>[]);
+  const limpiarCaja=async()=>{for(const p of previas)await sb(`caja_movimientos?id=eq.${p.id}`,{method:"DELETE"}).catch(()=>{});};
+
+  if(tipoMedio==="cuenta_socio"){
+    // Plata de un socio: no sale plata de la empresa todavía, se registra la deuda con ese socio
+    const ya=await sb(`aportes_socios?comprobante_id=eq.${c.id}&select=id`).catch(()=>[]);
+    if(!ya.length)await sb("aportes_socios",{method:"POST",body:JSON.stringify({socio_id:socioId,sociedad,fecha,tipo:"aporte",monto,concepto:conceptoSocio||desc,comprobante_id:c.id,creado_por:loggedUser?.nombre||null})});
+    await limpiarCaja();
+    return"socio";
+  }
+  if(tipoMedio==="tarjeta"){await limpiarCaja();return"tarjeta";}
+  if(tipoMedio==="cuenta_bancaria"){
+    const imp=(esNC?1:-1)*monto;
+    const t=_concTokenFactura({referencia:c.numero,concepto:""});
+    const existentes=t?await sb(`banco_movimientos?sociedad=eq.${sociedad}&extracto_id=is.null&saldo=is.null&select=id,importe,referencia,concepto`).catch(()=>[]):[];
+    const ya=existentes.find(x=>_concTokenFactura(x)===t&&Math.abs((parseFloat(x.importe)||0)-imp)<0.01);
+    if(!ya)await sb("banco_movimientos",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify({sociedad,fecha,concepto:desc,importe:imp,saldo:null,conciliado:false,referencia:c.numero||"OP"})});
+    await limpiarCaja();
+    return ya?"banco (ya estaba registrado)":"banco";
+  }
+  // efectivo / cheques de terceros → Caja (se reutiliza la línea existente de la factura, no se crea otra)
+  const body={sociedad,fecha,tipo:esNC?"ingreso":"egreso",concepto:desc,categoria:"Proveedor",monto,medio_pago:medio,observaciones:`${medio}${obs?` · ${obs}`:""} · ${marca}`};
+  if(previas.length){
+    await sb(`caja_movimientos?id=eq.${previas[0].id}`,{method:"PATCH",body:JSON.stringify(body)});
+    for(const p of previas.slice(1))await sb(`caja_movimientos?id=eq.${p.id}`,{method:"DELETE"}).catch(()=>{});
+  }else await sb("caja_movimientos",{method:"POST",body:JSON.stringify({...body,creado_por:loggedUser?.nombre||null})});
+  return"caja";
+}
+
+// Un solo asiento de pago por factura, aunque haya existido antes con otro origen (pago directo u orden de pago)
+async function _pagoAsiento(c,{fecha,lineas,descripcion,opId}){
+  const ops=await sb(`ordenes_pago?comprobante_id=eq.${c.id}&select=id`).catch(()=>[]);
+  const ids=[c.id,...ops.map(o=>o.id)];
+  const ya=await sb(`asientos_contables?anulado=eq.false&origen=in.(comprobante_pago,orden_pago)&origen_id=in.(${ids.join(",")})&select=id`).catch(()=>[]);
+  if(ya.length)return{omitido:true};
+  const ad={fecha,sociedad:c.sociedad||"SUDES",tipo:"pago_compra",origen:opId?"orden_pago":"comprobante_pago",origen_id:opId||c.id,descripcion,lineas};
+  return generarAsiento(ad).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,ad);else if(!a)toast("⚠️ Asiento de pago no generado","err");return a;}).catch(e=>{toast("⚠️ Error asiento pago: "+(e.message||"").slice(0,60),"err");return null;});
+}
+
+// Punto de entrada único. op = {id,numero,bruto,neto,ret,cod} cuando el pago lleva orden de pago.
+async function registrarPagoFactura(c,{fecha,medio,obs,socioId,monto,op}){
+  const esNC=!!c.tipo?.startsWith("NC");
+  const montoAbs=Math.abs(parseFloat(c.total)||0);
+  const bruto=op?op.bruto:montoAbs;
+  const neto=op?op.neto:(monto??montoAbs);
+  const via=await _pagoTesoreria(c,{fecha,medio,monto:neto,obs,socioId,conceptoSocio:`Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"}${op?` (OP ${op.numero})`:""}`});
+  await sb(`comprobantes_compra?id=eq.${c.id}`,{method:"PATCH",body:JSON.stringify({estado:"pagado",medio_pago:medio,fecha_pago:fecha,updated_at:new Date().toISOString()})});
+  c.estado="pagado";c.medio_pago=medio;c.fecha_pago=fecha;
+  if(bruto>0){
+    const bancoCod=getBancoCodigoPorMedio(medio,c.sociedad||"SUDES");
+    const lineas=esNC
+      ?[{codigo:bancoCod,debe:bruto,desc:`Cobro NC ${medio}`},{codigo:"2.1.01.001",haber:bruto,desc:"Cancelación proveedor (NC)"}]
+      :[{codigo:"2.1.01.001",debe:bruto,desc:"Cancelación proveedor"},{codigo:bancoCod,haber:neto,desc:`Pago ${medio}`}];
+    if(op&&op.ret>0)lineas.push({codigo:"2.1.03.002",haber:op.ret,desc:`Ret. SICORE ${op.cod||""}`});
+    await _pagoAsiento(c,{fecha,lineas,opId:op?.id,descripcion:op?`Pago: ${c.proveedor||""} — ${op.numero}`:`Pago: ${c.proveedor||""} — Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""}`});
+  }
+  return via;
+}
+
 async function confirmarPagoComp(){
   const id=document.getElementById("pagar-comp-id").value;
   const medio=document.getElementById("pagar-comp-medio").value;
@@ -25577,66 +25705,28 @@ async function confirmarPagoComp(){
   if(!c)return;
   const medioObj=mediosPago.find(m=>m.nombre===medio);
   if(medioObj?.es_personal&&!confirm(`⚠️ "${medio}" está marcado como cuenta/tarjeta PERSONAL, no de la empresa.\n\n¿Registrar igual este pago con ese medio?`))return;
-  const esCuentaSocio=medioObj?.tipo==="cuenta_socio";
+  const esCuentaSocio=_pagoMedioTipo(medio)==="cuenta_socio";
   const socioId=esCuentaSocio?document.getElementById("pagar-comp-socio").value:null;
   if(esCuentaSocio&&!socioId){toast("Elegí qué socio puso la plata","err");return;}
+  if(_pagoOPAplica(c,medio)&&!confirm("Las facturas A pagadas por transferencia, efectivo o cheque llevan orden de pago por las retenciones.\n\n¿Pagarla igual sin orden de pago? (por ejemplo, si es un monto chico sin retención)"))return;
   try{
-    await sb(`comprobantes_compra?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({
-      estado:"pagado",medio_pago:medio,fecha_pago:fecha,updated_at:new Date().toISOString()
-    })});
-    c.estado="pagado";c.medio_pago=medio;c.fecha_pago=fecha;
-    const esNC=c.tipo?.startsWith("NC");
-    const tipoMov=esNC?"ingreso":"egreso";
-    const montoAbs=Math.abs(parseFloat(c.total)||0);
-    if(esCuentaSocio){
-      // Pagado con plata de un socio -- no sale plata real de la caja/banco de la empresa
-      // todavía, así que no se toca caja_movimientos/banco_movimientos. Lo que sí se registra
-      // es la deuda con ese socio puntual, para poder devolvérsela después (ver "Socios" en
-      // Cuentas Corrientes).
-      const socio=users.find(u=>u.id===socioId);
-      await sb("aportes_socios",{method:"POST",body:JSON.stringify({
-        socio_id:socioId,sociedad:c.sociedad||"SUDES",fecha,tipo:"aporte",monto:montoAbs,
-        concepto:`Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"}`,
-        comprobante_id:id,creado_por:loggedUser?.nombre||null
-      })});
-      toast(`💰 Pagada con plata de ${socio?.nombre||"un socio"} · $${Math.round(c.total||0).toLocaleString("es-AR")}`,"ok");
-    }else{
-      // Egreso en caja (anti-duplicado)
-      const existe=await sb(`caja_movimientos?observaciones=like.*comp-${id}*&limit=1`).catch(()=>[]);
-      const prefijo=esNC?`NC ${c.tipo.replace("NC-","")}`:`Fact. ${c.tipo||""}`;
-      const descCaja=`${prefijo}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"}`;
-      const obsStr=`${medio}${obs?` · ${obs}`:""} · comp-${id}`;
-      if(existe?.length){
-        await sb(`caja_movimientos?observaciones=like.*comp-${id}*`,{method:"PATCH",body:JSON.stringify({observaciones:obsStr,tipo:tipoMov})});
-      } else {
-        await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
-          sociedad:c.sociedad||"SUDES",fecha,tipo:tipoMov,concepto:descCaja,
-          categoria:"Proveedor",monto:montoAbs,
-          observaciones:obsStr,creado_por:loggedUser?.nombre||null
-        })});
-      }
-      toast(`💰 Pagada · ${medio} · $${Math.round(c.total||0).toLocaleString("es-AR")}`,"ok");
+    const fresco=await _pagoFresco(id);
+    if(fresco?.estado==="pagado"){
+      toast(_pagoYaPagadaMsg(fresco),"err");
+      c.estado="pagado";closeModal("modal-pagar-comp");renderComprobantes();updateCompStats();
+      return;
     }
+    const via=await registrarPagoFactura(c,{fecha,medio,obs,socioId});
+    const monto=`$${Math.round(Math.abs(c.total||0)).toLocaleString("es-AR")}`;
+    if(via==="socio")toast(`💰 Pagada con plata de ${users.find(u=>u.id===socioId)?.nombre||"un socio"} · ${monto}`,"ok");
+    else if(via==="tarjeta")toast(`💳 Pagada con tarjeta · ${monto} · queda en la deuda de la tarjeta hasta cerrarla`,"ok");
+    else toast(`💰 Pagada · ${medio} · ${monto}`,"ok");
     closeModal("modal-pagar-comp");
     renderComprobantes();updateCompStats();
-
-    // Asiento de pago -- este camino de "pago rápido" (sin Orden de Pago formal) nunca
-    // generaba el asiento contable, solo el movimiento de caja. Eso dejaba "Proveedores"
-    // sobreestimado en los libros para cualquier factura pagada por acá en vez de por OP.
-    if(montoAbs>0){
-      const bancoCod=getBancoCodigoPorMedio(medio,c.sociedad||"SUDES");
-      const lineasPago=esNC
-        ?[{codigo:bancoCod,debe:montoAbs,desc:`Cobro NC ${medio}`},{codigo:"2.1.01.001",haber:montoAbs,desc:"Cancelación proveedor (NC)"}]
-        :[{codigo:"2.1.01.001",debe:montoAbs,desc:"Cancelación proveedor"},{codigo:bancoCod,haber:montoAbs,desc:`Pago ${medio}`}];
-      const descPagoAsiento=`Pago: ${c.proveedor||""} — Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""}`;
-      // origen "comprobante_pago" (no "comprobante") a propósito: el devengado de este mismo
-      // comprobante ya usa origen:"comprobante"+este id -- si el pago usara el mismo origen,
-      // el backfill de históricos los confundiría como si fueran el mismo asiento.
-      const _adPagoDirecto={fecha,sociedad:c.sociedad||"SUDES",tipo:"pago_compra",origen:"comprobante_pago",origen_id:id,descripcion:descPagoAsiento,lineas:lineasPago};
-      generarAsiento(_adPagoDirecto).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adPagoDirecto);else if(!a)toast("⚠️ Asiento de pago no generado","err");}).catch(e=>toast("⚠️ Error asiento pago: "+e.message.slice(0,50),"err"));
-    }
+    if(cfTab==="pendientes")renderCFPendientes();
   }catch(e){toast("Error: "+e.message,"err");}
 }
+
 async function marcarEstadoComp(id,estado){
   try{
     await sb(`comprobantes_compra?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado,updated_at:new Date().toISOString()})});
@@ -25665,28 +25755,6 @@ async function marcarEstadoComp(id,estado){
       }else if(c.proveedor_id&&ivaVal===0){
         toast("Factura sin IVA — registrá el movimiento manualmente en Cuentas Corrientes","warn");
       }
-    }
-    // Egreso en caja_movimientos (anti-duplicado por observaciones)
-    if(estado==="revisado"&&c&&c.total){
-      try{
-        const existe=await sb(`caja_movimientos?observaciones=like.*comp-${id}*&limit=1`);
-        if(!existe?.length){
-          const esNC=c.tipo?.startsWith("NC");
-          const tipoMov=esNC?"ingreso":"egreso";
-          const prefijo=esNC?`NC ${c.tipo.replace("NC-","")}`:`Fact. ${c.tipo||""}`;
-          const descCaja=`${prefijo}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"}`;
-          await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
-            sociedad:c.sociedad||"SUDES",
-            fecha:c.fecha||today(),
-            tipo:tipoMov,
-            concepto:descCaja,
-            categoria:"Proveedor",
-            monto:Math.abs(parseFloat(c.total)||0),
-            observaciones:`Auto desde comprobantes. comp-${id}`
-          })});
-          toast(`✓ Egreso en Caja: $${Math.round(c.total).toLocaleString("es-AR")}  (${c.sociedad||"SUDES"})`,"ok");
-        }
-      }catch(e){toast(`Error al registrar egreso en caja: ${e.message.slice(0,60)}`,"err");}
     }
     // Asiento devengado compra
     if(estado==="revisado"&&c&&!c.tipo?.startsWith("NC")){
@@ -25848,13 +25916,12 @@ async function confirmarOrdenPago(pagarTambien){
   const obs=document.getElementById("mop-obs-op").value.trim();
   if(!bruto){toast("Ingresá el monto bruto","err");return;}
   if(!medio){toast("Seleccioná un medio de pago","err");return;}
-  const medioObjPrevio=mediosPago.find(m=>m.nombre===medio);
-  const esCuentaSocio=medioObjPrevio?.tipo==="cuenta_socio";
+  const esCuentaSocio=_pagoMedioTipo(medio)==="cuenta_socio";
   const socioId=esCuentaSocio?document.getElementById("mop-socio").value:null;
   if(pagarTambien&&esCuentaSocio&&!socioId){toast("Elegí qué socio puso la plata","err");return;}
   const [cod]=(sicoreVal?sicoreVal.split("|"):["",""]);
   const sicoreDesc=cod?getSicoreCat()[cod]?.desc||"":"";
-  const numero=`OP-${fecha.slice(0,7).replace("-","")}-${String(Date.now()).slice(-4)}`;
+  let numero=`OP-${fecha.slice(0,7).replace("-","")}-${String(Date.now()).slice(-4)}`;
   const opData={
     comprobante_id:compId,numero,proveedor:c.proveedor||"",cuit:c.cuit||"",
     tipo_factura:tipo,sociedad:c.sociedad||"SUDES",monto_bruto:bruto,
@@ -25866,50 +25933,28 @@ async function confirmarOrdenPago(pagarTambien){
     creado_por:loggedUser?.nombre||null,
   };
   try{
-    const[op]=await sb("ordenes_pago",{method:"POST",body:JSON.stringify(opData)});
     if(pagarTambien){
-      await sb(`comprobantes_compra?id=eq.${compId}`,{method:"PATCH",body:JSON.stringify({
-        estado:"pagado",medio_pago:medio,fecha_pago:fecha,updated_at:new Date().toISOString()
-      })});
-      c.estado="pagado";c.medio_pago=medio;c.fecha_pago=fecha;
-      const medioObj=mediosPago.find(m=>m.nombre===medio);
-      const esBanco=medioObj?.tipo==="cuenta_bancaria";
-      const descPago=`Fact. ${tipo}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"}`;
-      const obsStr=`${medio}${obs?` · ${obs}`:""} · comp-${compId}`;
-      if(esCuentaSocio){
-        // Pagado con plata de un socio -- no sale plata real de caja/banco todavía, se
-        // registra la deuda con ese socio en vez de un movimiento de caja/banco (ver F).
-        const socio=users.find(u=>u.id===socioId);
-        await sb("aportes_socios",{method:"POST",body:JSON.stringify({
-          socio_id:socioId,sociedad:c.sociedad||"SUDES",fecha,tipo:"aporte",monto:neto,
-          concepto:`Fact. ${tipo}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"} (OP ${numero})`,
-          comprobante_id:compId,creado_por:loggedUser?.nombre||null
-        })});
-        toast(`💰 Pagada con plata de ${socio?.nombre||"un socio"}`,"inf");
-      }else if(esBanco){
-        await sb("banco_movimientos",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify({
-          sociedad:c.sociedad||"SUDES",fecha,concepto:descPago,importe:-neto,
-          saldo:null,conciliado:false,referencia:c.numero||"OP"
-        })}).catch(()=>{});
-      }else{
-        await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
-          sociedad:c.sociedad||"SUDES",fecha,tipo:"egreso",concepto:descPago,
-          categoria:"Proveedor",monto:neto,medio_pago:medio,
-          observaciones:obsStr,creado_por:loggedUser?.nombre||null
-        })});
-      }
+      const fresco=await _pagoFresco(compId);
+      if(fresco?.estado==="pagado"){toast(_pagoYaPagadaMsg(fresco),"err");return;}
+      if(_pagoMedioTipo(medio)==="tarjeta"){toast("Con tarjeta no corresponde orden de pago (se paga antes de recibir la factura): usá 💳 Pagar.","err");return;}
+    }
+    // Una sola orden de pago por factura: si quedó un borrador, se completa en vez de crear otra
+    const previas=await sb(`ordenes_pago?comprobante_id=eq.${compId}&select=id,numero,estado`).catch(()=>[]);
+    if(previas.some(p=>p.estado==="pagado")){toast("Esta factura ya tiene una orden de pago pagada","err");return;}
+    const borrador=previas[0];
+    let op;
+    if(borrador){
+      numero=borrador.numero;opData.numero=numero;
+      await sb(`ordenes_pago?id=eq.${borrador.id}`,{method:"PATCH",body:JSON.stringify(opData)});
+      op={id:borrador.id};
+    }else{
+      [op]=await sb("ordenes_pago",{method:"POST",body:JSON.stringify(opData)});
+    }
+    if(pagarTambien){
+      const via=await registrarPagoFactura(c,{fecha,medio,obs,socioId,op:{id:op?.id,numero,bruto,neto,ret,cod}});
+      if(via==="socio")toast(`💰 Pagada con plata de ${users.find(u=>u.id===socioId)?.nombre||"un socio"}`,"inf");
       renderComprobantes();updateCompStats();
       if(cfTab==="pendientes")renderCFPendientes();
-      // Asiento de pago
-      const bancoCod=getBancoCodigoPorMedio(medio,c.sociedad||"SUDES");
-      const lineasPago=[
-        {codigo:"2.1.01.001",debe:bruto,desc:"Cancelación proveedor"},
-        {codigo:bancoCod,haber:neto,desc:`Pago ${medio}`},
-      ];
-      if(ret>0)lineasPago.push({codigo:"2.1.03.002",haber:ret,desc:`Ret. SICORE ${cod||""}`});
-      const descPagoAsiento=`Pago: ${c.proveedor||""} — ${numero}`;
-      const _adPago={fecha,sociedad:c.sociedad||"SUDES",tipo:"pago_compra",origen:"orden_pago",origen_id:op?.id,descripcion:descPagoAsiento,lineas:lineasPago};
-      generarAsiento(_adPago).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adPago);else if(!a)toast("⚠️ Asiento de pago no generado","err");}).catch(e=>toast("⚠️ Error asiento pago: "+e.message.slice(0,50),"err"));
     }
     await generarPDFOrdenPago({...opData,id:op?.id,numero_comp:c.numero});
     closeModal("modal-orden-pago");

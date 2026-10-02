@@ -1441,6 +1441,25 @@ UPDATE cursos SET publicacion_aprobada = true WHERE estado != 'Borrador';
 - **Pendiente (lo hace Tomás, 2 Oct 2026):** importar los extractos de **julio, agosto y septiembre** de SUDES y POINTERS y ver cómo funciona. Lo que no tenga contrapartida queda resaltado (rojo = está en el panel y no en el banco; ámbar = está en el banco y no en el panel); sin extracto, el control del cierre da "crítico". Ajustar reglas de clasificación si aparecen conceptos que hoy caen en "otros pagos/cobros".
 - **Ventas / ingresos (`devengado_venta`/`cobro_venta`) quedan en el roadmap** (Fase 3). El técnico de la plataforma e-learning avisó el 2 Oct que **la API ya está lista**: falta que genere el token Sanctum (`ELEARNING_API_TOKEN`) y correr el SQL de las tablas `elearning_*` (ver sección de integración E-learning). Hasta entonces el resultado del mes sale solo con egresos.
 
+### 💳 Pago único de facturas (2 Oct 2026) — fase 1: protecciones
+
+**Problema:** cada botón de pago escribía un conjunto distinto de registros y ninguno controlaba duplicados. La auditoría de los datos reales (20 facturas pagadas desde julio) encontró: Finnegans con 4 movimientos de banco, una factura con 2 de caja, **todas** las pagadas dejaban un egreso de caja (también las de banco y tarjeta) y 147 egresos de caja (~$140M) creados solo por *revisar* facturas. Además el botón **Pagar** directo solo existía para notas de crédito: toda factura, hasta las de tarjeta, tenía que pasar por una orden de pago.
+
+**Regla de negocio (Tomás):** la orden de pago existe por las **retenciones**: corresponde a facturas **A** pagadas por **transferencia, efectivo o cheque**. Las facturas chicas o pagadas con **tarjeta** no llevan OP (se pagan antes de recibir la factura). La Caja muestra **solo efectivo real**.
+
+**Cómo quedó:** un único punto de entrada `registrarPagoFactura()` (helpers `_pagoTesoreria`, `_pagoAsiento`, `_pagoFresco`, `_pagoMedioTipo`, `_pagoOPAplica`) que usan Pagar, Orden de pago y Cash Flow:
+- **No se paga dos veces** la misma factura (se vuelve a leer el estado en la base; protege del doble clic y de pantallas desactualizadas).
+- **Un solo registro de tesorería según el medio:** banco → `banco_movimientos` (reconoce uno ya existente por número de factura + importe); efectivo / cheques de terceros → Caja (reutiliza la línea existente); **tarjeta → ninguno** (la deuda queda en la tarjeta hasta 💳 Cerrar tarjeta); cuenta de socio → aporte del socio. Para banco, tarjeta y socio se retira la línea de caja heredada de la revisión.
+- **Un solo asiento** de pago, aunque antes hubiera uno con el otro origen (`comprobante_pago` / `orden_pago`).
+- **Una sola orden de pago por factura:** un borrador se completa al pagar (conserva el número) en vez de crear otra; una factura con OP pagada no admite otra.
+- **Revisar una factura ya no crea un egreso de caja.**
+- **Orden de pago con tarjeta:** se bloquea y manda a usar 💳 Pagar. **Pagar una factura A** por transferencia/efectivo/cheque pregunta si se paga sin OP (por ejemplo, monto chico sin retención).
+- **Botones:** *Pendientes de pago* y *Comprobantes* ahora ofrecen 💳 Pagar a todas las facturas y 📄 Orden de Pago solo a las A.
+- **Cash Flow → Pagar concepto:** si el número de factura tipeado corresponde a una factura cargada, el pago va por el camino único (si ya estaba pagada, avisa y solo actualiza el valor real; si el monto no coincide, pide pagar desde Comprobantes por las retenciones). Sin factura cargada, sigue siendo un gasto suelto, ahora sin duplicarse.
+- Probado con 23 controles sobre una base simulada (pago por banco, tarjeta, efectivo, socio, doble pago, borrador→pago, movimiento ya anotado desde Cash Flow).
+
+**Pendiente (fase 2):** (a) **limpiar los 147 egresos de caja heredados "Auto desde comprobantes"** (85 de POINTERS por ~$110,9M y 62 de SUDES por ~$29,2M) — requiere confirmación de Tomás antes de borrarlos; (b) modal único de pago (Pagar + Orden de pago juntos); (c) columna `comprobante_id` en `banco_movimientos` para enlazar el pago a la factura sin depender del número; (d) asiento para gastos sueltos de Cash Flow sin factura; (e) revisar `delComprobante` y el revertir "revisado" por si borran/limpian la línea de caja.
+
 ---
 
 ## Notas técnicas críticas
