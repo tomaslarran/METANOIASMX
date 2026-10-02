@@ -4639,7 +4639,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg"><label class="fl">Hasta</label><input class="fi" type="date" id="nps-rep-hasta" onchange="npsRepActualizar()"></div>
   </div>
   <div id="nps-rep-preview"></div>
-  <div class="ma" style="flex-wrap:wrap"><button class="bc" onclick="closeModal('modal-nps-reporte')">Cerrar</button><button class="btn sec" onclick="imprimirReporteNPS()">🖨 Imprimir / PDF</button><button class="bk" onclick="exportarReporteNPS()">📥 Exportar a Excel</button></div>
+  <div class="ma" style="flex-wrap:wrap"><button class="bc" onclick="closeModal('modal-nps-reporte')">Cerrar</button><button class="btn sec" onclick="descargarPDFReporteNPS()">📄 Descargar PDF</button><button class="bk" onclick="exportarReporteNPS()">📥 Exportar a Excel</button></div>
 </div>
 </div>
 
@@ -7468,6 +7468,23 @@ const _NPS_ORDEN_ESTADO={respondido:5,pidiendo_nota:4,esperando_comentario:3,env
 const _npsCat=s=>s>=9?"Promotor":s>=7?"Pasivo":"Detractor";
 const _npsFecha=iso=>iso?new Date(iso).toLocaleDateString("es-AR"):"";
 let _npsRep=null;
+const _NPS_TEXTOS=[
+  {paso:"1. Envío inicial (plantilla de WhatsApp)",cuando:"Al tocar «Enviar encuesta WA» en el curso. {{nombre}} y {{curso}} se completan con los datos de cada alumno.",
+   texto:"Hola {{nombre}} 👋 ¿Cómo fue tu experiencia con Metanoia SMX en {{curso}}?\n\nNos encantaría conocer tu opinión: respondé con un número del 0 al 10, ¿qué tan probable es que nos recomiendes a un colega?"},
+  {paso:"2. Cuando el alumno responde con la nota",cuando:"El alumno responde un número de 0 a 10. {nota} es el número que mandó.",
+   texto:"¡Gracias por tu calificación ({nota}/10)! 🙌 Nos ayuda mucho a seguir mejorando.\n\n¿Nos contás en pocas palabras qué fue lo que más te gustó o qué podríamos mejorar?"},
+  {paso:"2b. Si comenta sin dar la nota",cuando:"El alumno responde con un comentario en lugar de un número.",
+   texto:"¡Gracias por contarnos eso! 🙌 Para que quede bien registrado, ¿nos confirmás con un número del 0 al 10 qué tan probable es que nos recomiendes?"},
+  {paso:"2c. Si sigue sin dar la nota",cuando:"El alumno vuelve a escribir sin mandar el número.",
+   texto:"¡Perfecto, anotado! 🙌 ¿Y del 0 al 10 qué nota le pondrías?"},
+  {paso:"3. Cierre",cuando:"El alumno deja su comentario.",
+   texto:"¡Muchas gracias por tu comentario! Lo tenemos en cuenta para seguir mejorando."},
+  {paso:"3b. Agregado opcional: datos del alumno",cuando:"Solo si en su ficha falta el DNI o el CUIT.",
+   texto:"Aprovechamos para pedirte un dato: ¿nos pasás tu DNI y CUIT para completar tu perfil? Lo vamos a necesitar para futuras certificaciones."},
+  {paso:"3c. Agregado opcional: próximos cursos",cuando:"Solo si hay cursos con inscripciones abiertas (se listan hasta 2).",
+   texto:"Aprovechamos para contarte que ya tenemos inscripciones abiertas para:\n• [Curso 1 (fecha de inicio)]\n• [Curso 2 (fecha de inicio)]\nSi te interesa alguno, escribinos y te pasamos toda la info. 😊"},
+];
+const _NPS_REGLAS="Cómo se lee la respuesta: el alumno contesta con un número del 0 al 10 en un mensaje corto. 9-10 = promotor, 7-8 = pasivo, 0-6 = detractor. NPS = % promotores - % detractores. Si comenta sin dar la nota, el bot le vuelve a pedir el número. La encuesta se envía por WhatsApp desde el número de Metanoia.";
 
 function abrirReporteNPS(cursoId){
   const sel=document.getElementById("nps-rep-curso");
@@ -7534,7 +7551,8 @@ async function npsRepActualizar(){
         ${k("NPS",t.nps>0?"+"+t.nps:t.nps,col)}${k("Respuestas",t.n)}${k("Promotores",t.pr,"var(--gr)")}${k("Pasivos",t.pa,"var(--al)")}${k("Detractores",t.de,"var(--re)")}${k("Nota promedio",t.prom)}
         ${k("Tasa resp. WhatsApp",e.length?Math.round(wa/e.length*100)+"%":"—")}${k("Sin responder",_npsRep.sinResp.length,_npsRep.sinResp.length?"var(--am)":"")}
       </div>
-      <div style="font-size:11px;color:var(--tx3)">${_npsRep.porCurso.length} curso${_npsRep.porCurso.length!==1?"s":""} en el reporte · ${_npsRep.resp.filter(r=>r.comentario&&r.comentario.trim()).length} comentarios</div>`
+      <div style="font-size:11px;color:var(--tx3)">${_npsRep.porCurso.length} curso${_npsRep.porCurso.length!==1?"s":""} en el reporte · ${_npsRep.resp.filter(r=>r.comentario&&r.comentario.trim()).length} comentarios · el reporte incluye el texto de la encuesta</div>
+      <details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--ac)">Ver el texto de la encuesta que se envía</summary><div style="margin-top:6px;max-height:200px;overflow:auto">${_NPS_TEXTOS.map(p=>`<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:700;color:var(--tx)">${esc(p.paso)}</div><div style="font-size:10px;color:var(--tx3);margin-bottom:2px">${esc(p.cuando)}</div><div style="font-size:12px;background:var(--surf2);border:1px solid var(--b);border-radius:6px;padding:6px 8px;white-space:pre-wrap">${esc(p.texto)}</div></div>`).join("")}</div></details>`
       :`<div style="padding:18px;text-align:center;color:var(--tx3);font-size:12px">No hay respuestas con esos filtros.</div>`;
   }catch(err){box.innerHTML=`<div style="color:var(--re);font-size:12px">Error: ${esc(err.message)}</div>`;}
 }
@@ -7568,45 +7586,123 @@ async function exportarReporteNPS(){
   const wsSin=XLSX.utils.json_to_sheet(sin.length?sin:[{Curso:"Todas las encuestas enviadas fueron respondidas"}]);wsSin["!cols"]=[{wch:42},{wch:30},{wch:30},{wch:11},{wch:18}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,wsRes,"Resumen");XLSX.utils.book_append_sheet(wb,wsDet,"Respuestas");XLSX.utils.book_append_sheet(wb,wsCom,"Comentarios");XLSX.utils.book_append_sheet(wb,wsSin,"Sin responder");
+  const wsTxt=XLSX.utils.json_to_sheet([..._NPS_TEXTOS.map(p=>({Paso:p.paso,"Cuándo se envía":p.cuando,Texto:p.texto.replace(/\n+/g," ")})),{Paso:"Cómo se lee la respuesta",Texto:_NPS_REGLAS}]);
+  wsTxt["!cols"]=[{wch:38},{wch:60},{wch:120}];XLSX.utils.book_append_sheet(wb,wsTxt,"Texto de la encuesta");
   const slug=(f.cursoId?cNom:"general").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-zA-Z0-9]+/g,"_").slice(0,40);
   XLSX.writeFile(wb,`reporte_nps_${slug}_${today()}.xlsx`);
   toast("📥 Reporte NPS exportado","ok");
 }
 
-async function imprimirReporteNPS(){
+async function descargarPDFReporteNPS(){
   if(!_npsRep)await npsRepActualizar();
   const R=_npsRep;
-  if(!R||!R.resp.length){toast("No hay respuestas para imprimir","err");return;}
+  if(!R||!R.resp.length){toast("No hay respuestas para el PDF","err");return;}
+  if(!window.jspdf){toast("No se pudo cargar el generador de PDF","err");return;}
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  const W=210,M=14,AN=W-2*M;
+  const clean=s=>String(s??"").replace(/[–—]/g,"-").replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/…/g,"...").replace(/•/g,"-").replace(/[^\u0000-ÿ]/g,"").replace(/\s+/g," ").trim();
   const t=R.total,wa=R.envios.filter(x=>x._resp).length,f=R.filtro;
   const cNom=f.cursoId?(R.cMap[f.cursoId]?.nombre||""):"Todos los cursos";
-  const col=s=>s>=9?"#15803d":s>=7?"#b45309":"#b91c1c";
+  const fd=iso=>iso?iso.split("-").reverse().join("/"):"";
+  const colNota=s=>s>=9?[21,128,61]:s>=7?[180,83,9]:[185,28,28];
+  let y=M;
+  const ensure=h=>{if(y+h>287){doc.addPage();y=M;}};
+  const titulo=txt=>{ensure(12);y+=4;doc.setFont("helvetica","bold");doc.setFontSize(11);doc.setTextColor(17);doc.text(clean(txt),M,y);y+=1.5;doc.setDrawColor(17);doc.setLineWidth(0.4);doc.line(M,y,W-M,y);y+=5;};
+
+  doc.setFont("helvetica","bold");doc.setFontSize(17);doc.setTextColor(46,40,104);doc.text("Reporte NPS - Metanoia SMX",M,y+4);y+=10;
+  doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(90);
+  const sub=doc.splitTextToSize(clean(`${cNom} | Período ${f.desde?fd(f.desde):"inicio"} al ${f.hasta?fd(f.hasta):"hoy"} | Generado ${new Date().toLocaleDateString("es-AR")}`),AN);
+  doc.text(sub,M,y);y+=sub.length*4+3;
+
+  // KPIs
+  const kp=[["NPS",t.nps>0?"+"+t.nps:String(t.nps),t.nps>=50?[21,128,61]:t.nps>=0?[180,83,9]:[185,28,28]],["Respuestas",String(t.n),[17,17,17]],["Promotores 9-10",String(t.pr),[21,128,61]],["Pasivos 7-8",String(t.pa),[180,83,9]],["Detractores 0-6",String(t.de),[185,28,28]],["Nota promedio",String(t.prom),[17,17,17]],["Resp. WhatsApp",R.envios.length?Math.round(wa/R.envios.length*100)+"%":"-",[17,17,17]]];
+  const bw=AN/kp.length;
+  kp.forEach((k,i)=>{
+    const x=M+i*bw;
+    doc.setDrawColor(200);doc.setLineWidth(0.2);doc.roundedRect(x+0.7,y,bw-1.4,17,1.5,1.5);
+    doc.setFont("helvetica","bold");doc.setFontSize(15);doc.setTextColor(...k[2]);doc.text(k[1],x+bw/2,y+8,{align:"center"});
+    doc.setFont("helvetica","normal");doc.setFontSize(6.5);doc.setTextColor(100);doc.text(k[0].toUpperCase(),x+bw/2,y+13.5,{align:"center"});
+  });
+  y+=21;
+  doc.setFontSize(8);doc.setTextColor(100);
+  doc.text(`NPS = % promotores - % detractores.  Tasa de respuesta WhatsApp: ${wa} de ${R.envios.length} encuestas enviadas con nota registrada.`,M,y);y+=3;
+
+  // Distribución
+  titulo("Distribución de notas");
   const max=Math.max(1,...R.dist.map(d=>d.cant));
-  const html=`<!doctype html><html><head><meta charset="utf-8"><title>Reporte NPS</title><style>
-    body{font-family:Arial,sans-serif;font-size:11px;color:#111;margin:20px 26px} h1{font-size:18px;margin:0} .sub{color:#555;margin:2px 0 12px}
-    h3{font-size:12px;margin:16px 0 6px;border-bottom:1.5px solid #111;padding-bottom:2px} .kp{display:flex;gap:10px;flex-wrap:wrap}
-    .k{border:1px solid #ccc;border-radius:6px;padding:6px 12px;text-align:center;min-width:90px} .k b{display:block;font-size:20px} .k span{font-size:9px;text-transform:uppercase;color:#555}
-    table{width:100%;border-collapse:collapse} th{font-size:9px;text-transform:uppercase;color:#555;text-align:left;border-bottom:1px solid #999;padding:3px 4px} td{padding:3px 4px;border-bottom:1px solid #e3e3e3;vertical-align:top} .n{text-align:right}
-    .bar{display:inline-block;height:9px;background:#7B6BBF;vertical-align:middle} tr{page-break-inside:avoid} .c{font-style:italic;color:#333}
-  </style></head><body>
-    <h1>Reporte NPS — Metanoia SMX</h1>
-    <div class="sub">${esc(cNom)} · Período ${f.desde?f.desde.split("-").reverse().join("/"):"inicio"} al ${f.hasta?f.hasta.split("-").reverse().join("/"):"hoy"} · Generado ${new Date().toLocaleDateString("es-AR")}</div>
-    <div class="kp">
-      <div class="k"><b style="color:${t.nps>=50?"#15803d":t.nps>=0?"#b45309":"#b91c1c"}">${t.nps>0?"+"+t.nps:t.nps}</b><span>NPS</span></div>
-      <div class="k"><b>${t.n}</b><span>Respuestas</span></div><div class="k"><b>${t.pr}</b><span>Promotores 9-10</span></div>
-      <div class="k"><b>${t.pa}</b><span>Pasivos 7-8</span></div><div class="k"><b>${t.de}</b><span>Detractores 0-6</span></div>
-      <div class="k"><b>${t.prom}</b><span>Nota promedio</span></div>
-      <div class="k"><b>${R.envios.length?Math.round(wa/R.envios.length*100)+"%":"—"}</b><span>Tasa resp. WhatsApp</span></div>
-    </div>
-    <div style="margin-top:6px;color:#555">NPS = % promotores − % detractores.</div>
-    <h3>Distribución de notas</h3>
-    <table>${R.dist.map(d=>`<tr><td style="width:30px"><b>${d.nota}</b></td><td style="width:40px" class="n">${d.cant}</td><td><span class="bar" style="width:${Math.round(d.cant/max*280)}px;background:${col(d.nota)}"></span></td></tr>`).join("")}</table>
-    ${R.porCurso.length>1?`<h3>Por curso</h3><table><tr><th>Curso</th><th class="n">Env.</th><th class="n">Resp.</th><th class="n">Tasa</th><th class="n">Prom.</th><th class="n">Pas.</th><th class="n">Det.</th><th class="n">NPS</th></tr>
-      ${R.porCurso.map(c=>`<tr><td>${esc(c.curso)}</td><td class="n">${c.enviadas}</td><td class="n">${c.n}</td><td class="n">${c.tasa??"—"}${c.tasa!=null?"%":""}</td><td class="n">${c.pr}</td><td class="n">${c.pa}</td><td class="n">${c.de}</td><td class="n"><b>${c.nps??"—"}</b></td></tr>`).join("")}</table>`:""}
-    <h3>Comentarios (de menor a mayor nota)</h3>
-    <table>${R.resp.filter(r=>r.comentario&&r.comentario.trim()).sort((a,b)=>a.score-b.score).map(r=>`<tr><td style="width:26px"><b style="color:${col(r.score)}">${r.score}</b></td><td style="width:150px">${esc(r.alumno_nombre||"Anónimo")}<br><span style="color:#777">${esc(R.cMap[r.curso_id]?.nombre||"")}</span></td><td class="c">${esc(r.comentario)}</td></tr>`).join("")||`<tr><td>Sin comentarios</td></tr>`}</table>
-    ${R.sinResp.length?`<h3>Enviadas sin responder (${R.sinResp.length})</h3><table>${R.sinResp.map(e=>`<tr><td>${esc(e.alumno_nombre||"")}</td><td>${esc(R.cMap[e.curso_id]?.nombre||"")}</td><td>${_npsFecha(e.created_at)}</td></tr>`).join("")}</table>`:""}
-  </body></html>`;
-  _imprimirHTML(html);
+  R.dist.forEach(d=>{
+    ensure(5);
+    doc.setFont("helvetica","bold");doc.setFontSize(8.5);doc.setTextColor(17);doc.text(String(d.nota),M+4,y+3,{align:"right"});
+    doc.setFont("helvetica","normal");doc.setTextColor(60);doc.text(String(d.cant),M+14,y+3,{align:"right"});
+    if(d.cant){doc.setFillColor(...colNota(d.nota));doc.rect(M+17,y+0.6,Math.max(1.2,d.cant/max*(AN-30)),3,"F");}
+    y+=4.6;
+  });
+
+  // Por curso
+  if(R.porCurso.length>1){
+    titulo("Por curso");
+    const cols=[["Curso",M],["Env.",M+98],["Resp.",M+110],["Tasa",M+123],["Prom.",M+137],["Pas.",M+150],["Det.",M+163],["NPS",M+176]];
+    doc.setFont("helvetica","bold");doc.setFontSize(7);doc.setTextColor(100);
+    cols.forEach(([c,x],i)=>doc.text(c.toUpperCase(),x,y,i?{align:"left"}:undefined));y+=1.5;doc.setDrawColor(150);doc.line(M,y,W-M,y);y+=3.5;
+    R.porCurso.forEach(c=>{
+      const nom=doc.splitTextToSize(clean(c.curso),92);
+      ensure(nom.length*3.8+2);
+      doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(17);doc.text(nom,M,y);
+      const v=[c.enviadas,c.n,c.tasa!=null?c.tasa+"%":"-",c.prom??"-",c.pa,c.de,c.nps??"-"];
+      v.forEach((val,i)=>{if(i===6)doc.setFont("helvetica","bold");doc.text(String(val),cols[i+1][1],y);});
+      y+=nom.length*3.8+1.6;doc.setDrawColor(225);doc.line(M,y-2.2,W-M,y-2.2);
+    });
+  }
+
+  // Comentarios
+  const coms=R.resp.filter(r=>r.comentario&&r.comentario.trim()).sort((a,b)=>a.score-b.score);
+  titulo(`Comentarios (${coms.length}) - de menor a mayor nota`);
+  if(!coms.length){doc.setFont("helvetica","normal");doc.setFontSize(8.5);doc.setTextColor(90);doc.text("Sin comentarios.",M,y);y+=5;}
+  coms.forEach(r=>{
+    const lineas=doc.splitTextToSize(clean(r.comentario),AN-52);
+    ensure(Math.max(8,lineas.length*3.9+5));
+    doc.setFont("helvetica","bold");doc.setFontSize(13);doc.setTextColor(...colNota(r.score));doc.text(String(r.score),M+4,y+4.5,{align:"center"});
+    doc.setFontSize(7.5);doc.setTextColor(17);doc.text(doc.splitTextToSize(clean(r.alumno_nombre||"Anónimo"),38)[0],M+10,y+2.2);
+    doc.setFont("helvetica","normal");doc.setFontSize(6.5);doc.setTextColor(120);doc.text(doc.splitTextToSize(clean(R.cMap[r.curso_id]?.nombre||""),38)[0],M+10,y+5.6);
+    doc.setFontSize(8.5);doc.setTextColor(40);doc.text(lineas,M+52,y+2.6);
+    y+=Math.max(8,lineas.length*3.9+3);
+    doc.setDrawColor(230);doc.line(M,y-1.4,W-M,y-1.4);
+  });
+
+  // Sin responder
+  if(R.sinResp.length){
+    titulo(`Encuestas enviadas sin responder (${R.sinResp.length})`);
+    R.sinResp.forEach(e=>{
+      ensure(5);
+      doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(17);
+      doc.text(clean(e.alumno_nombre||"").slice(0,34),M,y);
+      doc.setTextColor(90);doc.text(clean(R.cMap[e.curso_id]?.nombre||"").slice(0,62),M+60,y);
+      doc.text(_npsFecha(e.created_at),W-M,y,{align:"right"});
+      y+=4.2;
+    });
+  }
+
+  ensure(46);
+  titulo("Texto de la encuesta que reciben los alumnos");
+  _NPS_TEXTOS.forEach(p=>{
+    const tx=p.texto.split("\n").filter(s=>s.trim()).flatMap(par=>doc.splitTextToSize(clean(par),AN-6));
+    const cu=doc.splitTextToSize(clean(p.cuando),AN);
+    ensure(tx.length*3.9+cu.length*3.5+12);
+    doc.setFont("helvetica","bold");doc.setFontSize(8.5);doc.setTextColor(46,40,104);doc.text(clean(p.paso),M,y);y+=3.8;
+    doc.setFont("helvetica","italic");doc.setFontSize(7.5);doc.setTextColor(110);doc.text(cu,M,y);y+=cu.length*3.5+1.5;
+    doc.setFillColor(244,243,250);doc.roundedRect(M,y-2.8,AN,tx.length*3.9+3.4,1.5,1.5,"F");
+    doc.setFont("helvetica","normal");doc.setFontSize(8.5);doc.setTextColor(30);doc.text(tx,M+3,y+0.8);
+    y+=tx.length*3.9+5.5;
+  });
+  const reg=doc.splitTextToSize(clean(_NPS_REGLAS),AN);
+  ensure(reg.length*3.8+4);doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(90);doc.text(reg,M,y);y+=reg.length*3.8;
+
+  const n=doc.getNumberOfPages();
+  for(let i=1;i<=n;i++){doc.setPage(i);doc.setFont("helvetica","normal");doc.setFontSize(7.5);doc.setTextColor(140);doc.text(`Metanoia SMX - Reporte NPS - Página ${i} de ${n}`,W/2,291,{align:"center"});}
+  const slug=(f.cursoId?cNom:"general").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-zA-Z0-9]+/g,"_").slice(0,40);
+  doc.save(`reporte_nps_${slug}_${today()}.pdf`);
+  toast("📄 PDF descargado","ok");
 }
 
 // ══ NPS POST-CURSO ══
