@@ -3286,6 +3286,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         Importar ARCA
       </button>
+      <button class="btn sec admin-only-el" onclick="abrirEstadoCuenta()" title="Estado de cuenta de cada proveedor en el ejercicio (con control contra los libros)">📒 Estado de cuenta</button>
       <button class="btn sec" onclick="abrirCircularizacion()" title="Pedir a los proveedores más significativos que confirmen su saldo (anual, fin de ejercicio)">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
         Circularización
@@ -3616,12 +3617,37 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 </div>
 
+<!-- ══ ESTADO DE CUENTA DE PROVEEDORES DEL EJERCICIO ══ -->
+<div class="mov" id="modal-estado-cuenta" onclick="if(event.target===this&&_movDown===this)closeModal('modal-estado-cuenta')">
+<div class="modal" style="max-width:1040px;width:96vw">
+  <div class="mt"><span>📒 Estado de cuenta de proveedores</span><button class="mt-close" onclick="closeModal('modal-estado-cuenta')">✕</button></div>
+  <div style="font-size:12px;color:var(--tx3);margin-bottom:10px">Por proveedor (clave: CUIT), solo con las facturas del ejercicio que no están cerradas. El saldo es lo que todavía se le debe: facturado − pagado − notas de crédito. Tocá una fila para ver los comprobantes.</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
+    <div class="fg" style="margin:0"><label class="fl">Sociedad</label><select class="fs" id="ec-soc" onchange="renderEstadoCuenta()"><option>SUDES</option><option>POINTERS</option></select></div>
+    <div class="fg" style="margin:0"><label class="fl">Ejercicio</label><select class="fs" id="ec-ej" onchange="renderEstadoCuenta()"></select></div>
+    <div class="fg" style="margin:0;flex:1;min-width:160px"><label class="fl">Buscar</label><input class="fi" id="ec-q" type="text" placeholder="Proveedor o CUIT" oninput="renderEstadoCuenta()"></div>
+    <label style="font-size:12px;color:var(--tx2);display:flex;gap:6px;align-items:center;padding-bottom:8px"><input type="checkbox" id="ec-saldo" onchange="renderEstadoCuenta()"> Solo con saldo</label>
+  </div>
+  <div id="ec-ctrl"></div>
+  <div id="ec-lista" style="max-height:52vh;overflow:auto"></div>
+  <div class="ma" style="gap:8px;flex-wrap:wrap">
+    <button class="bc" onclick="closeModal('modal-estado-cuenta')">Cerrar</button>
+    <button class="bc" onclick="exportarEstadoCuenta()">📥 Exportar Excel</button>
+    <button class="bk" onclick="closeModal('modal-estado-cuenta');abrirCircularizacion(document.getElementById('ec-soc').value)">✉️ Circularizar saldos</button>
+  </div>
+</div>
+</div>
+
 <!-- ══ CIRCULARIZACIÓN DE SALDOS (automatización D del diagnóstico Auren) ══ -->
 <div class="mov" id="modal-circularizacion" onclick="if(event.target===this&&_movDown===this)closeModal('modal-circularizacion')">
-<div class="modal" style="max-width:620px">
+<div class="modal" style="max-width:680px">
   <div class="mt"><span>📧 Circularización de saldos</span><button class="mt-close" onclick="closeModal('modal-circularizacion')">✕</button></div>
-  <div style="font-size:12px;color:var(--tx3);margin-bottom:14px">Pedile a tus proveedores con mayor saldo pendiente que confirmen el monto por email. Práctica recomendada una vez al año, cerca del cierre de ejercicio (30/06). Solo se puede enviar a los que tienen email cargado en Proveedores.</div>
-  <div id="circ-lista" style="max-height:50vh;overflow-y:auto"></div>
+  <div style="font-size:12px;color:var(--tx3);margin-bottom:12px">Pedile a tus proveedores con saldo pendiente que confirmen el monto por email. El correo incluye el resumen del ejercicio y los comprobantes que componen el saldo. Práctica recomendada una vez al año, cerca del cierre (30/06). Si falta el email, escribilo acá: se guarda en Proveedores.</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+    <div class="fg" style="margin:0"><label class="fl">Sociedad</label><select class="fs" id="circ-soc" onchange="circReconstruir()"><option>SUDES</option><option>POINTERS</option></select></div>
+    <div class="fg" style="margin:0"><label class="fl">Ejercicio</label><select class="fs" id="circ-ej" onchange="circReconstruir()"></select></div>
+  </div>
+  <div id="circ-lista" style="max-height:48vh;overflow-y:auto"></div>
   <div class="ma">
     <button class="bc" onclick="closeModal('modal-circularizacion')">Cerrar</button>
     <button class="bk" id="circ-enviar-btn" onclick="enviarCircularizacion()">Enviar a seleccionados</button>
@@ -24500,17 +24526,11 @@ async function backfillAsientos(){
     // 1. Comprobantes → devengado_compra
     for(const c of(comprobantes||[]).filter(c=>
       (c.estado==="revisado"||c.estado==="pagado")&&c.estado!=="cerrado"
-      &&!c.tipo?.startsWith("NC")&&(parseFloat(c.total)||0)>0
+      &&Math.abs(parseFloat(c.total)||0)>0
       &&!yaExiste.has(`comprobante:${c.id}`)
     )){
-      const iva=Math.round((parseFloat(c.iva)||0)*100)/100;
-      const total=Math.round((parseFloat(c.total)||0)*100)/100;
-      const gastos=iva>0?Math.round((total-iva)*100)/100:total;
-      const lineas=[];
-      if(gastos>0)lineas.push({codigo:"5.2.01.001",debe:gastos,desc:"Gasto"});
-      if(iva>0)lineas.push({codigo:"1.1.03.001",debe:iva,desc:"IVA CF"});
-      lineas.push({codigo:"2.1.01.001",haber:total,desc:"Proveedores"});
-      await hacer({fecha:c.fecha||today(),sociedad:c.sociedad||"SUDES",tipo:"devengado_compra",origen:"comprobante",origen_id:c.id,descripcion:`Devengado: Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||""}`,lineas},`Devengado ${c.proveedor||c.id} (${c.numero||"s/n"})`);
+      const lineas=_lineasDevengado(c);
+      await hacer({fecha:c.fecha||today(),sociedad:c.sociedad||"SUDES",tipo:"devengado_compra",origen:"comprobante",origen_id:c.id,descripcion:`Devengado: ${c.tipo?.startsWith("NC")?"NC":"Fact."} ${c.tipo?.replace("NC-","")||""}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||""}`,lineas},`Devengado ${c.proveedor||c.id} (${c.numero||"s/n"})`);
     }
 
     // 2. Comprobantes pagados con OP → pago_compra
@@ -25919,6 +25939,26 @@ async function confirmarPagoComp(){
   }catch(e){toast("Error: "+e.message,"err");}
 }
 
+// Asiento de devengado de una factura (gasto + IVA a Proveedores) o de una nota de crédito (el mismo asiento invertido)
+function _lineasDevengado(c){
+  const esNC=!!c.tipo?.startsWith("NC");
+  const total=Math.round(Math.abs(parseFloat(c.total)||0)*100)/100;
+  if(!(total>0))return null;
+  const iva=Math.round(Math.abs(parseFloat(c.iva)||0)*100)/100;
+  const gastos=iva>0?Math.round((total-iva)*100)/100:total;
+  const lineas=[];
+  if(esNC){
+    lineas.push({codigo:"2.1.01.001",debe:total,desc:"Proveedores (NC)"});
+    if(gastos>0)lineas.push({codigo:"5.2.01.001",haber:gastos,desc:"Gasto (NC)"});
+    if(iva>0)lineas.push({codigo:"1.1.03.001",haber:iva,desc:"IVA CF (NC)"});
+  }else{
+    if(gastos>0)lineas.push({codigo:"5.2.01.001",debe:gastos,desc:"Gasto"});
+    if(iva>0)lineas.push({codigo:"1.1.03.001",debe:iva,desc:"IVA CF"});
+    lineas.push({codigo:"2.1.01.001",haber:total,desc:"Proveedores"});
+  }
+  return lineas;
+}
+
 async function marcarEstadoComp(id,estado){
   try{
     await sb(`comprobantes_compra?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado,updated_at:new Date().toISOString()})});
@@ -25949,16 +25989,10 @@ async function marcarEstadoComp(id,estado){
       }
     }
     // Asiento devengado compra
-    if(estado==="revisado"&&c&&!c.tipo?.startsWith("NC")){
-      const iva=Math.round((parseFloat(c.iva)||0)*100)/100;
-      const total=Math.round((parseFloat(c.total)||0)*100)/100;
-      if(total>0){
-        const gastos=iva>0?Math.round((total-iva)*100)/100:total;
-        const lineas=[];
-        if(gastos>0)lineas.push({codigo:"5.2.01.001",debe:gastos,desc:"Gasto"});
-        if(iva>0)lineas.push({codigo:"1.1.03.001",debe:iva,desc:"IVA CF"});
-        lineas.push({codigo:"2.1.01.001",haber:total,desc:"Proveedores"});
-        const desc=`Devengado: Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||""}`;
+    if(estado==="revisado"&&c){
+      const lineas=_lineasDevengado(c);
+      if(lineas){
+        const desc=`Devengado: ${c.tipo?.startsWith("NC")?"NC":"Fact."} ${c.tipo?.replace("NC-","")||""}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||""}`;
         const _adDev={fecha:c.fecha||today(),sociedad:c.sociedad||"SUDES",tipo:"devengado_compra",origen:"comprobante",origen_id:id,descripcion:desc,lineas};
         generarAsiento(_adDev).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adDev);else if(!a)toast("⚠️ Asiento devengado no generado","err");}).catch(e=>toast("⚠️ Error asiento devengado: "+e.message.slice(0,50),"err"));
       }
@@ -27383,50 +27417,209 @@ async function procesarImportArca(){
   }
 }
 
-// ── Circularización de saldos (automatización D del diagnóstico Auren) ──
-let _circDestinatarios=[];
-function abrirCircularizacion(){
-  const porProveedor={};
+// ══════════════════════════════════════════════════════════════════════
+// ESTADO DE CUENTA DE PROVEEDORES DEL EJERCICIO (1/07 – 30/06) + CIRCULARIZACIÓN DE SALDOS
+// Clave de cada proveedor: el CUIT (vía proveedor_maestro_id). Las facturas de ejercicios cerrados (estado 'cerrado') no entran.
+// Saldo = (facturado − pagado) − (notas de crédito − notas de crédito ya cobradas). Un pago cancela la factura completa:
+// lo efectivamente transferido más la retención practicada.
+// ══════════════════════════════════════════════════════════════════════
+let _ecOrdenes=[],_ecDatos=[],_ecVista=[],_ecAbiertos=new Set(),_ecCircs=[],_ecPropios=new Set(),_circDestinatarios=[];
+const _ecM=v=>"$"+(Math.round((+v||0)*100)/100).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
+const _ecC11=s=>String(s||"").replace(/\D/g,"");
+const _ecFecha=iso=>{const p=String(iso||"").slice(0,10).split("-");return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:"";};
+function _ecEjercicios(){
+  const h=new Date(),y=h.getMonth()>=6?h.getFullYear():h.getFullYear()-1;
+  return[y,y-1].map(a=>({v:String(a),label:`Ejercicio ${a}/${String(a+1).slice(2)} (01/07/${a} – 30/06/${a+1})`,nombre:`${a}/${String(a+1).slice(2)}`,desde:`${a}-07-01`,hasta:`${a+1}-06-30`}));
+}
+async function _ecCargarBase(){
+  if(!proveedores.length)proveedores=await sb("proveedores?select=*&order=nombre.asc").catch(()=>[]);
+  if(!comprobantes.length)await loadComprobantes();
+  const [ops,circ,fisc]=await Promise.all([
+    _sbAll("ordenes_pago?estado=eq.pagado&select=comprobante_id,monto_retencion,neto_a_pagar,fecha_pago").catch(()=>[]),
+    sb("circularizaciones?select=*&order=enviado_en.desc").catch(()=>[]),
+    sb("datos_fiscales_sociedad?select=*").catch(()=>[]),
+  ]);
+  _ecOrdenes=ops;_ecCircs=circ;
+  _ecPropios=new Set(fisc.map(f=>_ecC11(f.cuit)).filter(x=>x.length===11));
+}
+function _ecCalcular(soc,desde,hasta){
+  const mapa=new Map();
+  const opPorComp=new Map(_ecOrdenes.map(o=>[o.comprobante_id,o]));
   comprobantes.forEach(c=>{
-    if(c.estado==="pagado"||c.estado==="cerrado")return;
-    if(c.tipo?.startsWith("NC"))return;
-    const clave=(c.cuit?.replace(/\D/g,"")||c.proveedor||"").trim();
-    if(!clave)return;
-    if(!porProveedor[clave])porProveedor[clave]={proveedor:c.proveedor||"(sin nombre)",cuit:c.cuit||null,sociedad:c.sociedad,saldo:0};
-    porProveedor[clave].saldo+=Number(c.total)||0;
+    if((c.sociedad||"SUDES")!==soc||c.estado==="cerrado")return;
+    const f=c.fecha||c.fecha_imputacion||"";
+    if(f<desde||f>hasta)return;
+    const cuit=_ecC11(c.cuit);
+    const prov=(c.proveedor_maestro_id&&proveedores.find(p=>p.id===c.proveedor_maestro_id))||(cuit.length===11?proveedores.find(p=>_ecC11(p.cuit)===cuit):null);
+    const key=prov?.id||cuit||String(c.proveedor||"").toLowerCase();
+    let e=mapa.get(key);
+    if(!e){e={key,provId:prov?.id||null,nombre:prov?.nombre||c.proveedor||"(sin nombre)",cuit:cuit||_ecC11(prov?.cuit),email:prov?.email||"",facturado:0,nc:0,ncCobradas:0,pagado:0,ret:0,pendRevision:0,movs:[]};mapa.set(key,e);}
+    const esNC=!!c.tipo?.startsWith("NC"),tot=Math.abs(parseFloat(c.total)||0),pagada=c.estado==="pagado";
+    let ret=0;
+    if(esNC){e.nc+=tot;if(pagada)e.ncCobradas+=tot;}
+    else{
+      e.facturado+=tot;
+      if(pagada){e.pagado+=tot;ret=parseFloat(opPorComp.get(c.id)?.monto_retencion)||0;e.ret+=ret;}
+      else if(c.estado==="pendiente")e.pendRevision+=tot;
+    }
+    e.movs.push({fecha:f,tipo:c.tipo||"",numero:c.numero||"",importe:esNC?-tot:tot,estado:c.estado,fecha_pago:c.fecha_pago||"",medio:c.medio_pago||"",ret,esNC,pagada});
   });
-  _circDestinatarios=Object.values(porProveedor).filter(p=>p.saldo>0).map(p=>{
-    let prov=p.cuit?proveedores.find(x=>x.cuit&&x.cuit.replace(/\D/g,"")===p.cuit.replace(/\D/g,"")):null;
-    if(!prov)prov=proveedores.find(x=>(x.nombre||"").trim().toLowerCase()===p.proveedor.trim().toLowerCase());
-    return{...p,email:prov?.email||null,sel:!!prov?.email};
-  }).sort((a,b)=>b.saldo-a.saldo);
-  renderCircularizacion();
+  const out=[...mapa.values()];
+  out.forEach(e=>{
+    e.saldo=Math.round(((e.facturado-e.pagado)-(e.nc-e.ncCobradas))*100)/100;
+    e.movs.sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));
+  });
+  return out;
+}
+function _ecParams(){
+  const soc=document.getElementById("ec-soc")?.value||"SUDES";
+  const ej=_ecEjercicios().find(e=>e.v===document.getElementById("ec-ej")?.value)||_ecEjercicios()[0];
+  return{soc,...ej};
+}
+async function abrirEstadoCuenta(){
+  const lista=document.getElementById("ec-lista");
+  document.getElementById("ec-ej").innerHTML=_ecEjercicios().map(e=>`<option value="${e.v}">${e.label}</option>`).join("");
+  lista.innerHTML=`<div style="padding:30px;text-align:center;color:var(--tx3)">Cargando…</div>`;
+  openModal("modal-estado-cuenta");
+  try{await _ecCargarBase();}catch(e){lista.innerHTML=`<div class="empty">Error al cargar: ${esc(e.message)}</div>`;return;}
+  renderEstadoCuenta();
+}
+function _ecUltimaCirc(e,soc,ejNombre){
+  return _ecCircs.find(c=>c.sociedad===soc&&c.ejercicio===ejNombre&&((e.provId&&c.proveedor_id===e.provId)||(e.cuit&&_ecC11(c.cuit)===e.cuit)))||null;
+}
+function renderEstadoCuenta(){
+  const {soc,desde,hasta,nombre}=_ecParams();
+  const q=_normProd(document.getElementById("ec-q")?.value||"");
+  const soloSaldo=document.getElementById("ec-saldo")?.checked;
+  _ecDatos=_ecCalcular(soc,desde,hasta);
+  _ecVista=_ecDatos.filter(e=>(!q||_normProd(e.nombre).includes(q)||e.cuit.includes(q.replace(/\D/g,"")||"#"))&&(!soloSaldo||Math.abs(e.saldo)>0.5)).sort((a,b)=>b.saldo-a.saldo||a.nombre.localeCompare(b.nombre));
+  const tot=_ecVista.reduce((t,e)=>({f:t.f+e.facturado,n:t.n+e.nc,p:t.p+e.pagado,r:t.r+e.ret,s:t.s+e.saldo}),{f:0,n:0,p:0,r:0,s:0});
+  const th=(t,al="right")=>`<th style="padding:7px 8px;text-align:${al};font-size:11px;color:var(--tx3);white-space:nowrap">${t}</th>`;
+  let html=`<table class="dtable" style="width:100%;font-size:12px"><thead><tr>${th("Proveedor","left")}${th("CUIT","left")}${th("Facturado")}${th("Notas de crédito")}${th("Pagado")}${th("Retenciones")}${th("Saldo")}${th("Circularización","left")}</tr></thead><tbody>`;
+  _ecVista.forEach((e,i)=>{
+    const ci=_ecUltimaCirc(e,soc,nombre);
+    const abierto=_ecAbiertos.has(e.key);
+    const badge=ci?`<span title="Enviada ${_ecFecha(ci.enviado_en)} por ${_ecM(ci.saldo)}" onclick="event.stopPropagation();registrarRespuestaCirc('${ci.id}')" style="cursor:pointer;font-size:10px;padding:2px 7px;border-radius:10px;background:${ci.respuesta==="conforme"?"rgba(16,185,129,.18)":ci.respuesta==="diferencia"?"rgba(239,68,68,.18)":"rgba(245,158,11,.18)"};color:${ci.respuesta==="conforme"?"var(--gr)":ci.respuesta==="diferencia"?"var(--re)":"var(--am)"}">✉️ ${_ecFecha(ci.enviado_en).slice(0,5)} · ${ci.respuesta}</span>`:"";
+    html+=`<tr onclick="toggleECDetalle(${i})" style="cursor:pointer"><td style="padding:7px 8px"><span style="color:var(--tx3)">${abierto?"▾":"▸"}</span> ${esc(e.nombre)}${e.provId?"":` <span title="Sin proveedor en el maestro" style="color:var(--am)">⚠️</span>`}</td><td style="padding:7px 8px;color:var(--tx3)">${esc(e.cuit)}</td><td style="padding:7px 8px;text-align:right">${_ecM(e.facturado)}</td><td style="padding:7px 8px;text-align:right">${e.nc?"− "+_ecM(e.nc):"—"}</td><td style="padding:7px 8px;text-align:right">${e.pagado?_ecM(e.pagado):"—"}</td><td style="padding:7px 8px;text-align:right;color:var(--tx3)">${e.ret?_ecM(e.ret):"—"}</td><td style="padding:7px 8px;text-align:right;font-weight:700;color:${e.saldo>0.5?"var(--re)":e.saldo<-0.5?"var(--am)":"var(--gr)"}">${_ecM(e.saldo)}</td><td style="padding:7px 8px">${badge}</td></tr>`;
+    if(abierto){
+      html+=`<tr><td colspan="8" style="padding:0 8px 10px 26px;background:var(--bg3)"><table style="width:100%;font-size:11px">${e.movs.map(m=>`<tr><td style="padding:3px 6px;color:var(--tx3)">${_ecFecha(m.fecha)}</td><td style="padding:3px 6px">${esc(m.tipo)} ${esc(m.numero)}</td><td style="padding:3px 6px;text-align:right">${m.importe<0?"− ":""}${_ecM(Math.abs(m.importe))}</td><td style="padding:3px 6px;color:${m.pagada?"var(--gr)":"var(--am)"}">${m.pagada?`pagada ${_ecFecha(m.fecha_pago)}${m.medio?" · "+esc(m.medio):""}${m.ret?` · ret. ${_ecM(m.ret)}`:""}`:esc(m.estado)}</td></tr>`).join("")}</table></td></tr>`;
+    }
+  });
+  html+=`</tbody><tfoot><tr style="font-weight:700;border-top:2px solid var(--b)"><td style="padding:8px" colspan="2">Total (${_ecVista.length} proveedores)</td><td style="padding:8px;text-align:right">${_ecM(tot.f)}</td><td style="padding:8px;text-align:right">${tot.n?"− "+_ecM(tot.n):"—"}</td><td style="padding:8px;text-align:right">${_ecM(tot.p)}</td><td style="padding:8px;text-align:right">${_ecM(tot.r)}</td><td style="padding:8px;text-align:right">${_ecM(tot.s)}</td><td></td></tr></tfoot></table>`;
+  document.getElementById("ec-lista").innerHTML=_ecVista.length?html:`<div class="empty"><div class="ei">📒</div>Sin movimientos en este ejercicio.</div>`;
+  _ecControlLibros(soc,desde,hasta);
+}
+function toggleECDetalle(i){const e=_ecVista[i];if(!e)return;if(_ecAbiertos.has(e.key))_ecAbiertos.delete(e.key);else _ecAbiertos.add(e.key);renderEstadoCuenta();}
+
+// Control contra los libros: el saldo de Proveedores (2.1.01.001) debe coincidir con las facturas ya revisadas (las "pendientes" todavía no generaron asiento)
+async function _ecControlLibros(soc,desde,hasta){
+  const el=document.getElementById("ec-ctrl");
+  if(!el)return;
+  el.innerHTML="";
+  try{
+    const todos=_ecCalcular(soc,desde,hasta);
+    const facturas=todos.reduce((s,e)=>s+e.saldo,0),pend=todos.reduce((s,e)=>s+e.pendRevision,0);
+    const as=await _sbAll(`asientos_contables?sociedad=eq.${soc}&fecha=gte.${desde}&fecha=lte.${hasta}&anulado=eq.false&select=id,asientos_movimientos(debe,haber,plan_cuentas(codigo))`);
+    let libros=0;
+    as.forEach(a=>(a.asientos_movimientos||[]).forEach(m=>{if(m.plan_cuentas?.codigo==="2.1.01.001")libros+=(parseFloat(m.haber)||0)-(parseFloat(m.debe)||0);}));
+    const esperado=facturas-pend,dif=Math.round((libros-esperado)*100)/100,ok=Math.abs(dif)<1;
+    el.innerHTML=`<div style="font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:10px;background:${ok?"rgba(16,185,129,.10)":"rgba(245,158,11,.12)"};border:1px solid ${ok?"rgba(16,185,129,.3)":"rgba(245,158,11,.35)"};color:var(--tx2)">${ok?"✓":"⚠️"} <b>Control contra los libros</b> (cuenta Proveedores 2.1.01.001 del ejercicio): libros ${_ecM(libros)} · facturas revisadas ${_ecM(esperado)}${pend?` (más ${_ecM(pend)} de facturas pendientes de revisión, que todavía no tienen asiento)`:""}${ok?" · coinciden.":` · <b>diferencia ${_ecM(dif)}</b>: revisá si hay pagos o facturas sin asiento (🔄 Generar históricos en Impuestos → Libro Diario).`}</div>`;
+  }catch(e){}
+}
+
+async function exportarEstadoCuenta(){
+  const {soc,nombre}=_ecParams();
+  if(!_ecVista.length){toast("No hay datos para exportar","err");return;}
+  await _loadXLSX();
+  const res=[["Proveedor","CUIT","Facturado","Notas de crédito","Pagado (incluye retenciones)","Retenciones","Saldo"],...(_ecVista.map(e=>[e.nombre,e.cuit,e.facturado,e.nc,e.pagado,e.ret,e.saldo]))];
+  res.push(["TOTAL","",_ecVista.reduce((s,e)=>s+e.facturado,0),_ecVista.reduce((s,e)=>s+e.nc,0),_ecVista.reduce((s,e)=>s+e.pagado,0),_ecVista.reduce((s,e)=>s+e.ret,0),_ecVista.reduce((s,e)=>s+e.saldo,0)]);
+  const det=[["Proveedor","CUIT","Fecha","Tipo","Número","Importe","Estado","Fecha de pago","Medio de pago","Retención"]];
+  _ecVista.forEach(e=>e.movs.forEach(m=>det.push([e.nombre,e.cuit,m.fecha,m.tipo,m.numero,m.importe,m.pagada?"pagada":m.estado,m.fecha_pago,m.medio,m.ret||""])));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(res),"Resumen");
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(det),"Detalle");
+  XLSX.writeFile(wb,`estado_cuenta_proveedores_${soc}_${nombre.replace("/","-")}.xlsx`);
+}
+
+async function registrarRespuestaCirc(id){
+  const c=_ecCircs.find(x=>x.id===id);if(!c)return;
+  const r=prompt(`Respuesta de ${c.proveedor} (saldo informado ${_ecM(c.saldo)}):\n1 = Conforme\n2 = Con diferencia\n3 = Vuelve a pendiente`,c.respuesta==="conforme"?"1":c.respuesta==="diferencia"?"2":"3");
+  if(!r)return;
+  const respuesta={"1":"conforme","2":"diferencia","3":"pendiente"}[r.trim()];
+  if(!respuesta)return;
+  const patch={respuesta,respondido_en:respuesta==="pendiente"?null:new Date().toISOString()};
+  if(respuesta==="diferencia"){
+    const m=prompt("¿Qué saldo dice el proveedor? (opcional, solo números)",c.saldo_proveedor??"");
+    if(m!==null&&m.trim()!=="")patch.saldo_proveedor=parseFloat(String(m).replace(/\./g,"").replace(",","."))||null;
+    const o=prompt("Observaciones (opcional)",c.observaciones||"");
+    if(o!==null)patch.observaciones=o.trim()||null;
+  }
+  try{await sb(`circularizaciones?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(patch)});Object.assign(c,patch);toast("Respuesta registrada","ok");if(_ecVista.length)renderEstadoCuenta();}
+  catch(e){toast("Error: "+e.message,"err");}
+}
+
+// ── Circularización de saldos (automatización D del diagnóstico Auren) ──
+async function abrirCircularizacion(socPre){
+  const el=document.getElementById("circ-lista");
+  document.getElementById("circ-ej").innerHTML=_ecEjercicios().map(e=>`<option value="${e.v}">${e.label}</option>`).join("");
+  if(socPre)document.getElementById("circ-soc").value=socPre;
+  el.innerHTML=`<div style="padding:30px;text-align:center;color:var(--tx3)">Cargando…</div>`;
   openModal("modal-circularizacion");
+  try{await _ecCargarBase();}catch(e){el.innerHTML=`<div class="empty">Error: ${esc(e.message)}</div>`;return;}
+  circReconstruir();
+}
+function circReconstruir(){
+  const soc=document.getElementById("circ-soc").value;
+  const ej=_ecEjercicios().find(e=>e.v===document.getElementById("circ-ej").value)||_ecEjercicios()[0];
+  const hoy=today(),corte=hoy<ej.hasta?hoy:ej.hasta;
+  _circDestinatarios=_ecCalcular(soc,ej.desde,ej.hasta)
+    .filter(e=>e.saldo>0.5&&!_ecPropios.has(e.cuit))
+    .sort((a,b)=>b.saldo-a.saldo)
+    .map(e=>({provId:e.provId,proveedor:e.nombre,cuit:e.cuit,sociedad:soc,saldo:e.saldo,email:e.email||"",sel:!!e.email,ejercicio:ej.nombre,corte,
+      resumen:{facturado:e.facturado,notas_credito:e.nc,pagado:e.pagado,retenciones:e.ret},
+      detalle:e.movs.filter(m=>!m.pagada).map(m=>({fecha:m.fecha,tipo:m.tipo,numero:m.numero,importe:m.importe})),
+      previa:_ecUltimaCirc(e,soc,ej.nombre)}));
+  renderCircularizacion();
 }
 function renderCircularizacion(){
   const el=document.getElementById("circ-lista");
-  if(!_circDestinatarios.length){el.innerHTML=`<p style="color:var(--tx3);font-size:13px;padding:20px 0;text-align:center">No hay saldos pendientes con proveedores.</p>`;return;}
+  if(!_circDestinatarios.length){el.innerHTML=`<p style="color:var(--tx3);font-size:13px;padding:20px 0;text-align:center">No hay saldos pendientes con proveedores en este ejercicio.</p>`;return;}
+  const total=_circDestinatarios.reduce((s,d)=>s+d.saldo,0);
   el.innerHTML=_circDestinatarios.map((d,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--b)">
-    <input type="checkbox" ${d.sel?"checked":""} ${!d.email?"disabled":""} onchange="_circDestinatarios[${i}].sel=this.checked">
+    <input type="checkbox" id="circ-sel-${i}" ${d.sel?"checked":""} ${!d.email?"disabled":""} onchange="_circDestinatarios[${i}].sel=this.checked">
     <div style="flex:1;min-width:0">
-      <div style="font-size:13px;color:var(--tx)">${esc(d.proveedor)}${d.sociedad?` <span style="color:var(--tx3);font-size:10px">· ${esc(d.sociedad)}</span>`:""}</div>
-      <div style="font-size:11px;color:${d.email?"var(--tx3)":"var(--am)"}">${d.email?esc(d.email):"⚠️ Sin email cargado en Proveedores"}</div>
+      <div style="font-size:13px;color:var(--tx)">${esc(d.proveedor)} <span style="color:var(--tx3);font-size:10px">· CUIT ${esc(d.cuit)} · ${d.detalle.length} comprobante${d.detalle.length!==1?"s":""}</span>${d.previa?` <span style="font-size:10px;color:var(--am)">✉️ ya enviada ${_ecFecha(d.previa.enviado_en)} (${d.previa.respuesta})</span>`:""}</div>
+      <input class="fi" type="email" value="${esc(d.email)}" placeholder="email del proveedor (se guarda en Proveedores)" onchange="circEmail(${i},this.value)" style="margin-top:4px;font-size:11px;padding:4px 8px;max-width:340px">
     </div>
-    <div style="font-size:13px;font-weight:700;color:var(--tx)">$${Math.round(d.saldo).toLocaleString("es-AR")}</div>
-  </div>`).join("");
+    <div style="font-size:13px;font-weight:700;color:var(--tx);white-space:nowrap">${_ecM(d.saldo)}</div>
+  </div>`).join("")+`<div style="padding:10px;text-align:right;font-size:12px;color:var(--tx3)">${_circDestinatarios.length} proveedores · saldo total ${_ecM(total)}</div>`;
+}
+async function circEmail(i,valor){
+  const d=_circDestinatarios[i],v=String(valor||"").trim();
+  d.email=v;
+  const valido=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  d.sel=valido;
+  if(valido&&d.provId){
+    try{await sb(`proveedores?id=eq.${d.provId}`,{method:"PATCH",body:JSON.stringify({email:v})});const p=proveedores.find(x=>x.id===d.provId);if(p)p.email=v;}catch(e){toast("No se pudo guardar el email: "+e.message,"err");}
+  }
+  renderCircularizacion();
 }
 async function enviarCircularizacion(){
   const sel=_circDestinatarios.filter(d=>d.sel&&d.email);
   if(!sel.length){toast("Seleccioná al menos un proveedor con email","err");return;}
+  if(!confirm(`Se enviará el pedido de confirmación de saldo a ${sel.length} proveedor${sel.length!==1?"es":""}. ¿Continuar?`))return;
   const btn=document.getElementById("circ-enviar-btn");btn.disabled=true;btn.textContent="Enviando...";
   try{
     const res=await fetch(`${SB}/functions/v1/enviar-circularizacion`,{
       method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
-      body:JSON.stringify({destinatarios:sel.map(d=>({email:d.email,proveedor:d.proveedor,saldo:d.saldo,sociedad:d.sociedad}))})
+      body:JSON.stringify({destinatarios:sel.map(d=>({email:d.email,proveedor:d.proveedor,cuit:d.cuit,saldo:d.saldo,sociedad:d.sociedad,ejercicio:d.ejercicio,corte:d.corte,resumen:d.resumen,detalle:d.detalle}))})
     });
     const json=await res.json();
     if(!res.ok)throw new Error(json.error||"Error desconocido");
+    const enviadosA=new Set(json.enviados_a||sel.map(d=>d.email));
+    const filas=sel.filter(d=>enviadosA.has(d.email)).map(d=>({proveedor_id:d.provId,proveedor:d.proveedor,cuit:d.cuit,sociedad:d.sociedad,ejercicio:d.ejercicio,email:d.email,saldo:d.saldo,enviado_por:loggedUser?.nombre||null}));
+    if(filas.length){try{const cr=await sb("circularizaciones",{method:"POST",body:JSON.stringify(filas)});_ecCircs.unshift(...(cr||[]));}catch(e){toast("Se enviaron, pero no se pudo registrar el seguimiento (¿corriste el SQL?): "+e.message,"inf");}}
     toast(`✉️ Circularización enviada a ${json.enviados} proveedor${json.enviados!==1?"es":""}${json.errores?.length?` · ${json.errores.length} con error`:""}`,"ok");
     closeModal("modal-circularizacion");
   }catch(e){toast("Error: "+e.message,"err");}
