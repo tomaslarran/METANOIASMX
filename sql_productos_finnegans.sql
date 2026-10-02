@@ -32,26 +32,26 @@ INSERT INTO productos_finnegans (codigo, nombre, stockeable, uso, iva, activo) V
   ('Pasajes y viajes al 21', 'Pasajes y viajes', false, 'compra', '21', true),
   ('Percepción tish', 'Percepción tish', false, 'interno', NULL, true),
   ('Prestación de servicio de catering y uso de espacio destinado a', 'Prestación de servicio de catering y uso de espacio destinado a', false, 'compra', '21', true),
-  ('Reparación automotor', 'Reparación automotor', false, 'compra', NULL, true),
+  ('Reparación automotor', 'Reparación automotor', false, 'compra', '21', true),
   ('SI', 'SALDOS INICIALES', false, 'venta', NULL, true),
   ('SI105', 'SALDOS INICIALES 10.5%', false, 'venta', NULL, true),
   ('SI21', 'SALDOS INICIALES 21%', false, 'venta', NULL, true),
   ('SEGURIDAD Y VIGILANCIA', 'SEGURIDAD Y VIGILANCIA', false, 'compra', NULL, true),
-  ('SEGUROS', 'SEGUROS', false, 'compra', NULL, true),
+  ('SEGUROS', 'SEGUROS', false, 'compra', '21', true),
   ('SISTEMA CONTABLE HOSTING', 'SISTEMA CONTABLE HOSTING', false, 'compra', NULL, true),
-  ('Servicio de aislación', 'Servicio de aislación', false, 'compra', NULL, true),
-  ('Servicio de consultoria en direccion y gestion empresarial', 'Servicio de consultoria en direccion y gestion empresarial', false, 'compra', NULL, true),
+  ('Servicio de aislación', 'Servicio de aislación', false, 'compra', '21', true),
+  ('Servicio de consultoria en direccion y gestion empresarial', 'Servicio de consultoria en direccion y gestion empresarial', false, 'compra', '21', true),
   ('TESTDELETE', 'TESTDELETE', false, 'interno', NULL, false),
   ('VARIOS MATERIALES CONSTRUCCION 10.5%', 'VARIOS MATERIALES CONSTRUCCION 10.5%', false, 'compra', '10.5', true),
   ('varios almacen 21%', 'Varios almacen 21%', false, 'compra', '21', true),
   ('Varios construcción', 'Varios construcción', false, 'compra', NULL, true),
   ('Varios materiales construccióin 21%', 'Varios materiales construcción 21%', false, 'compra', '21', true),
-  ('Varios representacion/marketing', 'Varios representacion/marketing', false, 'compra', NULL, true),
+  ('Varios representacion/marketing', 'Varios representacion/marketing', false, 'compra', 'exento', true),
   ('honorarios profesionales', 'honorarios profesionales', false, 'compra', 'exento', true),
   ('iibb salta', 'iibb salta', false, 'interno', NULL, true),
   ('impuestos internos o no gravado', 'impuestos internos o no gravado', false, 'compra', 'nograv', true),
   ('logistica excenta', 'logistica excenta', false, 'compra', 'exento', true),
-  ('mantenimiento de cuenta', 'mantenimiento de cuenta', false, 'compra', NULL, true),
+  ('mantenimiento de cuenta', 'mantenimiento de cuenta', false, 'compra', '21', true),
   ('peajes', 'peajes', false, 'compra', NULL, true),
   ('percepcion iva 1.5%', 'percepcion iva 1.5%', false, 'interno', NULL, true),
   ('percepcion iva 3%', 'percepcion iva 3%', false, 'interno', NULL, true),
@@ -70,3 +70,5 @@ ON CONFLICT (codigo) DO UPDATE SET nombre = EXCLUDED.nombre, stockeable = EXCLUD
 UPDATE productos_finnegans SET iva = 'exento' WHERE codigo = 'honorarios profesionales';
 UPDATE productos_finnegans SET iva = '21' WHERE codigo = 'Asesoramiento profesional';
 UPDATE productos_finnegans SET iva = '21' WHERE codigo IN ('Asesoramiento financiero','ELEMENTOS DE SIMULACIÓN','Logistica y fletes','Prestación de servicio de catering y uso de espacio destinado a');
+UPDATE productos_finnegans SET iva = '21' WHERE codigo IN ('Reparación automotor','SEGUROS','Servicio de aislación','Servicio de consultoria en direccion y gestion empresarial','mantenimiento de cuenta');
+UPDATE productos_finnegans SET iva = 'exento' WHERE codigo = 'Varios representacion/marketing';
