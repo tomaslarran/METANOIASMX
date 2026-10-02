@@ -74,3 +74,7 @@ UPDATE productos_finnegans SET iva = '21' WHERE codigo IN ('Reparación automoto
 UPDATE productos_finnegans SET iva = 'exento' WHERE codigo = 'Varios representacion/marketing';
 UPDATE productos_finnegans SET iva = '21' WHERE codigo = 'peajes';
 UPDATE productos_finnegans SET iva = 'exento' WHERE codigo = 'prestamos';
+
+-- Productos que el formulario ya tenía fijos: se carga la tasa del select donde están hoy ("Varios construcción" se usa en 21% y 10,5%: queda sin tasa).
+UPDATE productos_finnegans SET iva = '21' WHERE codigo IN ('LOGISTICA','ASESORAMIENTO','COMBUSTIBLES','SEGURIDAD Y VIGILANCIA','SISTEMA CONTABLE HOSTING','varios electrodomesticos','varios representacion');
+UPDATE productos_finnegans SET iva = '10.5' WHERE codigo IN ('Obra Social','Pasajes y viajes');
