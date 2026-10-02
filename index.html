@@ -13655,14 +13655,123 @@ async function _concCruzarPanel(sociedad,extractos){
   return pares;
 }
 
+// Número de factura "0002-00196027" dentro de la referencia o el concepto (para reconocer el mismo pago cargado por distintos caminos)
+const _concTokenFactura=m=>{
+  const mm=String(m.referencia||"").match(/(\d{4,5})-(\d{6,8})/)||String(m.concepto||"").match(/(\d{4,5})-(\d{6,8})/);
+  return mm?`${parseInt(mm[1])}-${parseInt(mm[2])}`:null;
+};
+const _concNorm=s=>String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9 ]+/g," ").replace(/\s+/g," ").trim();
+
+// Un mismo pago puede quedar anotado varias veces en el panel (orden de pago + Cash Flow + pago directo).
+// Se deja uno y los demás quedan marcados como duplicado (no se borra nada, solo se ocultan de la conciliación).
+async function _concUnificarDuplicados(sociedad){
+  const panel=await sb(`banco_movimientos?sociedad=eq.${sociedad}&extracto_id=is.null&saldo=is.null&select=*&order=created_at`).catch(()=>[]);
+  const vivos=panel.filter(m=>m.match_tipo!=="duplicado");
+  const marcar=async(m,principal)=>{
+    await sb(`banco_movimientos?id=eq.${m.id}`,{method:"PATCH",body:JSON.stringify({conciliado:true,match_tipo:"duplicado",match_id:principal.id,match_descripcion:`Duplicado de: ${principal.concepto}`})});
+    m.match_tipo="duplicado";m.conciliado=true;
+  };
+  let n=0;
+  // 1) mismo número de factura y mismo importe
+  const grupos={};
+  vivos.forEach(m=>{const t=_concTokenFactura(m);if(!t)return;(grupos[`${t}|${Math.round((parseFloat(m.importe)||0)*100)}`]=grupos[`${t}|${Math.round((parseFloat(m.importe)||0)*100)}`]||[]).push(m);});
+  for(const g of Object.values(grupos)){
+    if(g.length<2)continue;
+    const principal=g.find(m=>m.match_tipo==="extracto")||g.find(m=>m.conciliado)||g[0];
+    for(const m of g){if(m.id===principal.id||m.conciliado)continue;await marcar(m,principal);n++;}
+  }
+  // 2) renglón sin número de factura cuyo concepto está contenido en otro del mismo día e importe (ej. "FINNEGANS" y "Fact. A N°… — Finnegans S.A.")
+  for(const m of vivos){
+    if(m.conciliado||m.match_tipo==="duplicado"||_concTokenFactura(m))continue;
+    const nm=_concNorm(m.concepto);if(nm.length<5)continue;
+    const otro=vivos.find(o=>o.id!==m.id&&o.match_tipo!=="duplicado"&&o.fecha===m.fecha&&Math.abs((parseFloat(o.importe)||0)-(parseFloat(m.importe)||0))<0.01&&_concNorm(o.concepto).includes(nm));
+    if(otro){await marcar(m,otro);n++;}
+  }
+  return n;
+}
+
+// Movimientos del banco que corresponden a algo que el panel ya tiene registrado en otro módulo:
+// cuotas de préstamos y planes de pago (AFIP, Rentas), órdenes de pago, facturas pagadas e inversiones.
+async function _concCruzarModulos(sociedad,extractos){
+  const r={cuotas:0,pagos:0,inversiones:0};
+  const prest=await sb(`cf_prestamos?sociedad=eq.${sociedad}&select=id,nombre`).catch(()=>[]);
+  const invs=await sb(`cf_inversiones?sociedad=eq.${sociedad}&select=id,nombre,capital,fecha_inicio`).catch(()=>[]);
+  const [cuotas,ops,comps,movInv,yaUsados]=await Promise.all([
+    prest.length?sb(`cf_prestamos_cuotas?prestamo_id=in.(${prest.map(p=>p.id).join(",")})&pagada=eq.true&select=id,prestamo_id,nro_cuota,fecha,fecha_pago,monto_total`).catch(()=>[]):[],
+    sb(`ordenes_pago?sociedad=eq.${sociedad}&select=id,numero,proveedor,neto_a_pagar,fecha_pago,medio_pago`).catch(()=>[]),
+    sb(`comprobantes_compra?sociedad=eq.${sociedad}&estado=eq.pagado&select=id,proveedor,numero,total,fecha_pago,medio_pago`).catch(()=>[]),
+    invs.length?sb(`cf_inversiones_movimientos?inversion_id=in.(${invs.map(i=>i.id).join(",")})&select=id,inversion_id,tipo,fecha,monto`).catch(()=>[]):[],
+    sb(`banco_movimientos?sociedad=eq.${sociedad}&match_tipo=in.(cuota_prestamo,orden_pago,comprobante,inversion)&select=match_tipo,match_id`).catch(()=>[]),
+  ]);
+  const usado=new Set(yaUsados.map(u=>`${u.match_tipo}:${u.match_id}`));
+  const dias=(a,b)=>Math.abs((Date.parse(a)-Date.parse(b))/86400000);
+  const nomInv=id=>invs.find(i=>i.id===id)?.nombre||"Inversión";
+  // candidatos de inversiones: suscripción inicial (capital en fecha_inicio) y aportes (salen del banco); rescates (entran al banco)
+  const invSalidas=[...invs.map(i=>({id:i.id,monto:parseFloat(i.capital)||0,fecha:i.fecha_inicio,desc:`Suscripción — ${i.nombre}`})),
+    ...movInv.filter(m=>/aporte/i.test(m.tipo||"")).map(m=>({id:m.id,monto:parseFloat(m.monto)||0,fecha:m.fecha,desc:`Aporte — ${nomInv(m.inversion_id)}`}))];
+  const invEntradas=movInv.filter(m=>/rescate/i.test(m.tipo||"")).map(m=>({id:m.id,monto:parseFloat(m.monto)||0,fecha:m.fecha,desc:`Rescate — ${nomInv(m.inversion_id)}`}));
+  const mejor=(lista,monto,fFecha,tipo,tol,fAmt=x=>x.monto)=>{
+    let best=null,bd=1e9;
+    for(const x of lista){
+      if(usado.has(`${tipo}:${x.id}`))continue;
+      const f=fFecha(x);if(!f)continue;
+      if(Math.abs(fAmt(x)-monto)>tol)continue;
+      const d=dias(f,fFecha.ref);if(d>6)continue;
+      if(d<bd){bd=d;best=x;}
+    }
+    return best;
+  };
+  for(const e of extractos){
+    const banco=(await sb(`banco_movimientos?extracto_id=eq.${e.id}&conciliado=eq.false&select=*`).catch(()=>[]))
+      .filter(x=>!EXT_CATS[x.categoria]?.banco&&!["tarjeta","transf_propia","sueldos"].includes(x.categoria));
+    for(const b of banco){
+      const imp=parseFloat(b.importe)||0,monto=Math.abs(imp);
+      const fecha=b.fecha;
+      const fF=g=>{const f=x=>g(x);f.ref=fecha;return f;};
+      let hallado=null;
+      for(const tol of [0.01,1]){
+        if(imp<0){
+          const c=mejor(cuotas,monto,fF(x=>x.fecha_pago||x.fecha),"cuota_prestamo",tol,x=>parseFloat(x.monto_total)||0);
+          if(c){hallado={tipo:"cuota_prestamo",id:c.id,desc:`Cuota ${c.nro_cuota??""} — ${prest.find(p=>p.id===c.prestamo_id)?.nombre||"Préstamo"}`.replace("Cuota  —","Cuota —"),k:"cuotas"};break;}
+          const o=mejor(ops,monto,fF(x=>x.fecha_pago),"orden_pago",tol,x=>parseFloat(x.neto_a_pagar)||0);
+          if(o){hallado={tipo:"orden_pago",id:o.id,desc:`Orden de pago ${o.numero||""} — ${o.proveedor||""}`,k:"pagos"};break;}
+          const f=mejor(comps.filter(x=>!/tarjeta|visa|socio/i.test(x.medio_pago||"")),monto,fF(x=>x.fecha_pago),"comprobante",tol,x=>parseFloat(x.total)||0);
+          if(f){hallado={tipo:"comprobante",id:f.id,desc:`Factura ${f.numero||""} — ${f.proveedor||""}`,k:"pagos"};break;}
+          const s=mejor(invSalidas,monto,fF(x=>x.fecha),"inversion",tol);
+          if(s){hallado={tipo:"inversion",id:s.id,desc:s.desc,k:"inversiones"};break;}
+        }else{
+          const s=mejor(invEntradas,monto,fF(x=>x.fecha),"inversion",tol);
+          if(s){hallado={tipo:"inversion",id:s.id,desc:s.desc,k:"inversiones"};break;}
+        }
+      }
+      if(hallado){
+        usado.add(`${hallado.tipo}:${hallado.id}`);
+        await sb(`banco_movimientos?id=eq.${b.id}`,{method:"PATCH",body:JSON.stringify({conciliado:true,match_tipo:hallado.tipo,match_id:hallado.id,match_descripcion:hallado.desc})});
+        r[hallado.k]++;
+      }
+    }
+  }
+  return r;
+}
+
+// Cruce completo: duplicados del panel, panel contra banco, y banco contra los demás módulos.
+async function _concCruzarTodo(sociedad,extractos){
+  const dup=await _concUnificarDuplicados(sociedad).catch(()=>0);
+  const panel=await _concCruzarPanel(sociedad,extractos).catch(()=>0);
+  const mod=await _concCruzarModulos(sociedad,extractos).catch(()=>({cuotas:0,pagos:0,inversiones:0}));
+  return{dup,panel,cuotas:mod.cuotas,pagos:mod.pagos,inversiones:mod.inversiones};
+}
+const _concResumenCruce=r=>[r.panel&&`${r.panel} del panel`,r.cuotas&&`${r.cuotas} cuota${r.cuotas>1?"s":""} de préstamos/planes`,r.pagos&&`${r.pagos} pago${r.pagos>1?"s":""} de facturas`,r.inversiones&&`${r.inversiones} de inversiones`,r.dup&&`${r.dup} duplicado${r.dup>1?"s":""} unificado${r.dup>1?"s":""}`].filter(Boolean).join(" · ");
+
 async function concCruzarPanelUI(){
   const btn=document.getElementById("btn-conc-cruzar");
   if(btn){btn.disabled=true;btn.textContent="⏳ Cruzando...";}
   try{
     const exts=await sb(`extractos_bancarios?sociedad=eq.${concSociedad}&select=id,periodo_desde,periodo_hasta`).catch(()=>[]);
     if(!exts.length){toast("No hay extractos importados de "+concSociedad+": importá uno primero","inf");return;}
-    const n=await _concCruzarPanel(concSociedad,exts);
-    toast(n?`🔗 ${n} movimientos del panel cruzados con el banco`:"No encontré cruces nuevos","ok");
+    const r=await _concCruzarTodo(concSociedad,exts);
+    const t=_concResumenCruce(r);
+    toast(t?`🔗 Cruzados: ${t}`:"No encontré cruces nuevos","ok");
     renderConciliacion();
   }catch(e){toast("Error: "+e.message,"err");}
   finally{if(btn){btn.disabled=false;btn.textContent="🔗 Cruzar con el banco";}}
@@ -13673,7 +13782,8 @@ async function renderConciliacion() {
   _concExtractos = await sb(`extractos_bancarios?sociedad=eq.${concSociedad}&select=id,periodo_desde,periodo_hasta`).catch(() => []);
   const cubierto = f => _concExtractos.some(e => f >= e.periodo_desde && f <= e.periodo_hasta);
   // el lado "panel" ya cruzado se muestra junto al movimiento del banco, no por separado
-  const movs = bancMovimientos.filter(m => m.match_tipo !== "extracto");
+  const movs = bancMovimientos.filter(m => m.match_tipo !== "extracto" && m.match_tipo !== "duplicado");
+  const nDup = bancMovimientos.filter(m => m.match_tipo === "duplicado").length;
   const estadoDe = m => {
     if (m.extracto_id) return m.conciliado ? "ok" : "falta_panel";
     if (m.saldo == null) return m.conciliado ? "ok" : (cubierto(m.fecha) ? "falta_banco" : "sin_extracto");
@@ -13712,6 +13822,7 @@ async function renderConciliacion() {
     <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:10px;font-size:12px">
       ${chip(`⚠ ${nFB} del panel sin match en el banco`, "var(--re)")}
       ${chip(`⚠ ${nFP} del banco sin cargar en el panel`, "var(--am)")}
+      ${nDup ? chip(`${nDup} duplicado${nDup > 1 ? "s" : ""} del panel unificado${nDup > 1 ? "s" : ""} (ocultos)`, "var(--tx3)") : ""}
       <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" ${_concSoloDif ? "checked" : ""} onchange="concToggleSoloDif(this.checked)"> Solo diferencias</label>
       ${_concExtractos.length ? "" : `<span style="color:var(--tx3)">No hay extractos importados de esta sociedad: el cruce con el banco aparece al importar uno.</span>`}
     </div>
@@ -14351,8 +14462,8 @@ async function confirmarExtracto(){
       await sb(`banco_movimientos?extracto_id=eq.${ext.id}&categoria=in.(${cats.join(",")})`,{method:"PATCH",body:JSON.stringify({asiento_id:asientoId})});
     }
     closeModal("modal-extracto");
-    const cruces=await _concCruzarPanel(sociedad,[{id:ext.id,periodo_desde:parsed.periodo.desde,periodo_hasta:parsed.periodo.hasta}]).catch(()=>0);
-    toast(`✅ Extracto importado: ${ars.length} movimientos${asientoId?` · asiento por ${_extM(asiento.total)}`:""}${cruces?` · ${cruces} cruzados con el panel`:""}`,"ok");
+    const cruces=_concResumenCruce(await _concCruzarTodo(sociedad,[{id:ext.id,periodo_desde:parsed.periodo.desde,periodo_hasta:parsed.periodo.hasta}]).catch(()=>({})));
+    toast(`✅ Extracto importado: ${ars.length} movimientos${asientoId?` · asiento por ${_extM(asiento.total)}`:""}${cruces?` · cruzados: ${cruces}`:""}`,"ok");
     const mesEl=document.getElementById("conc-mes");
     if(mesEl)mesEl.value=parsed.periodo.hasta.slice(0,7);
     concSociedad=sociedad;
