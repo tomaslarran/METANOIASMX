@@ -1459,6 +1459,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         🏁 Realizados
       </button>
 <button class="btn" onclick="openPlantillaModal()" style="white-space:nowrap">📋 Plantillas</button>
+      <button class="btn" onclick="abrirReporteNPS()" style="white-space:nowrap" title="Reporte exportable de las encuestas NPS">⭐ Reporte NPS</button>
       <button class="btn pri" onclick="openCrearCursoIA()" style="gap:6px;white-space:nowrap">✨ <span class="hide-xs">Crear curso con </span>IA</button>
     </div>
   </div>
@@ -4628,6 +4629,20 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 </div>
 
+<!-- MODAL REPORTE NPS -->
+<div class="mov" id="modal-nps-reporte" onclick="if(event.target===this&&_movDown===this)closeModal('modal-nps-reporte')">
+<div class="modal" style="max-width:640px">
+  <div class="mt">⭐ Reporte de encuestas NPS <button class="mt-close" onclick="closeModal('modal-nps-reporte')">✕</button></div>
+  <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:12px">
+    <div class="fg" style="grid-column:1/-1"><label class="fl">Curso</label><select class="fs" id="nps-rep-curso" onchange="npsRepActualizar()"></select></div>
+    <div class="fg"><label class="fl">Desde</label><input class="fi" type="date" id="nps-rep-desde" onchange="npsRepActualizar()"></div>
+    <div class="fg"><label class="fl">Hasta</label><input class="fi" type="date" id="nps-rep-hasta" onchange="npsRepActualizar()"></div>
+  </div>
+  <div id="nps-rep-preview"></div>
+  <div class="ma" style="flex-wrap:wrap"><button class="bc" onclick="closeModal('modal-nps-reporte')">Cerrar</button><button class="btn sec" onclick="imprimirReporteNPS()">🖨 Imprimir / PDF</button><button class="bk" onclick="exportarReporteNPS()">📥 Exportar a Excel</button></div>
+</div>
+</div>
+
 <!-- MODAL CERTIFICADO MiPyME -->
 <div class="mov" id="modal-mipyme" onclick="if(event.target===this&&_movDown===this)closeModal('modal-mipyme')">
 <div class="modal" style="max-width:480px">
@@ -7448,6 +7463,152 @@ async function removeInscripcion(id,cursoId){
   }catch(e){toast("Error","err")}
 }
 
+// ══ REPORTE EXPORTABLE DE NPS ══
+const _NPS_ORDEN_ESTADO={respondido:5,pidiendo_nota:4,esperando_comentario:3,enviado:2,fallido:1};
+const _npsCat=s=>s>=9?"Promotor":s>=7?"Pasivo":"Detractor";
+const _npsFecha=iso=>iso?new Date(iso).toLocaleDateString("es-AR"):"";
+let _npsRep=null;
+
+function abrirReporteNPS(cursoId){
+  const sel=document.getElementById("nps-rep-curso");
+  const lista=(typeof cursos!=="undefined"?cursos:[]).slice().sort((a,b)=>(b.fecha_inicio||"").localeCompare(a.fecha_inicio||""));
+  sel.innerHTML=`<option value="">Todos los cursos</option>`+lista.map(c=>`<option value="${c.id}">${esc(c.nombre||"Sin nombre")}</option>`).join("");
+  sel.value=cursoId||"";
+  document.getElementById("nps-rep-desde").value="";
+  document.getElementById("nps-rep-hasta").value="";
+  openModal("modal-nps-reporte");
+  npsRepActualizar();
+}
+
+async function _npsRepDatos(){
+  const cursoId=document.getElementById("nps-rep-curso").value;
+  const desde=document.getElementById("nps-rep-desde").value;
+  const hasta=document.getElementById("nps-rep-hasta").value;
+  let fr="",fe="";
+  if(cursoId){fr+=`&curso_id=eq.${cursoId}`;fe+=`&curso_id=eq.${cursoId}`;}
+  if(desde){fr+=`&created_at=gte.${desde}T00:00:00`;fe+=`&created_at=gte.${desde}T00:00:00`;}
+  if(hasta){fr+=`&created_at=lte.${hasta}T23:59:59`;fe+=`&created_at=lte.${hasta}T23:59:59`;}
+  const [resp,envAll,cs,respKeys]=await Promise.all([
+    _sbAll(`nps_respuestas?select=*&order=created_at.desc${fr}`),
+    _sbAll(`nps_envios?select=*&order=created_at.desc${fe}`),
+    sb("cursos?select=id,nombre,fecha_inicio,fecha_fin,linea_negocio,estado"),
+    _sbAll(`nps_respuestas?select=curso_id,alumno_id${cursoId?`&curso_id=eq.${cursoId}`:""}`),
+  ]);
+  const cMap=Object.fromEntries(cs.map(c=>[c.id,c]));
+  // un envío por alumno y curso (los reenvíos quedan con su mejor estado)
+  const por={};
+  envAll.forEach(e=>{
+    const k=`${e.curso_id}|${e.alumno_id||e.telefono}`;
+    if(!por[k]||(_NPS_ORDEN_ESTADO[e.estado]||0)>(_NPS_ORDEN_ESTADO[por[k].estado]||0))por[k]=e;
+  });
+  const envios=Object.values(por);
+  // "respondió" = hay una nota registrada para ese alumno en ese curso (no depende del estado del envío)
+  const contestaron=new Set(respKeys.filter(r=>r.alumno_id).map(r=>`${r.curso_id}|${r.alumno_id}`));
+  envios.forEach(e=>{e._resp=contestaron.has(`${e.curso_id}|${e.alumno_id}`);});
+  const stats=rs=>{
+    const n=rs.length,pr=rs.filter(r=>r.score>=9).length,pa=rs.filter(r=>r.score>=7&&r.score<=8).length,de=rs.filter(r=>r.score<=6).length;
+    return{n,pr,pa,de,nps:n?Math.round((pr/n-de/n)*100):null,prom:n?Math.round(rs.reduce((s,r)=>s+r.score,0)/n*10)/10:null};
+  };
+  const ids=[...new Set([...resp.map(r=>r.curso_id),...envios.map(e=>e.curso_id)])].filter(Boolean);
+  const porCurso=ids.map(id=>{
+    const rs=resp.filter(r=>r.curso_id===id),es=envios.filter(e=>e.curso_id===id);
+    const resp_wa=es.filter(e=>e._resp).length;
+    return{id,curso:cMap[id]?.nombre||"(curso eliminado)",linea:cMap[id]?.linea_negocio||"",inicio:cMap[id]?.fecha_inicio||"",fin:cMap[id]?.fecha_fin||"",
+      enviadas:es.length,respondidasWA:resp_wa,tasa:es.length?Math.round(resp_wa/es.length*100):null,...stats(rs)};
+  }).sort((a,b)=>(b.inicio||"").localeCompare(a.inicio||""));
+  const dist=Array.from({length:11},(_,i)=>({nota:i,cant:resp.filter(r=>r.score===i).length}));
+  const sinResp=envios.filter(e=>!e._resp);
+  return{resp,envios,sinResp,cMap,porCurso,dist,total:stats(resp),filtro:{cursoId,desde,hasta}};
+}
+
+async function npsRepActualizar(){
+  const box=document.getElementById("nps-rep-preview");
+  box.innerHTML=`<div style="padding:18px;text-align:center;color:var(--tx3);font-size:12px">Calculando...</div>`;
+  try{
+    _npsRep=await _npsRepDatos();
+    const t=_npsRep.total,e=_npsRep.envios;
+    const wa=e.filter(x=>x._resp).length;
+    const col=t.nps===null?"var(--tx3)":t.nps>=50?"var(--gr)":t.nps>=0?"var(--al)":"var(--re)";
+    const k=(l,v,c)=>`<div style="background:var(--surf2);border:1px solid var(--b);border-radius:8px;padding:8px 10px;text-align:center"><div style="font-size:18px;font-weight:800;color:${c||"var(--tx)"}">${v}</div><div style="font-size:10px;color:var(--tx3);text-transform:uppercase">${l}</div></div>`;
+    box.innerHTML=t.n?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:10px">
+        ${k("NPS",t.nps>0?"+"+t.nps:t.nps,col)}${k("Respuestas",t.n)}${k("Promotores",t.pr,"var(--gr)")}${k("Pasivos",t.pa,"var(--al)")}${k("Detractores",t.de,"var(--re)")}${k("Nota promedio",t.prom)}
+        ${k("Tasa resp. WhatsApp",e.length?Math.round(wa/e.length*100)+"%":"—")}${k("Sin responder",_npsRep.sinResp.length,_npsRep.sinResp.length?"var(--am)":"")}
+      </div>
+      <div style="font-size:11px;color:var(--tx3)">${_npsRep.porCurso.length} curso${_npsRep.porCurso.length!==1?"s":""} en el reporte · ${_npsRep.resp.filter(r=>r.comentario&&r.comentario.trim()).length} comentarios</div>`
+      :`<div style="padding:18px;text-align:center;color:var(--tx3);font-size:12px">No hay respuestas con esos filtros.</div>`;
+  }catch(err){box.innerHTML=`<div style="color:var(--re);font-size:12px">Error: ${esc(err.message)}</div>`;}
+}
+
+async function exportarReporteNPS(){
+  if(!_npsRep)await npsRepActualizar();
+  const R=_npsRep;
+  if(!R||!R.resp.length){toast("No hay respuestas para exportar","err");return;}
+  if(!window.XLSX){await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+  const t=R.total,wa=R.envios.filter(x=>x._resp).length;
+  const f=R.filtro,cNom=f.cursoId?(R.cMap[f.cursoId]?.nombre||""):"Todos los cursos";
+  const aoa=[
+    ["REPORTE NPS — METANOIA SMX"],
+    ["Curso",cNom],["Período",`${f.desde?f.desde.split("-").reverse().join("/"):"inicio"} al ${f.hasta?f.hasta.split("-").reverse().join("/"):"hoy"}`],["Generado",new Date().toLocaleString("es-AR")],[],
+    ["RESUMEN GENERAL"],
+    ["Respuestas recibidas",t.n],["Promotores (9-10)",t.pr],["Pasivos (7-8)",t.pa],["Detractores (0-6)",t.de],
+    ["% Promotores",t.n?Math.round(t.pr/t.n*1000)/10:""],["% Detractores",t.n?Math.round(t.de/t.n*1000)/10:""],
+    ["NPS (= % promotores − % detractores)",t.nps],["Nota promedio",t.prom],
+    ["Encuestas enviadas por WhatsApp",R.envios.length],["Respondidas por WhatsApp",wa],["Tasa de respuesta WhatsApp (%)",R.envios.length?Math.round(wa/R.envios.length*1000)/10:""],["Enviadas sin responder",R.sinResp.length],[],
+    ["DISTRIBUCIÓN DE NOTAS"],["Nota","Cantidad"],...R.dist.map(d=>[d.nota,d.cant]),[],
+    ["POR CURSO"],["Curso","Línea de negocio","Inicio","Fin","Enviadas WA","Respondidas WA","Tasa resp. (%)","Respuestas","Promotores","Pasivos","Detractores","NPS","Nota promedio"],
+    ...R.porCurso.map(c=>[c.curso,c.linea,c.inicio,c.fin,c.enviadas,c.respondidasWA,c.tasa??"",c.n,c.pr,c.pa,c.de,c.nps??"",c.prom??""]),
+  ];
+  const wsRes=XLSX.utils.aoa_to_sheet(aoa);wsRes["!cols"]=[{wch:42},{wch:22},{wch:12},{wch:12},{wch:12},{wch:14},{wch:13},{wch:11},{wch:11},{wch:9},{wch:11},{wch:7},{wch:13}];
+  const detalle=R.resp.map(r=>({Fecha:_npsFecha(r.created_at),Curso:R.cMap[r.curso_id]?.nombre||"",Alumno:r.alumno_nombre||"Anónimo",Nota:r.score,Categoría:_npsCat(r.score),Canal:r.canal||"",Comentario:r.comentario||""}));
+  const wsDet=XLSX.utils.json_to_sheet(detalle);wsDet["!cols"]=[{wch:11},{wch:42},{wch:30},{wch:6},{wch:11},{wch:10},{wch:80}];
+  const coment=R.resp.filter(r=>r.comentario&&r.comentario.trim()).sort((a,b)=>a.score-b.score).map(r=>({Nota:r.score,Categoría:_npsCat(r.score),Curso:R.cMap[r.curso_id]?.nombre||"",Alumno:r.alumno_nombre||"Anónimo",Fecha:_npsFecha(r.created_at),Comentario:r.comentario}));
+  const wsCom=XLSX.utils.json_to_sheet(coment.length?coment:[{Comentario:"Sin comentarios"}]);wsCom["!cols"]=[{wch:6},{wch:11},{wch:42},{wch:30},{wch:11},{wch:90}];
+  const hoy=Date.now();
+  const sin=R.sinResp.map(e=>({Curso:R.cMap[e.curso_id]?.nombre||"",Alumno:e.alumno_nombre||"",Estado:({enviado:"Enviada, sin respuesta",esperando_comentario:"Sin nota registrada",pidiendo_nota:"Comentó, falta la nota",respondido:"Figura respondida pero sin nota registrada (revisar)",fallido:"Falló el envío"})[e.estado]||e.estado,Enviada:_npsFecha(e.created_at),"Días sin responder":Math.floor((hoy-Date.parse(e.created_at))/86400000)}));
+  const wsSin=XLSX.utils.json_to_sheet(sin.length?sin:[{Curso:"Todas las encuestas enviadas fueron respondidas"}]);wsSin["!cols"]=[{wch:42},{wch:30},{wch:30},{wch:11},{wch:18}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,wsRes,"Resumen");XLSX.utils.book_append_sheet(wb,wsDet,"Respuestas");XLSX.utils.book_append_sheet(wb,wsCom,"Comentarios");XLSX.utils.book_append_sheet(wb,wsSin,"Sin responder");
+  const slug=(f.cursoId?cNom:"general").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-zA-Z0-9]+/g,"_").slice(0,40);
+  XLSX.writeFile(wb,`reporte_nps_${slug}_${today()}.xlsx`);
+  toast("📥 Reporte NPS exportado","ok");
+}
+
+async function imprimirReporteNPS(){
+  if(!_npsRep)await npsRepActualizar();
+  const R=_npsRep;
+  if(!R||!R.resp.length){toast("No hay respuestas para imprimir","err");return;}
+  const t=R.total,wa=R.envios.filter(x=>x._resp).length,f=R.filtro;
+  const cNom=f.cursoId?(R.cMap[f.cursoId]?.nombre||""):"Todos los cursos";
+  const col=s=>s>=9?"#15803d":s>=7?"#b45309":"#b91c1c";
+  const max=Math.max(1,...R.dist.map(d=>d.cant));
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>Reporte NPS</title><style>
+    body{font-family:Arial,sans-serif;font-size:11px;color:#111;margin:20px 26px} h1{font-size:18px;margin:0} .sub{color:#555;margin:2px 0 12px}
+    h3{font-size:12px;margin:16px 0 6px;border-bottom:1.5px solid #111;padding-bottom:2px} .kp{display:flex;gap:10px;flex-wrap:wrap}
+    .k{border:1px solid #ccc;border-radius:6px;padding:6px 12px;text-align:center;min-width:90px} .k b{display:block;font-size:20px} .k span{font-size:9px;text-transform:uppercase;color:#555}
+    table{width:100%;border-collapse:collapse} th{font-size:9px;text-transform:uppercase;color:#555;text-align:left;border-bottom:1px solid #999;padding:3px 4px} td{padding:3px 4px;border-bottom:1px solid #e3e3e3;vertical-align:top} .n{text-align:right}
+    .bar{display:inline-block;height:9px;background:#7B6BBF;vertical-align:middle} tr{page-break-inside:avoid} .c{font-style:italic;color:#333}
+  </style></head><body>
+    <h1>Reporte NPS — Metanoia SMX</h1>
+    <div class="sub">${esc(cNom)} · Período ${f.desde?f.desde.split("-").reverse().join("/"):"inicio"} al ${f.hasta?f.hasta.split("-").reverse().join("/"):"hoy"} · Generado ${new Date().toLocaleDateString("es-AR")}</div>
+    <div class="kp">
+      <div class="k"><b style="color:${t.nps>=50?"#15803d":t.nps>=0?"#b45309":"#b91c1c"}">${t.nps>0?"+"+t.nps:t.nps}</b><span>NPS</span></div>
+      <div class="k"><b>${t.n}</b><span>Respuestas</span></div><div class="k"><b>${t.pr}</b><span>Promotores 9-10</span></div>
+      <div class="k"><b>${t.pa}</b><span>Pasivos 7-8</span></div><div class="k"><b>${t.de}</b><span>Detractores 0-6</span></div>
+      <div class="k"><b>${t.prom}</b><span>Nota promedio</span></div>
+      <div class="k"><b>${R.envios.length?Math.round(wa/R.envios.length*100)+"%":"—"}</b><span>Tasa resp. WhatsApp</span></div>
+    </div>
+    <div style="margin-top:6px;color:#555">NPS = % promotores − % detractores.</div>
+    <h3>Distribución de notas</h3>
+    <table>${R.dist.map(d=>`<tr><td style="width:30px"><b>${d.nota}</b></td><td style="width:40px" class="n">${d.cant}</td><td><span class="bar" style="width:${Math.round(d.cant/max*280)}px;background:${col(d.nota)}"></span></td></tr>`).join("")}</table>
+    ${R.porCurso.length>1?`<h3>Por curso</h3><table><tr><th>Curso</th><th class="n">Env.</th><th class="n">Resp.</th><th class="n">Tasa</th><th class="n">Prom.</th><th class="n">Pas.</th><th class="n">Det.</th><th class="n">NPS</th></tr>
+      ${R.porCurso.map(c=>`<tr><td>${esc(c.curso)}</td><td class="n">${c.enviadas}</td><td class="n">${c.n}</td><td class="n">${c.tasa??"—"}${c.tasa!=null?"%":""}</td><td class="n">${c.pr}</td><td class="n">${c.pa}</td><td class="n">${c.de}</td><td class="n"><b>${c.nps??"—"}</b></td></tr>`).join("")}</table>`:""}
+    <h3>Comentarios (de menor a mayor nota)</h3>
+    <table>${R.resp.filter(r=>r.comentario&&r.comentario.trim()).sort((a,b)=>a.score-b.score).map(r=>`<tr><td style="width:26px"><b style="color:${col(r.score)}">${r.score}</b></td><td style="width:150px">${esc(r.alumno_nombre||"Anónimo")}<br><span style="color:#777">${esc(R.cMap[r.curso_id]?.nombre||"")}</span></td><td class="c">${esc(r.comentario)}</td></tr>`).join("")||`<tr><td>Sin comentarios</td></tr>`}</table>
+    ${R.sinResp.length?`<h3>Enviadas sin responder (${R.sinResp.length})</h3><table>${R.sinResp.map(e=>`<tr><td>${esc(e.alumno_nombre||"")}</td><td>${esc(R.cMap[e.curso_id]?.nombre||"")}</td><td>${_npsFecha(e.created_at)}</td></tr>`).join("")}</table>`:""}
+  </body></html>`;
+  _imprimirHTML(html);
+}
+
 // ══ NPS POST-CURSO ══
 function _calcNPS(respuestas){
   if(!respuestas.length)return{nps:null,promotores:0,pasivos:0,detractores:0,total:0};
@@ -7562,7 +7723,7 @@ function _renderNPSPanel(el,cursoId,respuestas,insc,envios=[]){
     <div style="font-size:10px;color:var(--tx3);margin-top:6px;font-style:italic">Requiere template Meta <code>nps_experiencia_metanoia</code> aprobado. El alumno responde con un número y el bot lo registra automáticamente; después le pregunta qué podemos mejorar.</div>
   </div>`;
 
-  el.innerHTML=`${waPanel}${summary}${listaComentarios}
+  el.innerHTML=`<div style="text-align:right;margin-bottom:10px"><button class="btn sec" style="font-size:12px;padding:5px 12px" onclick="abrirReporteNPS('${cursoId}')">📥 Reporte exportable</button></div>${waPanel}${summary}${listaComentarios}
     <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Respuestas por alumno inscripto</div>
     ${filas||`<p style="color:var(--tx3);font-size:13px;margin:0 0 8px">No hay inscriptos.</p>`}
     <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px">Respuesta adicional / anónima</div>
