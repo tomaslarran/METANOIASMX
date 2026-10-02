@@ -14147,6 +14147,8 @@ const EXT_CATS={
   impuesto_estatal:{label:"Impuestos AFIP / Rentas",banco:false},
   sueldos:{label:"Sueldos",banco:false},
   transf_propia:{label:"Transferencia entre cuentas propias",banco:false},
+  rescate_fci:{label:"Rescate de fondo común (FCI)",banco:false},
+  suscripcion_fci:{label:"Suscripción a fondo común (FCI)",banco:false},
   cobro:{label:"Otros cobros",banco:false},
   pago:{label:"Otros pagos",banco:false},
 };
@@ -14255,6 +14257,8 @@ function _extClasificar(m,cuitPropio){
   if(/^VISA|DEBITO TARJETA CREDITO|PAGO TARJETA/.test(c))return"tarjeta";
   if(m.importe<0&&/PRESTAMOS?/.test(c))return"prestamo";
   if(m.importe<0&&/SEGUROS?\b/.test(c))return"seguro";
+  if(m.importe>0&&/30693657977|ROSARIO VALORE|\bGC2\b/.test(c))return"rescate_fci";
+  if(m.importe<0&&/LIQ\.?\s*SUSC/.test(c))return"suscripcion_fci";
   if(m.importe<0&&/IMP\. AFIP|^AFIP|RENTAS/.test(c))return"impuesto_estatal";
   if(/REMUNERACIONES/.test(c))return"sueldos";
   if(cuitPropio&&c.includes("- "+cuitPropio))return"transf_propia";
