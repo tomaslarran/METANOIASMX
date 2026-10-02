@@ -1584,3 +1584,5 @@ el.innerHTML = `<div>${esc(dato)}</div>`;
 ALTER TABLE nueva_tabla ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Solo autenticados" ON nueva_tabla FOR ALL TO authenticated USING (true) WITH CHECK (true);
 ```
+
+**Confirmado por Tomás (2 Oct 2026, pantallas de Finnegans):** `honorarios profesionales` = IVA 0% (cuenta de compras "Honorarios profesionales") → va en **neto exento** para las facturas **C** de Daniela, Florencia y Agustín; `Asesoramiento profesional` = IVA 21% (mismo rubro contable) → factura **A** de Oscar (abogado). `sugerirProductosFinn` ahora lo propone solo: si el CUIT es de un empleado activo o el concepto dice "honorarios", factura C → exento/`honorarios profesionales`, factura A → 21%/`Asesoramiento profesional` (se re-sugiere al cambiar el tipo de factura). Pendiente: IVA de los productos genéricos (lista enviada a Tomás para que informe la tasa de cada uno).

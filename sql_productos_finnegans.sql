@@ -47,7 +47,7 @@ INSERT INTO productos_finnegans (codigo, nombre, stockeable, uso, iva, activo) V
   ('Varios construcción', 'Varios construcción', false, 'compra', NULL, true),
   ('Varios materiales construccióin 21%', 'Varios materiales construcción 21%', false, 'compra', '21', true),
   ('Varios representacion/marketing', 'Varios representacion/marketing', false, 'compra', NULL, true),
-  ('honorarios profesionales', 'honorarios profesionales', false, 'compra', NULL, true),
+  ('honorarios profesionales', 'honorarios profesionales', false, 'compra', 'exento', true),
   ('iibb salta', 'iibb salta', false, 'interno', NULL, true),
   ('impuestos internos o no gravado', 'impuestos internos o no gravado', false, 'compra', 'nograv', true),
   ('logistica excenta', 'logistica excenta', false, 'compra', 'exento', true),
@@ -65,3 +65,7 @@ INSERT INTO productos_finnegans (codigo, nombre, stockeable, uso, iva, activo) V
   ('varios electrodomesticos', 'varios electrodomesticos', false, 'compra', NULL, true),
   ('varios representacion', 'varios representacion', false, 'compra', NULL, true)
 ON CONFLICT (codigo) DO UPDATE SET nombre = EXCLUDED.nombre, stockeable = EXCLUDED.stockeable, actualizado_en = now();
+
+-- Finnegans: "honorarios profesionales" lleva IVA 0% (facturas C); "Asesoramiento profesional" IVA 21% (facturas A).
+UPDATE productos_finnegans SET iva = 'exento' WHERE codigo = 'honorarios profesionales';
+UPDATE productos_finnegans SET iva = '21' WHERE codigo = 'Asesoramiento profesional';

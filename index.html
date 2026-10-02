@@ -3460,7 +3460,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="fg"><label class="fl">Fecha emisión *</label><input class="fi" id="comp-fecha" type="date"></div>
       <div class="fg"><label class="fl">Fecha imputación</label><input class="fi" id="comp-fecha-imp" type="date"></div>
       <div class="fg"><label class="fl">Tipo</label>
-        <select class="fs" id="comp-tipo">
+        <select class="fs" id="comp-tipo" onchange="sugerirProductosFinn()">
           <option value="A">Factura A</option>
           <option value="B">Factura B</option>
           <option value="C">Factura C</option>
@@ -26908,6 +26908,15 @@ function sugerirProductosFinn(){
     p105="Obra Social";
   } else if(/pasaje|viaje|aerolinea|aerolin|flybondi|jetsmart/.test(txt)){
     p105="Pasajes y viajes";
+  }
+  // Honorarios profesionales: empleados/contratados (por CUIT) o concepto "honorarios".
+  // Factura C (monotributo, sin IVA) → "honorarios profesionales" en neto exento; factura A (ej. el abogado) → "Asesoramiento profesional" 21%.
+  const tipoF=document.getElementById("comp-tipo")?.value;
+  const cuitF=(document.getElementById("comp-cuit")?.value||"").replace(/\D/g,"");
+  const esEmp=cuitF.length===11&&(typeof cfEmpleados!=="undefined"?cfEmpleados:[]).some(e=>e.activo&&String(e.cuit||"").replace(/\D/g,"")===cuitF);
+  if(esEmp||/honorar/.test(txt)){
+    if(tipoF==="C"){const sx=document.getElementById("comp-prod-exento");if(sx&&[...sx.options].some(o=>o.value==="honorarios profesionales"))sx.value="honorarios profesionales";}
+    else if(tipoF==="A")p21="Asesoramiento profesional";
   }
   const s21=document.getElementById("comp-prod21");
   const s105=document.getElementById("comp-prod105");
