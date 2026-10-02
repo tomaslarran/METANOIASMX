@@ -16,7 +16,7 @@ CREATE POLICY "Solo autenticados" ON productos_finnegans FOR ALL TO authenticate
 
 INSERT INTO productos_finnegans (codigo, nombre, stockeable, uso, iva, activo) VALUES
   ('LOGISTICA', 'Asesoramiento de logistica y eventos', false, 'compra', NULL, true),
-  ('Asesoramiento financiero', 'Asesoramiento financiero', false, 'compra', NULL, true),
+  ('Asesoramiento financiero', 'Asesoramiento financiero', false, 'compra', '21', true),
   ('Asesoramiento financiero no gravado', 'Asesoramiento financiero no gravado', false, 'compra', 'nograv', true),
   ('Asesoramiento profesional', 'Asesoramiento profesional', false, 'compra', NULL, true),
   ('ASESORAMIENTO', 'Asesoramiento técnico y transferencia de Know How, distribución', false, 'compra', NULL, true),
@@ -25,13 +25,13 @@ INSERT INTO productos_finnegans (codigo, nombre, stockeable, uso, iva, activo) V
   ('Cursos', 'Cursos', false, 'venta', NULL, true),
   ('Convenio', 'Dictado de clases', false, 'venta', NULL, true),
   ('DIFCAM', 'Diferencia de cambio', false, 'venta', NULL, true),
-  ('ELEMENTOS DE SIMULACIÓN', 'ELEMENTOS DE SIMULACIÓN', false, 'compra', NULL, true),
-  ('Logistica y fletes', 'Logistica y fletes', false, 'compra', NULL, true),
+  ('ELEMENTOS DE SIMULACIÓN', 'ELEMENTOS DE SIMULACIÓN', false, 'compra', '21', true),
+  ('Logistica y fletes', 'Logistica y fletes', false, 'compra', '21', true),
   ('Obra Social', 'Obra Social', false, 'compra', NULL, true),
   ('Pasajes y viajes', 'Pasajes y viajes', false, 'compra', NULL, true),
   ('Pasajes y viajes al 21', 'Pasajes y viajes', false, 'compra', '21', true),
   ('Percepción tish', 'Percepción tish', false, 'interno', NULL, true),
-  ('Prestación de servicio de catering y uso de espacio destinado a', 'Prestación de servicio de catering y uso de espacio destinado a', false, 'compra', NULL, true),
+  ('Prestación de servicio de catering y uso de espacio destinado a', 'Prestación de servicio de catering y uso de espacio destinado a', false, 'compra', '21', true),
   ('Reparación automotor', 'Reparación automotor', false, 'compra', NULL, true),
   ('SI', 'SALDOS INICIALES', false, 'venta', NULL, true),
   ('SI105', 'SALDOS INICIALES 10.5%', false, 'venta', NULL, true),
@@ -69,3 +69,4 @@ ON CONFLICT (codigo) DO UPDATE SET nombre = EXCLUDED.nombre, stockeable = EXCLUD
 -- Finnegans: "honorarios profesionales" lleva IVA 0% (facturas C); "Asesoramiento profesional" IVA 21% (facturas A).
 UPDATE productos_finnegans SET iva = 'exento' WHERE codigo = 'honorarios profesionales';
 UPDATE productos_finnegans SET iva = '21' WHERE codigo = 'Asesoramiento profesional';
+UPDATE productos_finnegans SET iva = '21' WHERE codigo IN ('Asesoramiento financiero','ELEMENTOS DE SIMULACIÓN','Logistica y fletes','Prestación de servicio de catering y uso de espacio destinado a');
