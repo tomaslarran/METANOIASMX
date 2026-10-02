@@ -4692,12 +4692,20 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="mt">💸 Pagar orden de pago <button class="mt-close" onclick="closeModal('modal-pagar-op')">✕</button></div>
   <div style="font-size:13px;margin-bottom:4px"><b id="pop-numero"></b> · <span id="pop-proveedor"></span></div>
   <div id="pop-detalle" style="font-size:12px;color:var(--tx2);line-height:1.6;margin-bottom:12px"></div>
-  <div style="background:rgba(139,92,246,.10);border:1px solid rgba(139,92,246,.3);border-radius:8px;padding:8px 10px;font-size:11px;color:var(--tx2);margin-bottom:12px">Al confirmar se registra el pago: la factura queda pagada, se anota en banco o caja según el medio, se genera el asiento y se le avisa al proveedor.</div>
+  <div style="background:rgba(139,92,246,.10);border:1px solid rgba(139,92,246,.3);border-radius:8px;padding:8px 10px;font-size:11px;color:var(--tx2);margin-bottom:12px">Al confirmar se registra el pago: la factura queda pagada, se anota en banco o caja según el medio, se genera el asiento y se le envía al proveedor el comprobante de pago, la orden de pago y, si hubo retención, el certificado.</div>
   <div class="form-grid" style="grid-template-columns:1fr 1fr">
     <div class="fg" style="grid-column:1/-1"><label class="fl">Medio de pago *</label><select class="fs" id="pop-medio" onchange="popToggleSocio()"></select></div>
     <div class="fg" id="pop-socio-wrap" style="display:none;grid-column:1/-1"><label class="fl">¿Qué socio puso la plata? *</label><select class="fs" id="pop-socio"></select></div>
     <div class="fg"><label class="fl">Fecha de pago</label><input class="fi" type="date" id="pop-fecha"></div>
     <div class="fg"><label class="fl">Observaciones</label><input class="fi" type="text" id="pop-obs" placeholder="Opcional"></div>
+    <div class="fg" style="grid-column:1/-1"><label class="fl">Comprobante de pago (PDF o foto) *</label>
+      <input class="fi" type="file" id="pop-comprobante" accept="application/pdf,image/*">
+      <label style="display:flex;gap:6px;align-items:center;font-size:11px;color:var(--tx3);margin-top:4px"><input type="checkbox" id="pop-sin-comp"> Pagar sin comprobante (efectivo u otro caso)</label>
+    </div>
+    <div class="fg" style="grid-column:1/-1"><label class="fl">Email del proveedor</label>
+      <input class="fi" type="email" id="pop-email" placeholder="proveedor@correo.com">
+      <label style="display:flex;gap:6px;align-items:center;font-size:11px;color:var(--tx3);margin-top:4px"><input type="checkbox" id="pop-enviar" checked> Enviarle el mail con los comprobantes (si lo completás acá, se guarda en Proveedores)</label>
+    </div>
   </div>
   <div class="ma" style="gap:8px;flex-wrap:wrap">
     <button class="bc" style="color:var(--re)" onclick="anularOP(_opPagar&&_opPagar.id)">🗑 Anular orden</button>
@@ -17778,6 +17786,8 @@ async function renderSueldos(){
     catEmps.forEach(emp=>{
       const pago=cfPagosEmpleados.find(x=>x.empleado_id===emp.id&&x.periodo===cfSueldosMes);
       const pagado=pago?.pagado;
+      const cuitE=String(emp.cuit||"").replace(/\D/g,"");
+      const opPend=cuitE.length===11?(ordenesGanancias||[]).find(o=>o.estado!=="pagado"&&o.sociedad===emp.sociedad&&String(o.cuit||"").replace(/\D/g,"")===cuitE):null;
       const socCls=emp.sociedad==="SUDES"?"bpr":"bdo";
 
       // Tira de historial: últimos 6 meses + próximo
@@ -17814,6 +17824,7 @@ async function renderSueldos(){
               ?`<span class="badge bdo" style="font-size:10px;padding:3px 10px">✓ ${cfSueldosMes.slice(0,7)===(new Date().getFullYear()+"-"+String(new Date().getMonth()+1).padStart(2,"0"))?"Este mes":cfSueldosMes} pagado${pago?.comprobante_id?" · 📄 con factura":""}</span>
                  <button class="btn sm" onclick="desmarcarPagoEmpleado('${emp.id}','${cfSueldosMes}')" style="font-size:10px;padding:2px 8px;color:var(--re)">↩ Desmarcar</button>`
               :`<span class="badge bpr" style="font-size:10px;padding:3px 10px">Pendiente${pago?.comprobante_id?" · 📄 factura vinculada":""}</span>
+                 ${opPend?`<button class="btn sm" style="background:var(--gr);color:#fff;font-size:10px;padding:3px 10px" title="Esta persona tiene una orden de pago pendiente" onclick="abrirPagarOP('${opPend.id}')">💸 Pagar OP ${esc(opPend.numero)}</button>`:""}
                  <button class="btn sm" style="background:var(--pu);color:#fff;font-size:10px;padding:3px 10px" onclick="abrirPagoEmpleado('${emp.id}','${cfSueldosMes}')">Pagar</button>`
             }
             <button class="btn sm" onclick="openEditEmpleado('${emp.id}')">✎</button>
@@ -26262,6 +26273,11 @@ async function abrirPagarOP(opId){
     if(op.medio_pago&&[...ms.options].some(o=>o.value===op.medio_pago))ms.value=op.medio_pago;
     document.getElementById("pop-fecha").value=today();
     document.getElementById("pop-obs").value="";
+    document.getElementById("pop-comprobante").value="";
+    document.getElementById("pop-sin-comp").checked=false;
+    const _pv=_provDeComprobante(c||{cuit:op.cuit,proveedor:op.proveedor});
+    document.getElementById("pop-email").value=_pv?.email||"";
+    document.getElementById("pop-enviar").checked=true;
     popToggleSocio();
     openModal("modal-pagar-op");
   }catch(e){toast("Error: "+e.message,"err");}
@@ -26283,6 +26299,14 @@ async function confirmarPagarOP(){
   if(tipoMedio==="tarjeta"){toast("Con tarjeta no corresponde orden de pago: anulá la orden y pagá con 💳 Pagar","err");return;}
   const socioId=tipoMedio==="cuenta_socio"?document.getElementById("pop-socio").value:null;
   if(tipoMedio==="cuenta_socio"&&!socioId){toast("Elegí qué socio puso la plata","err");return;}
+  const archivo=document.getElementById("pop-comprobante").files?.[0]||null;
+  const sinComp=document.getElementById("pop-sin-comp").checked;
+  if(!archivo&&!sinComp){toast("Adjuntá el comprobante de pago (PDF o foto) o marcá «Pagar sin comprobante»","err");return;}
+  const enviarMail=document.getElementById("pop-enviar").checked;
+  const emailProv=document.getElementById("pop-email").value.trim();
+  if(enviarMail&&emailProv&&!/^\S+@\S+\.\S+$/.test(emailProv)){toast("El email del proveedor no es válido","err");return;}
+  let compPago=null;
+  if(archivo){try{compPago=await _leerComprobantePago(archivo);}catch(e){toast(e.message,"err");return;}}
   try{
     const [opF]=await sb(`ordenes_pago?id=eq.${op.id}&select=id,estado`);
     if(!opF){toast("La orden de pago ya no existe","err");closeModal("modal-pagar-op");return;}
@@ -26300,7 +26324,8 @@ async function confirmarPagarOP(){
     toast(via==="socio"?`💰 Orden ${op.numero} pagada con plata de ${users.find(u=>u.id===socioId)?.nombre||"un socio"}`:`💸 Orden ${op.numero} pagada · la factura quedó pagada`,"ok");
     renderComprobantes();updateCompStats();
     if(cfTab==="pendientes")renderCFPendientes();
-    enviarComprobantePagoProveedor(c,{...op,...patch,numero_comp:c.numero});
+    if(curPage==="sueldos")renderSueldos();
+    enviarComprobantePagoProveedor(c,{...op,...patch,numero_comp:c.numero},{email:enviarMail?emailProv:"",comprobante:compPago});
     _opPagar=null;
   }catch(e){toast("Error: "+e.message,"err");}
 }
@@ -26391,24 +26416,116 @@ async function confirmarOrdenPago(){
 
 // Automatización C del diagnóstico Auren: email automático al proveedor con el
 // comprobante de pago (incluye el detalle de retención) al confirmar el pago.
-async function enviarComprobantePagoProveedor(c,op){
+// ── Comprobante de pago + certificado de retención + mail al proveedor ──
+const _provDeComprobante=c=>{
+  let prov=c?.proveedor_maestro_id?proveedores.find(p=>p.id===c.proveedor_maestro_id):null;
+  if(!prov&&c?.cuit)prov=proveedores.find(p=>p.cuit&&p.cuit.replace(/\D/g,"")===String(c.cuit).replace(/\D/g,""));
+  if(!prov&&c?.proveedor)prov=proveedores.find(p=>(p.nombre||"").trim().toLowerCase()===c.proveedor.trim().toLowerCase());
+  return prov||null;
+};
+
+// Lee el comprobante de pago (PDF o foto). Las fotos se reducen para que el mail no pese de más.
+async function _leerComprobantePago(file){
+  const aB64=blob=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(",")[1]);r.onerror=()=>rej(new Error("No se pudo leer el archivo"));r.readAsDataURL(blob);});
+  if(/pdf$/i.test(file.type)||/\.pdf$/i.test(file.name)){
+    if(file.size>4*1024*1024)throw new Error("El PDF pesa más de 4 MB: comprimilo o sacale una foto al comprobante");
+    return{nombre:file.name,tipo:"application/pdf",base64:await aB64(file)};
+  }
+  if(!/^image\//.test(file.type))throw new Error("El comprobante debe ser un PDF o una foto");
+  const url=URL.createObjectURL(file);
   try{
-    let prov=c.proveedor_maestro_id?proveedores.find(p=>p.id===c.proveedor_maestro_id):null;
-    if(!prov&&c.cuit)prov=proveedores.find(p=>p.cuit&&p.cuit.replace(/\D/g,"")===c.cuit.replace(/\D/g,""));
-    if(!prov&&c.proveedor)prov=proveedores.find(p=>(p.nombre||"").trim().toLowerCase()===c.proveedor.trim().toLowerCase());
-    if(!prov?.email){
-      toast(`ℹ️ "${c.proveedor||"Proveedor"}" no tiene email cargado — no se pudo enviar el comprobante automáticamente`,"inf");
+    const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error("No se pudo abrir la imagen"));i.src=url;});
+    const esc=Math.min(1,1600/Math.max(img.width,img.height));
+    const cv=document.createElement("canvas");cv.width=Math.round(img.width*esc);cv.height=Math.round(img.height*esc);
+    const cx=cv.getContext("2d");cx.fillStyle="#fff";cx.fillRect(0,0,cv.width,cv.height);cx.drawImage(img,0,0,cv.width,cv.height);
+    const blob=await new Promise(res=>cv.toBlob(res,"image/jpeg",0.82));
+    return{nombre:(file.name||"comprobante").replace(/\.[^.]+$/,"")+".jpg",tipo:"image/jpeg",base64:await aB64(blob)};
+  }finally{URL.revokeObjectURL(url);}
+}
+
+// Certificado (constancia) de la retención de Ganancias practicada en la orden de pago
+async function generarPDFCertificadoRetencion(op,c,soloRetornar){
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  const W=210,M=20,sociedad=op.sociedad||"SUDES";
+  const [fiscal,logoUrl]=await Promise.all([getFiscalSociedad(sociedad),getLogoDataUrl(sociedad)]);
+  doc.setFillColor(20,22,35);doc.rect(0,0,W,40,"F");
+  let tx=M;
+  if(logoUrl){try{const p=doc.getImageProperties(logoUrl),lh=16,lw=lh*(p.width/p.height);doc.addImage(logoUrl,"PNG",M,8,lw,lh);tx=M+lw+6;}catch(e){}}
+  doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(11);
+  doc.text(fiscal?.razon_social||("Metanoia SMX · "+sociedad),tx,14);
+  doc.setFont("helvetica","normal");doc.setFontSize(7.5);doc.setTextColor(195,197,215);
+  let fy=19;
+  if(fiscal?.cuit){doc.text(`CUIT: ${fiscal.cuit}`,tx,fy);fy+=4;}
+  if(fiscal?.domicilio)doc.text(fiscal.domicilio,tx,fy);
+  doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(15);
+  doc.text("CERTIFICADO DE RETENCIÓN",W-M,17,{align:"right"});
+  doc.setFont("helvetica","normal");doc.setFontSize(9);
+  doc.text("Impuesto a las Ganancias · RG 830",W-M,24,{align:"right"});
+  doc.text(`N° ${op.nro_comprobante_retencion||"RET-"+op.numero}`,W-M,30,{align:"right"});
+  let y=54;
+  const bloque=(titulo,filas)=>{
+    doc.setFillColor(245,246,249);doc.roundedRect(M-2,y-6,W-2*M+4,8+filas.length*7,2,2,"F");
+    doc.setFont("helvetica","bold");doc.setFontSize(8);doc.setTextColor(110,110,130);doc.text(titulo,M+2,y);
+    y+=6;
+    filas.forEach(([k,v])=>{doc.setFont("helvetica","normal");doc.setFontSize(9.5);doc.setTextColor(95,95,115);doc.text(k,M+2,y);doc.setFont("helvetica","bold");doc.setTextColor(25,25,40);doc.text(String(v||"—"),W-M-2,y,{align:"right"});y+=7;});
+    y+=8;
+  };
+  const m=v=>"$"+Number(v||0).toLocaleString("es-AR",{minimumFractionDigits:2});
+  bloque("AGENTE DE RETENCIÓN",[["Razón social",fiscal?.razon_social||sociedad],["CUIT",fiscal?.cuit],["Domicilio",fiscal?.domicilio]]);
+  bloque("SUJETO RETENIDO",[["Razón social / nombre",op.proveedor],["CUIT",op.cuit]]);
+  bloque("RETENCIÓN PRACTICADA",[
+    ["Fecha de la retención",String(op.fecha_pago||"").split("-").reverse().join("/")],
+    ["Régimen",`${op.codigo_sicore||""} — ${op.descripcion_sicore||""}`.slice(0,70)],
+    ["Comprobante que origina el pago",`Fact. ${op.tipo_factura||c?.tipo||""} ${c?.numero||op.numero_comp||""}`],
+    ["Orden de pago",op.numero],
+    ["Importe del comprobante (con IVA)",m(op.monto_bruto)],
+    ["Base de cálculo (neto sin IVA)",m(op.base_retencion)],
+    ["Alícuota efectiva",`${Number(op.porcentaje_retencion||0).toLocaleString("es-AR")}%`],
+  ]);
+  doc.setFillColor(255,244,244);doc.roundedRect(M-2,y-5,W-2*M+4,14,2,2,"F");
+  doc.setFont("helvetica","bold");doc.setFontSize(12);doc.setTextColor(185,40,40);
+  doc.text("IMPORTE RETENIDO",M+2,y+3);doc.text(m(op.monto_retencion),W-M-2,y+3,{align:"right"});
+  y+=24;
+  doc.setFont("helvetica","normal");doc.setFontSize(8.5);doc.setTextColor(110,110,130);
+  doc.text("La retención se calculó según la tabla del régimen de la RG 830 de ARCA vigente a la fecha de pago.",M,y,{maxWidth:W-2*M});y+=5;
+  doc.text("Esta constancia acredita la retención practicada sobre el pago indicado, para su cómputo como pago a cuenta del impuesto.",M,y,{maxWidth:W-2*M});
+  doc.setFillColor(245,246,249);doc.rect(0,282,W,15,"F");
+  doc.setFontSize(7);doc.setTextColor(155,157,175);
+  doc.text(`Generado por Panel Metanoia SMX · ${op.numero} · ${op.fecha_pago||""}`,W/2,289,{align:"center"});
+  if(soloRetornar)return doc.output("datauristring");
+  doc.save(`Certificado_retencion_${op.numero}.pdf`);
+}
+
+// Envía al proveedor el comprobante de pago + la orden de pago + el certificado de retención (si hubo), y guarda el comprobante
+async function enviarComprobantePagoProveedor(c,op,extra={}){
+  try{
+    const prov=_provDeComprobante(c);
+    const emailNuevo=extra.email!==undefined?extra.email:(prov?.email||"");
+    const email=emailNuevo||"";
+    const hayComp=!!extra.comprobante;
+    if(!email&&!hayComp){
+      if(extra.email===undefined)toast(`ℹ️ "${c.proveedor||"Proveedor"}" no tiene email cargado — no se pudo enviar el comprobante automáticamente`,"inf");
       return;
     }
-    const pdfBase64=await generarPDFOrdenPago(op,true);
+    const sinPrefijo=s=>s&&s.startsWith("data:")?s.slice(s.indexOf(",")+1):s;
+    const pdfOP=sinPrefijo(await generarPDFOrdenPago(op,true));
+    const cert=parseFloat(op.monto_retencion)>0?sinPrefijo(await generarPDFCertificadoRetencion(op,c,true)):null;
     const res=await fetch(`${SB}/functions/v1/enviar-pago-proveedor`,{
       method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
-      body:JSON.stringify({email:prov.email,proveedor:c.proveedor,numero:op.numero,neto:op.neto_a_pagar,fecha:op.fecha_pago,sociedad:op.sociedad,pdf_base64:pdfBase64})
+      body:JSON.stringify({email,proveedor:c.proveedor,numero:op.numero,neto:op.neto_a_pagar,fecha:op.fecha_pago,sociedad:op.sociedad,retencion:parseFloat(op.monto_retencion)||0,pdf_base64:pdfOP,certificado_base64:cert,comprobante_pago:extra.comprobante||null})
     });
     const json=await res.json();
     if(!res.ok||json.error)throw new Error(json.error||"Error desconocido");
-    toast(`✉️ Comprobante enviado a ${prov.email}`,"ok");
+    if(json.comprobante_path&&op.id){
+      await sb(`ordenes_pago?id=eq.${op.id}`,{method:"PATCH",body:JSON.stringify({comprobante_pago_path:json.comprobante_path})}).catch(()=>{});
+      const loc=(ordenesGanancias||[]).find(o=>o.id===op.id);if(loc)loc.comprobante_pago_path=json.comprobante_path;
+    }
+    if(email&&prov&&emailNuevo&&prov.email!==emailNuevo){
+      await sb(`proveedores?id=eq.${prov.id}`,{method:"PATCH",body:JSON.stringify({email:emailNuevo})}).catch(()=>{});prov.email=emailNuevo;
+    }
+    toast(email?`✉️ Enviado a ${email}: comprobante de pago${cert?", orden de pago y certificado de retención":" y orden de pago"}`:"📎 Comprobante de pago guardado","ok");
   }catch(e){toast("⚠️ No se pudo enviar el email al proveedor: "+e.message,"err");}
 }
 
