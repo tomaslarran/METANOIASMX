@@ -296,6 +296,29 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 ### Pendiente de decisión (esperando reunión con Auren)
 - [ ] **Rol `contable` de solo lectura** — propuesta armada el 1 Oct 2026 (ver `resumen_auren.html` / artefacto "Automatizaciones Auren") para ofrecerle a Auren acceso directo al panel en vez de mandarles archivos por mail: solo lectura a Comprobantes, Cuentas Corrientes, Impuestos (incl. calendario Auren) y Libro Diario/Plan de Cuentas; sin acceso a Cursos/Alumnos/Comunicaciones ni a ninguna acción de carga/edición. Mismo mecanismo que `instructor`/`logistica` (clase CSS + rol en `usuarios`). **Diferido a propósito** hasta la próxima reunión con Auren — confirmar con ellos si les sirve este acceso antes de construirlo, y de paso consultarles qué formato de archivos necesitan (Libro IVA ARCA, padrón de retenciones, numeración estilo Tango) — preguntas completas en el resumen.
 
+### Plan priorizado de lo que falta (armado el 2 Oct 2026)
+
+**A. Urgente / con fecha**
+1. **Certificado MiPyME de SUDES vence el 31/10/2026** — renovarlo y subir el nuevo en Cash Flow → 🗂 Resúmenes (la alerta del dashboard ya avisa). Consultar a Estela si el 100% de la ley 25.413 se prorratea por la vigencia desde el 08/08 (agosto 1–7 quedó fuera).
+2. **Correr una línea de SQL:** `ALTER TABLE datos_fiscales_sociedad ADD COLUMN IF NOT EXISTS mipyme_archivo_path text;` y re-subir el PDF del certificado.
+3. **Correr 🔄 Generar históricos** (Impuestos → Libro Diario): genera 9 cuotas de préstamo jul–sep y las 2 facturas de POINTERS pagadas con Visa. Revisar a mano las 16 cuotas viejas del "Plan de cuotas de tu préstamo" (1–16) marcadas pagadas sin fecha de pago.
+4. **Importar extractos jul/ago/sep de SUDES y POINTERS** (los hace Tomás) y mandar los conceptos que no se clasifiquen bien. Después cerrar julio, agosto y septiembre en 🔒 Cierre de mes.
+5. **Revisar datos dudosos:** dos retiros de $15.050.000 iguales el 24/07 (posible duplicado), dos depósitos de USD 300 el 03/08 (un solo ingreso real en el extracto), pago de septiembre pendiente de Oscar Farah (SUDES).
+6. **Verificar deploys de Supabase que figuran como pendientes** en este archivo: `agente-mensajes` (fechas y fix de NPS `pidiendo_nota` + SQL del estado), las 9 funciones con caching/conteo de tokens (+ SQL de `ia_uso`), `enviar-pago-proveedor` y `enviar-circularizacion`.
+
+**B. Siguiente bloque (en este orden)**
+1. **Fase 3 — Ventas e ingresos:** token Sanctum del técnico (`ELEARNING_API_TOKEN`) → SQL `elearning_*` → estado de cuenta en la ficha del alumno → asientos `devengado_venta` / `cobro_venta` por CUIT → control "ingresos" en el cierre de mes (hoy el resultado sale solo con egresos).
+2. **Cuenta en dólares:** cuenta contable USD (banco y caja) e importación de esa cuenta del extracto (hoy se lee pero no se importa); incluye el pago de tarjeta en USD.
+3. **Reunión con Auren:** rol `contable` de solo lectura, formato de archivos que necesitan (Libro IVA ARCA, padrón de retenciones) y numeración estilo Tango.
+4. **Primer cierre completo validado por la contadora** (un mes de punta a punta) antes de depender del panel.
+
+**C. Más adelante**
+- Cierre de balance del 30/06/2027 con el módulo actual (la vista del ejercicio ya exporta a Excel).
+- Libro IVA digital, facturación electrónica ARCA (CAE) y balance / estado de resultados desde asientos → reemplazo de Finnegans.
+- Producto SaaS (multi-organización), biblioteca de PDFs con búsqueda para los agentes, módulo COFRADIA.
+
+**Documento para presentar el sistema:** `resumen_para_presentacion.md` (se le pasa a Claude Chat para armar la presentación).
+
 ### Bloqueados por externos
 - [ ] LinkedIn sync — esperando aprobación Community Management API (app "Metanoia CMS", enviado 2 Jun 2026)
 - [ ] **Meta Business — Human Agent (Instagram DM)** — Revisión del 27 Jul 2026: 3/4 aprobados (`instagram_business_basic`, `manage_messages`, `manage_insights` ✅). `Human Agent` rechazado: Meta no pudo acceder al panel (requiere login — faltaron credenciales de prueba). Para resubmitir: crear usuario rol `comunicaciones` para revisores + instrucciones paso a paso (URL → Login → Comunicaciones → tab Mensajes). Impacto bajo: escalación ya va por WhatsApp. **Diferido.**
