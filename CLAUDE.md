@@ -806,7 +806,7 @@ CREATE POLICY "Solo autenticados" ON elearning_sync_log FOR ALL TO authenticated
 - [ ] Correr SQL en Supabase
 - [ ] Deployar `sync-elearning` en Supabase Dashboard
 - [ ] Agregar secrets `ELEARNING_URL`, `ELEARNING_API_TOKEN`, `ELEARNING_WEBHOOK_SECRET`
-- [ ] Tab "E-learning" en el panel (sync manual, estado, últimas inscripciones)
+- [x] **Pantalla "E-learning" en el panel** (2 Oct 2026, menú Cursos → E-learning, solo admin): botón 🔄 Sincronizar ahora (`sync_all`, con pistas si falla el token o la ruta), estado de la última sincronización y último evento recibido, KPIs, y pestañas Resumen · Pagos y facturas · Suscripciones · Clientes · Cursos · Inscripciones · Eventos. El resumen lista: facturas con error, pagos pendientes con contacto (seguimiento), registrados que no pagaron (con botón *Copiar mails*) y suscripciones por vencer en 30 días. Sin datos muestra la guía de conexión. Probada en vacío contra la base real y con datos simulados. **Falta probar con datos reales** cuando el técnico entregue el token (el 2 Oct las 7 tablas `elearning_*` existen pero están vacías).
 - [ ] Botón "Publicar en e-learning" en detalle de curso del panel
 - [ ] `agente-mensajes` lee `elearning_cursos` para responder preguntas de fechas/cupos/precios en tiempo real
 

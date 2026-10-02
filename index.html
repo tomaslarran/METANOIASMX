@@ -1047,6 +1047,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
         Planes plataforma
       </div>
+      <div class="sitem" onclick="goPage('elearning',this)" id="nav-elearning">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        E-learning
+      </div>
     </div>
   </div>
   <div class="sgroup" id="sg-analisis">
@@ -1616,6 +1620,14 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- ══ PLANES PLATAFORMA ══ -->
+<div id="pg-elearning" style="display:none">
+  <div class="pg-header">
+    <div><div class="pg-title">E-learning</div><div class="pg-title-sub">Plataforma online (plataforma.metanoiasmx.com): cursos, inscripciones, pagos, facturas y suscripciones</div></div>
+    <button class="btn pri" id="el-btn-sync" onclick="elSincronizar()">🔄 Sincronizar ahora</button>
+  </div>
+  <div id="el-contenido"></div>
+</div>
+
 <div id="pg-planes" style="display:none">
   <div class="pg-header">
     <div><div class="pg-title">Planes plataforma</div><div class="pg-title-sub">Suscripciones de la plataforma online — precios para el bot de mensajes</div></div>
@@ -6255,6 +6267,7 @@ function goPage(name,el){
   if(name==="mensajes"){document.getElementById("msgs-layout")?.classList.remove("thread-open");loadMensajesInternos();renderConvList();}
   if(name==="inventario")loadInventario();
   if(name==="planes")loadPlanes();
+  if(name==="elearning")loadElearning();
   if(name==="comprobantes")loadComprobantes();
   if(name==="impuestos")loadImpuestos();
   if(name==="notif"){renderNotifPage();loadMfaStatus();}
@@ -20881,6 +20894,149 @@ async function delInventario(id){
 
 // ── PLANES PLATAFORMA ──
 let _planes=[];
+
+// ══════════════════════════════════════════════
+// E-LEARNING: espejo de la plataforma (cursos, inscripciones, clientes, pagos, facturas, suscripciones)
+// ══════════════════════════════════════════════
+let _el=null;
+let elTab="resumen";
+let elBusq="";
+const _elCuit=c=>{const d=String(c||"").replace(/\D/g,"");return d.length===11?d.replace(/^(\d{2})(\d{8})(\d)$/,"$1-$2-$3"):(c||"—");};
+const _elFecha=v=>v?new Date(v).toLocaleDateString("es-AR"):"—";
+const _elDias=v=>v?Math.ceil((Date.parse(String(v).slice(0,10))-Date.parse(today()))/86400000):null;
+
+async function loadElearning(){
+  const el=document.getElementById("el-contenido");
+  if(!el)return;
+  el.innerHTML=`<div class="loading"><div class="loader"></div><div class="lt">Cargando datos de la plataforma...</div></div>`;
+  const g=async p=>{try{return await _sbAll(p);}catch(e){return null;}};
+  const [cursos,insc,clientes,pagos,susc,eventos,log]=await Promise.all([
+    g("elearning_cursos?select=*&order=fecha_inicio.desc"),
+    g("elearning_inscripciones?select=*&order=fecha_inscripcion.desc"),
+    g("elearning_clientes?select=*&order=registrado_en.desc"),
+    g("elearning_pagos?select=*&order=fecha_pago.desc"),
+    g("elearning_suscripciones?select=*&order=fecha_vencimiento.asc"),
+    sb("elearning_eventos?select=evento_id,tipo,alumno_cuit,ocurrido_en,created_at&order=created_at.desc&limit=100").catch(()=>null),
+    sb("elearning_sync_log?select=*&order=created_at.desc&limit=10").catch(()=>null),
+  ]);
+  if([cursos,insc,clientes,pagos,susc,eventos,log].some(x=>x===null)){
+    el.innerHTML=`<div class="empty"><div class="ei">🌐</div><div>Faltan tablas de la integración en Supabase (elearning_*). Corré el SQL de la sección "Integración E-learning".</div></div>`;
+    return;
+  }
+  _el={cursos,insc,clientes,pagos,susc,eventos,log};
+  renderElearning();
+}
+
+async function elSincronizar(){
+  const btn=document.getElementById("el-btn-sync");
+  if(btn){btn.disabled=true;btn.textContent="⏳ Sincronizando...";}
+  try{
+    const res=await fetch(`${SB}/functions/v1/sync-elearning`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},body:JSON.stringify({action:"sync_all"})});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok){
+      const msg=data.error||`HTTP ${res.status}`;
+      const pista=/40[13]/.test(msg)?" · El token no es válido: revisá el secret ELEARNING_API_TOKEN en Supabase."
+        :/404/.test(msg)?" · La ruta no existe: revisá con el técnico la URL de la API."
+        :/50\d/.test(msg)?" · Error del lado de la plataforma."
+        :"";
+      throw new Error(msg+pista);
+    }
+    toast("✅ Sincronización completa","ok");
+    await loadElearning();
+  }catch(e){
+    toast("No se pudo sincronizar: "+e.message,"err");
+    loadElearning();
+  }
+}
+
+function setElTab(t){elTab=t;renderElearning();}
+
+function renderElearning(){
+  const el=document.getElementById("el-contenido");
+  if(!el||!_el)return;
+  const {cursos,insc,clientes,pagos,susc,eventos,log}=_el;
+  const cli=Object.fromEntries(clientes.map(c=>[String(c.cuit),c]));
+  const nom=cuit=>{const c=cli[String(cuit)];return c?(c.nombre_completo||c.email||_elCuit(cuit)):_elCuit(cuit);};
+  const cursoNom=id=>cursos.find(c=>String(c.elearning_id)===String(id))?.nombre||`Curso ${id||"?"}`;
+  const th="padding:7px 9px;font-size:10px;text-transform:uppercase;color:var(--tx3);text-align:left;white-space:nowrap";
+  const td="padding:7px 9px;font-size:12px;border-bottom:1px solid var(--b2);vertical-align:top";
+  const chip=(t,c)=>`<span style="background:color-mix(in srgb,${c} 15%,var(--surf));color:${c};padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;white-space:nowrap">${esc(t)}</span>`;
+  const tabla=(cols,filas,vacio)=>filas.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--surf2)">${cols.map(c=>`<th style="${th}">${c}</th>`).join("")}</tr></thead><tbody>${filas.join("")}</tbody></table></div>`:`<div style="padding:22px;text-align:center;color:var(--tx3);font-size:12px">${vacio}</div>`;
+
+  const aprobados=pagos.filter(p=>p.estado==="aprobado");
+  const pendientes=pagos.filter(p=>p.estado==="pendiente");
+  const factErr=pagos.filter(p=>p.factura_estado==="error");
+  const conPagoAprob=new Set(aprobados.map(p=>String(p.cuit)));
+  const sinPagar=clientes.filter(c=>!conPagoAprob.has(String(c.cuit)));
+  const porVencer=susc.filter(s=>s.estado==="activa"&&_elDias(s.fecha_vencimiento)!==null&&_elDias(s.fecha_vencimiento)<=30&&_elDias(s.fecha_vencimiento)>=0);
+  const vencidas=susc.filter(s=>s.estado==="vencida");
+  const ult=log[0],ultEv=eventos[0];
+  const vacio=!ult&&!ultEv&&!cursos.length&&!insc.length&&!clientes.length;
+
+  const tabs=[["resumen","📊 Resumen"],["pagos",`💳 Pagos y facturas (${pagos.length})`],["susc",`🔁 Suscripciones (${susc.length})`],["clientes",`👤 Clientes (${clientes.length})`],["cursos",`🎓 Cursos (${cursos.length})`],["insc",`📝 Inscripciones (${insc.length})`],["eventos",`📡 Eventos (${eventos.length})`]];
+  const barra=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">${tabs.map(([k,l])=>`<button class="btn sm ${elTab===k?"pri":"sec"}" onclick="setElTab('${k}')">${l}</button>`).join("")}</div>`;
+
+  let cuerpo="";
+  if(elTab==="resumen"){
+    const k=(l,v,c,s)=>`<div class="sc"><div class="sc-l">${l}</div><div class="sc-v" style="color:${c||"var(--tx)"}">${v}</div><div class="sc-s">${s||""}</div></div>`;
+    const estado=vacio
+      ?`<div style="background:rgba(245,158,11,.10);border:1px solid var(--am);border-radius:10px;padding:14px 16px;margin-bottom:14px">
+          <div style="font-weight:700;color:var(--am);margin-bottom:6px">⚠️ Todavía no llegó ningún dato de la plataforma</div>
+          <div style="font-size:12px;color:var(--tx2);line-height:1.6">Para conectar:<br>
+          1. Cargar el token de la API (Sanctum) en Supabase como <b>ELEARNING_API_TOKEN</b>.<br>
+          2. Que el técnico configure el webhook hacia <b>/functions/v1/sync-elearning?source=webhook</b> con el encabezado <b>X-Webhook-Secret</b>.<br>
+          3. Tocar <b>🔄 Sincronizar ahora</b> arriba para traer cursos e inscripciones.</div></div>`
+      :`<div style="background:var(--surf);border:1px solid var(--b);border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:12px;line-height:1.7">
+          <div>🔄 <b>Última sincronización:</b> ${ult?`${esc(ult.tipo)} · ${_elFecha(ult.created_at)} ${new Date(ult.created_at).toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · ${ult.registros_synced||0} registros${ult.errores?` · <span style="color:var(--re)">${ult.errores} errores</span>`:""}${ult.detalle?` · <span style="color:var(--tx3)">${esc(ult.detalle)}</span>`:""}`:"ninguna todavía"}</div>
+          <div>📡 <b>Último evento recibido:</b> ${ultEv?`${esc(ultEv.tipo)} · ${_elFecha(ultEv.created_at)} ${new Date(ultEv.created_at).toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})}`:"ninguno todavía (el webhook no mandó nada)"}</div></div>`;
+    const bloque=(titulo,cant,col,html)=>`<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:${col};margin-bottom:6px">${titulo} (${cant})</div>${html}</div>`;
+    cuerpo=`${estado}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px">
+        ${k("Clientes registrados",clientes.length)}${k("Inscripciones",insc.length)}
+        ${k("Pagos aprobados",aprobados.length,"var(--gr)",_extM(aprobados.reduce((s,p)=>s+(parseFloat(p.monto)||0),0)))}
+        ${k("Pagos pendientes",pendientes.length,pendientes.length?"var(--am)":"",_extM(pendientes.reduce((s,p)=>s+(parseFloat(p.monto)||0),0)))}
+        ${k("Facturas con error",factErr.length,factErr.length?"var(--re)":"")}${k("Suscripciones por vencer",porVencer.length,porVencer.length?"var(--am)":"","próximos 30 días")}
+      </div>
+      ${factErr.length?bloque("❌ Facturas con error",factErr.length,"var(--re)",tabla(["Alumno","Concepto","Monto","Error"],factErr.map(p=>`<tr><td style="${td}">${esc(nom(p.cuit))}</td><td style="${td}">${esc(p.concepto||"")}</td><td style="${td}">${_extM(p.monto)}</td><td style="${td};color:var(--re)">${esc(p.factura_error||"")}</td></tr>`),"")):""}
+      ${bloque("⏳ Pagos pendientes — para hacer seguimiento",pendientes.length,"var(--am)",tabla(["Alumno","Contacto","Concepto","Monto","Desde"],pendientes.map(p=>{const c=cli[String(p.cuit)]||{};return`<tr><td style="${td}">${esc(nom(p.cuit))}</td><td style="${td}">${esc(c.email||"")}${c.telefono?`<br><span style="color:var(--tx3)">${esc(c.telefono)}</span>`:""}</td><td style="${td}">${esc(p.concepto||"")}</td><td style="${td}">${_extM(p.monto)}</td><td style="${td}">${_elFecha(p.fecha_pago||p.created_at)}</td></tr>`;}),"Ningún pago pendiente."))}
+      ${bloque("📭 Se registraron y todavía no pagaron",sinPagar.length,"var(--tx2)",`${sinPagar.length?`<button class="btn sm sec" style="margin-bottom:8px" onclick="elCopiarMails()">📋 Copiar los mails (${sinPagar.filter(c=>c.email).length})</button>`:""}${tabla(["Nombre","Mail","Teléfono","Registrado"],sinPagar.slice(0,50).map(c=>`<tr><td style="${td}">${esc(c.nombre_completo||"—")}</td><td style="${td}">${esc(c.email||"—")}</td><td style="${td}">${esc(c.telefono||"—")}</td><td style="${td}">${_elFecha(c.registrado_en)}</td></tr>`),"Todos los registrados ya pagaron.")}`)}
+      ${bloque("🔁 Suscripciones por vencer (30 días) y vencidas",porVencer.length+vencidas.length,"var(--am)",tabla(["Alumno","Plan","Vence","Estado"],[...porVencer,...vencidas].map(s=>{const d=_elDias(s.fecha_vencimiento);return`<tr><td style="${td}">${esc(nom(s.cuit))}</td><td style="${td}">${esc(s.plan||"")}</td><td style="${td}">${_elFecha(s.fecha_vencimiento)}</td><td style="${td}">${s.estado==="vencida"?chip("Vencida","var(--re)"):chip(`en ${d} día${d!==1?"s":""}`,"var(--am)")}</td></tr>`;}),"Ninguna por vencer."))}`;
+  }
+  if(elTab==="pagos"){
+    cuerpo=tabla(["Fecha","Alumno","Concepto","Medio","Monto","Estado","Factura"],pagos.slice(0,300).map(p=>{
+      const f=p.factura_estado==="error"?chip("Error","var(--re)"):p.factura_estado==="emitida"?`${chip("Emitida","var(--gr)")} <span style="color:var(--tx3)">${esc(p.factura_tipo||"")} ${esc(p.factura_punto_venta||"")}-${esc(p.factura_numero||"")}</span>${p.factura_pdf_url?` <a href="${esc(p.factura_pdf_url)}" target="_blank" rel="noopener" style="color:var(--ac)">PDF</a>`:""}`:p.factura_estado?chip(p.factura_estado,"var(--am)"):"—";
+      const e=p.estado==="aprobado"?chip("Aprobado","var(--gr)"):p.estado==="rechazado"?chip("Rechazado","var(--re)"):chip(p.estado||"—","var(--am)");
+      return`<tr><td style="${td}">${_elFecha(p.fecha_pago||p.created_at)}</td><td style="${td}">${esc(nom(p.cuit))}</td><td style="${td}">${esc(p.concepto||"")}</td><td style="${td}">${esc(p.medio_pago||"")}</td><td style="${td};text-align:right">${_extM(p.monto)}</td><td style="${td}">${e}</td><td style="${td}">${f}</td></tr>`;}),"Todavía no hay pagos registrados.");
+  }
+  if(elTab==="susc"){
+    cuerpo=tabla(["Alumno","Plan","Periodicidad","Monto","Inicio","Vence","Renueva solo","Estado"],susc.map(s=>{const d=_elDias(s.fecha_vencimiento);return`<tr><td style="${td}">${esc(nom(s.cuit))}</td><td style="${td}">${esc(s.plan||"")}</td><td style="${td}">${esc(s.periodicidad||"")}</td><td style="${td}">${_extM(s.monto)}</td><td style="${td}">${_elFecha(s.fecha_inicio)}</td><td style="${td};color:${d!==null&&d<0?"var(--re)":d!==null&&d<=30?"var(--am)":"inherit"}">${_elFecha(s.fecha_vencimiento)}</td><td style="${td}">${s.renovacion_automatica?"Sí":"No"}</td><td style="${td}">${s.estado==="vencida"?chip("Vencida","var(--re)"):chip(s.estado||"activa","var(--gr)")}</td></tr>`;}),"Todavía no hay suscripciones.");
+  }
+  if(elTab==="clientes"){
+    const q=elBusq.toLowerCase();
+    const lista=clientes.filter(c=>!q||[c.nombre_completo,c.email,c.cuit,c.razon_social].some(v=>String(v||"").toLowerCase().includes(q)));
+    cuerpo=`<input class="fi" placeholder="Buscar por nombre, mail o CUIT..." value="${esc(elBusq)}" oninput="elBusq=this.value;renderElearning();this.focus()" style="max-width:320px;margin-bottom:10px">`+
+      tabla(["Nombre","CUIT","Mail","Teléfono","Condición fiscal","Provincia","En alumnos","Registrado"],lista.slice(0,300).map(c=>`<tr><td style="${td}">${esc(c.nombre_completo||"—")}${c.razon_social?`<br><span style="color:var(--tx3)">${esc(c.razon_social)}</span>`:""}</td><td style="${td}">${esc(_elCuit(c.cuit))}</td><td style="${td}">${esc(c.email||"—")}</td><td style="${td}">${esc(c.telefono||"—")}</td><td style="${td}">${esc(c.condicion_fiscal||"—")}</td><td style="${td}">${esc(c.provincia||"—")}</td><td style="${td}">${c.alumno_id?chip("Vinculado","var(--gr)"):chip("No está","var(--tx3)")}</td><td style="${td}">${_elFecha(c.registrado_en)}</td></tr>`),"No hay clientes que coincidan.");
+  }
+  if(elTab==="cursos"){
+    cuerpo=tabla(["Curso","Estado","Inicio","Fin","Cupos","Precio","Curso del panel"],cursos.map(c=>`<tr><td style="${td}">${esc(c.nombre||"—")}</td><td style="${td}">${esc(c.estado||"—")}</td><td style="${td}">${_elFecha(c.fecha_inicio)}</td><td style="${td}">${_elFecha(c.fecha_fin)}</td><td style="${td}">${c.cupos_inscriptos||0}${c.cupos_max?` / ${c.cupos_max}`:""}</td><td style="${td}">${c.precio!=null?_extM(c.precio):"—"}</td><td style="${td}">${c.panel_curso_id?chip("Vinculado","var(--gr)"):chip("Sin vincular","var(--am)")}</td></tr>`),"Todavía no se sincronizaron cursos. Tocá 🔄 Sincronizar ahora.");
+  }
+  if(elTab==="insc"){
+    cuerpo=tabla(["Fecha","Alumno","Mail","CUIT","Curso","Estado","Monto"],insc.slice(0,300).map(i=>`<tr><td style="${td}">${_elFecha(i.fecha_inscripcion)}</td><td style="${td}">${esc(i.alumno_nombre||"—")}</td><td style="${td}">${esc(i.alumno_email||"—")}</td><td style="${td}">${esc(_elCuit(i.alumno_cuit))}</td><td style="${td}">${esc(cursoNom(i.elearning_curso_id))}</td><td style="${td}">${esc(i.estado||"")}</td><td style="${td}">${i.monto_pagado!=null?_extM(i.monto_pagado):"—"}</td></tr>`),"Todavía no se sincronizaron inscripciones.");
+  }
+  if(elTab==="eventos"){
+    cuerpo=`<div style="font-size:11px;color:var(--tx3);margin-bottom:8px">Últimos 100 avisos que mandó la plataforma por webhook. Sirve para comprobar que la conexión funciona.</div>`+
+      tabla(["Recibido","Tipo","CUIT del alumno","Ocurrió en la plataforma"],eventos.map(e=>`<tr><td style="${td}">${_elFecha(e.created_at)} ${new Date(e.created_at).toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})}</td><td style="${td}">${esc(e.tipo)}</td><td style="${td}">${esc(_elCuit(e.alumno_cuit))}</td><td style="${td}">${_elFecha(e.ocurrido_en)}</td></tr>`),"No llegó ningún evento todavía.");
+  }
+  el.innerHTML=barra+cuerpo;
+}
+
+function elCopiarMails(){
+  if(!_el)return;
+  const conPago=new Set(_el.pagos.filter(p=>p.estado==="aprobado").map(p=>String(p.cuit)));
+  const mails=_el.clientes.filter(c=>!conPago.has(String(c.cuit))&&c.email).map(c=>c.email);
+  if(!mails.length){toast("No hay mails para copiar","inf");return;}
+  navigator.clipboard.writeText(mails.join("; ")).then(()=>toast(`📋 ${mails.length} mails copiados`,"ok")).catch(()=>toast("No se pudo copiar","err"));
+}
 
 async function loadPlanes(){
   const grid=document.getElementById("planes-grid");
