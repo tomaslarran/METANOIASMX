@@ -4611,6 +4611,15 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 </div>
 
+<!-- MODAL CERTIFICADO MiPyME -->
+<div class="mov" id="modal-mipyme" onclick="if(event.target===this&&_movDown===this)closeModal('modal-mipyme')">
+<div class="modal" style="max-width:480px">
+  <div class="mt">📜 Certificado MiPyME <button class="mt-close" onclick="closeModal('modal-mipyme')">✕</button></div>
+  <div id="mipyme-body"></div>
+  <div class="ma"><button class="bc" onclick="closeModal('modal-mipyme')">Cancelar</button><button class="bk" onclick="confirmarMipyme()">✅ Guardar certificado</button></div>
+</div>
+</div>
+
 <!-- MODAL CIERRE DE TARJETA -->
 <div class="mov" id="modal-liq-tarjeta" onclick="if(event.target===this&&_movDown===this)closeModal('modal-liq-tarjeta')">
 <div class="modal" style="max-width:640px;max-height:92vh;overflow-y:auto">
@@ -5503,6 +5512,19 @@ async function renderAlertas(){
       sub:`Período ${esc(c.periodo)} · fecha tope`,fecha:c.fecha_tope,
       onclick:`goPage('impuestos',document.getElementById('nav-impuestos'));setImpTab('auren')`});
   });
+
+  // ── Alerta de vencimiento del certificado MiPyME ──
+  try{
+    const fiscMp=await sb("datos_fiscales_sociedad?select=sociedad,mipyme_vencimiento").catch(()=>[]);
+    fiscMp.filter(f=>f.mipyme_vencimiento).forEach(f=>{
+      const d=days(f.mipyme_vencimiento);
+      if(d===null||d>60)return;
+      alertas.push({tipo:"impuesto",icon:"📜",urgencia:d<0?"critica":d===0?"hoy":d<=7?"semana":"mes",d,
+        titulo:d<0?`Certificado MiPyME ${f.sociedad} VENCIDO`:`Certificado MiPyME ${f.sociedad} vence en ${d} día${d!==1?"s":""}`,
+        sub:"Sin certificado vigente, la ley 25.413 se computa solo al 33%. Renovalo y subí el nuevo en Resúmenes.",fecha:f.mipyme_vencimiento,
+        onclick:`goPage('cashflow',document.getElementById('nav-cashflow'));setCFTab('resumenes')`});
+    });
+  }catch(e){}
 
   // ── Alerta de gastos pagados con medio personal (independencia patrimonial) ──
   try{
@@ -13755,7 +13777,7 @@ async function importarExtractoPDF(input){
     if(dup===null){toast("Falta correr el SQL de extractos bancarios en Supabase (tabla extractos_bancarios)","err");input.value="";return;}
     if(dup.length){toast(`Ese extracto de ${sociedad} (${parsed.periodo.desde} a ${parsed.periodo.hasta}) ya está importado. Verlo en 🗂 Resúmenes.`,"inf");input.value="";return;}
     parsed.movs.forEach(m=>{m.categoria=_extClasificar(m,parsed.cuit);});
-    _extState={parsed,sociedad,file,bancoCod:_extCodigoBanco(sociedad),mipyme:!!soc.mipyme_vigente,mipymeVto:soc.mipyme_vencimiento||null};
+    _extState={parsed,sociedad,file,bancoCod:_extCodigoBanco(sociedad),mipyme:!!soc.mipyme_vigente&&(!soc.mipyme_vencimiento||soc.mipyme_vencimiento>=parsed.periodo.hasta),mipymeVto:soc.mipyme_vencimiento||null,mipymeVencidoEnPeriodo:!!soc.mipyme_vigente&&!!soc.mipyme_vencimiento&&soc.mipyme_vencimiento<parsed.periodo.hasta};
     renderExtractoReview();
     openModal("modal-extracto");
   }catch(e){toast("Error al leer el extracto: "+e.message,"err");}
@@ -13770,7 +13792,7 @@ function extCambiarCat(idx,val){
 }
 
 function renderExtractoReview(){
-  const {parsed,sociedad,file,bancoCod,mipyme,mipymeVto}=_extState;
+  const {parsed,sociedad,file,bancoCod,mipyme,mipymeVto,mipymeVencidoEnPeriodo}=_extState;
   const ars=parsed.movs.filter(m=>m.moneda==="ARS");
   const usd=parsed.movs.filter(m=>m.moneda==="USD");
   const asiento=_extArmarAsiento(parsed.movs,parsed.cuentas,bancoCod,mipyme);
@@ -13819,6 +13841,7 @@ function renderExtractoReview(){
     </table>
     <div style="font-size:11px;color:var(--tx3);margin-bottom:14px">Ley 25.413: se toma como crédito a computar ${_extM(asiento.computable)} ${mipyme?"(100%, certificado MiPyME)":"(el 33% que informa el banco)"}; el resto va a gasto. SIRCREB y percepciones de IVA quedan como saldo a favor.</div>
     <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:14px;cursor:pointer"><input type="checkbox" ${mipyme?"checked":""} onchange="extToggleMipyme(this.checked)"> ${esc(sociedad)} tiene certificado MiPyME vigente (computa el 100% de la ley 25.413)${mipymeVto?` · vence ${esc(mipymeVto)}`:""}</label>
+    ${mipymeVencidoEnPeriodo?`<div style="font-size:11px;color:var(--am);margin:-8px 0 14px">⚠️ El certificado cargado venció antes del fin de este período: se asume sin MiPyME (33%). Si hay uno más nuevo, subilo en 🗂 Resúmenes.</div>`:""}
     <details style="margin-bottom:6px"><summary style="cursor:pointer;font-size:12px;color:var(--ac)">Ver y reclasificar los ${ars.length} movimientos</summary>
       <div style="max-height:260px;overflow:auto;margin-top:8px">
       <table style="width:100%;border-collapse:collapse">
@@ -13945,7 +13968,9 @@ async function renderResumenesGuardados(){
   const tot=enEj.reduce((a,e)=>{
     a.gb+=-(g(e,"comision")+g(e,"comision_iva_incl")+g(e,"interes"));a.imp+=-g(e,"imp_25413");a.sir+=-g(e,"sircreb");a.iva+=-(g(e,"iva_cf")+g(e,"perc_iva"));a.bruto+=(e.resumen?.gastos_bancarios||0);return a;
   },{gb:0,imp:0,sir:0,iva:0,bruto:0});
+  const mipymeHTML=await _mipymeCardsHTML();
   el.innerHTML=`
+    ${mipymeHTML}
     <div style="background:var(--surf);border:1px solid var(--b);border-radius:10px;padding:12px 14px;margin-bottom:14px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--tx3);margin-bottom:8px">Cobertura del ejercicio ${ej}/${ej+1} — extractos bancarios importados</div>
       ${cobertura}
@@ -14026,6 +14051,131 @@ async function exportarResumenesEjercicio(){
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(filas),"Extractos bancarios");
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(l1),"Pagos de tarjeta");
   XLSX.writeFile(wb,`resumenes_ejercicio_${ej}-${ej+1}${resSociedad?"_"+resSociedad:""}.xlsx`);
+}
+
+// ── CERTIFICADO MiPyME (computa 100% de la ley 25.413) ──────────────
+let _mipymeState=null;
+const _MIPYME_MESES={enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12};
+
+function _mipymeFechas(lines){
+  const iso=(d,m,y)=>`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+  const buscar=txt=>{
+    const out=[];let m;
+    const r1=/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/g;
+    while((m=r1.exec(txt)))out.push(iso(m[1],m[2],m[3]));
+    const r2=/(\d{1,2})\s+de\s+([a-záéíóú]+)\s+(?:de|del)\s+(\d{4})/gi;
+    while((m=r2.exec(txt))){const mm=_MIPYME_MESES[m[2].toLowerCase()];if(mm)out.push(iso(m[1],mm,m[3]));}
+    return out;
+  };
+  const cands=[];
+  lines.forEach((l,i)=>{
+    if(/vencimiento|vigencia|vigente hasta|v[aá]lido hasta|hasta el|hastas*:|caducidad/i.test(l))
+      buscar(l+" "+(lines[i+1]||"")).forEach(f=>cands.push(f));
+  });
+  return cands.filter(f=>f>="2020-01-01"&&f<"2041-01-01").sort();
+}
+
+function _mipymeEstado(f){
+  if(!f||!f.mipyme_vencimiento)return f?.mipyme_vigente?{k:"sinfecha",txt:"Vigente (sin fecha de vencimiento cargada)",col:"var(--am)"}:{k:"sin",txt:"Sin certificado cargado",col:"var(--tx3)"};
+  const d=days(f.mipyme_vencimiento);
+  const fmt=f.mipyme_vencimiento.split("-").reverse().join("/");
+  if(d<0)return{k:"vencido",txt:`Vencido el ${fmt} (hace ${-d} días)`,col:"var(--re)"};
+  if(d<=60)return{k:"porvencer",txt:`Vence el ${fmt} · faltan ${d} días`,col:"var(--am)"};
+  return{k:"vigente",txt:`Vigente hasta ${fmt} · faltan ${d} días`,col:"var(--gr)"};
+}
+
+async function _mipymeCardsHTML(){
+  const fisc=await sb("datos_fiscales_sociedad?select=*").catch(()=>[]);
+  const socs=resSociedad?[resSociedad]:["SUDES","POINTERS"];
+  return`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;margin-bottom:14px">${socs.map(s=>{
+    const f=fisc.find(x=>x.sociedad===s)||{};
+    const e=_mipymeEstado(f);
+    return`<div style="background:var(--surf);border:1px solid ${e.col};border-radius:10px;padding:12px 14px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><b style="font-size:13px">📜 Certificado MiPyME — ${s}</b></div>
+      <div style="font-size:12px;color:${e.col};font-weight:600;margin-bottom:4px">${e.txt}</div>
+      <div style="font-size:11px;color:var(--tx3);margin-bottom:10px">Con certificado vigente se computa el 100% de la ley 25.413 como crédito.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <label class="btn sm pri" style="cursor:pointer">📎 Subir certificado (PDF)<input type="file" accept=".pdf,application/pdf" style="display:none" onchange="subirCertificadoMipyme('${s}',this)"></label>
+        <button class="btn sm sec" onclick="abrirMipymeManual('${s}')">✎ Cambiar vencimiento</button>
+        ${f.mipyme_archivo_path?`<button class="btn sm" onclick="abrirPdfResumen('${f.mipyme_archivo_path}')">📄 Ver PDF</button>`:""}
+      </div></div>`;
+  }).join("")}</div>`;
+}
+
+async function subirCertificadoMipyme(sociedadHint,input){
+  const file=input.files[0];
+  if(!file)return;
+  toast("Leyendo certificado...","inf");
+  let nota="",venc="",soc=sociedadHint;
+  try{
+    const lines=await _extPdfALineas(file);
+    const texto=lines.join(" ");
+    const fechas=_mipymeFechas(lines);
+    venc=fechas.length?fechas[fechas.length-1]:"";
+    const fisc=await sb("datos_fiscales_sociedad?select=sociedad,cuit").catch(()=>[]);
+    const cuits=[...texto.matchAll(/\b(\d{2})-?(\d{8})-?(\d)\b/g)].map(m=>m[1]+m[2]+m[3]);
+    const hit=fisc.find(f=>cuits.includes(String(f.cuit||"").replace(/\D/g,"")));
+    if(hit){soc=hit.sociedad;nota+=hit.sociedad!==sociedadHint?`⚠️ El CUIT del certificado es de ${hit.sociedad}, no de ${sociedadHint}: se asignó a ${hit.sociedad}. `:`✓ El CUIT coincide con ${soc}. `;}
+    else nota+="⚠️ No encontré el CUIT de SUDES ni de POINTERS en el PDF: verificá que sea el certificado correcto. ";
+    const dm=texto.match(/Desdes*:s*(d{1,2})[-/](d{1,2})[-/](d{4})/i);
+    const desde=dm?`${dm[1].padStart(2,"0")}/${dm[2].padStart(2,"0")}/${dm[3]}`:"";
+    nota+=venc?`Vigencia detectada${desde?` desde el ${desde}`:""} hasta el ${venc.split("-").reverse().join("/")}. Confirmala.`:"No pude leer una fecha de vencimiento: ingresala a mano.";
+  }catch(e){
+    nota="No se pudo leer el texto del PDF (puede ser una imagen escaneada). Ingresá el vencimiento a mano.";
+  }
+  _mipymeState={file,sociedad:soc,nota,venc};
+  _mipymeRender();
+  openModal("modal-mipyme");
+  input.value="";
+}
+
+async function abrirMipymeManual(soc){
+  const f=(await sb(`datos_fiscales_sociedad?sociedad=eq.${soc}&select=*`).catch(()=>[]))[0]||{};
+  _mipymeState={file:null,sociedad:soc,nota:"Cambiá la fecha de vencimiento del certificado ya cargado.",venc:f.mipyme_vencimiento||""};
+  _mipymeRender();
+  openModal("modal-mipyme");
+}
+
+function _mipymeRender(){
+  const s=_mipymeState;
+  document.getElementById("mipyme-body").innerHTML=`
+    <div style="font-size:12px;color:var(--tx2);margin-bottom:12px;line-height:1.5">${esc(s.nota)}</div>
+    ${s.file?`<div style="font-size:11px;color:var(--tx3);margin-bottom:10px">Archivo: ${esc(s.file.name)}</div>`:""}
+    <div class="form-grid" style="grid-template-columns:1fr 1fr">
+      <div class="fg"><label class="fl">Sociedad</label><select class="fs" id="mipyme-soc"><option ${s.sociedad==="SUDES"?"selected":""}>SUDES</option><option ${s.sociedad==="POINTERS"?"selected":""}>POINTERS</option></select></div>
+      <div class="fg"><label class="fl">Vencimiento del certificado *</label><input class="fi" id="mipyme-venc" type="date" value="${esc(s.venc||"")}"></div>
+    </div>`;
+}
+
+async function confirmarMipyme(){
+  const s=_mipymeState;
+  if(!s)return;
+  const soc=document.getElementById("mipyme-soc").value;
+  const venc=document.getElementById("mipyme-venc").value;
+  if(!venc){toast("Ingresá la fecha de vencimiento","err");return;}
+  try{
+    let path=null;
+    if(s.file){
+      const p=`certificados/${soc}/mipyme_${venc}_${Date.now()}.pdf`;
+      const up=await fetch(`${SB}/storage/v1/object/extractos-bancarios/${p}`,{method:"POST",headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":"application/pdf","x-upsert":"false"},body:s.file});
+      if(up.ok)path=p;else toast("⚠️ No se pudo guardar el PDF (se guarda igual la fecha)","err");
+    }
+    const body={mipyme_vigente:true,mipyme_vencimiento:venc};
+    if(path)body.mipyme_archivo_path=path;
+    try{
+      await sb(`datos_fiscales_sociedad?sociedad=eq.${soc}`,{method:"PATCH",body:JSON.stringify(body)});
+    }catch(e){
+      if(path){
+        delete body.mipyme_archivo_path;
+        await sb(`datos_fiscales_sociedad?sociedad=eq.${soc}`,{method:"PATCH",body:JSON.stringify(body)});
+        toast("Guardado el vencimiento. Para archivar también el PDF falta la columna mipyme_archivo_path (ver SQL)","inf");
+      }else throw e;
+    }
+    closeModal("modal-mipyme");
+    _mipymeState=null;
+    toast(`✅ Certificado MiPyME de ${soc} registrado · vence ${venc.split("-").reverse().join("/")}`,"ok");
+    renderResumenesGuardados();
+  }catch(e){toast("Error: "+e.message,"err");}
 }
 
 // ── CIERRE DE TARJETA ───────────────────────────────────────────────

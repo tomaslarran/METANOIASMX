@@ -77,3 +77,6 @@ CREATE TABLE IF NOT EXISTS cierres_mensuales (
 );
 ALTER TABLE cierres_mensuales ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Solo autenticados" ON cierres_mensuales FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- 7) Archivo del certificado MiPyME
+ALTER TABLE datos_fiscales_sociedad ADD COLUMN IF NOT EXISTS mipyme_archivo_path text;

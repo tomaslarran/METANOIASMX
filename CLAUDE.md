@@ -1399,7 +1399,9 @@ UPDATE cursos SET publicacion_aprobada = true WHERE estado != 'Borrador';
 - 🐛 **Bug corregido**: las 2 Visa y las 2 cuentas Macro no tenían `cuenta_contable_id` y `getBancoCodigoPorMedio` caía en "banco" por el nombre: una compra con Visa figuraba como salida de banco. Se crearon 2.1.06.001/002 (Visa SUDES/POINTERS), se vincularon los 4 medios y se corrigió el asiento de Signal Seguridad. Las 2 facturas de POINTERS pagadas con Visa siguen sin asiento de pago: correr 🔄 Generar históricos.
 - Cuentas nuevas en el plan: 1.1.03.002/003/004, 2.1.06 (+.001/.002), 5.3.01.002, 5.3.02 (+.001).
 
-**SQL pendiente:** correr `sql_extractos_bancarios.sql` en Supabase (bucket + 3 tablas + columnas + tipos de asiento + `cierres_mensuales`). Hasta correrlo, el importador avisa que falta.
+- ✅ **Certificado MiPyME con alerta de vencimiento** (🗂 Resúmenes, tarjeta por sociedad): se sube el PDF, el panel lee el CUIT (verifica que sea de SUDES o POINTERS) y la fecha de vencimiento ("Hasta: dd-mm-aaaa"), pide confirmarla y la guarda en `datos_fiscales_sociedad.mipyme_vencimiento`. Alerta en el dashboard desde 60 días antes (crítica si venció). El importador de extractos solo aplica el 100% si el certificado sigue vigente al fin del período; si venció, usa 33% y avisa. **Certificado de SUDES cargado el 2/10/2026: vigencia 08-08-2026 → 31-10-2026** (renovar antes del 31/10). ⚠️ Arranca el 08/08: del extracto de agosto, los movimientos del 1 al 7 quedan fuera de la vigencia; consultar a la contadora si se prorratea.
+
+**SQL:** `sql_extractos_bancarios.sql` ejecutado el 2/10/2026 (bucket + tablas + columnas + tipos de asiento + `cierres_mensuales`). **Falta correr la última línea**: `ALTER TABLE datos_fiscales_sociedad ADD COLUMN IF NOT EXISTS mipyme_archivo_path text;` (para guardar el PDF del certificado).
 
 **Próximo:** cierre de mes real (tabla `cierres_mensuales` ya incluida en el SQL): checklist ampliado con asientos balanceados, saldo banco vs contable y cuentas corrientes; vista anual para el balance. Decisión tomada: cierre **con aviso** (registra quién/cuándo, avisa si se carga algo en un mes cerrado, se puede reabrir).
 
