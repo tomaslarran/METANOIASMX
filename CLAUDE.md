@@ -1656,3 +1656,34 @@ CREATE POLICY "Solo autenticados" ON nueva_tabla FOR ALL TO authenticated USING 
 **Pendiente de Tomás:** crear la función en Supabase → Edge Functions → *Deploy a new function* → nombre exacto `enviar-pago-proveedor` → pegar `supabase/functions/enviar-pago-proveedor/index.ts` (usa los secrets `SMTP_HOST`/`SMTP_USER`/`SMTP_PASS` que ya usa `enviar-diplomas`); correr `sql_comprobante_pago.sql`; cargar el email de los proveedores (Farah no tiene). Después reenviar el mail de la OP de Auren (OP-202610-9220, la que se pagó en la prueba) con ✉️ Reenviar.
 **Estado de órdenes al 5 Oct:** OP-202610-9220 (Auren) pagada con retención $64.008,60; OP-202610-0254 (Farah) sigue pendiente de pago (retención $59.310).
 **Lección:** verificar los deploys pegándole a la función (`POST /functions/v1/<nombre>` sin sesión: 401 = existe, 404 = no existe) en vez de confiar en lo anotado.
+
+
+---
+
+## 🌐 Cambio de dominio del panel — ANÁLISIS GUARDADO, SIN EJECUTAR (5 Oct 2026)
+
+**Estado:** Tomás consiguió dominio propio para que el panel deje de llamarse `tomaslarran.github.io/METANOIASMX`. **Decisión: esperar a la reunión de equipo antes de hacer nada.** No se tocó ninguna función, ni el DNS, ni GitHub. Retomar cuando el equipo defina el dominio.
+
+**Datos relevantes**
+- Tienen **dos dominios en DonWeb** y la idea es **mantener ambos registrados** para que nadie más los use: `metanoiasme.com` (con **e**, el nuevo) y `metanoiasmx.com` (con **x**, el del correo `@metanoiasmx.com` y de `plataforma.metanoiasmx.com`). El DNS de ambos se administra en DonWeb.
+- `metanoiasme.com` **ya tiene un sitio web** (Apache en DonWeb, IP 66.97.40.106) y el correo va por **Google Workspace** (MX `aspmx.l.google.com`): **no tocar la raíz, `www` ni los MX**. `panel.metanoiasme.com` está libre.
+- **Decisión pendiente (reunión):** cuál dominio usa el panel. `panel.metanoiasmx.com` sería coherente con el correo y la plataforma; `panel.metanoiasme.com` ya está conseguido y no choca con nada. El otro queda de reserva (opcional: redirección en DonWeb hacia el principal). Anotar vencimiento y renovación automática de ambos.
+- Con dominio propio **no hay redirección**: la barra muestra siempre `panel.<dominio>`. La única redirección es la inversa (GitHub manda la dirección vieja `github.io` a la nueva). Se usa un **CNAME** (no una "redirección" de DonWeb).
+
+**Qué se rompería si se cambia solo el DNS:** **32 edge functions** tienen `Access-Control-Allow-Origin` fijo en `https://tomaslarran.github.io`; con el dominio nuevo el navegador bloquea todas sus respuestas y el panel deja de funcionar en cada acción que las llama. Además `invitar-usuario` y `recuperar-password` tienen la dirección vieja en `REDIRECT` (mails de invitación / recuperar contraseña) y Supabase Auth necesita la URL nueva. El panel en sí (`index.html`, `manifest.json`, `sw.js`) **no** tiene la dirección escrita. Las funciones con `*` (`sync-instagram`, `sync-linkedin`) y las 3 sin CORS (`agente-ejecutivo`, `agente-mensajes`, `whatsapp-agente`) no se tocan. Webhooks de Meta, Twilio y la plataforma de cursos apuntan a Supabase: no cambian.
+
+**Plan en orden (cero cortes: la dirección vieja sigue andando hasta el final)**
+1. **Código (lo prepara Claude):** `tools/cambio_dominio_mk_cors.js` (preparado, **no ejecutado**) convierte las 32 funciones a un CORS por pedido que acepta ambas direcciones: `corsBase` + `corsPara(req)` con `ORIGENES_PERMITIDOS` leído del secret `ORIGENES_PERMITIDOS` (por defecto la vieja + `https://panel.metanoiasme.com`; **ajustar al dominio elegido antes de correrlo**) y `REDIRECT` de los mails leído del secret `PANEL_URL`. Verificar con una prueba local (OPTIONS con distintos `Origin`) antes de subir.
+2. **Redeployar las 32 funciones:** a mano desde el dashboard de Supabase, o con una orden desde la PC (`npx supabase functions deploy <nombre> --project-ref jppxmdvddvbsvymogvcp --use-api`, requiere un Personal Access Token de Supabase; no probado). **Cuidado:** redeployar solo las 32 con CORS (hoy tienen "verify JWT" activo); no redeployar las 3 de webhook sin CORS porque perderían su configuración sin JWT.
+3. **DonWeb → Zona DNS del dominio elegido:** agregar un registro **CNAME** `panel` → `tomaslarran.github.io.` (sin tocar nada más).
+4. **GitHub → Settings → Pages → Custom domain:** poner `panel.<dominio>`; esperar el certificado HTTPS (minutos a ~1 h) y tildar *Enforce HTTPS*. (Recién acá se crea el archivo `CNAME` del repo: **no agregarlo antes** de que el DNS responda, o la dirección vieja redirige a una que todavía no existe.)
+5. **Supabase → Authentication → URL Configuration:** *Site URL* = dirección nueva y agregar ambas a *Redirect URLs*; cargar el secret `PANEL_URL`.
+6. **Avisar al equipo:** todos vuelven a iniciar sesión (la sesión es por dirección), quien tenga el panel instalado como app lo reinstala desde la nueva, y se reinician las preferencias del navegador (modo claro/oscuro). Elegir un momento tranquilo.
+7. Cuando todos migraron, opcional: sacar la dirección vieja de `ORIGENES_PERMITIDOS` (cambiando el secret, sin redeploy).
+
+**Beneficio extra:** `manifest.json` (`start_url: "/"`) y `sw.js` (`ASSETS: '/', '/index.html'`) están pensados para un sitio en la raíz; con dominio propio la instalación como app anda mejor que hoy.
+
+**Esfuerzo estimado:** código 30 min (Claude) · redeploy de funciones entre 20 min (CLI) y 1–2 h (a mano) · DNS + GitHub 15 min + espera del certificado · Supabase Auth 2 min.
+
+### ⚠️ Pendiente aparte: publicación de GitHub Pages trabada (5 Oct 2026)
+Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro si falla la función) y `dd7150e` (commit vacío para relanzar) **no se publicaron**: las ejecuciones de "pages build and deployment" se cancelaron por un **incidente de GitHub Actions** (activo ese día). El sitio sigue en `sw.js` v62. Cuando GitHub se normalice: abrir la ejecución fallida → **Re-run all jobs** (o subir otro commit), esperar a ver `metanoia-v63` en `https://tomaslarran.github.io/METANOIASMX/sw.js`, recargar el panel con Ctrl+Shift+R y probar ✉️ Reenviar con la factura de Auren (00001-00001017, OP-202610-9220). La función `enviar-pago-proveedor`, la columna `comprobante_pago_path` y el bucket `comprobantes-pago` ya están en Supabase (verificado).
