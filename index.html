@@ -5217,6 +5217,19 @@ function days(d){if(!d)return null;return Math.ceil((new Date(d)-new Date(today(
 function fmt(d){if(!d)return"";const[y,m,dd]=d.split("-");return`${dd}/${m}/${y}`}
 function fmtNum(v,siempre2=false){if(v==null||v==="")return"—";const n=parseFloat(v);if(isNaN(n))return"—";const dec=n%1!==0||siempre2;return"$"+n.toLocaleString("es-AR",{minimumFractionDigits:dec?2:0,maximumFractionDigits:2})}
 
+// Un <input type="number"> SIEMPRE lee el punto como separador decimal (nunca como separador de miles,
+// sin importar el locale) y descarta la coma en silencio mientras se tipea. Si alguien escribe "240.000"
+// pensando en 240 mil, el navegador guarda 240.000 = 240 (÷1000, sin ningún error visible). Esta función
+// detecta el patrón de punto-cada-3-dígitos (separador de miles) y lo saca antes de parsear.
+function parseMontoAR(str){
+  if(str==null)return NaN;
+  str=String(str).trim();
+  if(!str)return NaN;
+  if(/^-?\d{1,3}(\.\d{3})+$/.test(str))str=str.replace(/\./g,"");
+  else if(str.includes(","))str=str.replace(/\./g,"").replace(",",".");
+  return parseFloat(str);
+}
+
 function calcTasaEstimada(cuotas){
   try{
     const sorted=cuotas
@@ -19857,7 +19870,7 @@ async function saveRendDiarios(){
   const btn=document.getElementById("rend-save-btn");btn.disabled=true;
   try{
     const upserts=activas.map(inv=>{
-      const val=parseFloat(document.getElementById(`rend-val-${inv.id}`)?.value);
+      const val=parseMontoAR(document.getElementById(`rend-val-${inv.id}`)?.value);
       return isNaN(val)?null:{inversion_id:inv.id,fecha:hoy,valor:val};
     }).filter(Boolean);
     if(!upserts.length){toast("Ingresá al menos un valor","err");btn.disabled=false;return;}
