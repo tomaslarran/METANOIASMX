@@ -894,8 +894,9 @@ CREATE POLICY "Solo autenticados" ON elearning_suscripciones FOR ALL TO authenti
 **Pendiente:**
 - [x] Spec v2 lista para mandar a Agustín (29 Sep 2026); el secret va por WhatsApp
 - [x] Secrets `ELEARNING_WEBHOOK_SECRET` y `ELEARNING_URL` cargados, `sync-elearning` deployada (29 Sep 2026)
-- [ ] Secret `ELEARNING_API_TOKEN` — esperando que Agustín genere el token Sanctum
-- [ ] Correr SQL de las tablas `elearning_*` (bloque de arriba del 7 Sep + este bloque)
+- [x] Secret `ELEARNING_API_TOKEN` cargado (5 Oct 2026) — "🔄 Sincronizar ahora" funciona: trajo 6 cursos y 17 inscripciones. Las rutas `/api/cursos`, `/api/inscripciones`, `/api/alumnos`, `/api/eventos` existen (401 sin token)
+- [x] SQL de las 7 tablas `elearning_*` corrido (29 Sep 2026); `sync-elearning` con "Verify JWT" desactivado en el dashboard (necesario para que el webhook de Laravel llegue a la función)
+- [ ] Primer evento real del webhook — al 5 Oct 2026 todavía no llegó ninguno: **no hubo ningún pago todavía** (las 17 inscripciones son registros sin cobro). Cuando entre el primer pago, revisar la pestaña Eventos de Cursos → E-learning
 - [ ] Vista en el panel: estado de cuenta en la ficha del alumno (pagos, facturas, suscripción) + listado de suscripciones por vencer + listado de pagos pendientes para seguimiento
 - [ ] Mail de seguimiento a los que se registraron y no pagaron (Agostina Sarmiento, Giovanna Massaglia, Nicolás Pérez y otros) — tarea de Tomás de la reunión del 29/09
 - [ ] Mensaje automático de renovación (WhatsApp template o email) al recibir `suscripcion.por_vencer` — hoy solo avisa al equipo por campanita
@@ -1646,3 +1647,12 @@ CREATE POLICY "Solo autenticados" ON nueva_tabla FOR ALL TO authenticated USING 
 - Revisar que "Varios construcción" salga solo en el select de 21% (hoy también aparece en 10,5% por ser opción fija del HTML).
 
 **Backups de datos tocados hoy** (en `backups/`): `caja_auto_comprobantes_20261002.json`, `ops_borrador_anuladas_20261002.json`, `proveedores_creados_20261002.json`.
+
+### 🔧 Mail del pago de OP no salía (5 Oct 2026) — función nunca desplegada
+
+**Síntoma:** al pagar una OP y apretar enviar, el panel avisaba que no se pudo enviar el email al proveedor.
+**Causa verificada contra Supabase:** la edge function **`enviar-pago-proveedor` devuelve 404 (no existe en el proyecto)**. Las otras 36 funciones del repo sí están desplegadas. El 1 Oct la Automatización C figuraba como "deployada" en este archivo, pero esa función nunca se creó en el dashboard. Un 404 del gateway no trae CORS, por eso el navegador lo muestra como "Failed to fetch". Además falta correr `sql_comprobante_pago.sql` (la columna `ordenes_pago.comprobante_pago_path` y el bucket `comprobantes-pago` no existen).
+**Qué se hizo:** (1) el panel ahora explica el error ("no responde la función de envío… el pago quedó registrado") y (2) botón **✉️ Reenviar** en Comprobantes para facturas pagadas con OP: pide el email y, opcional, el comprobante, y manda OP + certificado + comprobante. La función se probó localmente con un correo simulado (11 controles: adjuntos, nombres seguros, PDF sin prefijo `filename=generated.pdf`, guardado en el bucket, casos sin email/sin sesión).
+**Pendiente de Tomás:** crear la función en Supabase → Edge Functions → *Deploy a new function* → nombre exacto `enviar-pago-proveedor` → pegar `supabase/functions/enviar-pago-proveedor/index.ts` (usa los secrets `SMTP_HOST`/`SMTP_USER`/`SMTP_PASS` que ya usa `enviar-diplomas`); correr `sql_comprobante_pago.sql`; cargar el email de los proveedores (Farah no tiene). Después reenviar el mail de la OP de Auren (OP-202610-9220, la que se pagó en la prueba) con ✉️ Reenviar.
+**Estado de órdenes al 5 Oct:** OP-202610-9220 (Auren) pagada con retención $64.008,60; OP-202610-0254 (Farah) sigue pendiente de pago (retención $59.310).
+**Lección:** verificar los deploys pegándole a la función (`POST /functions/v1/<nombre>` sin sesión: 401 = existe, 404 = no existe) en vez de confiar en lo anotado.

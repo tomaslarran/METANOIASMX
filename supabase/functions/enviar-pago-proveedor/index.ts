@@ -9,7 +9,7 @@ const cors = {
 
 const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const limpiar = (s: string) => (s.startsWith("data:") ? s.slice(s.indexOf(",") + 1) : s);
-const seguro = (s: string) => String(s || "archivo").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80);
+const seguro = (s: string) => String(s || "archivo").normalize("NFD").replace(/\p{M}/gu, "").replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80);
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });

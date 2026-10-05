@@ -4715,6 +4715,21 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 </div>
 
+<!-- MODAL REENVIAR COMPROBANTE DE PAGO -->
+<div class="mov" id="modal-reenviar-pago" onclick="if(event.target===this&&_movDown===this)closeModal('modal-reenviar-pago')">
+<div class="modal" style="max-width:440px">
+  <div class="mt">✉️ Reenviar comprobante de pago <button class="mt-close" onclick="closeModal('modal-reenviar-pago')">✕</button></div>
+  <div style="font-size:13px;margin-bottom:10px"><b id="rp-numero"></b> · <span id="rp-proveedor"></span></div>
+  <div class="fg"><label class="fl">Email del proveedor *</label><input class="fi" type="email" id="rp-email" placeholder="proveedor@correo.com"></div>
+  <div class="fg"><label class="fl">Comprobante de pago (PDF o foto)</label><input class="fi" type="file" id="rp-comprobante" accept="application/pdf,image/*"></div>
+  <div id="rp-detalle" style="font-size:11px;color:var(--tx3);margin-bottom:10px"></div>
+  <div class="ma">
+    <button class="bc" onclick="closeModal('modal-reenviar-pago')">Cancelar</button>
+    <button class="bk" id="rp-btn" onclick="confirmarReenvioPago()">✉️ Enviar</button>
+  </div>
+</div>
+</div>
+
 <!-- MODAL PRODUCTOS FINNEGANS -->
 <div class="mov" id="modal-prod-finn" onclick="if(event.target===this&&_movDown===this)closeModal('modal-prod-finn')">
 <div class="modal" style="max-width:640px">
@@ -25759,6 +25774,7 @@ function renderComprobantes(){
         ${c.archivo_url?`<button onclick="window.open('${c.archivo_url}','_blank')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Ver archivo">👁</button>`:""}
         <button onclick="editComprobante('${c.id}')" style="background:none;border:1px solid ${faltaDesglose?"rgba(245,158,11,.6)":"var(--b)"};border-radius:5px;color:${faltaDesglose?"#FCD34D":"var(--tx3)"};font-size:10px;padding:3px 7px;cursor:pointer" title="${faltaDesglose?"Completar para Finnegans":"Editar"}">${faltaDesglose?"✏️":"✎"}</button>
         ${c.estado==="revisado"&&!c.tipo?.startsWith("NC")?_accionesPagoHTML(c,true):""}
+        ${c.estado==="pagado"&&!c.tipo?.startsWith("NC")?`<button onclick="reenviarComprobantePago('${c.id}')" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.4);border-radius:5px;color:#A78BFA;font-size:10px;padding:3px 7px;cursor:pointer" title="Reenviar al proveedor el comprobante de pago, la orden de pago y el certificado de retención">✉️ Reenviar</button>`:""}
         ${c.estado==="pendiente"
           ?`<button onclick="marcarEstadoComp('${c.id}','revisado')" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.4);border-radius:5px;color:#059669;font-size:10px;padding:3px 7px;cursor:pointer" title="Marcar como revisado — habilita OP y Finnegans">✓ OK</button>`
           :c.estado==="enviado_finnegans"
@@ -26539,7 +26555,42 @@ async function enviarComprobantePagoProveedor(c,op,extra={}){
       await sb(`proveedores?id=eq.${prov.id}`,{method:"PATCH",body:JSON.stringify({email:emailNuevo})}).catch(()=>{});prov.email=emailNuevo;
     }
     toast(email?`✉️ Enviado a ${email}: comprobante de pago${cert?", orden de pago y certificado de retención":" y orden de pago"}`:"📎 Comprobante de pago guardado","ok");
-  }catch(e){toast("⚠️ No se pudo enviar el email al proveedor: "+e.message,"err");}
+    return true;
+  }catch(e){
+    const sinConexion=/failed to fetch|networkerror|load failed/i.test(e.message||"");
+    toast("⚠️ No se pudo enviar el email al proveedor: "+(sinConexion?"no responde la función de envío (enviar-pago-proveedor). ¿Está desplegada en Supabase? El pago quedó registrado: usá ✉️ Reenviar desde Comprobantes cuando esté lista.":e.message),"err");
+    return false;
+  }
+}
+
+// Reenviar el mail de una factura ya pagada con orden de pago (por ejemplo si falló el envío)
+let _rpOP=null,_rpComp=null;
+async function reenviarComprobantePago(compId){
+  const c=comprobantes.find(x=>x.id===compId);
+  if(!c)return;
+  const ops=await sb(`ordenes_pago?comprobante_id=eq.${compId}&estado=eq.pagado&select=*`).catch(()=>[]);
+  if(!ops.length){toast("Esta factura se pagó sin orden de pago: no hay una orden para enviar","inf");return;}
+  _rpOP=ops[0];_rpComp=c;
+  const prov=_provDeComprobante(c);
+  document.getElementById("rp-numero").textContent=_rpOP.numero||"";
+  document.getElementById("rp-proveedor").textContent=c.proveedor||"";
+  document.getElementById("rp-email").value=prov?.email||"";
+  document.getElementById("rp-comprobante").value="";
+  document.getElementById("rp-detalle").textContent=parseFloat(_rpOP.monto_retencion)>0?"Se envían la orden de pago y el certificado de retención, más el comprobante de pago si lo adjuntás.":"Se envía la orden de pago, más el comprobante de pago si lo adjuntás.";
+  openModal("modal-reenviar-pago");
+}
+async function confirmarReenvioPago(){
+  if(!_rpOP||!_rpComp)return;
+  const email=document.getElementById("rp-email").value.trim();
+  if(!/^\S+@\S+\.\S+$/.test(email)){toast("Escribí un email válido del proveedor","err");return;}
+  const btn=document.getElementById("rp-btn");btn.disabled=true;btn.textContent="Enviando…";
+  try{
+    const f=document.getElementById("rp-comprobante").files?.[0]||null;
+    let comp=null;
+    if(f){try{comp=await _leerComprobantePago(f);}catch(e){toast(e.message,"err");return;}}
+    const ok=await enviarComprobantePagoProveedor(_rpComp,{..._rpOP,numero_comp:_rpComp.numero},{email,comprobante:comp});
+    if(ok)closeModal("modal-reenviar-pago");
+  }finally{btn.disabled=false;btn.textContent="✉️ Enviar";}
 }
 
 let _fiscalSociedadCache=null;
