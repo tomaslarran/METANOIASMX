@@ -4873,6 +4873,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
           <option value="">Sin definir</option>
           <option value="responsable_inscripto">Responsable Inscripto</option>
           <option value="monotributo">Monotributo</option>
+          <option value="regimen_simplificado">Régimen Simplificado (no retener)</option>
           <option value="exento">Exento</option>
           <option value="no_categorizado">No categorizado</option>
         </select>
@@ -11709,8 +11710,8 @@ function setProvFiscalFiltro(f,btn){
 function renderMaestroFiscal(){
   if(loggedUser?.rol!=="admin"){document.getElementById("pf-tabla").innerHTML="";return;}
   const search=(document.getElementById("pf-search")?.value||"").toLowerCase();
-  const condBadge={responsable_inscripto:"background:#3B82F620;color:#3B82F6",monotributo:"background:#7C3AED20;color:#7C3AED",exento:"background:#10B98120;color:#10B981",no_categorizado:"background:#F59E0B20;color:#F59E0B","":" background:var(--bg3);color:var(--tx3)"};
-  const condLabel={responsable_inscripto:"Resp. Inscripto",monotributo:"Monotributo",exento:"Exento",no_categorizado:"Sin categoría","":" Sin definir"};
+  const condBadge={responsable_inscripto:"background:#3B82F620;color:#3B82F6",monotributo:"background:#7C3AED20;color:#7C3AED",regimen_simplificado:"background:#6366F120;color:#6366F1",exento:"background:#10B98120;color:#10B981",no_categorizado:"background:#F59E0B20;color:#F59E0B","":" background:var(--bg3);color:var(--tx3)"};
+  const condLabel={responsable_inscripto:"Resp. Inscripto",monotributo:"Monotributo",regimen_simplificado:"Rég. Simplificado",exento:"Exento",no_categorizado:"Sin categoría","":" Sin definir"};
 
   // Calcular facturas por CUIT desde el array global (si está cargado)
   const factPorCuit={};
@@ -27003,7 +27004,7 @@ function selectProvMaestro(id){
   document.getElementById("comp-cuit").value=p.cuit||"";
   document.getElementById("comp-prov-maestro-id").value=id;
   // Sugerir tipo de factura según condición IVA
-  const tipoMap={responsable_inscripto:"A",monotributo:"B",exento:"C"};
+  const tipoMap={responsable_inscripto:"A",monotributo:"B",regimen_simplificado:"B",exento:"C"};
   if(tipoMap[p.condicion_iva]){document.getElementById("comp-tipo").value=tipoMap[p.condicion_iva];}
   setCompProvBadge(p);
   document.getElementById("comp-prov-dd").style.display="none";
@@ -27014,7 +27015,7 @@ function setCompProvBadge(p){
   const badge=document.getElementById("comp-prov-fiscal-badge");
   if(!badge)return;
   if(!p){badge.style.display="none";badge.textContent="";return;}
-  const condLabel={responsable_inscripto:"Resp. Inscripto",monotributo:"Monotributo",exento:"Exento",no_categorizado:"Sin categoría"};
+  const condLabel={responsable_inscripto:"Resp. Inscripto",monotributo:"Monotributo",regimen_simplificado:"Rég. Simplificado",exento:"Exento",no_categorizado:"Sin categoría"};
   const ibbLabel={exento:"IIBB Exento",retencion_aplica:"IIBB Retención",convenio_multilateral:"Conv. Multilateral",contribuyente_directo:"Contrib. directo",no_inscripto:"No inscripto"};
   const parts=[condLabel[p.condicion_iva]||"IVA sin definir"];
   if(p.situacion_iibb)parts.push(ibbLabel[p.situacion_iibb]);
