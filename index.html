@@ -26547,6 +26547,11 @@ async function enviarComprobantePagoProveedor(c,op,extra={}){
     });
     const json=await res.json();
     if(!res.ok||json.error)throw new Error(json.error||"Error desconocido");
+    // La versión nueva de la función responde {enviado, comprobante_path}; la vieja solo {ok:true} y adjunta únicamente la orden de pago
+    if(json.enviado===undefined){
+      toast("⚠️ El mail salió, pero solo con la orden de pago: la función enviar-pago-proveedor desplegada en Supabase es una versión vieja. Pegá de nuevo el código de supabase/functions/enviar-pago-proveedor/index.ts en el dashboard y desplegala; después usá ✉️ Reenviar.","err");
+      return true;
+    }
     if(json.comprobante_path&&op.id){
       await sb(`ordenes_pago?id=eq.${op.id}`,{method:"PATCH",body:JSON.stringify({comprobante_pago_path:json.comprobante_path})}).catch(()=>{});
       const loc=(ordenesGanancias||[]).find(o=>o.id===op.id);if(loc)loc.comprobante_pago_path=json.comprobante_path;
