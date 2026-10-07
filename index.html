@@ -4910,14 +4910,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       </div>
       <div class="fg"><label class="fl">Código Postal</label><input class="fi" id="p-cp" type="text" placeholder="A4400" maxlength="8"></div>
       <div class="fg form-full"><label class="fl">Situación IIBB</label>
-        <select class="fs" id="p-situacion-iibb">
-          <option value="">Sin definir</option>
-          <option value="exento">Exento / No alcanzado</option>
-          <option value="retencion_aplica">Sujeto a retención</option>
-          <option value="convenio_multilateral">Convenio Multilateral</option>
-          <option value="contribuyente_directo">Contribuyente directo (no retener)</option>
-          <option value="no_inscripto">No inscripto</option>
-        </select>
+        <select class="fs" id="p-situacion-iibb"></select>
+        <div style="font-size:10px;color:var(--tx3);margin-top:3px;line-height:1.4">Categorías según la normativa de Salta (RG DGR 08/2018 de retención y 10/2025 de percepción). La alícuota exacta de cada proveedor sale del padrón de la DGR.</div>
       </div>
     </div>
     <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;font-size:13px;color:var(--tx2)">
@@ -5216,6 +5210,29 @@ async function sb(path,opts={},retry=2){
 }
 
 // ── STATE ──
+// ══ Situación frente a Ingresos Brutos (Impuesto a las Actividades Económicas — DGR Salta) ══
+// Fuente: RG DGR Salta 08/2018 (retención: CM régimen general y especial, locales y de otra jurisdicción no inscriptos → triple alícuota)
+// y RG DGR Salta 10/2025 (percepción: padrón con alícuota por sujeto; excluidos exentos/no gravados, promoción 100%, certificado de no percepción,
+// inicio de actividades reciente y Régimen Simplificado). La alícuota exacta de cada sujeto sale del padrón de la DGR.
+// [valor, texto completo, etiqueta corta, estilo de la etiqueta]
+const IIBB_SITUACIONES=[
+  ["contribuyente_directo","Contribuyente local de Salta (inscripto)","Local Salta","background:#3B82F620;color:#3B82F6"],
+  ["convenio_multilateral","Convenio Multilateral — con alta en Salta (Régimen General)","CM con alta Salta","background:#7C3AED20;color:#7C3AED"],
+  ["cm_regimen_especial","Convenio Multilateral — Régimen Especial (arts. 6 a 13)","CM Rég. Especial","background:#8B5CF620;color:#8B5CF6"],
+  ["cm_sin_alta_salta","Convenio Multilateral — sin alta en Salta","CM sin alta Salta","background:#F59E0B20;color:#F59E0B"],
+  ["local_otra_jurisdiccion","Contribuyente local de otra provincia (sin alta en Salta)","Local otra prov.","background:#F59E0B20;color:#F59E0B"],
+  ["regimen_simplificado","Régimen Simplificado del IAE (pequeños contribuyentes)","Rég. Simplificado","background:#6366F120;color:#6366F1"],
+  ["exento","Exento / No gravado","Exento","background:#10B98120;color:#10B981"],
+  ["promocion_100","Régimen de promoción — exención del 100%","Promoción 100%","background:#10B98120;color:#10B981"],
+  ["cert_no_retencion","Con certificado de no retención / no percepción","Cert. no retención","background:#10B98120;color:#10B981"],
+  ["inicio_actividades","Inicio de actividades reciente (menos de 2 meses)","Inicio de actividades","background:var(--bg3);color:var(--tx3)"],
+  ["no_inscripto","No inscripto (no acredita inscripción) — triple alícuota","No inscripto","background:#EF444420;color:#EF4444"],
+  ["no_contribuyente","No contribuyente (sin actividad habitual / consumidor final)","No contribuyente","background:var(--bg3);color:var(--tx3)"],
+  ["retencion_aplica","Sujeto a retención (sin detallar) — valor anterior","Retención","background:#EF444420;color:#EF4444"],
+];
+const IIBB_BADGE=Object.assign({"":" background:var(--bg3);color:var(--tx3)"},Object.fromEntries(IIBB_SITUACIONES.map(s=>[s[0],s[3]])));
+const IIBB_LABEL_CORTO=Object.assign({"":" Sin definir"},Object.fromEntries(IIBB_SITUACIONES.map(s=>[s[0],s[2]])));
+(function(){const s=document.getElementById("p-situacion-iibb");if(s)s.innerHTML='<option value="">Sin definir</option>'+IIBB_SITUACIONES.map(x=>'<option value="'+x[0]+'">'+x[1]+'</option>').join("");})();
 let tasks=[],users=[],cursos=[],alumnos=[],proveedores=[],instructores=[],plantillas=[],notifConfigs=[],oportunidades=[];
 let _misCursoIdsInstructor=null;  // Set de curso_id donde el instructor logueado participa (curso_instructores), o null si no aplica
 let _cursoDetalleId=null;
@@ -11736,9 +11753,8 @@ function renderMaestroFiscal(){
 
   if(!lista.length){document.getElementById("pf-tabla").innerHTML=`<div class="empty"><div class="ei">🏛️</div>No hay proveedores${provFiscalFiltro!=="todos"?" con ese filtro":". Importalos desde Supabase con el SQL de alta"}.</div>`;return}
 
-  const ibbBadge={exento:"background:#10B98120;color:#10B981",retencion_aplica:"background:#EF444420;color:#EF4444",convenio_multilateral:"background:#7C3AED20;color:#7C3AED",contribuyente_directo:"background:#3B82F620;color:#3B82F6",no_inscripto:"background:#F59E0B20;color:#F59E0B","":" background:var(--bg3);color:var(--tx3)"};
-  const ibbLabel={exento:"Exento",retencion_aplica:"Retención",convenio_multilateral:"Conv. Multilateral",contribuyente_directo:"Contrib. directo",no_inscripto:"No inscripto","":" Sin definir"};
-
+  const ibbBadge=IIBB_BADGE;
+  const ibbLabel=IIBB_LABEL_CORTO;
   document.getElementById("pf-tabla").innerHTML=`
   <table style="width:100%;border-collapse:collapse;font-size:13px">
     <thead><tr style="border-bottom:2px solid var(--b);text-align:left">
@@ -11759,7 +11775,7 @@ function renderMaestroFiscal(){
         <td style="padding:9px 10px;font-family:monospace;font-size:12px">${esc(p.cuit||"")}</td>
         <td style="padding:9px 10px;font-weight:500">${esc(p.nombre||"")}</td>
         <td style="padding:9px 10px"><span style="font-size:11px;padding:2px 8px;border-radius:20px;${condBadge[p.condicion_iva||""]}">${condLabel[p.condicion_iva||""]}</span></td>
-        <td style="padding:9px 10px"><span style="font-size:11px;padding:2px 8px;border-radius:20px;${ibbBadge[p.situacion_iibb||""]}">${ibbLabel[p.situacion_iibb||""]}</span></td>
+        <td style="padding:9px 10px"><span style="font-size:11px;padding:2px 8px;border-radius:20px;${ibbBadge[p.situacion_iibb||""]||IIBB_BADGE[""]}">${ibbLabel[p.situacion_iibb||""]||esc(p.situacion_iibb)}</span></td>
         <td style="padding:9px 10px;color:var(--tx2);font-size:12px">${domProv?esc(domProv):`<span style="color:var(--tx3);font-style:italic">Sin datos</span>`}</td>
         <td style="padding:9px 10px;text-align:center;color:${fc>0?"var(--tx1)":"var(--tx3)"}">${fc||"—"}</td>
         <td style="padding:9px 10px;text-align:center"><span style="font-size:11px;padding:2px 8px;border-radius:20px;${ok?"background:#10B98120;color:#10B981":"background:#F59E0B20;color:#F59E0B"}">${ok?"✅ Revisado":"⚠️ Pendiente"}</span></td>
@@ -27016,9 +27032,9 @@ function setCompProvBadge(p){
   if(!badge)return;
   if(!p){badge.style.display="none";badge.textContent="";return;}
   const condLabel={responsable_inscripto:"Resp. Inscripto",monotributo:"Monotributo",regimen_simplificado:"Rég. Simplificado",exento:"Exento",no_categorizado:"Sin categoría"};
-  const ibbLabel={exento:"IIBB Exento",retencion_aplica:"IIBB Retención",convenio_multilateral:"Conv. Multilateral",contribuyente_directo:"Contrib. directo",no_inscripto:"No inscripto"};
+  const ibbLabel=Object.fromEntries(Object.entries(IIBB_LABEL_CORTO).map(([k,v])=>[k,"IIBB "+v]));
   const parts=[condLabel[p.condicion_iva]||"IVA sin definir"];
-  if(p.situacion_iibb)parts.push(ibbLabel[p.situacion_iibb]);
+  if(p.situacion_iibb)parts.push(ibbLabel[p.situacion_iibb]||p.situacion_iibb);
   badge.textContent="✅ Maestro fiscal — "+parts.join(" · ");
   badge.style.display="";
 }
