@@ -1687,3 +1687,10 @@ CREATE POLICY "Solo autenticados" ON nueva_tabla FOR ALL TO authenticated USING 
 
 ### ⚠️ Pendiente aparte: publicación de GitHub Pages trabada (5 Oct 2026)
 Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro si falla la función) y `dd7150e` (commit vacío para relanzar) **no se publicaron**: las ejecuciones de "pages build and deployment" se cancelaron por un **incidente de GitHub Actions** (activo ese día). El sitio sigue en `sw.js` v62. Cuando GitHub se normalice: abrir la ejecución fallida → **Re-run all jobs** (o subir otro commit), esperar a ver `metanoia-v63` en `https://tomaslarran.github.io/METANOIASMX/sw.js`, recargar el panel con Ctrl+Shift+R y probar ✉️ Reenviar con la factura de Auren (00001-00001017, OP-202610-9220). La función `enviar-pago-proveedor`, la columna `comprobante_pago_path` y el bucket `comprobantes-pago` ya están en Supabase (verificado).
+
+
+### ✅ Mail de pago de OP — RESUELTO Y VERIFICADO (7 Oct 2026)
+- `enviar-pago-proveedor` quedó **desplegada con el código nuevo** del repo (la primera copia pegada era una versión vieja que solo adjuntaba la OP). Probado por Tomás con ✉️ Reenviar sobre la OP de Auren (OP-202610-9220): **llegan los 3 adjuntos** (comprobante de pago, orden de pago y certificado de retención).
+- Panel publicado en **v64**: botón ✉️ Reenviar (Comprobantes, facturas pagadas con OP) y aviso rojo automático si la función desplegada es una versión vieja (la nueva responde `{enviado, comprobante_path}`, la vieja solo `{ok:true}`).
+- Las publicaciones de GitHub Pages del 5 Oct fallaron por un incidente de Actions; se resolvió relanzando con un commit vacío una vez normalizado GitHub. Si vuelve a pasar: *Re-run failed jobs* o commit vacío, y comprobar la versión en `sw.js` del sitio.
+- Ya no queda pendiente de este tema: solo cargar el email de los proveedores que falten (Farah no tiene) y probar "Pagar OP" con una orden real (exige comprobante y lo guarda en el bucket `comprobantes-pago`).
