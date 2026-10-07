@@ -4912,6 +4912,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="fg form-full"><label class="fl">Situación IIBB</label>
         <select class="fs" id="p-situacion-iibb"></select>
         <div style="font-size:10px;color:var(--tx3);margin-top:3px;line-height:1.4">Categorías según la normativa de Salta (RG DGR 08/2018 de retención y 10/2025 de percepción). La alícuota exacta de cada proveedor sale del padrón de la DGR.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <label style="font-size:12px;color:var(--tx2)">Certificado de no retención / no percepción — vigente hasta:</label>
+          <input class="fi" id="p-iibb-cert-hasta" type="date" style="max-width:160px">
+        </div>
+        <div style="font-size:10px;color:var(--tx3);margin-top:3px;line-height:1.4">Vacío = sin certificado. Con certificado vigente no se le retiene IIBB.</div>
       </div>
     </div>
     <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;font-size:13px;color:var(--tx2)">
@@ -5219,16 +5224,11 @@ const IIBB_SITUACIONES=[
   ["contribuyente_directo","Contribuyente local de Salta (inscripto)","Local Salta","background:#3B82F620;color:#3B82F6"],
   ["convenio_multilateral","Convenio Multilateral — con alta en Salta (Régimen General)","CM con alta Salta","background:#7C3AED20;color:#7C3AED"],
   ["cm_regimen_especial","Convenio Multilateral — Régimen Especial (arts. 6 a 13)","CM Rég. Especial","background:#8B5CF620;color:#8B5CF6"],
-  ["cm_sin_alta_salta","Convenio Multilateral — sin alta en Salta","CM sin alta Salta","background:#F59E0B20;color:#F59E0B"],
-  ["local_otra_jurisdiccion","Contribuyente local de otra provincia (sin alta en Salta)","Local otra prov.","background:#F59E0B20;color:#F59E0B"],
+  ["sin_alta_salta","Sin alta en Salta (de otra provincia o de Convenio Multilateral sin Salta)","Sin alta Salta","background:#F59E0B20;color:#F59E0B"],
   ["regimen_simplificado","Régimen Simplificado del IAE (pequeños contribuyentes)","Rég. Simplificado","background:#6366F120;color:#6366F1"],
-  ["exento","Exento / No gravado","Exento","background:#10B98120;color:#10B981"],
-  ["promocion_100","Régimen de promoción — exención del 100%","Promoción 100%","background:#10B98120;color:#10B981"],
-  ["cert_no_retencion","Con certificado de no retención / no percepción","Cert. no retención","background:#10B98120;color:#10B981"],
-  ["inicio_actividades","Inicio de actividades reciente (menos de 2 meses)","Inicio de actividades","background:var(--bg3);color:var(--tx3)"],
+  ["exento","Exento / No gravado / Promoción 100%","Exento","background:#10B98120;color:#10B981"],
   ["no_inscripto","No inscripto (no acredita inscripción) — triple alícuota","No inscripto","background:#EF444420;color:#EF4444"],
   ["no_contribuyente","No contribuyente (sin actividad habitual / consumidor final)","No contribuyente","background:var(--bg3);color:var(--tx3)"],
-  ["retencion_aplica","Sujeto a retención (sin detallar) — valor anterior","Retención","background:#EF444420;color:#EF4444"],
 ];
 const IIBB_BADGE=Object.assign({"":" background:var(--bg3);color:var(--tx3)"},Object.fromEntries(IIBB_SITUACIONES.map(s=>[s[0],s[3]])));
 const IIBB_LABEL_CORTO=Object.assign({"":" Sin definir"},Object.fromEntries(IIBB_SITUACIONES.map(s=>[s[0],s[2]])));
@@ -6440,7 +6440,7 @@ function openNewModal(){
     openModal("modal-curso");
   }
   else if(curPage==="alumnos"){document.getElementById("alum-edit-id").value="";document.getElementById("modal-alum-title").textContent="Nuevo Alumno";["a-nombre","a-apellido","a-dni","a-cuit","a-matricula","a-esp","a-inst","a-email","a-tel","a-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("alum-cursos-section").style.display="none";openModal("modal-alumno")}
-  else if(curPage==="proveedores"){document.getElementById("prov-edit-id").value="";document.getElementById("modal-prov-title").textContent="Nuevo Proveedor";["p-nombre","p-email","p-tel","p-esp","p-notas","p-cuit","p-domicilio","p-cp"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("p-tipo").value="Empresa";document.getElementById("p-condicion-iva").value="";document.getElementById("p-provincia").value="";document.getElementById("p-situacion-iibb").value="";document.getElementById("p-revisado").checked=false;openModal("modal-proveedor")}
+  else if(curPage==="proveedores"){document.getElementById("prov-edit-id").value="";document.getElementById("modal-prov-title").textContent="Nuevo Proveedor";["p-nombre","p-email","p-tel","p-esp","p-notas","p-cuit","p-domicilio","p-cp"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("p-tipo").value="Empresa";document.getElementById("p-condicion-iva").value="";document.getElementById("p-provincia").value="";document.getElementById("p-situacion-iibb").value="";document.getElementById("p-iibb-cert-hasta").value="";document.getElementById("p-revisado").checked=false;openModal("modal-proveedor")}
   else if(curPage==="instructores"){document.getElementById("inst-edit-id").value="";document.getElementById("modal-inst-title").textContent="Nuevo Instructor";["i-nombre","i-apellido","i-matricula","i-email","i-tel","i-inst","i-notas","i-genero"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("i-activo").checked=true;document.getElementById("ibtn-del").style.display="none";_instEspSel=[];renderEspPills("i-esp-pills",_instEspSel);openModal("modal-instructor")}
   else if(curPage==="comunicaciones")openModalNuevoPost();
 }
@@ -11690,6 +11690,7 @@ function editProveedor(id){
   document.getElementById("p-provincia").value=p.provincia||"";
   document.getElementById("p-cp").value=p.cp||"";
   document.getElementById("p-situacion-iibb").value=p.situacion_iibb||"";
+  document.getElementById("p-iibb-cert-hasta").value=p.iibb_cert_no_retencion_hasta||"";
   document.getElementById("p-revisado").checked=!!p.revisado;
   openModal("modal-proveedor");
 }
@@ -11697,7 +11698,7 @@ function editProveedor(id){
 async function saveProveedor(){
   const nombre=document.getElementById("p-nombre").value.trim();if(!nombre){toast("Escribí un nombre","err");return}
   const id=document.getElementById("prov-edit-id").value;
-  const data={nombre,tipo:document.getElementById("p-tipo").value,especialidad:document.getElementById("p-esp").value||null,email:document.getElementById("p-email").value||null,telefono:document.getElementById("p-tel").value||null,notas:document.getElementById("p-notas").value||null,cuit:document.getElementById("p-cuit").value.trim()||null,condicion_iva:document.getElementById("p-condicion-iva").value||null,domicilio:document.getElementById("p-domicilio").value.trim()||null,provincia:document.getElementById("p-provincia").value||null,cp:document.getElementById("p-cp").value.trim()||null,situacion_iibb:document.getElementById("p-situacion-iibb").value||null,revisado:document.getElementById("p-revisado").checked,updated_at:new Date().toISOString()};
+  const data={nombre,tipo:document.getElementById("p-tipo").value,especialidad:document.getElementById("p-esp").value||null,email:document.getElementById("p-email").value||null,telefono:document.getElementById("p-tel").value||null,notas:document.getElementById("p-notas").value||null,cuit:document.getElementById("p-cuit").value.trim()||null,condicion_iva:document.getElementById("p-condicion-iva").value||null,domicilio:document.getElementById("p-domicilio").value.trim()||null,provincia:document.getElementById("p-provincia").value||null,cp:document.getElementById("p-cp").value.trim()||null,situacion_iibb:document.getElementById("p-situacion-iibb").value||null,iibb_cert_no_retencion_hasta:document.getElementById("p-iibb-cert-hasta").value||null,revisado:document.getElementById("p-revisado").checked,updated_at:new Date().toISOString()};
   const pbtn=document.getElementById("pbtn");pbtn.disabled=true;pbtn.textContent="Guardando...";
   try{
     if(id){await sb(`proveedores?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(data)});const i=proveedores.findIndex(p=>p.id===id);if(i>=0)proveedores[i]={...proveedores[i],...data};}
@@ -24101,6 +24102,7 @@ function renderCalendarioAuren(){
   const enviados=calendarioAuren.filter(c=>c.enviado).sort((a,b)=>b.fecha_tope.localeCompare(a.fecha_tope));
 
   const fila=c=>{
+    const real=/^IAE Salta — VENCE/.test(c.tipo||"");
     const d=days(c.fecha_tope);
     const col=c.enviado?"var(--tx3)":d<0?"var(--re)":d<=3?"var(--al)":"var(--tx)";
     const fechaFmt=new Date(c.fecha_tope+"T00:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"});
@@ -24112,11 +24114,11 @@ function renderCalendarioAuren(){
       </div>
       <div style="text-align:right">
         <div style="font-size:13px;font-weight:700;color:${col}">${fechaFmt}</div>
-        <div style="font-size:10px;color:${col}">${c.enviado?"✓ Enviado":d<0?`Vencido hace ${Math.abs(d)}d`:d===0?"Hoy":`En ${d}d`}</div>
+        <div style="font-size:10px;color:${col}">${c.enviado?(real?"✓ Presentado y pagado":"✓ Enviado"):d<0?`Vencido hace ${Math.abs(d)}d`:d===0?"Hoy":`En ${d}d`}</div>
       </div>
       ${c.enviado
         ?`<button onclick="marcarCalendarioAurenPendiente('${c.id}')" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:5px 10px;cursor:pointer">Deshacer</button>`
-        :`<button onclick="marcarCalendarioAurenEnviado('${c.id}')" class="btn pri" style="font-size:11px;padding:5px 10px">✓ Marcar enviado</button>`}
+        :`<button onclick="marcarCalendarioAurenEnviado('${c.id}')" class="btn pri" style="font-size:11px;padding:5px 10px">${real?"✓ Presentado y pagado":"✓ Marcar enviado"}</button>`}
     </div>`;
   };
 
