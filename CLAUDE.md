@@ -1812,3 +1812,11 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 - Estado de cuenta de proveedores cuenta lo pagado en parte y suma la retención de todas las OP pagadas.
 - ⚠️ **SQL a correr:** `sql_pagos_mixtos.sql` (columna `monto_pagado`, tabla `comprobante_pagos`, estado `Endosado` y datos del cheque en `cf_cobranzas`, cuenta 1.1.01.005). Sin correrlo, solo funciona el pago de una línea por el total.
 - Pendiente: mail con varios Echeq adjuntos (función `enviar-pago-proveedor`), reenviar con varias OP, historial/KPIs de pagos parciales, **Etapa B: cartera de Echeq de terceros con Endosar y "endosado a"** (asiento provisorio, consultar a Estela).
+
+### 💸 Pago anticipado a proveedores sin factura — recibo posterior (8 Oct 2026)
+**Pedido de Tomás:** la **UNT** cobra primero y después entrega un **recibo** (no hay factura). Hace falta un pago que se cancele luego con el recibo, con mail al proveedor (OP + comprobante).
+- **Comprobantes → 💸 Pago anticipado**: proveedor (maestro), sociedad, fecha, importe, medio (cuenta bancaria o efectivo), N° de operación, concepto, email y comprobante de pago. Genera una **orden de pago sin factura** (`ordenes_pago.comprobante_id` null, estado pagado, sin retención), el movimiento de banco o caja y un **anticipo abierto** en `anticipos_proveedores`. Manda el mismo mail de siempre (OP + comprobante).
+- **Asiento del pago:** Debe `1.1.05.001` Anticipos a proveedores (activo) / Haber banco o caja.
+- **Comprobantes → 📎 Anticipos** (con contador de pendientes): lista los anticipos; **🧾 Cargar recibo** pide N° de recibo, fecha, importe y **cuenta de gasto**; asiento `devengado_compra` origen `anticipo_recibo`: Debe gasto / Haber Anticipos. Admite recibos parciales (el anticipo sigue abierto por el resto) y varios recibos; no deja pasar del saldo ni repetir el número.
+- ⚠️ **SQL a correr:** `sql_anticipos_proveedores.sql` (tabla + cuentas 1.1.05 / 1.1.05.001). Sin él el botón avisa.
+- Pendiente / a confirmar con Estela: (1) el recibo de la UNT (exenta) no genera IVA: se asienta el gasto por el total; (2) el estado de cuenta de proveedores y el control de cierre de mes todavía **no incluyen anticipos** (se ven solo en 📎 Anticipos y en el Libro Diario); (3) no se guarda el PDF del recibo; (4) solo cuenta bancaria o efectivo (sin Echeq ni tarjeta).
