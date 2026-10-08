@@ -4739,7 +4739,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg"><label class="fl">Fecha de pago</label><input class="fi" type="date" id="pop-fecha"></div>
     <div class="fg"><label class="fl">Observaciones</label><input class="fi" type="text" id="pop-obs" placeholder="Opcional"></div>
     <div class="fg" style="grid-column:1/-1"><label class="fl">N° de operación / referencia de la transferencia</label><input class="fi" type="text" id="pop-nroop" placeholder="Opcional — sale en la orden de pago que recibe el proveedor"></div>
-    <div class="fg" style="grid-column:1/-1"><label class="fl">Comprobante de pago (PDF o foto) *</label>
+    <div class="fg" id="pop-comp-wrap" style="grid-column:1/-1"><label class="fl">Comprobante de pago (PDF o foto) *</label>
       <input class="fi" type="file" id="pop-comprobante" accept="application/pdf,image/*">
       <label style="display:flex;gap:6px;align-items:center;font-size:11px;color:var(--tx3);margin-top:4px"><input type="checkbox" id="pop-sin-comp"> Pagar sin comprobante (efectivo u otro caso)</label>
     </div>
@@ -24303,8 +24303,8 @@ function _echeqMontar(p){
   w.dataset.listo="1";
   w.innerHTML=`<div style="border:1px solid var(--b);border-radius:8px;padding:10px;background:rgba(99,102,241,.06)">
     <div style="font-size:12px;font-weight:700;margin-bottom:6px">🧾 Datos del Echeq</div>
-    <label class="fl">Detalle del Echeq (PDF del banco) — completa los datos solo</label>
-    <input class="fi" type="file" id="${p}-echeq-pdf" accept="application/pdf" onchange="echeqCargarPdf('${p}')">
+    <label class="fl">Detalle del Echeq (PDF del banco): completa los datos solo y sirve de comprobante de pago</label>
+    <input class="fi" type="file" id="${p}-echeq-pdf" accept="application/pdf,image/*" onchange="echeqCargarPdf('${p}')">
     <div id="${p}-echeq-ctrl" style="font-size:11px;margin:6px 0;line-height:1.7"></div>
     <div class="form-grid" style="grid-template-columns:1fr 1fr">
       <div class="fg"><label class="fl">Número de cheque *</label><input class="fi" id="${p}-echeq-num" oninput="echeqControlar('${p}')"></div>
@@ -24323,12 +24323,18 @@ function _echeqToggle(p,medioSelId){
   const w=document.getElementById(p+"-echeq-wrap");
   if(!w)return;
   w.style.display=esE?"":"none";
+  if(p==="pop"){const cw=document.getElementById("pop-comp-wrap");if(cw)cw.style.display=esE?"none":"";}
   if(esE){_echeqMontar(p);echeqControlar(p);}
 }
 async function echeqCargarPdf(p){
   const f=document.getElementById(p+"-echeq-pdf").files?.[0];
   if(!f)return;
   const ctrl=document.getElementById(p+"-echeq-ctrl");
+  if(/^image\//.test(f.type)){
+    _echeqForm[p]={d:null,file:f};
+    ctrl.innerHTML=`<span style="color:var(--am)">📷 Es una foto: no puedo leer los datos sola. Completá los de abajo a mano; la foto queda como comprobante. (Con el PDF del banco se completan solos.)</span>`;
+    return;
+  }
   ctrl.innerHTML=`<span style="color:var(--tx3)">Leyendo el PDF…</span>`;
   try{
     const d=await _echeqLeerPdf(f);
@@ -24404,8 +24410,8 @@ async function _echeqAlta(c,{sociedad,medio,monto,echeq,opId}){
   })});
   if(rec&&e.file){
     try{
-      const path=`echeqs/${sociedad}/${(e.numero||"sin-numero").replace(/[^\w-]/g,"")}_${Date.now()}.pdf`;
-      const up=await fetch(`${SB}/storage/v1/object/extractos-bancarios/${path}`,{method:"POST",headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":"application/pdf","x-upsert":"false"},body:e.file});
+      const path=`echeqs/${sociedad}/${(e.numero||"sin-numero").replace(/[^\w-]/g,"")}_${Date.now()}.${/png/i.test(e.file.type||"")?"png":/^image\//.test(e.file.type||"")?"jpg":"pdf"}`;
+      const up=await fetch(`${SB}/storage/v1/object/extractos-bancarios/${path}`,{method:"POST",headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":e.file.type||"application/pdf","x-upsert":"false"},body:e.file});
       if(up.ok)await sb(`echeqs_propios?id=eq.${rec.id}`,{method:"PATCH",body:JSON.stringify({pdf_path:path})});
       else toast("⚠️ No se pudo guardar el PDF del Echeq (los datos sí quedaron)","err");
     }catch(_){toast("⚠️ No se pudo guardar el PDF del Echeq (los datos sí quedaron)","err");}
@@ -26809,7 +26815,7 @@ async function confirmarPagarOP(){
     const local=(ordenesGanancias||[]).find(o=>o.id===op.id);
     if(local)Object.assign(local,patch);
     closeModal("modal-pagar-op");
-    toast(via==="socio"?`💰 Orden ${op.numero} pagada con plata de ${users.find(u=>u.id===socioId)?.nombre||"un socio"}`:`💸 Orden ${op.numero} pagada · la factura quedó pagada`,"ok");
+    toast(via==="socio"?`💰 Orden ${op.numero} pagada con plata de ${users.find(u=>u.id===socioId)?.nombre||"un socio"}`:via==="echeq"?`🧾 Orden ${op.numero} pagada con Echeq N° ${echeq?.numero||""} · queda pendiente de débito el ${String(echeq?.fecha_pago||"").split("-").reverse().join("/")}`:`💸 Orden ${op.numero} pagada · la factura quedó pagada`,"ok");
     renderComprobantes();updateCompStats();
     if(cfTab==="pendientes")renderCFPendientes();
     if(curPage==="sueldos")renderSueldos();
@@ -26999,10 +27005,11 @@ async function enviarComprobantePagoProveedor(c,op,extra={}){
     const sinPrefijo=s=>s&&s.startsWith("data:")?s.slice(s.indexOf(",")+1):s;
     const pdfOP=sinPrefijo(await generarPDFOrdenPago(op,true));
     const cert=parseFloat(op.monto_retencion)>0?sinPrefijo(await generarPDFCertificadoRetencion(op,c,true)):null;
+    const ech=_pagoMedioTipo(op.medio_pago)==="echeq"?await _echeqDeOrden(op):null;
     const res=await fetch(`${SB}/functions/v1/enviar-pago-proveedor`,{
       method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
-      body:JSON.stringify({email,proveedor:c.proveedor,numero:op.numero,neto:op.neto_a_pagar,fecha:op.fecha_pago,sociedad:op.sociedad,retencion:parseFloat(op.monto_retencion)||0,pdf_base64:pdfOP,certificado_base64:cert,comprobante_pago:extra.comprobante||null})
+      body:JSON.stringify({email,proveedor:c.proveedor,numero:op.numero,neto:op.neto_a_pagar,fecha:op.fecha_pago,sociedad:op.sociedad,retencion:parseFloat(op.monto_retencion)||0,pdf_base64:pdfOP,certificado_base64:cert,comprobante_pago:extra.comprobante||null,echeq:ech?{numero:ech.numero,id_cheque:ech.id_cheque,tipo_cheque:ech.tipo_cheque,fecha_emision:ech.fecha_emision,fecha_pago:ech.fecha_pago,beneficiario:ech.beneficiario}:null})
     });
     const json=await res.json();
     if(!res.ok||json.error)throw new Error(json.error||"Error desconocido");
@@ -27018,7 +27025,7 @@ async function enviarComprobantePagoProveedor(c,op,extra={}){
     if(email&&prov&&emailNuevo&&prov.email!==emailNuevo){
       await sb(`proveedores?id=eq.${prov.id}`,{method:"PATCH",body:JSON.stringify({email:emailNuevo})}).catch(()=>{});prov.email=emailNuevo;
     }
-    toast(email?`✉️ Enviado a ${email}: comprobante de pago${cert?", orden de pago y certificado de retención":" y orden de pago"}`:"📎 Comprobante de pago guardado","ok");
+    toast(email?`✉️ Enviado a ${email}: ${ech?"detalle del Echeq":"comprobante de pago"}${cert?", orden de pago y certificado de retención":" y orden de pago"}`:"📎 Comprobante de pago guardado","ok");
     return true;
   }catch(e){
     const sinConexion=/failed to fetch|networkerror|load failed/i.test(e.message||"");
@@ -27078,6 +27085,14 @@ async function getLogoDataUrl(sociedad){
   }catch(e){_logoSociedadCache[sociedad]=null;return null;}
 }
 
+// Echeq propio que se registró al pagar esta orden (por la orden y, si no está, por la factura)
+async function _echeqDeOrden(op){
+  const filtros=[op.id&&`orden_pago_id=eq.${op.id}`,op.comprobante_id&&`comprobante_id=eq.${op.comprobante_id}`].filter(Boolean);
+  for(const f of filtros){
+    try{const r=await sb(`echeqs_propios?${f}&estado=neq.anulado&select=*&order=created_at.desc&limit=1`);if(r&&r[0])return r[0];}catch(e){}
+  }
+  return null;
+}
 // Datos de la cuenta de la que sale el pago, para la orden de pago (los Echeq muestran la cuenta que los debita).
 async function _opDatosCuenta(op){
   const nombre=op.medio_pago||"";
@@ -27104,6 +27119,8 @@ async function generarPDFOrdenPago(op,soloRetornar){
   const W=210,M=20;
   const sociedad=op.sociedad||"SUDES";
   const [fiscal,logoUrl]=await Promise.all([getFiscalSociedad(sociedad),getLogoDataUrl(sociedad)]);
+  const cta=await _opDatosCuenta(op);
+  const ech=cta?.medio?.tipo==="echeq"?await _echeqDeOrden(op):null;
   let y=M;
   // Header
   doc.setFillColor(20,22,35);doc.rect(0,0,W,46,"F");
@@ -27130,7 +27147,8 @@ async function generarPDFOrdenPago(op,soloRetornar){
   doc.setFontSize(9);doc.setFont("helvetica","normal");
   doc.text(`N° ${op.numero}`,W-M,24,{align:"right"});
   doc.text(`Fecha: ${op.fecha_pago||""}`,W-M,30,{align:"right"});
-  doc.text(`Estado: ${op.estado==="pagado"?"Pagada":"Pendiente de pago"}`,W-M,36,{align:"right"});
+  const _estadoOP=op.estado==="pagado"?(ech?`Pagada con Echeq · se debita el ${String(ech.fecha_pago||"").slice(0,10).split("-").reverse().join("/")}`:"Pagada"):"Pendiente de pago";
+  doc.text(`Estado: ${_estadoOP}`,W-M,36,{align:"right"});
   y=58;
   doc.setTextColor(20,20,30);
   // Bloque proveedor
@@ -27177,15 +27195,7 @@ async function generarPDFOrdenPago(op,soloRetornar){
   doc.setFontSize(9);doc.setFont("helvetica","bold");doc.setTextColor(100,100,120);
   doc.text("DATOS DEL PAGO",M,y);y+=8;
   doc.setTextColor(40,40,55);doc.setFont("helvetica","normal");doc.setFontSize(10);
-  const cta=await _opDatosCuenta(op);
   const _fecha=f=>String(f||"").slice(0,10).split("-").reverse().join("/");
-  let ech=null;
-  if(cta?.medio?.tipo==="echeq"){
-    const filtros=[op.id&&`orden_pago_id=eq.${op.id}`,op.comprobante_id&&`comprobante_id=eq.${op.comprobante_id}`].filter(Boolean);
-    for(const f of filtros){
-      try{const r=await sb(`echeqs_propios?${f}&estado=neq.anulado&select=*&order=created_at.desc&limit=1`);if(r&&r[0]){ech=r[0];break;}}catch(e){}
-    }
-  }
   const fila=(rot,val)=>{
     if(!val)return;
     doc.setFont("helvetica","bold");doc.setFontSize(8.5);doc.setTextColor(100,100,120);doc.text(rot,M+2,y);

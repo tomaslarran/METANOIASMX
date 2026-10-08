@@ -21,7 +21,7 @@ serve(async (req) => {
   if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
 
   try {
-    const { email, proveedor, numero, neto, fecha, sociedad, retencion, pdf_base64, certificado_base64, comprobante_pago } = await req.json();
+    const { email, proveedor, numero, neto, fecha, sociedad, retencion, pdf_base64, certificado_base64, comprobante_pago, echeq } = await req.json();
     if (!email && !comprobante_pago) return new Response(JSON.stringify({ error: "email o comprobante requerido" }), { status: 400, headers: cors });
 
     const resp: Record<string, unknown> = { ok: true, enviado: false, comprobante_path: null };
@@ -47,8 +47,11 @@ serve(async (req) => {
       });
       const montoFmt = Number(neto || 0).toLocaleString("es-AR", { minimumFractionDigits: 2 });
       const retFmt = Number(retencion || 0).toLocaleString("es-AR", { minimumFractionDigits: 2 });
+      // Pago con Echeq propio (cheque de pago diferido): el mail lo dice y detalla el cheque
+      const esEcheq = !!echeq?.numero;
+      const fFmt = (f: unknown) => String(f || "").slice(0, 10).split("-").reverse().join("/");
       const lista = [
-        comprobante_pago?.base64 ? "Comprobante de pago (transferencia)" : "",
+        comprobante_pago?.base64 ? (esEcheq ? "Detalle del Echeq (comprobante del banco)" : "Comprobante de pago (transferencia)") : "",
         pdf_base64 ? "Orden de pago con el detalle de la liquidación" : "",
         certificado_base64 ? "Certificado de retención del Impuesto a las Ganancias" : "",
       ].filter(Boolean).map((t) => `<li>${t}</li>`).join("");
@@ -60,11 +63,12 @@ serve(async (req) => {
           </div>
           <div style="padding:28px 24px;background:#fafafa">
             <p style="font-size:15px;color:#333">Estimado/a <strong>${esc(proveedor)}</strong>,</p>
-            <p style="color:#555">Te confirmamos el pago de tu comprobante. Adjuntamos:</p>
+            <p style="color:#555">${esEcheq ? "Te enviamos el pago de tu comprobante mediante <strong>Echeq (cheque de pago diferido)</strong>. Adjuntamos:" : "Te confirmamos el pago de tu comprobante. Adjuntamos:"}</p>
             <ul style="color:#555;line-height:1.7">${lista}</ul>
             <div style="background:white;border-left:4px solid #4a2eb4;padding:16px 20px;margin:20px 0;border-radius:4px">
-              <strong style="font-size:16px;color:#1a0a5e">Orden de pago ${esc(numero)}</strong><br>
-              <span style="color:#888;font-size:14px">${esc(fecha)} · Neto pagado: $${montoFmt}${Number(retencion) > 0 ? ` · Retención de Ganancias: $${retFmt}` : ""}</span>
+              <strong style="font-size:16px;color:#1a0a5e">${esEcheq ? `Echeq N° ${esc(echeq.numero)} · ` : ""}Orden de pago ${esc(numero)}</strong><br>
+              <span style="color:#888;font-size:14px">${esc(fecha)} · ${esEcheq ? "Importe del Echeq" : "Neto pagado"}: $${montoFmt}${Number(retencion) > 0 ? ` · Retención de Ganancias: $${retFmt}` : ""}</span>
+              ${esEcheq ? `<br><span style="color:#555;font-size:14px">${echeq.fecha_emision ? `Emitido el ${esc(fFmt(echeq.fecha_emision))} · ` : ""}<strong>Fecha de pago: ${esc(fFmt(echeq.fecha_pago))}</strong>${echeq.beneficiario ? ` · A la orden de ${esc(echeq.beneficiario)}` : ""}${echeq.id_cheque ? `<br>Id del cheque: ${esc(echeq.id_cheque)}` : ""}</span>` : ""}
             </div>
             <p style="color:#555">Ante cualquier consulta, respondé este mismo correo.</p>
             <p style="color:#555;margin-top:24px">Equipo Metanoia SMX</p>
@@ -90,7 +94,7 @@ serve(async (req) => {
         from: `"Metanoia SMX" <${Deno.env.get("SMTP_USER")}>`,
         to: email,
         cc: copia && copia.toLowerCase() !== String(email).trim().toLowerCase() ? copia : undefined,
-        subject: `📄 Comprobante de pago ${numero || ""} — Metanoia SMX`,
+        subject: esEcheq ? `🧾 Pago con Echeq N° ${echeq.numero} — Orden de pago ${numero || ""} — Metanoia SMX` : `📄 Comprobante de pago ${numero || ""} — Metanoia SMX`,
         html,
         attachments,
       });
