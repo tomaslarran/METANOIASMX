@@ -1722,7 +1722,7 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 - **Tipos nuevos:** Cargas sociales (F.931) y SICORE (retenciones practicadas). SICORE no devenga: su deuda ya está en 2.1.03.002 y el pago la cancela directo.
 - **Tabla de cuentas por impuesto** (`VEP_CUENTAS` en `index.html`, único lugar a tocar): IIBB → 5.4.01.001 / 2.1.03.005 · Ganancias → 5.4.01.002 / 2.1.03.006 · Autónomos → 5.4.01.003 / 2.1.03.007 · Cargas sociales → 5.1.01.001 / 2.1.04.002 · Otro → 5.4.01.004 / 2.1.03.008 · IVA → 2.1.03.001 / 2.1.03.004.
 - ⚠️ **Criterio PROVISORIO — confirmar con la contadora:** (1) **IVA**: se asienta contra IVA Débito Fiscal sin netear el crédito fiscal (la liquidación completa necesita el lado de ventas, Fase 3); (2) **Ganancias**: un anticipo es técnicamente un activo, hoy va a gasto; (3) **IIBB**: el VEP viene neto de SIRCREB a favor, el gasto bruto quedaría subestimado.
-- **SQL a correr:** `sql_vep_contabilidad.sql` (3 columnas en `impuestos_vep`, tipos `devengado_impuesto`/`pago_impuesto` en el constraint, 12 cuentas nuevas del plan: 5.4, 5.4.01, 5.4.01.001–004, 2.1.03.004–008, 2.1.04.002). Sin correrlo, el VEP se guarda igual pero avisa que no pudo generar el asiento.
+- **SQL corrido el 8/10/2026:** `sql_vep_contabilidad.sql` (3 columnas en `impuestos_vep`, tipos `devengado_impuesto`/`pago_impuesto` en el constraint, 12 cuentas nuevas del plan: 5.4, 5.4.01, 5.4.01.001–004, 2.1.03.004–008, 2.1.04.002). Sin correrlo, el VEP se guarda igual pero avisa que no pudo generar el asiento.
 - Probado con 36 controles sobre un entorno simulado (devengado, pago, no duplicar, SICORE, cuentas faltantes, eliminar, cruce con el banco). Pendiente: probar con un VEP real.
 - **Ideas anotadas el 7/10 (vuelo)**, en este orden: (1) VEP ✅ · (2) pago de facturas con **cheques** y (3) **Echeq** (medio con ciclo propio: emitido → pendiente → debitado) · (4) **solicitar a ARCA la facturación electrónica de la plataforma** (hoy factura el plugin de Finnegans; Tomás quiere habilitar la propia) · (5) **curso offline**: exportar a Word con opciones para que el médico edite sin conexión y volver a subirlo, con comparación de cambios.
 
@@ -1737,6 +1737,27 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 - **Conciliación:** al importar el extracto, un débito del **mismo importe** entre 2 días antes y 7 después de la fecha de pago se cruza con el Echeq, lo marca debitado y genera el asiento (si ya estaba marcado a mano, solo lo enlaza).
 - **Listado:** Cash Flow → Cuentas & Caja → **🧾 Echeq propios**: total pendiente de débito por sociedad (útil para el flujo de caja), tabla con estado, botón "✓ Debitado" manual y PDF original (guardado en el bucket `extractos-bancarios`, carpeta `echeqs/`).
 - Los Echeq no se ofrecen en caja, cuotas de préstamos, devolución a socios ni pagos sueltos de Cash Flow (no recogen sus datos).
-- **SQL a correr:** `sql_echeq_propios.sql` (tipo `echeq` en `medios_pago`, columna `cuenta_bancaria_id`, cuenta 2.1.01.002, tipo de asiento `debito_echeq`, tabla `echeqs_propios`, los 2 medios Macro). Sin Edge Functions nuevas ni redeploy.
+- **SQL corrido el 8/10/2026:** `sql_echeq_propios.sql` (tipo `echeq` en `medios_pago`, columna `cuenta_bancaria_id`, cuenta 2.1.01.002, tipo de asiento `debito_echeq`, tabla `echeqs_propios`, los 2 medios Macro). Sin Edge Functions nuevas ni redeploy.
 - **Pendiente:** (1) **Echeq de terceros / endoso** (fase 2): el mismo lector sirve; datos a guardar al recibirlos: banco, fecha de pago/depósito, importe, librador (razón social y CUIT), número e id del cheque, CMC7, último endoso; (2) anular un Echeq emitido (reabre la factura y reversa asientos); (3) **ICBC**: crear las cuentas y medios cuando se abran; el **importador de extractos hoy solo lee el PDF del Macro**, ICBC necesitará su propio lector; (4) el PDF de los Echeq que ya se pagaron antes de este cambio no está cargado.
+
+---
+
+## 📌 Cierre de jornada — 7/8 Oct 2026 (retomar mañana)
+
+**Hecho en esta sesión (todo publicado, panel en v68):**
+- IIBB de proveedores simplificado a **8 categorías** + certificado de no retención con vigencia (`sql_proveedores_iibb.sql` corrido). Estela confirmó: **SUDES y POINTERS son contribuyentes locales de Salta y NO agentes de retención de la DGR** → no hay que retener IIBB a proveedores.
+- **Vencimientos reales de los anticipos de IIBB (DGR)** cargados en Impuestos → Calendario Auren (POINTERS 15/10, 13/11, 15/12, 15/01/27 · SUDES 20/10, 18/11, 21/12, 20/01/27). Botón "Presentado y pagado".
+- **VEP → deuda en libros y cancelación con el pago / el extracto** (sección "VEP → deuda en libros…", SQL corrido).
+- **Echeq propios como medio de pago**, con lectura del PDF del banco sin IA (sección "Echeq propios…", SQL corrido).
+
+**Pendientes para mañana, en orden:**
+1. **Probar con datos reales:** cargar un VEP real (debe aparecer el asiento `devengado_impuesto` en el Libro Diario), y pagar una factura con un Echeq propio real (subir su PDF "Cheques electrónicos – detalle").
+2. **Cargar en Impuestos los anticipos de IIBB de julio, agosto y septiembre** (Tomás dijo que ya están pagados; en el panel solo figura IIBB hasta junio) con la fecha real de presentación y pago.
+3. **Echeq de terceros / endoso** (fase 2): el lector de PDF ya sirve. Datos a guardar al recibirlos: banco, fecha de pago/depósito, importe, librador (razón social y CUIT), número e id del cheque, CMC7 y último endoso. Reutilizar `cf_cobranzas` (hoy guarda los ECheque recibidos con estados Pendiente/Cobrado/Vencido).
+4. **Confirmar con la contadora (Estela)** el criterio provisorio de los asientos de VEP: IVA (se asienta contra IVA Débito sin netear el crédito), anticipos de Ganancias (hoy a gasto) e IIBB (el VEP viene neto de SIRCREB).
+5. **ARCA — facturación electrónica propia** (para ir dejando Finnegans): trámite por sociedad (punto de venta de web services, certificado digital de prueba y de producción, autorizar el servicio de Facturación Electrónica) y después yo armo la función de emisión. Se arranca con el trámite; en paralelo definir con Agustín el flujo (la plataforma avisa el pago → el panel emite → devuelve la factura) y con la contadora qué comprobantes emitir (A/B, y Factura de Crédito MiPyME para empresas grandes). Desde RG 5616 cada factura debe informar la condición de IVA del receptor (ARCA rechaza las que no, desde 1/12/2026).
+6. **ICBC** (cuando se abran las cuentas en las dos sociedades): crear cuenta bancaria + medio Echeq + tarjetas desde Cuentas & Caja; el importador de extractos hoy solo lee el PDF del Macro, ICBC necesitará su propio lector.
+7. Siguen pendientes de antes: cargar la categoría de IIBB de los 46 proveedores (Tomás), 🔄 Generar históricos, importar extractos jul/ago/sep, renovar certificado MiPyME de SUDES (vence 31/10), el cambio de dominio del panel (analizado, esperando la reunión de equipo).
+
+**Ideas anotadas por Tomás (vuelo del 7/10), aún sin hacer:** curso offline (exportar a Word con opciones para que el médico edite sin conexión y volver a subirlo, comparando cambios) · "ver para facturar desde la plataforma" (= punto 5, ARCA).
 
