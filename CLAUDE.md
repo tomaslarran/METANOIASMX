@@ -1761,3 +1761,14 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 
 **Ideas anotadas por Tomás (vuelo del 7/10), aún sin hacer:** curso offline (exportar a Word con opciones para que el médico edite sin conexión y volver a subirlo, comparando cambios) · "ver para facturar desde la plataforma" (= punto 5, ARCA).
 
+### 🧭 Sidebar reorganizado por áreas (8 Oct 2026) — paso 1 de 3
+
+**Motivo (Tomás):** el sidebar creció por capas y quedó desordenado: "Cursos" tenía Proveedores e Inventario, "Análisis" tenía Calendario y Rutinas, y lo escondido (Libro Diario, Cierre de mes, Echeq) solo se encontraba entrando a otras pantallas.
+
+- **8 áreas por función** (ids de grupo `sg-*`): **Inicio** (Dashboard, Centro de Control, Tareas, Reuniones, Calendario) · **Cursos** (Cursos, Alumnos, Instructores, Inventario, Planes plataforma, E-learning, Cotizaciones) · **Comunicación** (Comunicaciones, Chats) · **Compras y pagos** (Proveedores, Comprobantes, Cuentas Corrientes) · **Finanzas** (Cash Flow, Sueldos) · **Contabilidad** (Impuestos, Libro Diario, Plan de cuentas, Estado de resultados, Cierre de mes, Extractos y resúmenes, Nomenclador) · **Estrategia** (Oportunidades, COFRADIA, Gráficos, Reportes, Rutinas) · **Configuración** (Notificaciones, Usuarios).
+- **Accesos directos nuevos** a cosas que estaban escondidas: Libro Diario, Plan de cuentas y Estado de resultados (pestañas de Impuestos, `setImpTab`), Cierre de mes y Extractos y resúmenes (pestañas de Cash Flow, `cfTab`), y VEPs y Vencimientos como subitems de Impuestos.
+- **Submenús plegados por defecto** (Tareas, Cursos, Cash Flow, Sueldos, Impuestos) y **se abren solos al entrar** a esa sección (`expandNavSub` en `goPage`).
+- **Permisos por rol intactos:** no se tocó ninguna clase `comu-visible` / `inst-visible` / `logi-visible` ni los ids `nav-*`; se verificó que cada rol ve exactamente el mismo conjunto de ítems que antes (solo cambia el orden). `goPage` sigue validando el acceso por el id `nav-<página>`.
+- El navegador de cada usuario recuerda qué grupos tenía plegados (`localStorage sg-*`); los grupos con id nuevo arrancan abiertos.
+- **Pasos siguientes acordados:** (2) **partir Cash Flow** (hoy ~12 pestañas juntas: resumen, préstamos, cobranzas, inversiones, conciliación, caja, resúmenes, cierre de mes, promociones, cuentas) en secciones con su propio menú; (3) **buscador Ctrl+K** y **favoritos** para llegar en un paso a lo más usado.
+
