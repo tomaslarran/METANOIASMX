@@ -4738,6 +4738,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg" id="pop-echeq-wrap" style="display:none;grid-column:1/-1"></div>
     <div class="fg"><label class="fl">Fecha de pago</label><input class="fi" type="date" id="pop-fecha"></div>
     <div class="fg"><label class="fl">Observaciones</label><input class="fi" type="text" id="pop-obs" placeholder="Opcional"></div>
+    <div class="fg" style="grid-column:1/-1"><label class="fl">N° de operación / referencia de la transferencia</label><input class="fi" type="text" id="pop-nroop" placeholder="Opcional — sale en la orden de pago que recibe el proveedor"></div>
     <div class="fg" style="grid-column:1/-1"><label class="fl">Comprobante de pago (PDF o foto) *</label>
       <input class="fi" type="file" id="pop-comprobante" accept="application/pdf,image/*">
       <label style="display:flex;gap:6px;align-items:center;font-size:11px;color:var(--tx3);margin-top:4px"><input type="checkbox" id="pop-sin-comp"> Pagar sin comprobante (efectivo u otro caso)</label>
@@ -26522,6 +26523,10 @@ async function cargarRG830(){
     _rg830Cargado=rg830Conceptos.length>0;
   }catch(err){rg830Conceptos=[];rg830Escala=[];}
 }
+const _rg830DescCompleta=cod=>{
+  const r=rg830Conceptos.find(x=>x.cod_regimen===(parseInt(cod,10)||-1));
+  return r?String(r.concepto||"").replace(/\s+/g," ").trim():"";
+};
 const _rg830Desc=cod=>{
   const r=rg830Conceptos.find(x=>x.cod_regimen===(parseInt(cod,10)||-1));
   if(!r)return"";
@@ -26749,7 +26754,7 @@ async function abrirPagarOP(opId){
       :`<option value="Transferencia">Transferencia bancaria</option><option value="Efectivo">Efectivo</option><option value="Cheque">Cheque</option>`;
     if(op.medio_pago&&[...ms.options].some(o=>o.value===op.medio_pago))ms.value=op.medio_pago;
     document.getElementById("pop-fecha").value=today();
-    document.getElementById("pop-obs").value="";
+    document.getElementById("pop-obs").value="";document.getElementById("pop-nroop").value="";
     document.getElementById("pop-comprobante").value="";
     document.getElementById("pop-sin-comp").checked=false;
     const _pv=_provDeComprobante(c||{cuit:op.cuit,proveedor:op.proveedor});
@@ -26798,7 +26803,9 @@ async function confirmarPagarOP(){
     const c=comprobantes.find(x=>x.id===cf.id)||cf;
     const via=await registrarPagoFactura(c,{fecha,medio,obs,socioId,echeq,op:{id:op.id,numero:op.numero,bruto:parseFloat(op.monto_bruto)||0,neto:parseFloat(op.neto_a_pagar)||0,ret:parseFloat(op.monto_retencion)||0,cod:op.codigo_sicore}});
     const patch={estado:"pagado",fecha_pago:fecha,medio_pago:medio};
+    const nroOp=(document.getElementById("pop-nroop")?.value||"").trim();
     await sb(`ordenes_pago?id=eq.${op.id}`,{method:"PATCH",body:JSON.stringify(patch)});
+    if(nroOp){try{await sb(`ordenes_pago?id=eq.${op.id}`,{method:"PATCH",body:JSON.stringify({nro_operacion:nroOp})});}catch(e){toast("El pago quedó registrado, pero no se guardó el N° de operación: falta correr sql_op_nro_operacion.sql","err");}}
     const local=(ordenesGanancias||[]).find(o=>o.id===op.id);
     if(local)Object.assign(local,patch);
     closeModal("modal-pagar-op");
@@ -26806,7 +26813,7 @@ async function confirmarPagarOP(){
     renderComprobantes();updateCompStats();
     if(cfTab==="pendientes")renderCFPendientes();
     if(curPage==="sueldos")renderSueldos();
-    enviarComprobantePagoProveedor(c,{...op,...patch,numero_comp:c.numero},{email:enviarMail?emailProv:"",comprobante:compPago});
+    enviarComprobantePagoProveedor(c,{...op,...patch,nro_operacion:nroOp||op.nro_operacion||"",numero_comp:c.numero},{email:enviarMail?emailProv:"",comprobante:compPago});
     _opPagar=null;
   }catch(e){toast("Error: "+e.message,"err");}
 }
@@ -26857,7 +26864,7 @@ async function confirmarOrdenPago(){
   if(!medio){toast("Seleccioná cómo se va a pagar","err");return;}
   if(_pagoMedioTipo(medio)==="tarjeta"){toast("Con tarjeta no corresponde orden de pago (se paga antes de recibir la factura): usá 💳 Pagar.","err");return;}
   const [cod]=(sicoreVal?sicoreVal.split("|"):["",""]);
-  const sicoreDesc=cod?(rg830Conceptos.length?_rg830Desc(cod):getSicoreCat()[cod]?.desc)||"":"";
+  const sicoreDesc=cod?(rg830Conceptos.length?_rg830DescCompleta(cod):getSicoreCat()[cod]?.desc)||"":"";
   let numero=`OP-${fecha.slice(0,7).replace("-","")}-${String(Date.now()).slice(-4)}`;
   const opData={
     comprobante_id:compId,numero,proveedor:c.proveedor||"",cuit:c.cuit||"",
@@ -27071,6 +27078,26 @@ async function getLogoDataUrl(sociedad){
   }catch(e){_logoSociedadCache[sociedad]=null;return null;}
 }
 
+// Datos de la cuenta de la que sale el pago, para la orden de pago (los Echeq muestran la cuenta que los debita).
+async function _opDatosCuenta(op){
+  const nombre=op.medio_pago||"";
+  let m=(typeof mediosPago!=="undefined"?mediosPago:[]).find(x=>x.nombre===nombre);
+  if(!m&&nombre){try{[m]=await sb(`medios_pago?nombre=eq.${encodeURIComponent(nombre)}&select=*`);}catch(e){}}
+  if(!m)return null;
+  let cuenta=m,nota="";
+  if(m.tipo==="echeq"){
+    let b=(typeof mediosPago!=="undefined"?mediosPago:[]).find(x=>x.id===m.cuenta_bancaria_id);
+    if(!b&&m.cuenta_bancaria_id){try{[b]=await sb(`medios_pago?id=eq.${m.cuenta_bancaria_id}&select=*`);}catch(e){}}
+    if(b){cuenta=b;nota="Echeq propio, se debita de la cuenta indicada";}
+  }
+  const det=String(cuenta.detalle||"").trim(),dig=det.replace(/\D/g,"");
+  let ident="";
+  if(cuenta.tipo==="tarjeta")ident=dig.length>=4?`Tarjeta terminada en ${dig.slice(-4)}`:"";
+  else if(cuenta.tipo==="cuenta_bancaria")ident=dig.length===22?`CBU ${dig}`:det;
+  let banco=String(cuenta.banco||"").trim();
+  if(banco&&!/^banco/i.test(banco))banco="Banco "+(banco===banco.toUpperCase()?banco.charAt(0)+banco.slice(1).toLowerCase():banco);
+  return{medio:m,cuenta,banco,ident,nota};
+}
 async function generarPDFOrdenPago(op,soloRetornar){
   const{jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
@@ -27132,8 +27159,9 @@ async function generarPDFOrdenPago(op,soloRetornar){
   if(op.tipo_factura==="A"&&op.monto_retencion>0){
     y+=2;
     doc.setFontSize(8);doc.setFont("helvetica","italic");doc.setTextColor(120,80,190);
-    doc.text(`Retención Ganancias — SICORE ${op.codigo_sicore||""} · ${op.descripcion_sicore||""}`,M+4,y);y+=5;
-    doc.text(`Base: $${Number(op.base_retencion).toLocaleString("es-AR",{minimumFractionDigits:2})}   ×   ${op.porcentaje_retencion}%`,M+4,y);y+=2;
+    const _dr=doc.splitTextToSize(`Retención Ganancias — SICORE ${op.codigo_sicore||""} · ${op.descripcion_sicore||""}`,W-2*M-8);
+    doc.text(_dr,M+4,y);y+=_dr.length*4+1.5;
+    doc.text(`Base: $${Number(op.base_retencion).toLocaleString("es-AR",{minimumFractionDigits:2})}   ×   ${op.porcentaje_retencion}%`,M+4,y);y+=7;
     doc.setFont("helvetica","normal");
     addRow("(-) Monto retención",-op.monto_retencion,false,[200,50,50]);
   }
@@ -27149,9 +27177,24 @@ async function generarPDFOrdenPago(op,soloRetornar){
   doc.setFontSize(9);doc.setFont("helvetica","bold");doc.setTextColor(100,100,120);
   doc.text("DATOS DEL PAGO",M,y);y+=8;
   doc.setTextColor(40,40,55);doc.setFont("helvetica","normal");doc.setFontSize(10);
-  doc.text(`Medio de pago: ${op.medio_pago||"—"}`,M+2,y);y+=7;
-  if(op.cbu_destino){doc.text(`Referencia / CBU: ${op.cbu_destino}`,M+2,y);y+=7;}
-  if(op.observaciones){doc.text(`Observaciones: ${op.observaciones}`,M+2,y);y+=7;}
+  const cta=await _opDatosCuenta(op);
+  const _fecha=f=>String(f||"").slice(0,10).split("-").reverse().join("/");
+  const fila=(rot,val)=>{
+    if(!val)return;
+    doc.setFont("helvetica","bold");doc.setFontSize(8.5);doc.setTextColor(100,100,120);doc.text(rot,M+2,y);
+    doc.setFont("helvetica","normal");doc.setFontSize(10);doc.setTextColor(40,40,55);
+    const l=doc.splitTextToSize(String(val),W-2*M-52);doc.text(l,M+50,y);
+    y+=Math.max(7,l.length*5+2);
+  };
+  fila("Medio de pago",(op.medio_pago||"—")+(cta?.nota?` (${cta.nota})`:""));
+  fila("Cuenta de origen",[cta?.banco,cta?.ident].filter(Boolean).join(" · "));
+  fila("Fecha de pago",op.estado==="pagado"?_fecha(op.fecha_pago):"");
+  fila("Importe del pago","$"+Number(op.neto_a_pagar).toLocaleString("es-AR",{minimumFractionDigits:2}));
+  fila("Destino (CBU / alias)",op.cbu_destino);
+  fila("N° de operación",op.nro_operacion);
+  fila("Observaciones",op.observaciones);
+
+
   // Firmas
   y=Math.max(y+22,228);
   doc.setDrawColor(180,182,200);doc.setLineWidth(0.3);

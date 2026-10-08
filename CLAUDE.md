@@ -1785,3 +1785,10 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 - La copia es **visible para el proveedor** (CC). Si se prefiere que no la vea, se cambia a CCO (`bcc`).
 - **Requiere redeployar `enviar-pago-proveedor`** en el dashboard de Supabase (pegar `supabase/functions/enviar-pago-proveedor/index.ts`). Verificar después con ✉️ Reenviar sobre una factura ya pagada. Probado localmente: 15 controles.
 
+### 📄 Orden de pago (PDF): retención sin superponer y datos de la cuenta de origen (8 Oct 2026)
+- **Bug visual:** en el PDF de la OP la línea «Base × %» de la retención quedaba a 2 mm de «(-) Monto retención» y se pisaban; además la descripción del régimen (larga) se salía de la hoja. Ahora el texto se parte en renglones y la separación es de 7 mm. La descripción del régimen se guarda **completa** (antes `_rg830Desc` la cortaba en 80 caracteres con «…»; nueva `_rg830DescCompleta` para guardar en la OP).
+- **Datos del pago completos** (`_opDatosCuenta` + «DATOS DEL PAGO»): medio de pago, **cuenta de origen (banco + CBU)** tomada de `medios_pago.detalle`, fecha del pago, importe, destino (CBU/alias de la OP), **N° de operación** y observaciones. Los **Echeq propios** muestran la cuenta que los debita. Las **tarjetas muestran solo los últimos 4 dígitos** (nunca el número completo en un PDF que sale por mail). Efectivo no muestra datos bancarios.
+- **Nuevo campo opcional «N° de operación / referencia de la transferencia»** al pagar la OP (`ordenes_pago.nro_operacion`); sale en el PDF que recibe el proveedor. **SQL: `sql_op_nro_operacion.sql`.** Se guarda aparte del pago: si la columna todavía no existe, el pago igual queda registrado y el panel avisa que falta el SQL.
+- Para que el CBU salga, la cuenta debe tener cargado el **«Detalle / CBU»** en Cuentas & Caja (hoy están cargadas las dos Macro: SUDES y POINTERS).
+- Probado con la librería real de PDF (jsPDF): 14 controles, con los datos del caso reportado (POINTERS, retención $65.092,60).
+
