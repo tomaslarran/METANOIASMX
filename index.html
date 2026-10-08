@@ -27179,6 +27179,13 @@ async function generarPDFOrdenPago(op,soloRetornar){
   doc.setTextColor(40,40,55);doc.setFont("helvetica","normal");doc.setFontSize(10);
   const cta=await _opDatosCuenta(op);
   const _fecha=f=>String(f||"").slice(0,10).split("-").reverse().join("/");
+  let ech=null;
+  if(cta?.medio?.tipo==="echeq"){
+    const filtros=[op.id&&`orden_pago_id=eq.${op.id}`,op.comprobante_id&&`comprobante_id=eq.${op.comprobante_id}`].filter(Boolean);
+    for(const f of filtros){
+      try{const r=await sb(`echeqs_propios?${f}&estado=neq.anulado&select=*&order=created_at.desc&limit=1`);if(r&&r[0]){ech=r[0];break;}}catch(e){}
+    }
+  }
   const fila=(rot,val)=>{
     if(!val)return;
     doc.setFont("helvetica","bold");doc.setFontSize(8.5);doc.setTextColor(100,100,120);doc.text(rot,M+2,y);
@@ -27188,7 +27195,14 @@ async function generarPDFOrdenPago(op,soloRetornar){
   };
   fila("Medio de pago",(op.medio_pago||"—")+(cta?.nota?` (${cta.nota})`:""));
   fila("Cuenta de origen",[cta?.banco,cta?.ident].filter(Boolean).join(" · "));
-  fila("Fecha de pago",op.estado==="pagado"?_fecha(op.fecha_pago):"");
+  if(ech){
+    const tipoE=/^CPD$/i.test(ech.tipo_cheque||"")?"Cheque de pago diferido (CPD)":/^CC$/i.test(ech.tipo_cheque||"")?"Cheque común (CC)":(ech.tipo_cheque||"");
+    fila("Echeq N°",`${ech.numero||"—"}${ech.id_cheque?` · Id ${ech.id_cheque}`:""}`);
+    fila("Tipo",[tipoE,ech.caracter].filter(Boolean).join(" · "));
+    fila("Fecha de emisión",_fecha(ech.fecha_emision));
+    fila("Fecha de pago (débito)",_fecha(ech.fecha_pago));
+    fila("A la orden de",[ech.beneficiario,ech.beneficiario_cuit&&`CUIT ${ech.beneficiario_cuit}`].filter(Boolean).join(" · "));
+  }else fila("Fecha de pago",op.estado==="pagado"?_fecha(op.fecha_pago):"");
   fila("Importe del pago","$"+Number(op.neto_a_pagar).toLocaleString("es-AR",{minimumFractionDigits:2}));
   fila("Destino (CBU / alias)",op.cbu_destino);
   fila("N° de operación",op.nro_operacion);
