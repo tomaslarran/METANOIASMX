@@ -3372,6 +3372,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
               <option value="IIBB">IIBB</option>
               <option value="Ganancias">Ganancias</option>
               <option value="Autonomos">Autónomos</option>
+              <option value="Cargas sociales">Cargas sociales (F.931)</option>
+              <option value="SICORE">SICORE (retenciones practicadas)</option>
               <option value="Otro">Otro</option>
             </select>
           </div>
@@ -13817,17 +13819,34 @@ async function _concUnificarDuplicados(sociedad){
 // Movimientos del banco que corresponden a algo que el panel ya tiene registrado en otro módulo:
 // cuotas de préstamos y planes de pago (AFIP, Rentas), órdenes de pago, facturas pagadas e inversiones.
 async function _concCruzarModulos(sociedad,extractos){
-  const r={cuotas:0,pagos:0,inversiones:0};
+  const r={cuotas:0,pagos:0,inversiones:0,veps:0};
   const prest=await sb(`cf_prestamos?sociedad=eq.${sociedad}&select=id,nombre`).catch(()=>[]);
   const invs=await sb(`cf_inversiones?sociedad=eq.${sociedad}&select=id,nombre,capital,fecha_inicio`).catch(()=>[]);
-  const [cuotas,ops,comps,movInv,yaUsados]=await Promise.all([
+  const [cuotas,ops,comps,movInv,yaUsados,vepsTodos]=await Promise.all([
     prest.length?sb(`cf_prestamos_cuotas?prestamo_id=in.(${prest.map(p=>p.id).join(",")})&pagada=eq.true&select=id,prestamo_id,nro_cuota,fecha,fecha_pago,monto_total`).catch(()=>[]):[],
     sb(`ordenes_pago?sociedad=eq.${sociedad}&estado=eq.pagado&select=id,numero,proveedor,neto_a_pagar,fecha_pago,medio_pago`).catch(()=>[]),
     sb(`comprobantes_compra?sociedad=eq.${sociedad}&estado=eq.pagado&select=id,proveedor,numero,total,fecha_pago,medio_pago`).catch(()=>[]),
     invs.length?sb(`cf_inversiones_movimientos?inversion_id=in.(${invs.map(i=>i.id).join(",")})&select=id,inversion_id,tipo,fecha,monto`).catch(()=>[]):[],
-    sb(`banco_movimientos?sociedad=eq.${sociedad}&match_tipo=in.(cuota_prestamo,orden_pago,comprobante,inversion)&select=match_tipo,match_id`).catch(()=>[]),
+    sb(`banco_movimientos?sociedad=eq.${sociedad}&match_tipo=in.(cuota_prestamo,orden_pago,comprobante,inversion,vep)&select=match_tipo,match_id`).catch(()=>[]),
+    sb(`impuestos_vep?sociedad=eq.${sociedad}&select=id,tipo_impuesto,periodo,monto,fecha_vencimiento,fecha_pago,estado,banco_movimiento_id,asiento_devengado_id,asiento_pago_id,numero_vep,sociedad`).catch(()=>[]),
   ]);
   const usado=new Set(yaUsados.map(u=>`${u.match_tipo}:${u.match_id}`));
+  // VEP: un pendiente puede pagarse antes o poco después del vencimiento; uno ya pagado a mano se busca cerca de su fecha de pago.
+  const vepsLibres=vepsTodos.filter(v=>!v.banco_movimiento_id);
+  const vepCand=(monto,fecha,tol)=>{
+    let best=null,bd=1e9;
+    for(const v of vepsLibres){
+      if(usado.has(`vep:${v.id}`))continue;
+      if(Math.abs((parseFloat(v.monto)||0)-monto)>tol)continue;
+      const pagado=v.estado==="pagado"&&v.fecha_pago;
+      const ref=pagado?v.fecha_pago:v.fecha_vencimiento;
+      if(!ref)continue;
+      const dd=(Date.parse(fecha)-Date.parse(ref))/86400000;
+      if(!(pagado?Math.abs(dd)<=6:(dd>=-15&&dd<=10)))continue;
+      if(Math.abs(dd)<bd){bd=Math.abs(dd);best=v;}
+    }
+    return best;
+  };
   const dias=(a,b)=>Math.abs((Date.parse(a)-Date.parse(b))/86400000);
   const nomInv=id=>invs.find(i=>i.id===id)?.nombre||"Inversión";
   // candidatos de inversiones: suscripción inicial (capital en fecha_inicio) y aportes (salen del banco); rescates (entran al banco)
@@ -13857,6 +13876,8 @@ async function _concCruzarModulos(sociedad,extractos){
         if(imp<0){
           const c=mejor(cuotas,monto,fF(x=>x.fecha_pago||x.fecha),"cuota_prestamo",tol,x=>parseFloat(x.monto_total)||0);
           if(c){hallado={tipo:"cuota_prestamo",id:c.id,desc:`Cuota ${c.nro_cuota??""} — ${prest.find(p=>p.id===c.prestamo_id)?.nombre||"Préstamo"}`.replace("Cuota  —","Cuota —"),k:"cuotas"};break;}
+          const vp=vepCand(monto,fecha,tol);
+          if(vp){hallado={tipo:"vep",id:vp.id,desc:`VEP ${vp.tipo_impuesto||""} ${vp.periodo||""}`.trim(),k:"veps",vep:vp};break;}
           const o=mejor(ops,monto,fF(x=>x.fecha_pago),"orden_pago",tol,x=>parseFloat(x.neto_a_pagar)||0);
           if(o){hallado={tipo:"orden_pago",id:o.id,desc:`Orden de pago ${o.numero||""} — ${o.proveedor||""}`,k:"pagos"};break;}
           const f=mejor(comps.filter(x=>!/tarjeta|visa|socio/i.test(x.medio_pago||"")),monto,fF(x=>x.fecha_pago),"comprobante",tol,x=>parseFloat(x.total)||0);
@@ -13871,6 +13892,7 @@ async function _concCruzarModulos(sociedad,extractos){
       if(hallado){
         usado.add(`${hallado.tipo}:${hallado.id}`);
         await sb(`banco_movimientos?id=eq.${b.id}`,{method:"PATCH",body:JSON.stringify({conciliado:true,match_tipo:hallado.tipo,match_id:hallado.id,match_descripcion:hallado.desc})});
+        if(hallado.tipo==="vep")await _vepRegistrarPago(hallado.vep,{fecha:b.fecha,bancoMovId:b.id}).catch(e=>console.warn("VEP: pago conciliado sin asiento",e));
         r[hallado.k]++;
       }
     }
@@ -13882,10 +13904,10 @@ async function _concCruzarModulos(sociedad,extractos){
 async function _concCruzarTodo(sociedad,extractos){
   const dup=await _concUnificarDuplicados(sociedad).catch(()=>0);
   const panel=await _concCruzarPanel(sociedad,extractos).catch(()=>0);
-  const mod=await _concCruzarModulos(sociedad,extractos).catch(()=>({cuotas:0,pagos:0,inversiones:0}));
-  return{dup,panel,cuotas:mod.cuotas,pagos:mod.pagos,inversiones:mod.inversiones};
+  const mod=await _concCruzarModulos(sociedad,extractos).catch(()=>({cuotas:0,pagos:0,inversiones:0,veps:0}));
+  return{dup,panel,cuotas:mod.cuotas,pagos:mod.pagos,inversiones:mod.inversiones,veps:mod.veps};
 }
-const _concResumenCruce=r=>[r.panel&&`${r.panel} del panel`,r.cuotas&&`${r.cuotas} cuota${r.cuotas>1?"s":""} de préstamos/planes`,r.pagos&&`${r.pagos} pago${r.pagos>1?"s":""} de facturas`,r.inversiones&&`${r.inversiones} de inversiones`,r.dup&&`${r.dup} duplicado${r.dup>1?"s":""} unificado${r.dup>1?"s":""}`].filter(Boolean).join(" · ");
+const _concResumenCruce=r=>[r.panel&&`${r.panel} del panel`,r.cuotas&&`${r.cuotas} cuota${r.cuotas>1?"s":""} de préstamos/planes`,r.pagos&&`${r.pagos} pago${r.pagos>1?"s":""} de facturas`,r.inversiones&&`${r.inversiones} de inversiones`,r.veps&&`${r.veps} VEP${r.veps>1?"s":""} de impuestos`,r.dup&&`${r.dup} duplicado${r.dup>1?"s":""} unificado${r.dup>1?"s":""}`].filter(Boolean).join(" · ");
 
 async function concCruzarPanelUI(){
   const btn=document.getElementById("btn-conc-cruzar");
@@ -24139,6 +24161,85 @@ async function marcarCalendarioAurenPendiente(id){
   renderCalendarioAuren();
 }
 
+/* ══ VEP → contabilidad: la deuda nace al cargar el VEP y se cancela al pagarlo ══ */
+// Por tipo de impuesto: "gasto" = contrapartida del devengado, "deuda" = pasivo que cancela el pago.
+// gasto:null → la deuda ya está en libros (retenciones practicadas): no hay asiento de devengado.
+// Criterio PROVISORIO para IVA (se asienta contra IVA Débito Fiscal, sin netear el crédito) y para
+// los anticipos de Ganancias (van a gasto): confirmar con la contadora y ajustar solo esta tabla.
+const VEP_CUENTAS={
+  "IVA":{deuda:"2.1.03.004",gasto:"2.1.03.001"},
+  "IIBB":{deuda:"2.1.03.005",gasto:"5.4.01.001"},
+  "Ganancias":{deuda:"2.1.03.006",gasto:"5.4.01.002"},
+  "Autonomos":{deuda:"2.1.03.007",gasto:"5.4.01.003"},
+  "Cargas sociales":{deuda:"2.1.04.002",gasto:"5.1.01.001"},
+  "SICORE":{deuda:"2.1.03.002",gasto:null},
+  "Otro":{deuda:"2.1.03.008",gasto:"5.4.01.004"}
+};
+function _vepCuentas(tipo){return VEP_CUENTAS[tipo]||VEP_CUENTAS["Otro"];}
+function _vepMonto(v){return Math.round((parseFloat(v.monto)||0)*100)/100;}
+function _vepBancoCodigo(soc){return soc==="POINTERS"?"1.1.01.003":"1.1.01.002";}
+function _vepFechaDevengo(v){
+  // El impuesto se devenga en el período al que corresponde (último día del mes), no cuando se carga.
+  const per=String(v.periodo||"");
+  let m=/^(\d{4})-(\d{2})/.exec(per),a,mes;
+  if(m){a=+m[1];mes=+m[2];}
+  else if((m=/^(\d{2})\/(\d{4})$/.exec(per))){a=+m[2];mes=+m[1];}
+  if(a&&mes>=1&&mes<=12)return new Date(Date.UTC(a,mes,0)).toISOString().slice(0,10);
+  return v.fecha_vencimiento||today();
+}
+async function _vepAsientoDevengado(v){
+  const c=_vepCuentas(v.tipo_impuesto);
+  if(!c.gasto||!v.sociedad)return null;
+  const desc=(`${v.tipo_impuesto} ${v.periodo||""} — VEP${v.numero_vep?" "+v.numero_vep:""}`).replace(/\s+/g," ").trim();
+  const monto=_vepMonto(v);
+  return generarAsiento({fecha:_vepFechaDevengo(v),sociedad:v.sociedad,tipo:"devengado_impuesto",origen:"vep",origen_id:v.id,descripcion:desc,
+    lineas:[{codigo:c.gasto,debe:monto,desc},{codigo:c.deuda,haber:monto,desc}]});
+}
+async function _vepAsegurarDevengado(v){
+  // Un VEP cargado antes de este circuito no tiene deuda en libros: se crea antes de cancelarla.
+  if(v.asiento_devengado_id||!_vepCuentas(v.tipo_impuesto).gasto||!v.sociedad)return;
+  const a=await _vepAsientoDevengado(v);
+  if(a?._faltantes)throw new Error("Faltan cuentas contables: "+a._faltantes.join(", "));
+  if(a?.id){v.asiento_devengado_id=a.id;await sb(`impuestos_vep?id=eq.${v.id}`,{method:"PATCH",body:JSON.stringify({asiento_devengado_id:a.id})});}
+}
+async function _vepRegistrarPago(v,{fecha,bancoMovId}={}){
+  const patch={estado:"pagado",fecha_pago:fecha||today()};
+  if(bancoMovId)patch.banco_movimiento_id=bancoMovId;
+  if(!v.asiento_pago_id&&v.sociedad){
+    await _vepAsegurarDevengado(v);
+    const c=_vepCuentas(v.tipo_impuesto);
+    const monto=_vepMonto(v);
+    const desc=(`Pago VEP ${v.tipo_impuesto} ${v.periodo||""}`).replace(/\s+/g," ").trim();
+    const a=await generarAsiento({fecha:patch.fecha_pago,sociedad:v.sociedad,tipo:"pago_impuesto",origen:"vep_pago",origen_id:v.id,descripcion:desc,
+      lineas:[{codigo:c.deuda,debe:monto,desc},{codigo:_vepBancoCodigo(v.sociedad),haber:monto,desc}]});
+    if(a?._faltantes)throw new Error("Faltan cuentas contables: "+a._faltantes.join(", "));
+    if(a?.id)patch.asiento_pago_id=a.id;
+  }
+  await sb(`impuestos_vep?id=eq.${v.id}`,{method:"PATCH",body:JSON.stringify(patch)});
+  Object.assign(v,patch);
+  return patch;
+}
+async function _vepMarcarPagadoManual(id){
+  const v=vepData.find(x=>x.id===id);
+  if(!v)return;
+  try{await _vepRegistrarPago(v,{fecha:today()});}
+  catch(e){
+    // El pago se marca igual para no perder el dato; el aviso dice qué falta en contabilidad.
+    await sb(`impuestos_vep?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado:"pagado",fecha_pago:today()})});
+    toast("Marcado como pagado, pero el asiento no se generó: "+String(e.message||e).slice(0,90),"err");
+  }
+}
+async function _vepAnularAsientos(id){
+  const v=vepData.find(x=>x.id===id);
+  if(!v)return;
+  try{
+    for(const aid of [v.asiento_devengado_id,v.asiento_pago_id].filter(Boolean))
+      await sb(`asientos_contables?id=eq.${aid}`,{method:"PATCH",body:JSON.stringify({anulado:true})});
+    if(v.banco_movimiento_id)
+      await sb(`banco_movimientos?id=eq.${v.banco_movimiento_id}`,{method:"PATCH",body:JSON.stringify({conciliado:false,match_tipo:null,match_id:null,match_descripcion:null})});
+  }catch(e){console.warn("VEP: no se pudieron anular los asientos",e);}
+}
+
 /* ══ VEPs ══ */
 let vepData=[], vepArchivoUrl=null, vepArchivoPath=null;
 
@@ -24281,6 +24382,7 @@ async function saveVEP(){
   if(!tipo){toast("Seleccioná el tipo de impuesto","err");return;}
   if(!venc){toast("Ingresá la fecha de vencimiento","err");return;}
   if(!monto){toast("Ingresá el monto","err");return;}
+  if(!document.getElementById("vep-sociedad").value){toast("Seleccioná la sociedad (hace falta para la contabilidad)","err");return;}
   const btn=document.getElementById("vep-save-btn"); btn.disabled=true;
   try{
     const obj={
@@ -24296,19 +24398,27 @@ async function saveVEP(){
     };
     const num=document.getElementById("vep-numero").value.trim();
     if(num)obj.numero_vep=num;
-    await sb("impuestos_vep",{method:"POST",body:JSON.stringify(obj)});
+    const [creado]=await sb("impuestos_vep",{method:"POST",body:JSON.stringify(obj)});
+    let avisoAsiento="";
+    if(creado?.id){
+      try{
+        const a=await _vepAsientoDevengado(creado);
+        if(a?._faltantes)avisoAsiento="faltan cuentas contables ("+a._faltantes.join(", ")+")";
+        else if(a?.id)await sb(`impuestos_vep?id=eq.${creado.id}`,{method:"PATCH",body:JSON.stringify({asiento_devengado_id:a.id})});
+      }catch(e){avisoAsiento="no se pudo generar el asiento: "+String(e.message||e).slice(0,70);}
+    }
     await loadVEPs();
     renderVEPs();
     closeModal("modal-cargar-vep");
-    toast("VEP guardado","ok");
+    toast(avisoAsiento?"VEP guardado, pero "+avisoAsiento:"VEP guardado — la deuda ya figura en contabilidad",avisoAsiento?"err":"ok");
     if(typeof renderCalendario==="function")renderCalendario();
   }catch(e){ toast("Error: "+e.message.slice(0,80),"err"); }
   finally{ btn.disabled=false; }
 }
 
 async function marcarVEPPagado(id){
-  if(!confirm("¿Marcar este VEP como pagado?"))return;
-  await sb(`impuestos_vep?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado:"pagado",fecha_pago:today()})});
+  if(!confirm("¿Marcar este VEP como pagado desde el Banco Macro? Se registra el pago en contabilidad; si después importás el extracto, se concilia solo."))return;
+  await _vepMarcarPagadoManual(id);
   const i=vepData.findIndex(v=>v.id===id); if(i>=0){vepData[i].estado="pagado";vepData[i].fecha_pago=today();}
   renderVEPs();
   if(typeof renderCalendario==="function")renderCalendario();
@@ -24317,6 +24427,7 @@ async function marcarVEPPagado(id){
 
 async function deleteVEP(id){
   if(!confirm("¿Eliminar este VEP?"))return;
+  await _vepAnularAsientos(id);
   await sb(`impuestos_vep?id=eq.${id}`,{method:"DELETE"});
   vepData=vepData.filter(v=>v.id!==id);
   renderVEPs();
@@ -24700,6 +24811,8 @@ async function renderLibroDiario(){
         <option value="pago_cuota_prestamo"${f.tipo==="pago_cuota_prestamo"?" selected":""}>Cuota préstamo</option>
         <option value="gastos_bancarios"${f.tipo==="gastos_bancarios"?" selected":""}>Gastos bancarios</option>
         <option value="liquidacion_tarjeta"${f.tipo==="liquidacion_tarjeta"?" selected":""}>Pago de tarjeta</option>
+        <option value="devengado_impuesto"${f.tipo==="devengado_impuesto"?" selected":""}>Impuesto devengado (VEP)</option>
+        <option value="pago_impuesto"${f.tipo==="pago_impuesto"?" selected":""}>Pago de impuesto</option>
         <option value="sueldo"${f.tipo==="sueldo"?" selected":""}>Sueldo</option>
         <option value="ajuste_manual"${f.tipo==="ajuste_manual"?" selected":""}>Ajuste manual</option>
       </select>
@@ -24722,8 +24835,8 @@ async function _ldCargar(){
   try{
     const asientos=await sb(q);
     if(!asientos.length){body.innerHTML=`<div style="color:var(--tx3);font-size:12px;padding:24px 0;text-align:center">Sin asientos para el período seleccionado</div>`;return;}
-    const tipoLabel={devengado_compra:"Devengado compra",pago_compra:"Pago compra",pago_cuota_prestamo:"Cuota préstamo",gastos_bancarios:"Gastos bancarios",liquidacion_tarjeta:"Pago de tarjeta",sueldo:"Sueldo",ajuste_manual:"Ajuste manual",devengado_venta:"Devengado venta",cobro_venta:"Cobro venta",ajuste:"Ajuste",apertura:"Apertura"};
-    const tipoBadge={devengado_compra:"var(--al)",pago_compra:"var(--gr)",pago_cuota_prestamo:"#818CF8",gastos_bancarios:"#F59E0B",liquidacion_tarjeta:"#06B6D4",sueldo:"#F472B6",ajuste_manual:"var(--ac)",devengado_venta:"var(--al)",cobro_venta:"var(--gr)",ajuste:"var(--ac)",apertura:"var(--tx3)"};
+    const tipoLabel={devengado_compra:"Devengado compra",pago_compra:"Pago compra",pago_cuota_prestamo:"Cuota préstamo",gastos_bancarios:"Gastos bancarios",liquidacion_tarjeta:"Pago de tarjeta",devengado_impuesto:"Impuesto devengado (VEP)",pago_impuesto:"Pago de impuesto",sueldo:"Sueldo",ajuste_manual:"Ajuste manual",devengado_venta:"Devengado venta",cobro_venta:"Cobro venta",ajuste:"Ajuste",apertura:"Apertura"};
+    const tipoBadge={devengado_compra:"var(--al)",pago_compra:"var(--gr)",pago_cuota_prestamo:"#818CF8",gastos_bancarios:"#F59E0B",liquidacion_tarjeta:"#06B6D4",devengado_impuesto:"#EF4444",pago_impuesto:"#10B981",sueldo:"#F472B6",ajuste_manual:"var(--ac)",devengado_venta:"var(--al)",cobro_venta:"var(--gr)",ajuste:"var(--ac)",apertura:"var(--tx3)"};
     body.innerHTML=`<div style="margin-bottom:8px;font-size:11px;color:var(--tx3)">${asientos.length} asiento${asientos.length!==1?"s":""}</div>`+
       asientos.map(a=>{
         const col=tipoBadge[a.tipo]||"var(--tx3)";
