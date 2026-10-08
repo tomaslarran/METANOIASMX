@@ -1801,3 +1801,14 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 - **PDF de la orden:** el encabezado dice «Pagada con Echeq · se debita el dd/mm/aaaa». `_echeqDeOrden(op)` centraliza la búsqueda del Echeq (por orden y, si no, por factura) para el PDF y el mail (también ✉️ Reenviar).
 - Probado: mail 8 controles, PDF 25, pantalla 5.
 
+
+### 💳 Pagos mixtos y saldo pendiente en facturas (8 Oct 2026) — Etapa A
+
+**Pedido de Tomás:** una factura se puede pagar con varios medios (parte Echeq, parte transferencia, cinco Echeq distintos) y puede quedar un saldo pendiente.
+
+- **Editor de líneas** en 💳 Pagar y 💸 Pagar OP: cada línea = medio + monto (+ datos del Echeq con su PDF, socio, etc.). Pagar directo admite pagar menos que el total (queda **saldo**); la OP exige que las líneas sumen exactamente el neto a pagar.
+- `registrarPagoMixto()` registra un evento: una fila por línea en `comprobante_pagos`, tesorería según medio, **un asiento** por evento. La factura pasa a `pagado` solo cuando `monto_pagado` cubre el total; antes sigue pendiente con "Saldo $X".
+- **OP parcial:** se puede generar una OP por una parte (la base de retención de Ganancias acompaña proporcionalmente) y otra después por el saldo; la retención se calcula por OP. El PDF de la OP lista cada medio ("Pago 1, Pago 2…") cuando hay más de uno.
+- Estado de cuenta de proveedores cuenta lo pagado en parte y suma la retención de todas las OP pagadas.
+- ⚠️ **SQL a correr:** `sql_pagos_mixtos.sql` (columna `monto_pagado`, tabla `comprobante_pagos`, estado `Endosado` y datos del cheque en `cf_cobranzas`, cuenta 1.1.01.005). Sin correrlo, solo funciona el pago de una línea por el total.
+- Pendiente: mail con varios Echeq adjuntos (función `enviar-pago-proveedor`), reenviar con varias OP, historial/KPIs de pagos parciales, **Etapa B: cartera de Echeq de terceros con Endosar y "endosado a"** (asiento provisorio, consultar a Estela).

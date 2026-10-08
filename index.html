@@ -4683,17 +4683,12 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <div class="mov" id="modal-pagar-comp" onclick="if(event.target===this&&_movDown===this)closeModal('modal-pagar-comp')">
-<div class="modal" style="max-width:540px">
+<div class="modal" style="max-width:680px">
   <div class="mt">Registrar pago</div>
   <input type="hidden" id="pagar-comp-id">
   <div class="form-grid" style="grid-template-columns:1fr">
-    <div class="fg"><label class="fl">Medio de pago *</label>
-      <select class="fs" id="pagar-comp-medio" onchange="toggleSocioPagoComp()"></select>
-    </div>
-    <div class="fg" id="pagar-comp-socio-wrap" style="display:none"><label class="fl">¿Qué socio puso la plata? *</label>
-      <select class="fs" id="pagar-comp-socio"></select>
-    </div>
-    <div class="fg" id="pagar-comp-echeq-wrap" style="display:none"></div>
+    <div id="pagar-comp-resumen" style="font-size:12px;color:var(--tx2);line-height:1.6;margin-bottom:6px"></div>
+    <div class="fg"><label class="fl">Medios de pago *</label><div id="pagar-comp-lineas"></div></div>
     <div class="fg"><label class="fl">Fecha de pago</label><input class="fi" id="pagar-comp-fecha" type="date"></div>
     <div class="fg"><label class="fl">Observaciones</label><input class="fi" id="pagar-comp-obs" type="text" placeholder="Opcional — referencia, CBU, etc."></div>
   </div>
@@ -4727,19 +4722,17 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
 <!-- MODAL PAGAR ORDEN DE PAGO -->
 <div class="mov" id="modal-pagar-op" onclick="if(event.target===this&&_movDown===this)closeModal('modal-pagar-op')">
-<div class="modal" style="max-width:460px">
+<div class="modal" style="max-width:680px">
   <div class="mt">💸 Pagar orden de pago <button class="mt-close" onclick="closeModal('modal-pagar-op')">✕</button></div>
   <div style="font-size:13px;margin-bottom:4px"><b id="pop-numero"></b> · <span id="pop-proveedor"></span></div>
   <div id="pop-detalle" style="font-size:12px;color:var(--tx2);line-height:1.6;margin-bottom:12px"></div>
   <div style="background:rgba(139,92,246,.10);border:1px solid rgba(139,92,246,.3);border-radius:8px;padding:8px 10px;font-size:11px;color:var(--tx2);margin-bottom:12px">Al confirmar se registra el pago: la factura queda pagada, se anota en banco o caja según el medio, se genera el asiento y se le envía al proveedor el comprobante de pago, la orden de pago y, si hubo retención, el certificado.</div>
   <div class="form-grid" style="grid-template-columns:1fr 1fr">
-    <div class="fg" style="grid-column:1/-1"><label class="fl">Medio de pago *</label><select class="fs" id="pop-medio" onchange="popToggleSocio()"></select></div>
-    <div class="fg" id="pop-socio-wrap" style="display:none;grid-column:1/-1"><label class="fl">¿Qué socio puso la plata? *</label><select class="fs" id="pop-socio"></select></div>
-    <div class="fg" id="pop-echeq-wrap" style="display:none;grid-column:1/-1"></div>
+    <div class="fg" style="grid-column:1/-1"><label class="fl">Medios de pago *</label><div id="pop-lineas"></div></div>
     <div class="fg"><label class="fl">Fecha de pago</label><input class="fi" type="date" id="pop-fecha"></div>
     <div class="fg"><label class="fl">Observaciones</label><input class="fi" type="text" id="pop-obs" placeholder="Opcional"></div>
     <div class="fg" style="grid-column:1/-1"><label class="fl">N° de operación / referencia de la transferencia</label><input class="fi" type="text" id="pop-nroop" placeholder="Opcional — sale en la orden de pago que recibe el proveedor"></div>
-    <div class="fg" id="pop-comp-wrap" style="grid-column:1/-1"><label class="fl">Comprobante de pago (PDF o foto) *</label>
+    <div class="fg" id="pop-comp-wrap" style="grid-column:1/-1"><label class="fl">Comprobante de la transferencia (PDF o foto)</label>
       <input class="fi" type="file" id="pop-comprobante" accept="application/pdf,image/*">
       <label style="display:flex;gap:6px;align-items:center;font-size:11px;color:var(--tx3);margin-top:4px"><input type="checkbox" id="pop-sin-comp"> Pagar sin comprobante (efectivo u otro caso)</label>
     </div>
@@ -4827,7 +4820,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       </select>
     </div>
     <div class="fg"><label class="fl">Monto bruto</label>
-      <input class="fi" id="mop-monto-bruto" type="number" step="0.01" oninput="mopRecalcular()" placeholder="0">
+      <input class="fi" id="mop-monto-bruto" type="number" step="0.01" oninput="mopBrutoCambio()" placeholder="0">
     </div>
   </div>
   <div id="mop-retencion-section" style="background:rgba(139,92,246,.06);border:1px solid rgba(139,92,246,.2);border-radius:8px;padding:12px 14px;margin-bottom:12px;display:none">
@@ -13477,7 +13470,7 @@ async function renderCFPendientes(){
   }
 
   // ── TOTALES ─────────────────────────────────────────────
-  const totalFact=facturas.reduce((s,c)=>s+(parseFloat(c.total)||0),0);
+  const totalFact=facturas.reduce((s,c)=>s+(_pagoParcial(c)?saldoComp(c):(parseFloat(c.total)||0)),0);
   const totalCuot=cuotas.reduce((s,c)=>s+(parseFloat(c.monto_total)||0),0);
   const totalSuel=sueldosPend.reduce((s,x)=>s+(parseFloat(x.emp.monto_mensual)||0),0);
   const totalGral=totalFact+totalCuot+totalSuel;
@@ -13562,7 +13555,7 @@ async function renderCFPendientes(){
               </td>
               <td style="padding:8px 12px;color:var(--tx3)">${esc(c.sociedad||"—")}</td>
               <td style="padding:8px 12px">${badgeEstado(c.estado)}</td>
-              <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--tx)">$${Math.round(c.total||0).toLocaleString("es-AR")}</td>
+              <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--tx)">$${Math.round(_pagoParcial(c)?saldoComp(c):(c.total||0)).toLocaleString("es-AR")}${_pagoParcial(c)?`<div style="font-size:10px;font-weight:400;color:var(--am)">saldo · de $${Math.round(c.total||0).toLocaleString("es-AR")}</div>`:""}</td>
               <td style="padding:8px 12px;text-align:center;color:${days(fv)<0?"var(--re)":days(fv)<=7?"#F97316":"var(--tx3)"}">${fv?fmt(fv):"—"}</td>
               <td style="padding:8px 6px;text-align:center">
                 <div style="display:flex;gap:4px;justify-content:center">
@@ -24291,11 +24284,14 @@ async function _echeqLeerPdf(file){
 
 // ── Formulario dentro de los modales de pago (prefijo p = "pagar-comp" | "pop") ──
 function _echeqCtx(p){
-  if(p==="pagar-comp"){
-    const c=comprobantes.find(x=>x.id===document.getElementById("pagar-comp-id").value);
-    return{sociedad:c?.sociedad||"SUDES",monto:Math.abs(parseFloat(c?.total)||0),cuit:c?.cuit||"",proveedor:c?.proveedor||"",medio:mediosPago.find(m=>m.nombre===document.getElementById("pagar-comp-medio").value)};
-  }
-  return{sociedad:_opPagar?.sociedad||"SUDES",monto:parseFloat(_opPagar?.neto_a_pagar)||0,cuit:_opPagar?.cuit||"",proveedor:_opPagar?.proveedor||"",medio:mediosPago.find(m=>m.nombre===document.getElementById("pop-medio").value)};
+  const m=/^(pagar-comp|pop)-L\d+$/.exec(p);
+  const base=m?m[1]:p;
+  let sociedad="SUDES",cuit="",proveedor="";
+  if(base==="pagar-comp"){const c=comprobantes.find(x=>x.id===document.getElementById("pagar-comp-id").value);sociedad=c?.sociedad||"SUDES";cuit=c?.cuit||"";proveedor=c?.proveedor||"";}
+  else{sociedad=_opPagar?.sociedad||"SUDES";cuit=_opPagar?.cuit||"";proveedor=_opPagar?.proveedor||"";}
+  const monto=parseFloat(document.getElementById(p+"-monto")?.value)||0;
+  const medio=mediosPago.find(x=>x.nombre===document.getElementById(p+"-medio")?.value);
+  return{sociedad,monto,cuit,proveedor,medio};
 }
 function _echeqMontar(p){
   const w=document.getElementById(p+"-echeq-wrap");
@@ -24317,18 +24313,11 @@ function _echeqMontar(p){
     <div style="font-size:10px;color:var(--tx3)">Sin PDF podés completarlo a mano. Si es a la vista, la fecha de pago es la misma que la de emisión.</div>
   </div>`;
 }
-function _echeqToggle(p,medioSelId){
-  const mo=mediosPago.find(m=>m.nombre===document.getElementById(medioSelId).value);
-  const esE=mo?.tipo==="echeq";
-  const w=document.getElementById(p+"-echeq-wrap");
-  if(!w)return;
-  w.style.display=esE?"":"none";
-  if(p==="pop"){const cw=document.getElementById("pop-comp-wrap");if(cw)cw.style.display=esE?"none":"";}
-  if(esE){_echeqMontar(p);echeqControlar(p);}
-}
+
 async function echeqCargarPdf(p){
   const f=document.getElementById(p+"-echeq-pdf").files?.[0];
   if(!f)return;
+  const base=p.replace(/-L\d+$/,"");
   const ctrl=document.getElementById(p+"-echeq-ctrl");
   if(/^image\//.test(f.type)){
     _echeqForm[p]={d:null,file:f};
@@ -24342,7 +24331,10 @@ async function echeqCargarPdf(p){
     const set=(s,v)=>{const el=document.getElementById(`${p}-echeq-${s}`);if(el)el.value=v||"";};
     set("num",d.numero);set("id",d.id_cheque);set("emi",d.fecha_emision);set("pago",d.fecha_pago);
     set("ben",d.beneficiario_razon);set("bcuit",d.beneficiario_cuit);
-    const fp=document.getElementById(p==="pagar-comp"?"pagar-comp-fecha":"pop-fecha");
+    // el monto de esta línea pasa a ser el importe del Echeq
+    const mi=document.getElementById(p+"-monto");
+    if(mi&&d.importe){mi.value=d.importe;if(typeof _PL!=="undefined"&&_PL[base])plTotales(base);}
+    const fp=document.getElementById(base+"-fecha");
     if(fp&&d.fecha_emision)fp.value=d.fecha_emision;
     await echeqControlar(p);
   }catch(e){
@@ -24395,11 +24387,13 @@ async function _echeqDatosDe(p){
 }
 // Alta del registro al pagar la factura con un Echeq (un solo Echeq vigente por factura).
 async function _echeqAlta(c,{sociedad,medio,monto,echeq,opId}){
-  const ya=await sb(`echeqs_propios?comprobante_id=eq.${c.id}&estado=neq.anulado&select=id`).catch(()=>[]);
-  if(ya.length)return;
+  const e=echeq||{};
+  if(e.numero){
+    const ya=await sb(`echeqs_propios?comprobante_id=eq.${c.id}&numero=eq.${encodeURIComponent(e.numero)}&estado=neq.anulado&select=id`).catch(()=>[]);
+    if(ya.length)return ya[0].id;
+  }
   const mo=mediosPago.find(x=>x.nombre===medio);
   const bancoMed=mediosPago.find(x=>x.id===mo?.cuenta_bancaria_id);
-  const e=echeq||{};
   const [rec]=await sb("echeqs_propios",{method:"POST",body:JSON.stringify({
     sociedad,medio,cuenta_bancaria:bancoMed?.nombre||null,banco:e.emisor_banco||mo?.banco||bancoMed?.banco||null,
     numero:e.numero||null,id_cheque:e.id_cheque||null,tipo_cheque:e.tipo_cheque||null,caracter:e.caracter||null,cmc7:e.cmc7||null,
@@ -24416,6 +24410,7 @@ async function _echeqAlta(c,{sociedad,medio,monto,echeq,opId}){
       else toast("⚠️ No se pudo guardar el PDF del Echeq (los datos sí quedaron)","err");
     }catch(_){toast("⚠️ No se pudo guardar el PDF del Echeq (los datos sí quedaron)","err");}
   }
+  return rec?.id||null;
 }
 // El banco debitó el Echeq: se cancela "Echeq emitidos pendientes de débito" contra el banco.
 async function _echeqRegistrarDebito(e,{fecha,bancoMovId}={}){
@@ -24473,7 +24468,10 @@ async function renderEcheqs(){
       </tbody></table></div>`:`<div style="text-align:center;padding:40px;color:var(--tx3)"><div style="font-size:32px;margin-bottom:10px">🧾</div><div style="font-size:14px">Todavía no hay Echeq propios</div><div style="font-size:12px;margin-top:6px">Se registran solos al pagar una factura con un medio de pago tipo Echeq.</div></div>`}`;
 }
 
-function _echeqReset(p){_echeqForm[p]=null;const w=document.getElementById(p+"-echeq-wrap");if(w){w.dataset.listo="";w.innerHTML="";w.style.display="none";}}
+function _echeqReset(p){
+  Object.keys(_echeqForm).filter(k=>k===p||k.startsWith(p+"-")).forEach(k=>delete _echeqForm[k]);
+  const w=document.getElementById(p+"-echeq-wrap");if(w){w.dataset.listo="";w.innerHTML="";}
+}
 
 /* ══ VEP → contabilidad: la deuda nace al cargar el VEP y se cancela al pagarlo ══ */
 // Por tipo de impuesto: "gasto" = contrapartida del devengado, "deuda" = pasivo que cancela el pago.
@@ -26215,6 +26213,7 @@ function renderComprobantes(){
         <div style="font-size:14px;font-weight:700;color:var(--tx)">${total}</div>
         ${iva?`<div style="font-size:10px;color:var(--tx3)">IVA ${iva}</div>`:""}
         <div style="margin-top:4px">${estadoBadge(c.estado)}</div>
+        ${_pagoParcial(c)?`<div style="font-size:10px;color:var(--am);margin-top:2px">Pagado ${_extM(c.monto_pagado)} · saldo ${_extM(saldoComp(c))}</div>`:""}
         ${c.estado==="pagado"&&c.medio_pago?`<div style="font-size:10px;color:${mediosPago.find(m=>m.nombre===c.medio_pago)?.es_personal?"var(--re)":"var(--tx3)"};margin-top:2px">${mediosPago.find(m=>m.nombre===c.medio_pago)?.es_personal?"⚠️ ":"💳 "}${esc(c.medio_pago)}</div>`:""}
         ${c.importado_finnegans?`<div style="font-size:10px;color:#60A5FA;margin-top:2px">🔗 En Finnegans</div>`:""}
       </div>
@@ -26265,22 +26264,142 @@ function updateCompStats(){
   if(vEl){vEl.textContent=venc||"✓";vEl.style.color=venc?"var(--re)":"var(--gr)";}
 }
 
-function abrirPagarComp(id){
+/* ── Editor de líneas de pago ── */
+const _PL={};
+const _plFilas=base=>[...document.querySelectorAll(`#${base}-filas .pl-row`)];
+const _plSuma=base=>_r2(_plFilas(base).reduce((s,r)=>s+(parseFloat(document.getElementById(`${base}-L${r.dataset.k}-monto`)?.value)||0),0));
+const _plMediosTxt=ls=>[...new Set(ls.map(l=>l.tipo==="endoso"?"Echeq de terceros":l.medio))].join(" + ");
+function _plOpcionesHTML(base){
+  const st=_PL[base],soc=st.sociedad||"";
+  let m=(mediosPago||[]).filter(x=>x.activo&&(x.sociedad==="Ambas"||!soc||x.sociedad===soc));
+  if(st.sinTarjeta)m=m.filter(x=>x.tipo!=="tarjeta");
+  const opts=m.length
+    ?m.map(x=>`<option value="${esc(x.nombre)}">${x.es_personal?"⚠️ ":""}${esc(x.nombre)}${x.banco?` — ${esc(x.banco)}`:""}${x.es_personal?" (personal)":""}</option>`).join("")
+    :`<option value="Transferencia">Transferencia bancaria</option><option value="Efectivo">Efectivo</option>`;
+  const endoso=(!st.unaLinea&&st.cartera.length)?`<option value="${ENDOSO_VALOR}">🧾 Echeq de terceros (endosar) — ${st.cartera.length} en cartera</option>`:"";
+  return opts+endoso;
+}
+async function plIniciar(base,{sociedad,total,exacto,sinTarjeta,unaLinea,preCheque}){
+  const st=_PL[base]={sociedad,total:_r2(total),exacto:!!exacto,sinTarjeta:!!sinTarjeta,unaLinea:!!unaLinea,k:0,cartera:[]};
+  if(!unaLinea){
+    try{st.cartera=(await sb(`cf_cobranzas?tipo=eq.ECheque&estado=eq.Pendiente${sociedad?`&sociedad=eq.${sociedad}`:""}&select=*&order=fecha_vencimiento.asc`))||[];}
+    catch(e){st.cartera=[];}
+  }
+  const cont=document.getElementById(base+"-lineas");
+  cont.innerHTML=`<div id="${base}-filas"></div>${unaLinea?"":`<button type="button" class="btn sm" onclick="plAgregar('${base}')">＋ Agregar otro medio de pago</button>`}<div id="${base}-lineas-tot" style="margin-top:8px;font-size:12px;line-height:1.6"></div>`;
+  plAgregar(base,{preCheque});
+}
+function plAgregar(base,{preCheque}={}){
+  const st=_PL[base],k=st.k++,p=`${base}-L${k}`;
+  const falta=Math.max(0,_r2(st.total-_plSuma(base)));
+  const div=document.createElement("div");
+  div.className="pl-row";div.id=p+"-row";div.dataset.k=k;
+  div.style.cssText="border:1px solid var(--b);border-radius:8px;padding:8px;margin-bottom:8px;background:var(--surf)";
+  div.innerHTML=`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <select class="fs" id="${p}-medio" style="flex:1;min-width:180px" onchange="plCambioMedio('${base}',${k})">${_plOpcionesHTML(base)}</select>
+      <input class="fi" id="${p}-monto" type="number" step="0.01" min="0" style="width:140px" placeholder="Monto" oninput="plTotales('${base}');echeqControlarSiHay('${p}')">
+      ${st.unaLinea?"":`<button type="button" class="btn sm" style="color:var(--re)" title="Quitar este medio" onclick="plQuitar('${base}',${k})">✕</button>`}
+    </div><div id="${p}-extra" style="margin-top:6px"></div>`;
+  document.getElementById(base+"-filas").appendChild(div);
+  document.getElementById(p+"-monto").value=falta||"";
+  if(preCheque){document.getElementById(p+"-medio").value=ENDOSO_VALOR;}
+  plCambioMedio(base,k,preCheque);
+  plTotales(base);
+}
+function plQuitar(base,k){
+  const row=document.getElementById(`${base}-L${k}-row`);
+  if(row)row.remove();
+  Object.keys(_echeqForm).filter(x=>x===`${base}-L${k}`).forEach(x=>delete _echeqForm[x]);
+  if(!_plFilas(base).length)plAgregar(base);
+  plTotales(base);
+}
+function plCambioMedio(base,k,preCheque){
+  const st=_PL[base],p=`${base}-L${k}`;
+  const medio=document.getElementById(p+"-medio").value,tipo=_tipoDeLinea(medio);
+  const extra=document.getElementById(p+"-extra");
+  const montoEl=document.getElementById(p+"-monto");
+  montoEl.readOnly=false;
+  delete _echeqForm[p];
+  if(tipo==="cuenta_socio"){
+    extra.innerHTML=`<label class="fl">¿Qué socio puso la plata? *</label><select class="fs" id="${p}-socio"></select>`;
+    _poblarSelectSocios(document.getElementById(p+"-socio"));
+  }else if(tipo==="echeq"){
+    extra.innerHTML=`<div id="${p}-echeq-wrap"></div>`;
+    _echeqMontar(p);echeqControlar(p);
+  }else if(tipo==="endoso"){
+    const usados=new Set(_plFilas(base).map(r=>document.getElementById(`${base}-L${r.dataset.k}-endoso`)?.value).filter(Boolean));
+    const f=d=>String(d||"").slice(0,10).split("-").reverse().join("/");
+    extra.innerHTML=`<label class="fl">Echeq de terceros a endosar *</label>
+      <select class="fs" id="${p}-endoso" onchange="plElegirCheque('${base}',${k})"><option value="">— Elegí un Echeq de la cartera —</option>${
+        st.cartera.filter(c=>!usados.has(c.id)).map(c=>`<option value="${c.id}">${esc(c.librador||c.remitente||c.nombre||"Echeq")} · ${esc(c.banco_emisor||c.banco_destino||"banco s/d")}${c.numero_cheque?` · N° ${esc(c.numero_cheque)}`:""} · ${_extM(c.monto)} · cobra el ${f(c.fecha_vencimiento)}</option>`).join("")}</select>
+      <div id="${p}-endoso-info" style="font-size:11px;color:var(--tx3);margin-top:4px">Un cheque no se puede partir: el monto de esta línea es el del cheque.</div>`;
+    if(preCheque){document.getElementById(p+"-endoso").value=preCheque;plElegirCheque(base,k);}
+  }else if(tipo==="cuenta_bancaria"){
+    extra.innerHTML=`<input class="fi" id="${p}-nroop" type="text" placeholder="N° de operación de la transferencia (opcional)">`;
+  }else extra.innerHTML="";
+  plTotales(base);
+}
+function plElegirCheque(base,k){
+  const st=_PL[base],p=`${base}-L${k}`;
+  const id=document.getElementById(p+"-endoso").value;
+  const ch=st.cartera.find(c=>c.id===id);
+  const montoEl=document.getElementById(p+"-monto"),info=document.getElementById(p+"-endoso-info");
+  if(!ch){montoEl.readOnly=false;return;}
+  montoEl.value=_r2(ch.monto);montoEl.readOnly=true;
+  const f=d=>String(d||"").slice(0,10).split("-").reverse().join("/");
+  info.innerHTML=`Librador: <b>${esc(ch.librador||ch.remitente||"—")}</b>${ch.librador_cuit?` (CUIT ${esc(ch.librador_cuit)})`:""} · Banco: <b>${esc(ch.banco_emisor||ch.banco_destino||"—")}</b>${ch.numero_cheque?` · N° ${esc(ch.numero_cheque)}`:""} · Fecha de pago: <b>${f(ch.fecha_vencimiento)}</b>`;
+  plTotales(base);
+}
+function echeqControlarSiHay(p){if(document.getElementById(p+"-echeq-wrap")?.dataset.listo)echeqControlar(p);}
+function plTotales(base){
+  const st=_PL[base];if(!st)return null;
+  const suma=_plSuma(base),dif=_r2(st.total-suma);
+  const m=v=>_extM(v);
+  let txt;
+  if(st.exacto){
+    txt=Math.abs(dif)<0.01?`<span style="color:var(--gr)">✓ Las líneas suman ${m(suma)}: cierra con el neto a pagar</span>`
+      :dif>0?`<span style="color:var(--am)">Suma ${m(suma)} de ${m(st.total)} · <b>falta ${m(dif)}</b></span>`
+      :`<span style="color:var(--re)">Suma ${m(suma)} de ${m(st.total)} · <b>sobran ${m(-dif)}</b></span>`;
+  }else if(dif<-0.01)txt=`<span style="color:var(--re)">Suma ${m(suma)}: <b>supera el saldo de la factura (${m(st.total)}) en ${m(-dif)}</b></span>`;
+  else if(dif>0.01)txt=`<span style="color:var(--am)">Se paga ${m(suma)} ahora · <b>queda un saldo de ${m(dif)}</b> pendiente</span>`;
+  else txt=`<span style="color:var(--gr)">✓ Se paga ${m(suma)}: cancela el saldo de la factura</span>`;
+  const el=document.getElementById(base+"-lineas-tot");if(el)el.innerHTML=txt;
+  return{suma,dif};
+}
+async function plRecolectar(base){
+  const filas=_plFilas(base);
+  if(!filas.length){toast("Agregá al menos un medio de pago","err");return null;}
+  const out=[];
+  for(const row of filas){
+    const k=row.dataset.k,p=`${base}-L${k}`;
+    const sel=document.getElementById(p+"-medio").value,tipo=_tipoDeLinea(sel);
+    const monto=_r2(parseFloat(document.getElementById(p+"-monto").value)||0);
+    if(!(monto>0)){toast("Hay un medio de pago sin monto","err");return null;}
+    const l={medio:tipo==="endoso"?"Echeq de terceros (endoso)":sel,tipo,monto};
+    if(tipo==="cuenta_socio"){l.socioId=document.getElementById(p+"-socio")?.value;if(!l.socioId){toast("Elegí qué socio puso la plata","err");return null;}}
+    if(tipo==="echeq"){const d=await _echeqDatosDe(p);if(!d)return null;l.echeq=d;}
+    if(tipo==="endoso"){l.cobranzaId=document.getElementById(p+"-endoso")?.value;if(!l.cobranzaId){toast("Elegí el Echeq de terceros a endosar","err");return null;}}
+    if(tipo==="cuenta_bancaria")l.nroOp=(document.getElementById(p+"-nroop")?.value||"").trim();
+    out.push(l);
+  }
+  return out;
+}
+
+async function abrirPagarComp(id){
+  const c=comprobantes.find(x=>x.id===id);
+  if(!c)return;
+  if(!mediosPago.length)mediosPago=await sb("medios_pago?select=*&order=orden.asc,nombre.asc").catch(()=>[]);
   _echeqReset("pagar-comp");
   document.getElementById("pagar-comp-id").value=id;
   document.getElementById("pagar-comp-fecha").value=today();
   document.getElementById("pagar-comp-obs").value="";
-  const c=comprobantes.find(x=>x.id===id);
-  const soc=c?.sociedad||"";
-  const sel=document.getElementById("pagar-comp-medio");
-  const activos=mediosPago.filter(m=>m.activo&&(m.sociedad==="Ambas"||!soc||m.sociedad===soc));
-  if(activos.length){
-    sel.innerHTML=activos.map(m=>`<option value="${esc(m.nombre)}">${m.es_personal?"⚠️ ":""}${esc(m.nombre)}${m.banco?` — ${esc(m.banco)}`:""}${m.es_personal?" (personal)":""}</option>`).join("");
-  } else {
-    sel.innerHTML=`<option value="Transferencia">Transferencia bancaria</option><option value="Efectivo">Efectivo</option><option value="Tarjeta">Tarjeta</option><option value="Cheque">Cheque</option>`;
-  }
-  toggleSocioPagoComp();
-  document.getElementById("pagar-comp-hint").style.display=(c&&c.tipo==="A")?"":"none";
+  const esNC=!!c.tipo?.startsWith("NC");
+  const tot=_r2(Math.abs(parseFloat(c.total)||0));
+  const saldo=esNC?tot:(saldoComp(c)||tot);
+  const pag=_r2(parseFloat(c.monto_pagado)||0);
+  document.getElementById("pagar-comp-resumen").innerHTML=`<b>${esc(c.proveedor||"")}</b> · ${esNC?"NC":"Fact."} ${esc(c.tipo||"")} ${esc(c.numero||"")} · Total <b>${_extM(tot)}</b>${pag>0?` · Ya pagado <b>${_extM(pag)}</b>`:""} · <b>Saldo ${_extM(saldo)}</b>`;
+  document.getElementById("pagar-comp-hint").style.display=(c.tipo==="A")?"":"none";
+  await plIniciar("pagar-comp",{sociedad:c.sociedad||"",total:saldo,exacto:false,unaLinea:esNC});
   openModal("modal-pagar-comp");
 }
 function _poblarSelectSocios(sel){
@@ -26288,15 +26407,7 @@ function _poblarSelectSocios(sel){
   const socios=users.filter(u=>u.rol==="admin"&&u.estado!=="inactivo");
   sel.innerHTML=socios.map(u=>`<option value="${u.id}">${esc(u.nombre)}</option>`).join("");
 }
-function toggleSocioPagoComp(){
-  const medio=document.getElementById("pagar-comp-medio").value;
-  const medioObj=mediosPago.find(m=>m.nombre===medio);
-  const wrap=document.getElementById("pagar-comp-socio-wrap");
-  const esSocio=medioObj?.tipo==="cuenta_socio";
-  wrap.style.display=esSocio?"":"none";
-  if(esSocio)_poblarSelectSocios(document.getElementById("pagar-comp-socio"));
-  _echeqToggle("pagar-comp","pagar-comp-medio");
-}
+
 // ══════════════════════════════════════════════════════════════════════
 // PAGO ÚNICO DE FACTURAS
 // Todos los caminos que pagan una factura (Pagar, Orden de pago, Cash Flow) pasan por acá:
@@ -26307,6 +26418,137 @@ function toggleSocioPagoComp(){
 // La orden de pago solo corresponde a facturas A pagadas por transferencia, efectivo o cheque
 // (por las retenciones). Con tarjeta se paga antes de recibir la factura: no lleva orden de pago.
 // ══════════════════════════════════════════════════════════════════════
+/* ══ PAGOS EN VARIAS LÍNEAS + SALDO PENDIENTE (8 Oct 2026) ══ */
+const _uuid=()=>(typeof crypto!=="undefined"&&crypto.randomUUID)?crypto.randomUUID():"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==="x"?r:(r&3|8)).toString(16);});
+const _pagoParcial=c=>!!c&&c.estado!=="pagado"&&c.estado!=="cerrado"&&(parseFloat(c.monto_pagado)||0)>0.009;
+let _pmDisponible=null;
+const ENDOSO_VALOR="__endoso__";
+const _tipoDeLinea=medio=>medio===ENDOSO_VALOR?"endoso":_pagoMedioTipo(medio);
+const _nombreMedioLinea=l=>l.tipo==="endoso"?"Echeq de terceros (endoso)":l.medio;
+function saldoComp(c){
+  if(!c||c.estado==="pagado"||c.estado==="cerrado")return 0;
+  return Math.max(0,_r2(Math.abs(parseFloat(c.total)||0)-(parseFloat(c.monto_pagado)||0)));
+}
+async function _pagosMixtosDisponible(){
+  if(_pmDisponible!==null)return _pmDisponible;
+  try{await sb("comprobante_pagos?select=id&limit=1");await sb("comprobantes_compra?select=monto_pagado&limit=1");_pmDisponible=true;}
+  catch(e){_pmDisponible=false;}
+  return _pmDisponible;
+}
+async function _pagoLinea(c,l,{fecha,sociedad,desc,opId,obs,primera,conceptoSocio}){
+  const tipo=l.tipo||_tipoDeLinea(l.medio);
+  const monto=_r2(l.monto);
+  const marca=`comp-${c.id}`;
+  if(primera){
+    // En el primer pago se retira la línea de caja heredada de la revisión (ya no se crea, pero hay registros viejos)
+    const previas=await sb(`caja_movimientos?observaciones=like.*${marca}*&select=id`).catch(()=>[]);
+    for(const p of previas)await sb(`caja_movimientos?id=eq.${p.id}`,{method:"DELETE"}).catch(()=>{});
+  }
+  if(tipo==="cuenta_socio"){
+    const ya=await sb(`aportes_socios?comprobante_id=eq.${c.id}&select=id,monto`).catch(()=>[]);
+    if(!ya.some(x=>Math.abs((parseFloat(x.monto)||0)-monto)<0.01))
+      await sb("aportes_socios",{method:"POST",body:JSON.stringify({socio_id:l.socioId,sociedad,fecha,tipo:"aporte",monto,concepto:conceptoSocio||desc,comprobante_id:c.id,creado_por:loggedUser?.nombre||null})});
+    return{via:"socio"};
+  }
+  if(tipo==="tarjeta")return{via:"tarjeta"};
+  if(tipo==="echeq"){
+    const id=await _echeqAlta(c,{sociedad,medio:l.medio,monto,echeq:l.echeq,opId});
+    return{via:"echeq",echeqId:id};
+  }
+  if(tipo==="endoso"){
+    await _endosarCheque(l.cobranzaId,c,{fecha,monto});
+    return{via:"endoso"};
+  }
+  if(tipo==="cuenta_bancaria"){
+    const t=_concTokenFactura({referencia:c.numero,concepto:""});
+    const existentes=t?await sb(`banco_movimientos?sociedad=eq.${sociedad}&extracto_id=is.null&saldo=is.null&select=id,importe,referencia,concepto`).catch(()=>[]):[];
+    const ya=existentes.find(x=>_concTokenFactura(x)===t&&Math.abs((parseFloat(x.importe)||0)+monto)<0.01);
+    if(!ya)await sb("banco_movimientos",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify({sociedad,fecha,concepto:desc,importe:-monto,saldo:null,conciliado:false,referencia:l.nroOp||c.numero||"OP"})});
+    return{via:ya?"banco (ya estaba registrado)":"banco"};
+  }
+  // efectivo / cheques de terceros del esquema viejo → Caja
+  await sb("caja_movimientos",{method:"POST",body:JSON.stringify({sociedad,fecha,tipo:"egreso",concepto:desc,categoria:"Proveedor",monto,medio_pago:l.medio,observaciones:`${l.medio}${obs?` · ${obs}`:""} · ${marca}`,creado_por:loggedUser?.nombre||null})});
+  return{via:"caja"};
+}
+async function _endosarCheque(cobranzaId,c,{fecha,monto}){
+  const [ch]=await sb(`cf_cobranzas?id=eq.${cobranzaId}&select=*`).catch(()=>[]);
+  if(!ch)throw new Error("No encontré el Echeq de terceros elegido");
+  if(ch.estado!=="Pendiente")throw new Error(`El Echeq ${ch.numero_cheque||ch.nombre} ya no está en cartera (${ch.estado})`);
+  if(Math.abs((parseFloat(ch.monto)||0)-monto)>0.01)throw new Error("El importe de la línea no coincide con el del cheque (un cheque no se puede partir)");
+  await sb(`cf_cobranzas?id=eq.${cobranzaId}`,{method:"PATCH",body:JSON.stringify({estado:"Endosado",endosado_a:c.proveedor||null,endosado_cuit:String(c.cuit||"").replace(/\D/g,"")||null,endosado_en:fecha,endoso_comprobante_id:c.id,updated_at:new Date().toISOString()})});
+  return ch;
+}
+async function _validarPagoMixto(c,{lineas,bruto,op}){
+  const totalComp=_r2(Math.abs(parseFloat(c.total)||0));
+  const antes=_r2(parseFloat(c.monto_pagado)||0);
+  if(bruto>_r2(totalComp-antes)+0.02)throw new Error(`El pago (${_r2(bruto)}) supera el saldo de la factura (${_r2(totalComp-antes)})`);
+  const vistos=new Set();
+  for(const l of lineas){
+    if(!(_r2(l.monto)>0))throw new Error("Hay una línea sin monto");
+    if(l.tipo==="endoso"){
+      if(!l.cobranzaId)throw new Error("Elegí el Echeq de terceros a endosar");
+      if(vistos.has(l.cobranzaId))throw new Error("El mismo Echeq de terceros está dos veces");
+      vistos.add(l.cobranzaId);
+      const [ch]=await sb(`cf_cobranzas?id=eq.${l.cobranzaId}&select=id,estado,monto,numero_cheque,nombre`).catch(()=>[]);
+      if(!ch||ch.estado!=="Pendiente")throw new Error(`El Echeq ${ch?.numero_cheque||ch?.nombre||""} ya no está en cartera`);
+      if(Math.abs((parseFloat(ch.monto)||0)-_r2(l.monto))>0.01)throw new Error("El importe de la línea no coincide con el del cheque (un cheque no se puede partir)");
+    }
+    if(l.tipo==="echeq"&&l.echeq?.numero){
+      const k=String(l.echeq.numero);
+      if(vistos.has("e"+k))throw new Error(`El Echeq ${k} está dos veces en este pago`);
+      vistos.add("e"+k);
+    }
+    if(l.tipo==="cuenta_socio"&&!l.socioId)throw new Error("Elegí qué socio puso la plata");
+  }
+}
+async function registrarPagoMixto(c,{fecha,lineas,obs,op}){
+  const sociedad=c.sociedad||"SUDES";
+  lineas=lineas.map(l=>({...l,tipo:l.tipo||_tipoDeLinea(l.medio),monto:_r2(l.monto)}));
+  const totalComp=_r2(Math.abs(parseFloat(c.total)||0));
+  const antes=_r2(parseFloat(c.monto_pagado)||0);
+  const suma=_r2(lineas.reduce((s,l)=>s+l.monto,0));
+  const ret=op?_r2(op.ret):0;
+  const bruto=op?_r2(op.bruto):suma;
+  if(op&&Math.abs(suma+ret-bruto)>0.02)throw new Error(`Las líneas suman ${suma} y la orden pide ${_r2(bruto-ret)}`);
+  await _validarPagoMixto(c,{lineas,bruto,op});
+  const eventoId=_uuid();
+  const descF=`Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"}`;
+  // 1) Tesorería: una operación por línea
+  const res=[];
+  for(let i=0;i<lineas.length;i++)
+    res.push(await _pagoLinea(c,lineas[i],{fecha,sociedad,desc:descF,opId:op?.id,obs,primera:antes===0&&i===0,conceptoSocio:`${descF}${op?` (OP ${op.numero})`:""}`}));
+  // 2) Contabilidad: un asiento, una cuenta por medio
+  const porCuenta=new Map();
+  lineas.forEach(l=>{const cod=l.tipo==="endoso"?"1.1.01.005":getBancoCodigoPorMedio(l.medio,sociedad);porCuenta.set(cod,_r2((porCuenta.get(cod)||0)+l.monto));});
+  const nombres=[...new Set(lineas.map(_nombreMedioLinea))].join(" + ");
+  const asLineas=[{codigo:"2.1.01.001",debe:bruto,desc:"Cancelación proveedor"}];
+  for(const [cod,m] of porCuenta)asLineas.push({codigo:cod,haber:m,desc:`Pago ${nombres}`});
+  if(ret>0)asLineas.push({codigo:"2.1.03.002",haber:ret,desc:`Ret. SICORE ${op?.cod||""}`});
+  const ad={fecha,sociedad,tipo:"pago_compra",origen:op?"orden_pago":"comprobante_pago",origen_id:op?.id||c.id,
+    descripcion:op?`Pago: ${c.proveedor||""} — ${op.numero}`:`Pago: ${c.proveedor||""} — ${descF.replace(/ — .*/,"")}`,lineas:asLineas};
+  try{
+    const a=await generarAsiento(ad);
+    if(a?._faltantes)mcfAbrir(a._faltantes,ad);else if(!a)toast("⚠️ Asiento de pago no generado","err");
+  }catch(e){toast("⚠️ Error asiento pago: "+(e.message||"").slice(0,60),"err");}
+  // 3) Una línea por medio en comprobante_pagos
+  const filas=lineas.map((l,i)=>({comprobante_id:c.id,orden_pago_id:op?.id||null,evento_id:eventoId,sociedad,fecha,medio:_nombreMedioLinea(l),tipo_medio:l.tipo,monto:l.monto,
+    echeq_propio_id:res[i].echeqId||null,cobranza_id:l.tipo==="endoso"?l.cobranzaId:null,nro_operacion:l.nroOp||null,observaciones:obs||null,creado_por:loggedUser?.nombre||null}));
+  await sb("comprobante_pagos",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify(filas)});
+  // 4) La factura: cuánto se pagó; completa → pagada
+  const pagado=_r2(antes+bruto);
+  const completa=pagado>=totalComp-0.01;
+  const patch={monto_pagado:completa?totalComp:pagado,updated_at:new Date().toISOString()};
+  if(completa){
+    const previos=await sb(`comprobante_pagos?comprobante_id=eq.${c.id}&select=medio&order=created_at`).catch(()=>[]);
+    const todos=[...new Set(previos.map(p=>p.medio).filter(Boolean))];
+    patch.estado="pagado";patch.fecha_pago=fecha;patch.medio_pago=todos.length?todos.join(" + "):nombres;
+  }
+  await sb(`comprobantes_compra?id=eq.${c.id}`,{method:"PATCH",body:JSON.stringify(patch)});
+  Object.assign(c,patch);
+  if(completa){try{await _sueldoSincronizarPago(c,{fecha,medio:lineas[0].medio});}catch(e){console.warn("sueldo-sync",e);}}
+  return{eventoId,completa,saldo:completa?0:_r2(totalComp-pagado),pagado,vias:res.map(r=>r.via),medios:nombres};
+}
+
 function _pagoMedioTipo(nombre){
   const m=mediosPago.find(x=>x.nombre===nombre);
   if(m?.tipo)return m.tipo;
@@ -26401,18 +26643,18 @@ async function registrarPagoFactura(c,{fecha,medio,obs,socioId,monto,op,echeq}){
 
 async function confirmarPagoComp(){
   const id=document.getElementById("pagar-comp-id").value;
-  const medio=document.getElementById("pagar-comp-medio").value;
   const fecha=document.getElementById("pagar-comp-fecha").value||today();
   const obs=document.getElementById("pagar-comp-obs").value.trim();
   const c=comprobantes.find(x=>x.id===id);
   if(!c)return;
-  const medioObj=mediosPago.find(m=>m.nombre===medio);
-  if(medioObj?.es_personal&&!confirm(`⚠️ "${medio}" está marcado como cuenta/tarjeta PERSONAL, no de la empresa.\n\n¿Registrar igual este pago con ese medio?`))return;
-  const esCuentaSocio=_pagoMedioTipo(medio)==="cuenta_socio";
-  const socioId=esCuentaSocio?document.getElementById("pagar-comp-socio").value:null;
-  if(esCuentaSocio&&!socioId){toast("Elegí qué socio puso la plata","err");return;}
-  let echeq=null;
-  if(_pagoMedioTipo(medio)==="echeq"){echeq=await _echeqDatosDe("pagar-comp");if(!echeq)return;}
+  const esNC=!!c.tipo?.startsWith("NC");
+  const lineas=await plRecolectar("pagar-comp");
+  if(!lineas)return;
+  for(const l of lineas){
+    const mo=mediosPago.find(m=>m.nombre===l.medio);
+    if(mo?.es_personal&&!confirm(`⚠️ "${l.medio}" está marcado como cuenta/tarjeta PERSONAL, no de la empresa.\n\n¿Registrar igual este pago con ese medio?`))return;
+  }
+  const suma=_r2(lineas.reduce((s,l)=>s+l.monto,0));
   try{
     const fresco=await _pagoFresco(id);
     if(fresco?.estado==="pagado"){
@@ -26422,11 +26664,20 @@ async function confirmarPagoComp(){
     }
     const opPend=await sb(`ordenes_pago?comprobante_id=eq.${id}&estado=neq.pagado&select=numero`).catch(()=>[]);
     if(opPend.length){toast(`Esta factura tiene la orden de pago ${opPend[0].numero} pendiente: pagala desde ahí (💸 Pagar OP) o anulala`,"err");return;}
-    const via=await registrarPagoFactura(c,{fecha,medio,obs,socioId,echeq});
-    const monto=`$${Math.round(Math.abs(c.total||0)).toLocaleString("es-AR")}`;
-    if(via==="socio")toast(`💰 Pagada con plata de ${users.find(u=>u.id===socioId)?.nombre||"un socio"} · ${monto}`,"ok");
-    else if(via==="tarjeta")toast(`💳 Pagada con tarjeta · ${monto} · queda en la deuda de la tarjeta hasta cerrarla`,"ok");
-    else toast(`💰 Pagada · ${medio} · ${monto}`,"ok");
+    const monto=_extM(suma);
+    if(esNC||!(await _pagosMixtosDisponible())){
+      // Camino de siempre: un solo medio y pago completo (los pagos en varias líneas necesitan sql_pagos_mixtos.sql)
+      if(lineas.length>1||(!esNC&&suma<_r2(saldoComp(c))-0.01)){toast("Para pagar con varios medios o dejar saldo falta correr sql_pagos_mixtos.sql en Supabase","err");return;}
+      const l=lineas[0];
+      const via=await registrarPagoFactura(c,{fecha,medio:l.medio,obs,socioId:l.socioId,echeq:l.echeq});
+      toast(via==="socio"?`💰 Pagada con plata de ${users.find(u=>u.id===l.socioId)?.nombre||"un socio"} · ${monto}`:via==="tarjeta"?`💳 Pagada con tarjeta · ${monto} · queda en la deuda de la tarjeta hasta cerrarla`:`💰 Pagada · ${l.medio} · ${monto}`,"ok");
+    }else{
+      const saldo=esNC?suma:saldoComp(c);
+      if(suma>saldo+0.01){toast("Las líneas suman más que el saldo de la factura","err");return;}
+      if(suma<saldo-0.01&&!confirm(`Vas a pagar ${monto} de ${_extM(saldo)}.\n\nQueda un saldo de ${_extM(saldo-suma)} pendiente de pago. ¿Confirmás?`))return;
+      const r=await registrarPagoMixto(c,{fecha,lineas,obs});
+      toast(r.completa?`💰 Pagada · ${r.medios} · ${monto}`:`💰 Pago parcial registrado · ${monto} · saldo pendiente ${_extM(r.saldo)}`,"ok");
+    }
     closeModal("modal-pagar-comp");
     renderComprobantes();updateCompStats();
     if(cfTab==="pendientes")renderCFPendientes();
@@ -26621,6 +26872,7 @@ async function abrirOrdenPago(compId,fromPendientes=false){
   document.getElementById("mop-cuit").textContent=c.cuit||"—";
   document.getElementById("mop-comp-info").textContent=`Fact. ${c.tipo||"?"} ${c.numero?`N°${c.numero}`:""}`;
   document.getElementById("mop-sociedad").textContent=c.sociedad||"—";
+  if(_pagoParcial(c))document.getElementById("mop-comp-info").textContent+=" · saldo "+_extM(saldoComp(c))+" de "+_extM(Math.abs(parseFloat(c.total)||0));
   document.getElementById("mop-fecha").value=today();
   document.getElementById("mop-cbu").value="";
   document.getElementById("mop-obs-op").value="";
@@ -26637,9 +26889,10 @@ async function abrirOrdenPago(compId,fromPendientes=false){
   const tipoVal=c.tipo?.startsWith("NC")?"NC":(c.tipo||"B");
   const tipoSel=document.getElementById("mop-tipo");
   tipoSel.value=["A","B","C","NC"].includes(tipoVal)?tipoVal:"B";
-  const bruto=Math.abs(parseFloat(c.total)||0);
+  const totalAbs=Math.abs(parseFloat(c.total)||0);
+  const bruto=c.tipo?.startsWith("NC")?totalAbs:(saldoComp(c)||totalAbs);
   // Base de retención = neto sin IVA (Ganancias se retiene sobre el neto)
-  const baseRet=Math.abs(parseFloat(c.monto_neto)||0)||bruto;
+  const baseRet=Math.round((Math.abs(parseFloat(c.monto_neto)||0)||totalAbs)*(totalAbs>0?bruto/totalAbs:1)*100)/100;
   document.getElementById("mop-monto-bruto").value=bruto||"";
   document.getElementById("mop-base-ret").value=baseRet||"";
   const soc=c.sociedad||"";
@@ -26692,6 +26945,16 @@ async function mopSelSicore(){
   mopRecalcular();
 }
 
+function mopBrutoCambio(){
+  const c=comprobantes.find(x=>x.id===document.getElementById("mop-comp-id").value);
+  if(c){
+    const tot=Math.abs(parseFloat(c.total)||0),neto=Math.abs(parseFloat(c.monto_neto)||0)||tot;
+    const b=parseFloat(document.getElementById("mop-monto-bruto").value)||0;
+    if(tot>0)document.getElementById("mop-base-ret").value=Math.round(neto*Math.min(b,tot)/tot*100)/100;
+  }
+  mopRecalcular();
+}
+
 function mopRecalcular(){
   const bruto=parseFloat(document.getElementById("mop-monto-bruto").value)||0;
   const esA=document.getElementById("mop-tipo").value==="A";
@@ -26729,18 +26992,19 @@ function _accionesPagoHTML(c,peq){
   const NC=!!c.tipo?.startsWith("NC");
   const op=NC?null:_opPendiente(c.id);
   const est=peq?"font-size:10px;padding:3px 7px;border-radius:5px":"font-size:11px;padding:4px 10px;border-radius:6px;white-space:nowrap";
+  const parcial=_pagoParcial(c)?`<span style="font-size:10px;color:var(--am);white-space:nowrap" title="Ya se pagó una parte">Saldo ${_extM(saldoComp(c))}</span>`:"";
   const btn=(on,rgb,txt,tit)=>`<button onclick="${on}" title="${tit}" style="background:rgba(${rgb},.14);border:1px solid rgba(${rgb},.4);color:rgb(${rgb});cursor:pointer;${est}">${txt}</button>`;
   if(op){
-    return `<span style="font-size:10px;color:#A78BFA;white-space:nowrap">📄 ${esc(op.numero)} pendiente de pago</span>`+
+    return parcial+`<span style="font-size:10px;color:#A78BFA;white-space:nowrap">📄 ${esc(op.numero)} pendiente de pago</span>`+
       btn(`abrirPagarOP('${op.id}')`,"16,185,129","💸 Pagar OP","Pagar esta orden de pago: recién ahí la factura queda pagada")+
       btn(`verPDFOP('${op.id}')`,"139,92,246","📄 PDF","Ver el PDF de la orden de pago")+
       btn(`abrirOrdenPago('${c.id}',true)`,"148,163,184","✎","Editar la orden de pago pendiente");
   }
   const bOP=NC?"":btn(`abrirOrdenPago('${c.id}',true)`,"139,92,246","📄 Generar OP","Generar la orden de pago: indica cómo se va a pagar, la factura sigue impaga hasta que pagues la orden");
-  return bOP+btn(`abrirPagarComp('${c.id}')`,"16,185,129","💳 Pagar","Pagar ahora: elegís el medio y se registra el movimiento");
+  return parcial+bOP+btn(`abrirPagarComp('${c.id}')`,"16,185,129","💳 Pagar","Pagar ahora: elegís el medio y se registra el movimiento");
 }
 
-async function abrirPagarOP(opId){
+async function abrirPagarOP(opId,opts={}){
   try{
     const [op]=await sb(`ordenes_pago?id=eq.${opId}&select=*`);
     if(!op){toast("No se encontró la orden de pago","err");return;}
@@ -26752,13 +27016,6 @@ async function abrirPagarOP(opId){
     document.getElementById("pop-numero").textContent=op.numero||"";
     document.getElementById("pop-proveedor").textContent=op.proveedor||"";
     document.getElementById("pop-detalle").innerHTML=`Fact. ${esc(op.tipo_factura||"")} ${esc(c?.numero||"")} · Bruto <b>${_extM(op.monto_bruto)}</b>${parseFloat(op.monto_retencion)>0?` · Retención <b>${_extM(op.monto_retencion)}</b>`:""} · <b>A pagar ${_extM(op.neto_a_pagar)}</b>${op.cbu_destino?`<br>CBU / referencia: ${esc(op.cbu_destino)}`:""}`;
-    const soc=op.sociedad||"";
-    const activos=mediosPago.filter(m=>m.activo&&(m.sociedad==="Ambas"||!soc||m.sociedad===soc)&&m.tipo!=="tarjeta");
-    const ms=document.getElementById("pop-medio");
-    ms.innerHTML=activos.length
-      ?activos.map(m=>`<option value="${esc(m.nombre)}">${esc(m.nombre)}${m.banco?` — ${esc(m.banco)}`:""}</option>`).join("")
-      :`<option value="Transferencia">Transferencia bancaria</option><option value="Efectivo">Efectivo</option><option value="Cheque">Cheque</option>`;
-    if(op.medio_pago&&[...ms.options].some(o=>o.value===op.medio_pago))ms.value=op.medio_pago;
     document.getElementById("pop-fecha").value=today();
     document.getElementById("pop-obs").value="";document.getElementById("pop-nroop").value="";
     document.getElementById("pop-comprobante").value="";
@@ -26766,39 +27023,36 @@ async function abrirPagarOP(opId){
     const _pv=_provDeComprobante(c||{cuit:op.cuit,proveedor:op.proveedor});
     document.getElementById("pop-email").value=_pv?.email||"";
     document.getElementById("pop-enviar").checked=true;
-    popToggleSocio();
+    await plIniciar("pop",{sociedad:op.sociedad||"",total:_r2(op.neto_a_pagar),exacto:true,sinTarjeta:true,preCheque:opts.cobranzaId});
+    // si la orden se generó con un medio, arranca con ese
+    const sel0=document.getElementById("pop-L0-medio");
+    if(sel0&&!opts.cobranzaId&&op.medio_pago&&[...sel0.options].some(o=>o.value===op.medio_pago)){sel0.value=op.medio_pago;plCambioMedio("pop",0);}
     openModal("modal-pagar-op");
   }catch(e){toast("Error: "+e.message,"err");}
 }
-function popToggleSocio(){
-  const esSocio=_pagoMedioTipo(document.getElementById("pop-medio").value)==="cuenta_socio";
-  document.getElementById("pop-socio-wrap").style.display=esSocio?"":"none";
-  if(esSocio)_poblarSelectSocios(document.getElementById("pop-socio"));
-  _echeqToggle("pop","pop-medio");
-}
+
 
 async function confirmarPagarOP(){
   const op=_opPagar;
   if(!op)return;
-  const medio=document.getElementById("pop-medio").value;
   const fecha=document.getElementById("pop-fecha").value||today();
   const obs=document.getElementById("pop-obs").value.trim();
-  if(!medio){toast("Elegí el medio de pago","err");return;}
-  const tipoMedio=_pagoMedioTipo(medio);
-  if(tipoMedio==="tarjeta"){toast("Con tarjeta no corresponde orden de pago: anulá la orden y pagá con 💳 Pagar","err");return;}
-  const socioId=tipoMedio==="cuenta_socio"?document.getElementById("pop-socio").value:null;
-  if(tipoMedio==="cuenta_socio"&&!socioId){toast("Elegí qué socio puso la plata","err");return;}
-  let echeq=null;
-  if(tipoMedio==="echeq"){echeq=await _echeqDatosDe("pop");if(!echeq)return;}
+  const lineas=await plRecolectar("pop");
+  if(!lineas)return;
+  const neto=_r2(op.neto_a_pagar),suma=_r2(lineas.reduce((s,l)=>s+l.monto,0));
+  if(Math.abs(suma-neto)>0.01){toast(`Las líneas suman ${_extM(suma)} y la orden es de ${_extM(neto)}: ${suma<neto?"falta":"sobra"} ${_extM(Math.abs(neto-suma))}`,"err");return;}
   const archivo=document.getElementById("pop-comprobante").files?.[0]||null;
   const sinComp=document.getElementById("pop-sin-comp").checked;
-  if(!archivo&&!sinComp&&!echeq){toast("Adjuntá el comprobante de pago (PDF o foto) o marcá «Pagar sin comprobante»","err");return;}
+  // El comprobante de la transferencia solo es obligatorio si hay una transferencia o efectivo (el Echeq trae su propio detalle)
+  const pideComp=lineas.some(l=>l.tipo==="cuenta_bancaria"||l.tipo==="cuenta_socio"||l.tipo==="efectivo"||l.tipo==="cheque");
+  if(pideComp&&!archivo&&!sinComp){toast("Adjuntá el comprobante de pago (PDF o foto) o marcá «Pagar sin comprobante»","err");return;}
   const enviarMail=document.getElementById("pop-enviar").checked;
   const emailProv=document.getElementById("pop-email").value.trim();
   if(enviarMail&&emailProv&&!/^\S+@\S+\.\S+$/.test(emailProv)){toast("El email del proveedor no es válido","err");return;}
   let compPago=null;
   if(archivo){try{compPago=await _leerComprobantePago(archivo);}catch(e){toast(e.message,"err");return;}}
-  else if(echeq?.file){try{compPago=await _leerComprobantePago(echeq.file);}catch(e){}}
+  const echeqFiles=[];
+  for(const l of lineas)if(l.tipo==="echeq"&&l.echeq?.file){try{echeqFiles.push(await _leerComprobantePago(l.echeq.file));}catch(e){}}
   try{
     const [opF]=await sb(`ordenes_pago?id=eq.${op.id}&select=id,estado`);
     if(!opF){toast("La orden de pago ya no existe","err");closeModal("modal-pagar-op");return;}
@@ -26807,19 +27061,36 @@ async function confirmarPagarOP(){
     if(!cf)throw new Error("No se encontró la factura de esta orden de pago");
     if(cf.estado==="pagado"){toast(_pagoYaPagadaMsg(cf)+" Si fue un error, anulá la orden de pago.","err");return;}
     const c=comprobantes.find(x=>x.id===cf.id)||cf;
-    const via=await registrarPagoFactura(c,{fecha,medio,obs,socioId,echeq,op:{id:op.id,numero:op.numero,bruto:parseFloat(op.monto_bruto)||0,neto:parseFloat(op.neto_a_pagar)||0,ret:parseFloat(op.monto_retencion)||0,cod:op.codigo_sicore}});
-    const patch={estado:"pagado",fecha_pago:fecha,medio_pago:medio};
-    const nroOp=(document.getElementById("pop-nroop")?.value||"").trim();
+    Object.assign(c,{monto_pagado:cf.monto_pagado,estado:cf.estado});
+    const opInfo={id:op.id,numero:op.numero,bruto:parseFloat(op.monto_bruto)||0,neto,ret:parseFloat(op.monto_retencion)||0,cod:op.codigo_sicore};
+    let via,medios,completa=true,saldo=0;
+    if(!(await _pagosMixtosDisponible())){
+      if(lineas.length>1||opInfo.bruto<_r2(Math.abs(parseFloat(c.total)||0))-0.01){toast("Para pagar con varios medios o con saldo falta correr sql_pagos_mixtos.sql en Supabase","err");return;}
+      const l=lineas[0];
+      via=await registrarPagoFactura(c,{fecha,medio:l.medio,obs,socioId:l.socioId,echeq:l.echeq,op:opInfo});
+      medios=l.medio;
+    }else{
+      const r=await registrarPagoMixto(c,{fecha,lineas,obs,op:opInfo});
+      via=r.vias.length===1?r.vias[0]:"mixto";medios=r.medios;completa=r.completa;saldo=r.saldo;
+    }
+    const nroGlobal=(document.getElementById("pop-nroop")?.value||"").trim();
+    const nroOp=[nroGlobal,...lineas.map(l=>l.nroOp).filter(Boolean)].filter(Boolean).join(" / ");
+    const patch={estado:"pagado",fecha_pago:fecha,medio_pago:medios};
     await sb(`ordenes_pago?id=eq.${op.id}`,{method:"PATCH",body:JSON.stringify(patch)});
     if(nroOp){try{await sb(`ordenes_pago?id=eq.${op.id}`,{method:"PATCH",body:JSON.stringify({nro_operacion:nroOp})});}catch(e){toast("El pago quedó registrado, pero no se guardó el N° de operación: falta correr sql_op_nro_operacion.sql","err");}}
     const local=(ordenesGanancias||[]).find(o=>o.id===op.id);
     if(local)Object.assign(local,patch);
     closeModal("modal-pagar-op");
-    toast(via==="socio"?`💰 Orden ${op.numero} pagada con plata de ${users.find(u=>u.id===socioId)?.nombre||"un socio"}`:via==="echeq"?`🧾 Orden ${op.numero} pagada con Echeq N° ${echeq?.numero||""} · queda pendiente de débito el ${String(echeq?.fecha_pago||"").split("-").reverse().join("/")}`:`💸 Orden ${op.numero} pagada · la factura quedó pagada`,"ok");
+    const e1=lineas.find(l=>l.tipo==="echeq");
+    const txtSaldo=completa?"":` · quedó un saldo de ${_extM(saldo)} en la factura`;
+    toast(via==="socio"?`💰 Orden ${op.numero} pagada con plata de ${users.find(u=>u.id===lineas[0].socioId)?.nombre||"un socio"}${txtSaldo}`
+      :via==="echeq"?`🧾 Orden ${op.numero} pagada con Echeq N° ${e1?.echeq?.numero||""} · queda pendiente de débito el ${String(e1?.echeq?.fecha_pago||"").split("-").reverse().join("/")}${txtSaldo}`
+      :via==="mixto"?`🧾 Orden ${op.numero} pagada con ${lineas.length} medios (${medios})${txtSaldo}`
+      :`💸 Orden ${op.numero} pagada${completa?" · la factura quedó pagada":txtSaldo}`,"ok");
     renderComprobantes();updateCompStats();
     if(cfTab==="pendientes")renderCFPendientes();
     if(curPage==="sueldos")renderSueldos();
-    enviarComprobantePagoProveedor(c,{...op,...patch,nro_operacion:nroOp||op.nro_operacion||"",numero_comp:c.numero},{email:enviarMail?emailProv:"",comprobante:compPago});
+    enviarComprobantePagoProveedor(c,{...op,...patch,nro_operacion:nroOp||op.nro_operacion||"",numero_comp:c.numero},{email:enviarMail?emailProv:"",comprobante:compPago,echeqFiles});
     _opPagar=null;
   }catch(e){toast("Error: "+e.message,"err");}
 }
@@ -26867,6 +27138,8 @@ async function confirmarOrdenPago(){
   const cbu=document.getElementById("mop-cbu").value.trim();
   const obs=document.getElementById("mop-obs-op").value.trim();
   if(!bruto){toast("Ingresá el monto bruto","err");return;}
+  const _saldoC=c.tipo?.startsWith("NC")?Infinity:(saldoComp(c)||Math.abs(parseFloat(c.total)||0));
+  if(bruto>_saldoC+0.01){toast("El monto bruto supera el saldo de la factura ("+_extM(_saldoC)+")","err");return;}
   if(!medio){toast("Seleccioná cómo se va a pagar","err");return;}
   if(_pagoMedioTipo(medio)==="tarjeta"){toast("Con tarjeta no corresponde orden de pago (se paga antes de recibir la factura): usá 💳 Pagar.","err");return;}
   const [cod]=(sicoreVal?sicoreVal.split("|"):["",""]);
@@ -26887,8 +27160,7 @@ async function confirmarOrdenPago(){
     if(fresco?.estado==="pagado"){toast(_pagoYaPagadaMsg(fresco),"err");return;}
     // Una sola orden de pago por factura: si ya hay una pendiente se actualiza en vez de crear otra
     const previas=await sb(`ordenes_pago?comprobante_id=eq.${compId}&select=id,numero,estado`).catch(()=>[]);
-    if(previas.some(p=>p.estado==="pagado")){toast("Esta factura ya tiene una orden de pago pagada","err");return;}
-    const pendiente=previas[0];
+    const pendiente=previas.find(p=>p.estado!=="pagado");
     let op;
     if(pendiente){
       numero=pendiente.numero;opData.numero=numero;
@@ -27203,9 +27475,20 @@ async function generarPDFOrdenPago(op,soloRetornar){
     const l=doc.splitTextToSize(String(val),W-2*M-52);doc.text(l,M+50,y);
     y+=Math.max(7,l.length*5+2);
   };
-  fila("Medio de pago",(op.medio_pago||"—")+(cta?.nota?` (${cta.nota})`:""));
+  let lineasPago=[];
+  if(op.id&&typeof _pmDisponible!=="undefined"&&_pmDisponible){try{lineasPago=await sb(`comprobante_pagos?orden_pago_id=eq.${op.id}&select=*&order=created_at`)||[];}catch(e){}}
+  if(lineasPago.length>1){
+    const ids=lineasPago.map(l=>l.echeq_propio_id).filter(Boolean);
+    let eq=[];if(ids.length){try{eq=await sb(`echeqs_propios?id=in.(${ids.join(",")})&select=*`)||[];}catch(e){}}
+    lineasPago.forEach((l,i)=>{
+      const e=eq.find(x=>x.id===l.echeq_propio_id);
+      const imp="$"+Number(l.monto).toLocaleString("es-AR",{minimumFractionDigits:2});
+      const det=e?`Echeq N° ${e.numero||"—"}${e.id_cheque?` · Id ${e.id_cheque}`:""} · pago ${_fecha(e.fecha_pago)}`:(l.nro_operacion?`Op. ${l.nro_operacion}`:"");
+      fila("Pago "+(i+1),`${imp} · ${l.medio||"—"}${det?" · "+det:""}`);
+    });
+  }else fila("Medio de pago",(op.medio_pago||"—")+(cta?.nota?` (${cta.nota})`:""));
   fila("Cuenta de origen",[cta?.banco,cta?.ident].filter(Boolean).join(" · "));
-  if(ech){
+  if(ech&&lineasPago.length<=1){
     const tipoE=/^CPD$/i.test(ech.tipo_cheque||"")?"Cheque de pago diferido (CPD)":/^CC$/i.test(ech.tipo_cheque||"")?"Cheque común (CC)":(ech.tipo_cheque||"");
     fila("Echeq N°",`${ech.numero||"—"}${ech.id_cheque?` · Id ${ech.id_cheque}`:""}`);
     fila("Tipo",[tipoE,ech.caracter].filter(Boolean).join(" · "));
@@ -28149,7 +28432,8 @@ async function _ecCargarBase(){
 }
 function _ecCalcular(soc,desde,hasta){
   const mapa=new Map();
-  const opPorComp=new Map(_ecOrdenes.map(o=>[o.comprobante_id,o]));
+  const retPorComp=new Map();
+  _ecOrdenes.filter(o=>o.estado==="pagado").forEach(o=>retPorComp.set(o.comprobante_id,(retPorComp.get(o.comprobante_id)||0)+(parseFloat(o.monto_retencion)||0)));
   comprobantes.forEach(c=>{
     if((c.sociedad||"SUDES")!==soc||c.estado==="cerrado")return;
     const f=c.fecha||c.fecha_imputacion||"";
@@ -28164,8 +28448,12 @@ function _ecCalcular(soc,desde,hasta){
     if(esNC){e.nc+=tot;if(pagada)e.ncCobradas+=tot;}
     else{
       e.facturado+=tot;
-      if(pagada){e.pagado+=tot;ret=parseFloat(opPorComp.get(c.id)?.monto_retencion)||0;e.ret+=ret;}
-      else if(c.estado==="pendiente")e.pendRevision+=tot;
+      if(pagada){e.pagado+=tot;ret=retPorComp.get(c.id)||0;e.ret+=ret;}
+      else{
+        const par=Math.min(parseFloat(c.monto_pagado)||0,tot);
+        if(par>0){e.pagado+=par;ret=retPorComp.get(c.id)||0;e.ret+=ret;}
+        if(c.estado==="pendiente")e.pendRevision+=tot;
+      }
     }
     e.movs.push({fecha:f,tipo:c.tipo||"",numero:c.numero||"",importe:esNC?-tot:tot,estado:c.estado,fecha_pago:c.fecha_pago||"",medio:c.medio_pago||"",ret,esNC,pagada});
   });
