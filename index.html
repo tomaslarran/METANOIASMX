@@ -27470,9 +27470,49 @@ async function renderAnticiposLista(){
   body.innerHTML=`<table class="dtable" style="width:100%;font-size:12px"><thead><tr><th style="text-align:left">Fecha</th><th style="text-align:left">Proveedor</th><th style="text-align:left">Concepto</th><th style="text-align:right">Pagado</th><th style="text-align:right">Con recibo</th><th style="text-align:right">Saldo</th><th></th></tr></thead><tbody>${_antLista.map(a=>{
     const saldo=_r2((parseFloat(a.monto)||0)-(parseFloat(a.monto_aplicado)||0));
     const recs=(a.recibos||[]).map(r=>`Recibo ${esc(r.numero)} (${fd(r.fecha)})`).join(" · ");
-    return `<tr><td>${fd(a.fecha)}<div style="font-size:10px;color:var(--tx3)">${esc(a.sociedad)}</div></td><td>${esc(a.proveedor)}</td><td>${esc(a.concepto||"")}${recs?`<div style="font-size:10px;color:var(--gr)">${recs}</div>`:""}</td><td style="text-align:right">${_extM(a.monto)}</td><td style="text-align:right">${_extM(a.monto_aplicado||0)}</td><td style="text-align:right;font-weight:700;color:${saldo>0.01?"var(--am)":"var(--gr)"}">${_extM(saldo)}</td><td style="text-align:right">${a.estado==="abierto"?`<button class="btn sec" onclick="abrirReciboAnticipo('${a.id}')">🧾 Cargar recibo</button>`:`<span style="font-size:11px;color:var(--gr)">✓ ${esc(a.estado)}</span>`}</td></tr>`;
+    return `<tr><td>${fd(a.fecha)}<div style="font-size:10px;color:var(--tx3)">${esc(a.sociedad)}</div></td><td>${esc(a.proveedor)}</td><td>${esc(a.concepto||"")}${recs?`<div style="font-size:10px;color:var(--gr)">${recs}</div>`:""}</td><td style="text-align:right">${_extM(a.monto)}</td><td style="text-align:right">${_extM(a.monto_aplicado||0)}</td><td style="text-align:right;font-weight:700;color:${saldo>0.01?"var(--am)":"var(--gr)"}">${_extM(saldo)}</td><td style="text-align:right">${a.estado==="abierto"?`<button class="btn sec" onclick="abrirReciboAnticipo('${a.id}')">🧾 Cargar recibo</button> `:`<span style="font-size:11px;color:var(--gr)">✓ ${esc(a.estado)}</span> `}<button class="btn sec" title="Reenviar el mail con la orden de pago" onclick="reenviarAnticipo('${a.id}')">✉️</button> <button class="btn sec" title="Eliminar el anticipo y todo lo que generó" onclick="eliminarAnticipo('${a.id}')" style="color:var(--re)">🗑</button></td></tr>`;
   }).join("")}</tbody></table>`;
 }
+async function reenviarAnticipo(id){
+  const a=_antLista.find(x=>x.id===id);if(!a)return;
+  const [op]=a.orden_pago_id?await sb(`ordenes_pago?id=eq.${a.orden_pago_id}&select=*`).catch(()=>[]):[];
+  if(!op){toast("No encuentro la orden de pago de este anticipo","err");return;}
+  if(!proveedores.length)proveedores=await sb("proveedores?select=*&order=nombre.asc").catch(()=>[]);
+  const prov=proveedores.find(x=>x.id===a.proveedor_id);
+  _rpOP=op;_rpComp={id:op.id,tipo:"",numero:op.numero,proveedor:a.proveedor,cuit:a.cuit,sociedad:a.sociedad};
+  document.getElementById("rp-numero").textContent=op.numero||"";
+  document.getElementById("rp-proveedor").textContent=a.proveedor||"";
+  document.getElementById("rp-email").value=prov?.email||"";
+  document.getElementById("rp-comprobante").value="";
+  document.getElementById("rp-detalle").textContent="Se envía la orden de pago, más el comprobante de pago si lo adjuntás.";
+  openModal("modal-reenviar-pago");
+}
+async function eliminarAnticipo(id){
+  const a=_antLista.find(x=>x.id===id);if(!a)return;
+  const nRec=(a.recibos||[]).length;
+  if(!confirm(`¿Eliminar el anticipo de ${a.proveedor} por ${_extM(a.monto)}?\n\nSe borran la orden de pago, el movimiento de banco o caja y se anulan los asientos${nRec?` (también los de ${nRec} recibo${nRec>1?"s":""} cargado${nRec>1?"s":""})`:""}. Después podés volver a cargarlo.`))return;
+  try{
+    const monto=_r2(parseFloat(a.monto)||0);
+    // Banco: se borra solo si es el movimiento cargado por el panel (no uno del extracto ni ya conciliado)
+    const movs=await sb(`banco_movimientos?sociedad=eq.${a.sociedad}&extracto_id=is.null&saldo=is.null&select=*`).catch(()=>[]);
+    const mb=movs.find(m=>m.fecha===a.fecha&&Math.abs((parseFloat(m.importe)||0)+monto)<0.01&&[a.nro_operacion,_antOpNumero(a)].filter(Boolean).includes(m.referencia));
+    if(mb&&mb.conciliado){toast("El pago ya está conciliado con el extracto del banco: anulá primero esa conciliación","err");return;}
+    if(mb)await sb(`banco_movimientos?id=eq.${mb.id}`,{method:"DELETE"});
+    // Caja (si fue en efectivo)
+    if(a.orden_pago_id)await sb(`caja_movimientos?observaciones=like.*comp-${a.orden_pago_id}*&select=id`).then(async r=>{for(const x of r)await sb(`caja_movimientos?id=eq.${x.id}`,{method:"DELETE"});}).catch(()=>{});
+    // Asientos: el del pago y los de los recibos
+    const ids=new Set([a.asiento_pago_id,...(a.recibos||[]).map(r=>r.asiento_id)].filter(Boolean));
+    const otros=await sb(`asientos_contables?anulado=eq.false&origen=in.(anticipo,anticipo_recibo)&origen_id=eq.${a.id}&select=id`).catch(()=>[]);
+    otros.forEach(x=>ids.add(x.id));
+    for(const aid of ids)await sb(`asientos_contables?id=eq.${aid}`,{method:"PATCH",body:JSON.stringify({anulado:true})});
+    if(a.orden_pago_id)await sb(`ordenes_pago?id=eq.${a.orden_pago_id}`,{method:"DELETE"});
+    await sb(`anticipos_proveedores?id=eq.${a.id}`,{method:"DELETE"});
+    if(typeof ordenesGanancias!=="undefined")ordenesGanancias=ordenesGanancias.filter(o=>o.id!==a.orden_pago_id);
+    toast("🗑 Anticipo eliminado. Podés volver a cargarlo","ok");
+    await renderAnticiposLista();antActualizarBadge();
+  }catch(e){toast("Error al eliminar: "+(e.message||e),"err");}
+}
+const _antOpNumero=a=>(typeof ordenesGanancias!=="undefined"?ordenesGanancias:[]).find(o=>o.id===a.orden_pago_id)?.numero||null;
 async function abrirReciboAnticipo(id){
   const a=_antLista.find(x=>x.id===id);if(!a)return;
   if(!planCuentas.length)planCuentas=await sb("plan_cuentas?select=*&order=codigo.asc").catch(()=>[]);
