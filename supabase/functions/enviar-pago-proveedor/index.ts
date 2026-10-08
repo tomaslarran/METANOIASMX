@@ -84,9 +84,12 @@ serve(async (req) => {
       if (certificado_base64) {
         attachments.push({ filename: `Certificado_retencion_${seguro(numero || "")}.pdf`, content: limpiar(certificado_base64), encoding: "base64", contentType: "application/pdf" });
       }
+      // Copia interna de cada orden de pago (se puede cambiar con el secret OP_COPIA_EMAIL)
+      const copia = (Deno.env.get("OP_COPIA_EMAIL") || "tlarran@metanoiasmx.com").trim();
       await transporter.sendMail({
         from: `"Metanoia SMX" <${Deno.env.get("SMTP_USER")}>`,
         to: email,
+        cc: copia && copia.toLowerCase() !== String(email).trim().toLowerCase() ? copia : undefined,
         subject: `📄 Comprobante de pago ${numero || ""} — Metanoia SMX`,
         html,
         attachments,

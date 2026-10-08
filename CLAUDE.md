@@ -1780,3 +1780,8 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 - **SQL a correr:** `sql_notificaciones_escal_bot.sql` (`ALTER TABLE notificaciones_config ADD COLUMN IF NOT EXISTS escal_bot_email boolean DEFAULT false;`). Después de correrlo hay que **volver a marcar el toggle de escalaciones** a quienes deban recibir esos mails.
 - **Lección:** el CLAUDE.md anotó como "SQL corrido" cambios que no se habían corrido. Ante una función nueva que depende de una columna, verificarla contra la API real antes de darla por hecha.
 
+### ✉️ Copia interna de cada orden de pago (8 Oct 2026)
+- `enviar-pago-proveedor` ahora manda **copia (CC) a `tlarran@metanoiasmx.com`** en cada mail de orden de pago, como respaldo y para controlar que salga todo (comprobante, OP y certificado de retención). Se puede cambiar el destinatario con el secret `OP_COPIA_EMAIL` sin tocar el código. Si el destinatario ya es esa misma dirección no se duplica, y sin email del proveedor no se manda nada.
+- La copia es **visible para el proveedor** (CC). Si se prefiere que no la vea, se cambia a CCO (`bcc`).
+- **Requiere redeployar `enviar-pago-proveedor`** en el dashboard de Supabase (pegar `supabase/functions/enviar-pago-proveedor/index.ts`). Verificar después con ✉️ Reenviar sobre una factura ya pagada. Probado localmente: 15 controles.
+
