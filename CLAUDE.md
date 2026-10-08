@@ -1772,3 +1772,11 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 - El navegador de cada usuario recuerda qué grupos tenía plegados (`localStorage sg-*`); los grupos con id nuevo arrancan abiertos.
 - **Pasos siguientes acordados:** (2) **partir Cash Flow** (hoy ~12 pestañas juntas: resumen, préstamos, cobranzas, inversiones, conciliación, caja, resúmenes, cierre de mes, promociones, cuentas) en secciones con su propio menú; (3) **buscador Ctrl+K** y **favoritos** para llegar en un paso a lo más usado.
 
+### 🐛 Fix: "Guardar preferencias" de Notificaciones no guardaba (8 Oct 2026)
+
+- **Causa 1 (la principal):** la columna `notificaciones_config.escal_bot_email` — el toggle "📨 Escalaciones del bot (email)" del 24 Sep — **nunca se creó en la base** (el CLAUDE.md la daba por hecha). El PATCH llevaba esa columna y Postgres lo rechazaba entero (`PGRST204`), así que **a ningún usuario se le guardaba nada**. El mensaje solo decía "Error". Además `agente-mensajes` filtra por esa columna, así que nunca pudo leer a quién avisar y caía siempre en el fallback `tlarran@metanoiasmx.com`.
+- **Causa 2:** `saveNotif()` solo hacía PATCH. Un usuario sin fila en la tabla (hoy 12 de 16, entre ellos Tomas Larran `tomaslarran@gmail.com`) quedaba con "Preferencias guardadas" sin que se guardara nada. Ahora, si el PATCH no actualiza ninguna fila, crea la fila (POST).
+- Los errores ahora dicen la causa real; si falta la columna, indican qué SQL correr.
+- **SQL a correr:** `sql_notificaciones_escal_bot.sql` (`ALTER TABLE notificaciones_config ADD COLUMN IF NOT EXISTS escal_bot_email boolean DEFAULT false;`). Después de correrlo hay que **volver a marcar el toggle de escalaciones** a quienes deban recibir esos mails.
+- **Lección:** el CLAUDE.md anotó como "SQL corrido" cambios que no se habían corrido. Ante una función nueva que depende de una columna, verificarla contra la API real antes de darla por hecha.
+

@@ -12402,10 +12402,15 @@ async function saveNotif(){
   if(!curNotifUser){toast("Seleccioná un usuario","err");return}
   const data={usuario_id:curNotifUser,email:document.getElementById("n-email").value,aviso_vencimiento:document.getElementById("n-venc").checked,dias_antes:parseInt(document.getElementById("n-dias").value)||3,resumen_semanal:document.getElementById("n-semanal").checked,dia_semana:parseInt(document.getElementById("n-dia").value)||1,hora_envio:document.getElementById("n-hora").value,alerta_bloqueado:document.getElementById("n-block").checked,alerta_asignacion:document.getElementById("n-asig").checked,alerta_curso:document.getElementById("n-curso").checked,alerta_nuevo_curso:document.getElementById("n-nuevo-curso").checked,escal_bot_email:document.getElementById("n-escal-bot").checked,rs_comprobantes:document.getElementById("n-rs-comp").checked,rs_vencimientos:document.getElementById("n-rs-venc").checked,rs_cobranzas:document.getElementById("n-rs-cobr").checked,rs_prestamos:document.getElementById("n-rs-prest").checked,rs_sueldos:document.getElementById("n-rs-sue").checked,rs_tareas:document.getElementById("n-rs-tareas").checked,updated_at:new Date().toISOString()};
   try{
-    await sb(`notificaciones_config?usuario_id=eq.${curNotifUser}`,{method:"PATCH",body:JSON.stringify(data)});
+    // PATCH devuelve las filas que actualizó: si no hay ninguna es porque este usuario nunca tuvo preferencias guardadas
+    const filas=await sb(`notificaciones_config?usuario_id=eq.${curNotifUser}`,{method:"PATCH",body:JSON.stringify(data)});
+    if(!filas||!filas.length)await sb("notificaciones_config",{method:"POST",body:JSON.stringify(data)});
     const idx=notifConfigs.findIndex(n=>n.usuario_id===curNotifUser);if(idx>=0)notifConfigs[idx]={...notifConfigs[idx],...data};else notifConfigs.push(data);
     toast("Preferencias guardadas","ok");
-  }catch(e){toast("Error","err")}
+  }catch(e){
+    const m=String(e.message||e);
+    toast(/escal_bot_email|PGRST204/.test(m)?"No se pudo guardar: falta una columna en la base (correr sql_notificaciones_escal_bot.sql)":"Error al guardar: "+m.slice(0,90),"err");
+  }
 }
 
 
