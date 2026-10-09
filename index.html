@@ -28657,7 +28657,7 @@ async function procesarImportArca(){
 // Saldo = (facturado − pagado) − (notas de crédito − notas de crédito ya cobradas). Un pago cancela la factura completa:
 // lo efectivamente transferido más la retención practicada.
 // ══════════════════════════════════════════════════════════════════════
-let _ecOrdenes=[],_ecDatos=[],_ecVista=[],_ecAbiertos=new Set(),_ecCircs=[],_ecPropios=new Set(),_circDestinatarios=[];
+let _ecAnticipos=[],_ecOrdenes=[],_ecDatos=[],_ecVista=[],_ecAbiertos=new Set(),_ecCircs=[],_ecPropios=new Set(),_circDestinatarios=[];
 const _ecM=v=>"$"+(Math.round((+v||0)*100)/100).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
 const _ecC11=s=>String(s||"").replace(/\D/g,"");
 const _ecFecha=iso=>{const p=String(iso||"").slice(0,10).split("-");return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:"";};
@@ -28673,6 +28673,7 @@ async function _ecCargarBase(){
     sb("circularizaciones?select=*&order=enviado_en.desc").catch(()=>[]),
     sb("datos_fiscales_sociedad?select=*").catch(()=>[]),
   ]);
+  _ecAnticipos=await sb("anticipos_proveedores?estado=eq.abierto&select=*").catch(()=>[]);
   _ecOrdenes=ops;_ecCircs=circ;
   _ecPropios=new Set(fisc.map(f=>_ecC11(f.cuit)).filter(x=>x.length===11));
 }
@@ -28703,9 +28704,24 @@ function _ecCalcular(soc,desde,hasta){
     }
     e.movs.push({fecha:f,tipo:c.tipo||"",numero:c.numero||"",importe:esNC?-tot:tot,estado:c.estado,fecha_pago:c.fecha_pago||"",medio:c.medio_pago||"",ret,esNC,pagada});
   });
+  // Anticipos sin recibo: el proveedor nos debe ese servicio, así que bajan lo que le debemos (saldo a favor)
+  _ecAnticipos.forEach(a=>{
+    if((a.sociedad||"SUDES")!==soc||String(a.fecha||"")>hasta)return;
+    const saldoA=Math.round(((parseFloat(a.monto)||0)-(parseFloat(a.monto_aplicado)||0))*100)/100;
+    if(saldoA<=0.005)return;
+    const cuit=_ecC11(a.cuit);
+    const prov=(a.proveedor_id&&proveedores.find(p=>p.id===a.proveedor_id))||(cuit.length===11?proveedores.find(p=>_ecC11(p.cuit)===cuit):null);
+    const key=prov?.id||cuit||String(a.proveedor||"").toLowerCase();
+    let e=mapa.get(key);
+    if(!e){e={key,provId:prov?.id||null,nombre:prov?.nombre||a.proveedor||"(sin nombre)",cuit:cuit||_ecC11(prov?.cuit),email:prov?.email||"",facturado:0,nc:0,ncCobradas:0,pagado:0,ret:0,pendRevision:0,movs:[]};mapa.set(key,e);}
+    e.anticipos=(e.anticipos||0)+saldoA;
+    e.movs.push({fecha:a.fecha,tipo:"Anticipo sin recibo",numero:a.concepto||"",importe:-saldoA,estado:"saldo a favor",fecha_pago:"",medio:"",ret:0,esNC:true,pagada:false});
+  });
   const out=[...mapa.values()];
   out.forEach(e=>{
-    e.saldo=Math.round(((e.facturado-e.pagado)-(e.nc-e.ncCobradas))*100)/100;
+    e.anticipos=Math.round((e.anticipos||0)*100)/100;
+    e.saldoFact=Math.round(((e.facturado-e.pagado)-(e.nc-e.ncCobradas))*100)/100;
+    e.saldo=Math.round((e.saldoFact-e.anticipos)*100)/100;
     e.movs.sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));
   });
   return out;
@@ -28732,19 +28748,19 @@ function renderEstadoCuenta(){
   const soloSaldo=document.getElementById("ec-saldo")?.checked;
   _ecDatos=_ecCalcular(soc,desde,hasta);
   _ecVista=_ecDatos.filter(e=>(!q||_normProd(e.nombre).includes(q)||e.cuit.includes(q.replace(/\D/g,"")||"#"))&&(!soloSaldo||Math.abs(e.saldo)>0.5)).sort((a,b)=>b.saldo-a.saldo||a.nombre.localeCompare(b.nombre));
-  const tot=_ecVista.reduce((t,e)=>({f:t.f+e.facturado,n:t.n+e.nc,p:t.p+e.pagado,r:t.r+e.ret,s:t.s+e.saldo}),{f:0,n:0,p:0,r:0,s:0});
+  const tot=_ecVista.reduce((t,e)=>({f:t.f+e.facturado,n:t.n+e.nc,p:t.p+e.pagado,r:t.r+e.ret,s:t.s+e.saldo,a:t.a+e.anticipos}),{f:0,n:0,p:0,r:0,s:0,a:0});
   const th=(t,al="right")=>`<th style="padding:7px 8px;text-align:${al};font-size:11px;color:var(--tx3);white-space:nowrap">${t}</th>`;
-  let html=`<table class="dtable" style="width:100%;font-size:12px"><thead><tr>${th("Proveedor","left")}${th("CUIT","left")}${th("Facturado")}${th("Notas de crédito")}${th("Pagado")}${th("Retenciones")}${th("Saldo")}${th("Circularización","left")}</tr></thead><tbody>`;
+  let html=`<table class="dtable" style="width:100%;font-size:12px"><thead><tr>${th("Proveedor","left")}${th("CUIT","left")}${th("Facturado")}${th("Notas de crédito")}${th("Pagado")}${th("Retenciones")}${th("Anticipos")}${th("Saldo")}${th("Circularización","left")}</tr></thead><tbody>`;
   _ecVista.forEach((e,i)=>{
     const ci=_ecUltimaCirc(e,soc,nombre);
     const abierto=_ecAbiertos.has(e.key);
     const badge=ci?`<span title="Enviada ${_ecFecha(ci.enviado_en)} por ${_ecM(ci.saldo)}" onclick="event.stopPropagation();registrarRespuestaCirc('${ci.id}')" style="cursor:pointer;font-size:10px;padding:2px 7px;border-radius:10px;background:${ci.respuesta==="conforme"?"rgba(16,185,129,.18)":ci.respuesta==="diferencia"?"rgba(239,68,68,.18)":"rgba(245,158,11,.18)"};color:${ci.respuesta==="conforme"?"var(--gr)":ci.respuesta==="diferencia"?"var(--re)":"var(--am)"}">✉️ ${_ecFecha(ci.enviado_en).slice(0,5)} · ${ci.respuesta}</span>`:"";
-    html+=`<tr onclick="toggleECDetalle(${i})" style="cursor:pointer"><td style="padding:7px 8px"><span style="color:var(--tx3)">${abierto?"▾":"▸"}</span> ${esc(e.nombre)}${e.provId?"":` <span title="Sin proveedor en el maestro" style="color:var(--am)">⚠️</span>`}</td><td style="padding:7px 8px;color:var(--tx3)">${esc(e.cuit)}</td><td style="padding:7px 8px;text-align:right">${_ecM(e.facturado)}</td><td style="padding:7px 8px;text-align:right">${e.nc?"− "+_ecM(e.nc):"—"}</td><td style="padding:7px 8px;text-align:right">${e.pagado?_ecM(e.pagado):"—"}</td><td style="padding:7px 8px;text-align:right;color:var(--tx3)">${e.ret?_ecM(e.ret):"—"}</td><td style="padding:7px 8px;text-align:right;font-weight:700;color:${e.saldo>0.5?"var(--re)":e.saldo<-0.5?"var(--am)":"var(--gr)"}">${_ecM(e.saldo)}</td><td style="padding:7px 8px">${badge}</td></tr>`;
+    html+=`<tr onclick="toggleECDetalle(${i})" style="cursor:pointer"><td style="padding:7px 8px"><span style="color:var(--tx3)">${abierto?"▾":"▸"}</span> ${esc(e.nombre)}${e.provId?"":` <span title="Sin proveedor en el maestro" style="color:var(--am)">⚠️</span>`}</td><td style="padding:7px 8px;color:var(--tx3)">${esc(e.cuit)}</td><td style="padding:7px 8px;text-align:right">${_ecM(e.facturado)}</td><td style="padding:7px 8px;text-align:right">${e.nc?"− "+_ecM(e.nc):"—"}</td><td style="padding:7px 8px;text-align:right">${e.pagado?_ecM(e.pagado):"—"}</td><td style="padding:7px 8px;text-align:right;color:var(--tx3)">${e.ret?_ecM(e.ret):"—"}</td><td style="padding:7px 8px;text-align:right;color:var(--am)" title="Pagado por adelantado, todavía sin recibo del proveedor">${e.anticipos?"− "+_ecM(e.anticipos):"—"}</td><td style="padding:7px 8px;text-align:right;font-weight:700;color:${e.saldo>0.5?"var(--re)":e.saldo<-0.5?"var(--am)":"var(--gr)"}">${_ecM(e.saldo)}</td><td style="padding:7px 8px">${badge}</td></tr>`;
     if(abierto){
-      html+=`<tr><td colspan="8" style="padding:0 8px 10px 26px;background:var(--bg3)"><table style="width:100%;font-size:11px">${e.movs.map(m=>`<tr><td style="padding:3px 6px;color:var(--tx3)">${_ecFecha(m.fecha)}</td><td style="padding:3px 6px">${esc(m.tipo)} ${esc(m.numero)}</td><td style="padding:3px 6px;text-align:right">${m.importe<0?"− ":""}${_ecM(Math.abs(m.importe))}</td><td style="padding:3px 6px;color:${m.pagada?"var(--gr)":"var(--am)"}">${m.pagada?`pagada ${_ecFecha(m.fecha_pago)}${m.medio?" · "+esc(m.medio):""}${m.ret?` · ret. ${_ecM(m.ret)}`:""}`:esc(m.estado)}</td></tr>`).join("")}</table></td></tr>`;
+      html+=`<tr><td colspan="9" style="padding:0 8px 10px 26px;background:var(--bg3)"><table style="width:100%;font-size:11px">${e.movs.map(m=>`<tr><td style="padding:3px 6px;color:var(--tx3)">${_ecFecha(m.fecha)}</td><td style="padding:3px 6px">${esc(m.tipo)} ${esc(m.numero)}</td><td style="padding:3px 6px;text-align:right">${m.importe<0?"− ":""}${_ecM(Math.abs(m.importe))}</td><td style="padding:3px 6px;color:${m.pagada?"var(--gr)":"var(--am)"}">${m.pagada?`pagada ${_ecFecha(m.fecha_pago)}${m.medio?" · "+esc(m.medio):""}${m.ret?` · ret. ${_ecM(m.ret)}`:""}`:esc(m.estado)}</td></tr>`).join("")}</table></td></tr>`;
     }
   });
-  html+=`</tbody><tfoot><tr style="font-weight:700;border-top:2px solid var(--b)"><td style="padding:8px" colspan="2">Total (${_ecVista.length} proveedores)</td><td style="padding:8px;text-align:right">${_ecM(tot.f)}</td><td style="padding:8px;text-align:right">${tot.n?"− "+_ecM(tot.n):"—"}</td><td style="padding:8px;text-align:right">${_ecM(tot.p)}</td><td style="padding:8px;text-align:right">${_ecM(tot.r)}</td><td style="padding:8px;text-align:right">${_ecM(tot.s)}</td><td></td></tr></tfoot></table>`;
+  html+=`</tbody><tfoot><tr style="font-weight:700;border-top:2px solid var(--b)"><td style="padding:8px" colspan="2">Total (${_ecVista.length} proveedores)</td><td style="padding:8px;text-align:right">${_ecM(tot.f)}</td><td style="padding:8px;text-align:right">${tot.n?"− "+_ecM(tot.n):"—"}</td><td style="padding:8px;text-align:right">${_ecM(tot.p)}</td><td style="padding:8px;text-align:right">${_ecM(tot.r)}</td><td style="padding:8px;text-align:right">${tot.a?"− "+_ecM(tot.a):"—"}</td><td style="padding:8px;text-align:right">${_ecM(tot.s)}</td><td></td></tr></tfoot></table>`;
   document.getElementById("ec-lista").innerHTML=_ecVista.length?html:`<div class="empty"><div class="ei">📒</div>Sin movimientos en este ejercicio.</div>`;
   _ecControlLibros(soc,desde,hasta);
 }
@@ -28757,7 +28773,7 @@ async function _ecControlLibros(soc,desde,hasta){
   el.innerHTML="";
   try{
     const todos=_ecCalcular(soc,desde,hasta);
-    const facturas=todos.reduce((s,e)=>s+e.saldo,0),pend=todos.reduce((s,e)=>s+e.pendRevision,0);
+    const facturas=todos.reduce((s,e)=>s+(e.saldoFact??e.saldo),0),pend=todos.reduce((s,e)=>s+e.pendRevision,0);
     const as=await _sbAll(`asientos_contables?sociedad=eq.${soc}&fecha=gte.${desde}&fecha=lte.${hasta}&anulado=eq.false&select=id,asientos_movimientos(debe,haber,plan_cuentas(codigo))`);
     let libros=0;
     as.forEach(a=>(a.asientos_movimientos||[]).forEach(m=>{if(m.plan_cuentas?.codigo==="2.1.01.001")libros+=(parseFloat(m.haber)||0)-(parseFloat(m.debe)||0);}));
@@ -28770,8 +28786,8 @@ async function exportarEstadoCuenta(){
   const {soc,nombre}=_ecParams();
   if(!_ecVista.length){toast("No hay datos para exportar","err");return;}
   await _loadXLSX();
-  const res=[["Proveedor","CUIT","Facturado","Notas de crédito","Pagado (incluye retenciones)","Retenciones","Saldo"],...(_ecVista.map(e=>[e.nombre,e.cuit,e.facturado,e.nc,e.pagado,e.ret,e.saldo]))];
-  res.push(["TOTAL","",_ecVista.reduce((s,e)=>s+e.facturado,0),_ecVista.reduce((s,e)=>s+e.nc,0),_ecVista.reduce((s,e)=>s+e.pagado,0),_ecVista.reduce((s,e)=>s+e.ret,0),_ecVista.reduce((s,e)=>s+e.saldo,0)]);
+  const res=[["Proveedor","CUIT","Facturado","Notas de crédito","Pagado (incluye retenciones)","Retenciones","Anticipos sin recibo","Saldo"],...(_ecVista.map(e=>[e.nombre,e.cuit,e.facturado,e.nc,e.pagado,e.ret,e.anticipos||0,e.saldo]))];
+  res.push(["TOTAL","",_ecVista.reduce((s,e)=>s+e.facturado,0),_ecVista.reduce((s,e)=>s+e.nc,0),_ecVista.reduce((s,e)=>s+e.pagado,0),_ecVista.reduce((s,e)=>s+e.ret,0),_ecVista.reduce((s,e)=>s+(e.anticipos||0),0),_ecVista.reduce((s,e)=>s+e.saldo,0)]);
   const det=[["Proveedor","CUIT","Fecha","Tipo","Número","Importe","Estado","Fecha de pago","Medio de pago","Retención"]];
   _ecVista.forEach(e=>e.movs.forEach(m=>det.push([e.nombre,e.cuit,m.fecha,m.tipo,m.numero,m.importe,m.pagada?"pagada":m.estado,m.fecha_pago,m.medio,m.ret||""])));
   const wb=XLSX.utils.book_new();
