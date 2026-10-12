@@ -3346,6 +3346,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="sc"><div class="sc-l">IVA del mes</div><div class="sc-v va" id="comp-stat-iva">—</div><div class="sc-s">crédito fiscal</div></div>
     <div class="sc"><div class="sc-l">Pendientes</div><div class="sc-v" id="comp-stat-pend" style="color:var(--am)">—</div><div class="sc-s">a revisar</div></div>
     <div class="sc" style="cursor:pointer" onclick="setCompFilter('vencida',document.getElementById('fb-vencida'))"><div class="sc-l">Vencidas</div><div class="sc-v" id="comp-stat-venc" style="color:var(--re)">—</div><div class="sc-s">sin pagar ⚠</div></div>
+    <div class="sc"><div class="sc-l">Por pagar</div><div class="sc-v" id="comp-stat-porpagar" style="color:var(--re)">—</div><div class="sc-s" id="comp-stat-porpagar-sub">saldo de facturas</div></div>
     <div class="sc"><div class="sc-l">En Finnegans</div><div class="sc-v vg" id="comp-stat-finn">—</div><div class="sc-s">sincronizados</div></div>
   </div>
 
@@ -5792,12 +5793,12 @@ async function renderAlertas(){
   });
 
   // Comprobantes vencidos o por vencer
-  comprobantes.filter(c=>c.fecha_vencimiento&&c.estado!=="enviado_finnegans"&&c.estado!=="cerrado").forEach(c=>{
+  comprobantes.filter(c=>c.fecha_vencimiento&&!c.tipo?.startsWith("NC")&&c.estado!=="pagado"&&c.estado!=="enviado_finnegans"&&c.estado!=="cerrado").forEach(c=>{
     const d=days(c.fecha_vencimiento);
     if(d===null||d>30)return;
     alertas.push({tipo:"comp",icon:"🧾",urgencia:d<0?"critica":d===0?"hoy":d<=7?"semana":"mes",d,
       titulo:c.proveedor||"Factura sin proveedor",
-      sub:`$${Math.round(c.total||0).toLocaleString("es-AR")} · ${c.sociedad} · ${c.tipo||"Comprobante"}`,
+      sub:`$${Math.round(_pagoParcial(c)?saldoComp(c):(c.total||0)).toLocaleString("es-AR")}${_pagoParcial(c)?` (saldo de $${Math.round(c.total||0).toLocaleString("es-AR")})`:""} · ${c.sociedad} · ${c.tipo||"Comprobante"}`,
       fecha:c.fecha_vencimiento,
       onclick:`goPage('comprobantes',document.getElementById('nav-comprobantes'));setCompFilter('vencida',document.getElementById('fb-vencida'))`});
   });
@@ -13386,6 +13387,9 @@ async function loadCF(){
 }
 
 let pendSubTab='pendientes';
+// Pagos de facturas (una fila por línea de pago): null = hay que volver a leerlos
+let cfCompPagos=null;
+async function _cargarCompPagos(){cfCompPagos=await sb("comprobante_pagos?select=*&order=fecha.asc,created_at.asc").catch(()=>[]);return cfCompPagos;}
 let pendHistFiltroTipo='todo', pendHistFiltroSoc='all';
 
 function setPendSubTab(tab,btn){
@@ -13411,6 +13415,7 @@ function setPendHistFiltro(key,val,btn){
 }
 
 function renderPendHistorial(){
+  if(cfCompPagos===null){_cargarCompPagos().then(renderPendHistorial);return;}
   const mesInput=document.getElementById("pend-hist-mes");
   const mesFilter=mesInput?mesInput.value:"";
   const tipo=pendHistFiltroTipo||"todo";
@@ -13423,9 +13428,47 @@ function renderPendHistorial(){
 
   const rows=[];
 
-  // ── Facturas pagadas ──
+  // ── Pagos de facturas: cada acto de pago es una fila, así un pago parcial se ve en el momento en que se hace ──
   if(tipo==="todo"||tipo==="facturas"){
-    (comprobantes||[]).filter(c=>c.estado==="pagado"&&pasaMes(c.fecha_pago||c.fecha)&&pasaSoc(c.sociedad)).forEach(c=>{
+    const porFact=new Map();
+    (cfCompPagos||[]).forEach(r=>{if(!porFact.has(r.comprobante_id))porFact.set(r.comprobante_id,[]);porFact.get(r.comprobante_id).push(r);});
+    const cubiertos=new Set();
+    porFact.forEach((rs,cid)=>{
+      const c=(comprobantes||[]).find(x=>x.id===cid);
+      if(!c)return;
+      cubiertos.add(cid);
+      const eventos=new Map();
+      rs.forEach(r=>{const k=r.evento_id||r.id;if(!eventos.has(k))eventos.set(k,[]);eventos.get(k).push(r);});
+      const lista=[...eventos.values()].sort((a,b)=>String(a[0].fecha||"").localeCompare(String(b[0].fecha||""))||String(a[0].created_at||"").localeCompare(String(b[0].created_at||"")));
+      const total=Math.abs(parseFloat(c.total)||0);
+      let acum=0;
+      lista.forEach(ev=>{
+        const pagado=ev.reduce((s,r)=>s+(parseFloat(r.monto)||0),0);
+        const op=ev[0].orden_pago_id?(ordenesGanancias||[]).find(o=>o.id===ev[0].orden_pago_id):null;
+        const retGan=op?parseFloat(op.monto_retencion)||0:0;
+        const bruto=pagado+retGan;
+        acum+=bruto;
+        const saldo=Math.max(0,Math.round((total-acum)*100)/100);
+        const fecha=ev[0].fecha||"";
+        if(!pasaMes(fecha)||!pasaSoc(c.sociedad))return;
+        const detalles=[];
+        if(retGan>0)detalles.push(`Ret.Gcias: ${fmt(retGan)}`);
+        if(op?.codigo_sicore)detalles.push(`SICORE ${op.codigo_sicore}`);
+        const parcial=saldo>0.01;
+        rows.push({
+          tipo:"factura",icon:"🧾",color:"var(--re)",fecha,
+          desc:`Fact. ${c.tipo||"?"} — ${esc(c.proveedor||"Sin proveedor")}`,
+          sub:`${c.numero?`N°${esc(c.numero)}`:""}${parcial?` · <span style="color:var(--am)">⏳ pago parcial · queda ${fmt(saldo)}</span>`:(lista.length>1?` · <span style="color:var(--gr)">✓ cancela la factura</span>`:"")}`,
+          sociedad:c.sociedad||"",
+          bruto,neto:pagado,
+          detalle:detalles.join(" · "),
+          medio:[...new Set(ev.map(r=>r.medio).filter(Boolean))].join(" + "),
+          parcial
+        });
+      });
+    });
+    // Facturas pagadas antes de los pagos en varias líneas: una fila por factura, como siempre
+    (comprobantes||[]).filter(c=>c.estado==="pagado"&&!cubiertos.has(c.id)&&pasaMes(c.fecha_pago||c.fecha)&&pasaSoc(c.sociedad)).forEach(c=>{
       const op=(ordenesGanancias||[]).find(o=>o.comprobante_id===c.id);
       const bruto=parseFloat(c.total)||0;
       const retGan=op?parseFloat(op.monto_retencion)||0:parseFloat(c.retencion_ganancias)||0;
@@ -13499,10 +13542,11 @@ function renderPendHistorial(){
   const totCuot=cuotRows.reduce((s,r)=>s+r.bruto,0);
   const totSuel=sueldRows.reduce((s,r)=>s+r.bruto,0);
   const totGral=totFact+totCuot+totSuel;
+  const parc=factRows.filter(r=>r.parcial).length;
 
   const kpis=document.getElementById("pend-hist-kpis");
   if(kpis)kpis.innerHTML=`
-    <div class="sc"><div class="sc-l">🧾 Facturas pagadas</div><div class="sc-v" style="color:var(--re)">${fmt(totFact)}</div><div class="sc-s">${factRows.length} comprobante${factRows.length!==1?"s":""}</div></div>
+    <div class="sc"><div class="sc-l">🧾 Pagos de facturas</div><div class="sc-v" style="color:var(--re)">${fmt(totFact)}</div><div class="sc-s">${factRows.length} pago${factRows.length!==1?"s":""}${parc?` · ${parc} parcial${parc!==1?"es":""}`:""}</div></div>
     <div class="sc"><div class="sc-l">🏦 Cuotas pagadas</div><div class="sc-v" style="color:#818CF8">${fmt(totCuot)}</div><div class="sc-s">${cuotRows.length} cuota${cuotRows.length!==1?"s":""}</div></div>
     <div class="sc"><div class="sc-l">👤 Sueldos pagados</div><div class="sc-v" style="color:var(--am)">${fmt(totSuel)}</div><div class="sc-s">${sueldRows.length} pago${sueldRows.length!==1?"s":""}</div></div>
     <div class="sc"><div class="sc-l">Total egresado</div><div class="sc-v" style="color:var(--re);font-size:18px">${fmt(totGral)}</div><div class="sc-s">en el período</div></div>`;
@@ -22204,8 +22248,8 @@ function buildEventos(){
   }
 
   if(calFiltro==="todo"||calFiltro==="finanzas"){
-    comprobantes.filter(c=>c.en_calendario&&c.fecha_vencimiento&&c.estado!=="enviado_finnegans"&&c.estado!=="cerrado").forEach(c=>{
-      addEvento(c.fecha_vencimiento,{tipo:"ev-comp",dot:"#F97316",nombre:c.proveedor||"Factura",sub:`Venc. factura ${c.tipo||""} — ${c.sociedad} — $${Math.round(c.total||0).toLocaleString("es-AR")}`});
+    comprobantes.filter(c=>c.en_calendario&&c.fecha_vencimiento&&!c.tipo?.startsWith("NC")&&c.estado!=="pagado"&&c.estado!=="enviado_finnegans"&&c.estado!=="cerrado").forEach(c=>{
+      addEvento(c.fecha_vencimiento,{tipo:"ev-comp",dot:"#F97316",nombre:c.proveedor||"Factura",sub:`Venc. factura ${c.tipo||""} — ${c.sociedad} — $${Math.round(_pagoParcial(c)?saldoComp(c):(c.total||0)).toLocaleString("es-AR")}${_pagoParcial(c)?" (saldo)":""}`});
     });
     cfCobranzas.filter(c=>c.estado==="Pendiente").forEach(c=>{
       addEvento(c.fecha_vencimiento,{tipo:"ev-cobr",dot:"#10B981",nombre:c.nombre,sub:`Cobranza ${c.tipo} — ${c.sociedad} — $${Math.round(c.monto).toLocaleString("es-AR")}`});
@@ -26326,7 +26370,7 @@ function renderComprobantes(){
     const desglose=(c.neto_21||0)+(c.neto_105||0)+(c.neto_27||0)+(c.neto_exento||0);
     return esDeProveedor&&(c.monto_neto||0)>0&&desglose===0&&c.estado!=="enviado_finnegans";
   });
-  else if(compFilter==="vencida")list=list.filter(c=>c.fecha_vencimiento&&c.estado!=="enviado_finnegans"&&c.estado!=="cerrado"&&!c.importado_finnegans&&days(c.fecha_vencimiento)<0);
+  else if(compFilter==="vencida")list=list.filter(c=>c.fecha_vencimiento&&!c.tipo?.startsWith("NC")&&c.estado!=="pagado"&&c.estado!=="enviado_finnegans"&&c.estado!=="cerrado"&&!c.importado_finnegans&&days(c.fecha_vencimiento)<0);
   else if(compFilter==="enviado_finnegans")list=list.filter(c=>c.importado_finnegans||c.estado==="enviado_finnegans");
   else if(compFilter!=="all")list=list.filter(c=>c.estado===compFilter);
   // Actualizar badge "por completar"
@@ -26416,11 +26460,19 @@ function updateCompStats(){
   const ivaMes=base.reduce((s,c)=>{const sign=c.tipo?.startsWith("NC")?-1:1;return s+sign*(Number(c.iva)||0);},0);
   const pend=base.filter(c=>c.estado==="pendiente").length;
   const finn=base.filter(c=>c.importado_finnegans||c.estado==="enviado_finnegans").length;
-  const venc=comprobantes.filter(c=>c.fecha_vencimiento&&c.estado!=="enviado_finnegans"&&days(c.fecha_vencimiento)<0).length;
+  const venc=comprobantes.filter(c=>c.fecha_vencimiento&&!c.tipo?.startsWith("NC")&&c.estado!=="pagado"&&c.estado!=="cerrado"&&c.estado!=="enviado_finnegans"&&days(c.fecha_vencimiento)<0).length;
+  // Saldo por pagar: lo que falta de las facturas pendientes (descuenta lo ya pagado en parte)
+  const impagas=base.filter(c=>(c.estado==="pendiente"||c.estado==="revisado")&&!c.tipo?.startsWith("NC"));
+  const porPagar=impagas.reduce((s,c)=>s+saldoComp(c),0);
+  const conParcial=impagas.filter(_pagoParcial).length;
   document.getElementById("comp-stat-total").textContent="$"+Math.round(totalMes).toLocaleString("es-AR");
   document.getElementById("comp-stat-iva").textContent="$"+Math.round(ivaMes).toLocaleString("es-AR");
   document.getElementById("comp-stat-pend").textContent=pend;
   document.getElementById("comp-stat-finn").textContent=finn;
+  const ppEl=document.getElementById("comp-stat-porpagar");
+  if(ppEl){ppEl.textContent="$"+Math.round(porPagar).toLocaleString("es-AR");}
+  const ppSub=document.getElementById("comp-stat-porpagar-sub");
+  if(ppSub)ppSub.textContent=`${impagas.length} factura${impagas.length!==1?"s":""}${conParcial?` · ${conParcial} con pago parcial`:""}`;
   document.getElementById("comp-stat-mes").textContent=mesLabel;
   const vEl=document.getElementById("comp-stat-venc");
   if(vEl){vEl.textContent=venc||"✓";vEl.style.color=venc?"var(--re)":"var(--gr)";}
@@ -26702,6 +26754,7 @@ async function registrarPagoMixto(c,{fecha,lineas,obs,op}){
   const filas=lineas.map((l,i)=>({comprobante_id:c.id,orden_pago_id:op?.id||null,evento_id:eventoId,sociedad,fecha,medio:_nombreMedioLinea(l),tipo_medio:l.tipo,monto:l.monto,
     echeq_propio_id:res[i].echeqId||null,cobranza_id:l.tipo==="endoso"?l.cobranzaId:null,nro_operacion:l.nroOp||null,observaciones:obs||null,creado_por:loggedUser?.nombre||null}));
   await sb("comprobante_pagos",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify(filas)});
+  cfCompPagos=null;
   // 4) La factura: cuánto se pagó; completa → pagada
   const pagado=_r2(antes+bruto);
   const completa=pagado>=totalComp-0.01;
