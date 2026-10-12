@@ -2469,6 +2469,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <button class="cd-tab on" id="cuentas-sub-btn-medios" onclick="setCuentasSubTab('medios',this)">💳 Cuentas y tarjetas</button>
       <button class="cd-tab" id="cuentas-sub-btn-caja" onclick="setCuentasSubTab('caja',this)">💵 Caja</button>
       <button class="cd-tab" id="cuentas-sub-btn-echeq" onclick="setCuentasSubTab('echeq',this)">🧾 Echeq propios</button>
+      <button class="cd-tab" id="cuentas-sub-btn-echeq3" onclick="setCuentasSubTab('echeq3',this)">📥 Echeq de terceros</button>
     </div>
     <!-- Panel: Cuentas y tarjetas -->
     <div id="cuentas-panel-medios">
@@ -2480,6 +2481,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </div>
     <!-- Panel: Echeq propios -->
     <div id="cuentas-panel-echeq" style="display:none"></div>
+    <!-- Panel: Echeq de terceros (cartera) -->
+    <div id="cuentas-panel-echeq3" style="display:none"></div>
     <!-- Panel: Caja (contenido movido desde cfpg-caja) -->
     <div id="cuentas-panel-caja" style="display:none">
       <!-- Selector sociedad + moneda -->
@@ -4851,6 +4854,60 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="ma">
     <button class="bc" onclick="closeModal('modal-off')">Cerrar</button>
     <button class="bk" id="off-aplicar" style="display:none" onclick="offAplicar()">✓ Aplicar los cambios tildados</button>
+  </div>
+</div>
+</div>
+
+<!-- MODAL ECHEQ DE TERCEROS: DATOS -->
+<div class="mov" id="modal-et" onclick="if(event.target===this&&_movDown===this)closeModal('modal-et')">
+<div class="modal" style="max-width:620px">
+  <div class="mt"><span id="et-titulo">Cargar Echeq recibido</span> <button class="mt-close" onclick="closeModal('modal-et')">✕</button></div>
+  <div class="fg"><label class="fl">PDF del Echeq (detalle del home banking) — completa los datos solo</label><input class="fi" type="file" id="et-file" accept="application/pdf,image/*" onchange="etLeerPdf(this)"></div>
+  <div id="et-estado-aviso" style="margin-bottom:8px"></div>
+  <div class="g2">
+    <div class="fg"><label class="fl">Sociedad que lo recibe *</label><select class="fi" id="et-sociedad"><option value="SUDES">SUDES</option><option value="POINTERS">POINTERS</option></select></div>
+    <div class="fg"><label class="fl">Monto *</label><input class="fi" type="number" step="0.01" id="et-monto"></div>
+  </div>
+  <div class="g2">
+    <div class="fg"><label class="fl">Fecha de pago (vencimiento) *</label><input class="fi" type="date" id="et-fecha_pago"></div>
+    <div class="fg"><label class="fl">Fecha de emisión</label><input class="fi" type="date" id="et-fecha_emision"></div>
+  </div>
+  <div class="g2">
+    <div class="fg"><label class="fl">Librador (quién lo libra) *</label><input class="fi" id="et-librador"></div>
+    <div class="fg"><label class="fl">CUIT del librador</label><input class="fi" id="et-librador_cuit"></div>
+  </div>
+  <div class="g2">
+    <div class="fg"><label class="fl">N° de cheque</label><input class="fi" id="et-numero"></div>
+    <div class="fg"><label class="fl">ID del Echeq</label><input class="fi" id="et-id_cheque"></div>
+  </div>
+  <div class="g2">
+    <div class="fg"><label class="fl">Banco emisor</label><input class="fi" id="et-banco"></div>
+    <div class="fg"><label class="fl">Tipo (CPD / CC)</label><input class="fi" id="et-tipo"></div>
+  </div>
+  <div class="fg"><label class="fl">CMC7</label><input class="fi" id="et-cmc7"></div>
+  <div id="et-aviso" style="font-size:11px;color:var(--am);margin-bottom:8px"></div>
+  <div class="ma">
+    <button class="bc" onclick="closeModal('modal-et')">Cancelar</button>
+    <button class="bk" id="et-btn" onclick="etGuardar()">Guardar</button>
+  </div>
+</div>
+</div>
+
+<!-- MODAL ENDOSAR ECHEQ DE TERCEROS -->
+<div class="mov" id="modal-et-end" onclick="if(event.target===this&&_movDown===this)closeModal('modal-et-end')">
+<div class="modal" style="max-width:600px">
+  <div class="mt">↪ Endosar Echeq a un proveedor <button class="mt-close" onclick="closeModal('modal-et-end')">✕</button></div>
+  <div id="ete-info" style="font-size:12px;background:var(--surf2);border-radius:8px;padding:8px 10px;margin-bottom:10px"></div>
+  <div class="fg"><label class="fl">¿A quién lo endosás? *</label><select class="fi" id="ete-prov" onchange="etProvCambio()"></select></div>
+  <div class="fg"><label class="fl">¿Con qué lo pagás?</label><div id="ete-facturas"></div></div>
+  <div id="ete-ctas-wrap" style="display:none">
+    <div class="fg"><label class="fl">Email del proveedor</label><input class="fi" type="email" id="ete-email" placeholder="proveedor@correo.com"></div>
+    <label style="font-size:12px;display:flex;gap:6px;align-items:center;margin-bottom:10px"><input type="checkbox" id="ete-enviar" checked> Enviar mail con la orden de pago</label>
+  </div>
+  <div style="font-size:11px;color:var(--tx3);margin-bottom:8px">Recordá endosar el cheque también en el home banking del banco. Con factura, el pago sigue en la pantalla de pagos (podés sumar otros medios si el saldo es mayor).</div>
+  <div class="ma">
+    <button class="bc" onclick="closeModal('modal-et-end')">Cancelar</button>
+    <button class="bk" id="ete-btn" onclick="etContinuarEndoso()" disabled>↪ Endosar a cuenta</button>
   </div>
 </div>
 </div>
@@ -15724,8 +15781,10 @@ function setCuentasSubTab(tab,btn){
   document.getElementById("cuentas-panel-medios").style.display=tab==="medios"?"":"none";
   document.getElementById("cuentas-panel-caja").style.display=tab==="caja"?"":"none";
   document.getElementById("cuentas-panel-echeq").style.display=tab==="echeq"?"":"none";
+  document.getElementById("cuentas-panel-echeq3").style.display=tab==="echeq3"?"":"none";
   if(tab==="medios")renderMediosPago();
   else if(tab==="echeq")renderEcheqs();
+  else if(tab==="echeq3")renderEcheqsTerceros();
   else renderCaja();
 }
 
@@ -18395,6 +18454,7 @@ function renderCFCobranzas(){
         <td><span style="${dCls}">${fmt(c.fecha_vencimiento)} ${dLabel}</span></td>
         <td>
           <span class="badge ${ECls[c.estado]||"btd"}">${c.estado}</span>
+          ${c.estado==="Endosado"?`<div style="font-size:10px;color:var(--tx3);margin-top:2px">↪ a ${esc(c.endosado_a||"—")}${c.endosado_en?" · "+fmt(c.endosado_en):""}</div>`:""}
           ${c.estado==="Cobrado"&&c.medio_cobro?`<div style="font-size:10px;color:var(--tx3);margin-top:2px">💳 ${esc(c.medio_cobro)}${c.fecha_cobro?" · "+fmt(c.fecha_cobro):""}</div>`:""}
           ${c.numero_factura?`<div style="font-size:10px;color:var(--tx3)">🧾 ${esc(c.numero_factura)}</div>`:""}
         </td>
@@ -26478,7 +26538,7 @@ async function plRecolectar(base){
   return out;
 }
 
-async function abrirPagarComp(id){
+async function abrirPagarComp(id,opts={}){
   const c=comprobantes.find(x=>x.id===id);
   if(!c)return;
   if(!mediosPago.length)mediosPago=await sb("medios_pago?select=*&order=orden.asc,nombre.asc").catch(()=>[]);
@@ -26492,7 +26552,7 @@ async function abrirPagarComp(id){
   const pag=_r2(parseFloat(c.monto_pagado)||0);
   document.getElementById("pagar-comp-resumen").innerHTML=`<b>${esc(c.proveedor||"")}</b> · ${esNC?"NC":"Fact."} ${esc(c.tipo||"")} ${esc(c.numero||"")} · Total <b>${_extM(tot)}</b>${pag>0?` · Ya pagado <b>${_extM(pag)}</b>`:""} · <b>Saldo ${_extM(saldo)}</b>`;
   document.getElementById("pagar-comp-hint").style.display=(c.tipo==="A")?"":"none";
-  await plIniciar("pagar-comp",{sociedad:c.sociedad||"",total:saldo,exacto:false,unaLinea:esNC});
+  await plIniciar("pagar-comp",{sociedad:c.sociedad||"",total:saldo,exacto:false,unaLinea:esNC,preCheque:opts.preCheque});
   openModal("modal-pagar-comp");
 }
 function _poblarSelectSocios(sel){
@@ -27399,6 +27459,222 @@ async function enviarComprobantePagoProveedor(c,op,extra={}){
   }
 }
 
+/* ══ ECHEQ DE TERCEROS: cartera, carga desde el PDF y endoso (12 Oct 2026) ══
+   Son los cheques que nos entregan los clientes (cf_cobranzas, tipo ECheque). En cartera = Pendiente.
+   Endosar = usarlos para pagar a un proveedor: contra una factura (editor de pagos, línea «Echeq de terceros»)
+   o a cuenta, sin factura (queda como anticipo abierto). Contable: Haber 1.1.01.005 (provisorio hasta Fase 3). */
+const ET_ENDOSO_MEDIO="Echeq de terceros (endoso)";
+let echeqsTer=[],etFiltro="cartera",_etEditId=null,_etArchivo=null,_etEndosoId=null,_etFacturas=[];
+const etF=f=>f?String(f).slice(0,10).split("-").reverse().join("/"):"—";
+const etMonto=v=>_extM(v);
+async function renderEcheqsTerceros(){
+  const el=document.getElementById("cuentas-panel-echeq3");
+  if(!el)return;
+  el.innerHTML=`<div style="color:var(--tx3);font-size:13px">Cargando…</div>`;
+  try{echeqsTer=await sb("cf_cobranzas?tipo=eq.ECheque&select=*&order=fecha_vencimiento.asc");}
+  catch(e){el.innerHTML=`<div style="padding:30px;text-align:center;color:var(--tx3)">No se pudo leer la cartera: ${esc(e.message||e)}</div>`;return;}
+  echeqsTer.forEach(c=>{if(typeof cfCobranzas!=="undefined"&&!cfCobranzas.find(x=>x.id===c.id))cfCobranzas.push(c);});
+  const cartera=echeqsTer.filter(c=>c.estado==="Pendiente");
+  const kpi=["SUDES","POINTERS"].map(s=>{
+    const l=cartera.filter(c=>c.sociedad===s),tot=l.reduce((a,c)=>a+(parseFloat(c.monto)||0),0);
+    return`<div style="flex:1;min-width:170px;background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:10px 14px"><div style="font-size:11px;color:var(--tx3)">${s} · en cartera</div><div style="font-size:18px;font-weight:700;color:var(--ac)">${etMonto(tot)}</div><div style="font-size:11px;color:var(--tx3)">${l.length} cheque${l.length===1?"":"s"}</div></div>`;
+  }).join("");
+  const endosados=echeqsTer.filter(c=>c.estado==="Endosado");
+  const kEnd=`<div style="flex:1;min-width:170px;background:var(--surf);border:1px solid var(--b);border-radius:var(--r);padding:10px 14px"><div style="font-size:11px;color:var(--tx3)">Endosados (total)</div><div style="font-size:18px;font-weight:700">${etMonto(endosados.reduce((a,c)=>a+(parseFloat(c.monto)||0),0))}</div><div style="font-size:11px;color:var(--tx3)">${endosados.length} cheque${endosados.length===1?"":"s"}</div></div>`;
+  const lista=echeqsTer.filter(c=>etFiltro==="todos"||(etFiltro==="cartera"?c.estado==="Pendiente":c.estado===({endosados:"Endosado",cobrados:"Cobrado",vencidos:"Vencido"}[etFiltro])));
+  const fb=(k,t)=>`<button class="fb ${etFiltro===k?"on":""}" onclick="etSetFiltro('${k}')">${t}</button>`;
+  const badge=c=>({Pendiente:["En cartera","rgba(59,130,246,.14)","var(--ac)"],Endosado:["↪ Endosado","rgba(139,92,246,.16)","#A78BFA"],Cobrado:["✓ Cobrado","rgba(16,185,129,.12)","var(--gr)"],Vencido:["⚠ Vencido","rgba(239,68,68,.12)","var(--re)"],Descontado:["Descontado","rgba(16,185,129,.12)","var(--gr)"]}[c.estado]||[c.estado,"var(--surf2)","var(--tx3)"]);
+  const btn=(on,txt,tit,col)=>`<button onclick="${on}" title="${tit}" style="font-size:11px;padding:3px 8px;background:${col||"var(--surf2)"};border:1px solid var(--b);border-radius:6px;cursor:pointer;white-space:nowrap;color:var(--tx)">${txt}</button>`;
+  el.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <div style="font-size:13px;color:var(--tx3);max-width:640px">Echeq que nos entregan los clientes. Podés <b>endosarlos</b> a un proveedor para pagarle (con o sin factura) o depositarlos desde Cobranzas.</div>
+      <button class="btn pri" onclick="etAbrir()">＋ Cargar Echeq recibido</button>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">${kpi}${kEnd}</div>
+    <div class="fbar" style="margin-bottom:12px">${fb("cartera","En cartera")}${fb("endosados","Endosados")}${fb("cobrados","Cobrados")}${fb("vencidos","Vencidos")}${fb("todos","Todos")}</div>
+    ${lista.length?`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:var(--surf2);color:var(--tx3);font-size:11px;text-transform:uppercase;letter-spacing:.5px">
+        <th style="padding:8px 10px;text-align:left">Librador / remitente</th><th style="padding:8px 10px;text-align:left">Nº · Banco</th><th style="padding:8px 10px;text-align:left">Soc.</th>
+        <th style="padding:8px 10px;text-align:right">Monto</th><th style="padding:8px 10px;text-align:center">Fecha de pago</th><th style="padding:8px 10px;text-align:left">Estado</th><th style="padding:8px 10px;text-align:center">Acciones</th></tr></thead><tbody>
+      ${lista.map(c=>{const [tx,bg,col]=badge(c);const dv=days(c.fecha_vencimiento);const venc=c.estado==="Pendiente"&&dv!==null&&dv<0;
+        return`<tr style="border-bottom:1px solid var(--b)">
+        <td style="padding:8px 10px"><div style="font-weight:600">${esc(c.librador||c.remitente||c.nombre||"—")}</div>${c.librador_cuit?`<div style="font-size:10px;color:var(--tx3)">CUIT ${esc(c.librador_cuit)}</div>`:""}</td>
+        <td style="padding:8px 10px;color:var(--tx2)">${c.numero_cheque?`N° ${esc(c.numero_cheque)}`:'<span style="color:var(--am)" title="Faltan los datos del cheque">sin datos</span>'}<div style="font-size:10px;color:var(--tx3)">${esc(c.banco_emisor||c.banco_destino||"")}</div></td>
+        <td style="padding:8px 10px;color:var(--tx3)">${esc(c.sociedad||"")}</td>
+        <td style="padding:8px 10px;text-align:right;font-weight:700">${etMonto(c.monto)}</td>
+        <td style="padding:8px 10px;text-align:center;${venc?"color:var(--am);font-weight:700":"color:var(--tx3)"}">${etF(c.fecha_vencimiento)}${venc?" ⚠️":""}</td>
+        <td style="padding:8px 10px"><span style="background:${bg};color:${col};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${tx}</span>${c.estado==="Endosado"?`<div style="font-size:11px;margin-top:3px"><b>a ${esc(c.endosado_a||"—")}</b>${c.endosado_cuit?` <span style="color:var(--tx3)">(${esc(c.endosado_cuit)})</span>`:""}<div style="color:var(--tx3)">el ${etF(c.endosado_en)}</div></div>`:""}</td>
+        <td style="padding:8px 10px;text-align:center"><div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+          ${c.estado==="Pendiente"?btn(`etAbrirEndoso('${c.id}')`,"↪ Endosar","Usarlo para pagar a un proveedor","rgba(139,92,246,.16)"):""}
+          ${c.estado==="Pendiente"?btn(`abrirRegistrarCobro('${c.id}','cobranza')`,"💰 Cobrar","Depositarlo / registrar el cobro"):""}
+          ${btn(`etAbrir('${c.id}')`,"✎ Datos","Ver o completar los datos del cheque")}
+          ${c.pdf_path?btn(`abrirPdfResumen('${esc(c.pdf_path)}')`,"📄 PDF","Ver el archivo del cheque"):""}
+        </div></td></tr>`;}).join("")}
+      </tbody></table></div>`:`<div style="text-align:center;padding:40px;color:var(--tx3)"><div style="font-size:32px;margin-bottom:10px">📥</div><div style="font-size:14px">No hay Echeq en esta vista</div></div>`}
+    <div style="font-size:11px;color:var(--tx3);margin-top:10px">Contablemente, al endosar se acredita <b>1.1.01.005 Cheques de terceros en cartera</b>. El ingreso del cheque todavía no genera asiento (llega con la Fase 3 de ventas): criterio provisorio a confirmar con la contadora.</div>`;
+}
+function etSetFiltro(k){etFiltro=k;return renderEcheqsTerceros();}
+
+/* ── cargar / completar los datos de un Echeq recibido ── */
+function etAbrir(id){
+  _etEditId=id||null;_etArchivo=null;
+  const c=id?echeqsTer.find(x=>x.id===id):null;
+  const set=(k,v)=>{const e=document.getElementById("et-"+k);if(e)e.value=v??"";};
+  document.getElementById("et-titulo").textContent=c?"Datos del Echeq recibido":"Cargar Echeq recibido";
+  document.getElementById("et-file").value="";
+  set("sociedad",c?.sociedad||"SUDES");set("monto",c?.monto);set("fecha_pago",c?.fecha_vencimiento);set("numero",c?.numero_cheque);set("id_cheque",c?.id_cheque);
+  set("banco",c?.banco_emisor||c?.banco_destino);set("librador",c?.librador||c?.remitente);set("librador_cuit",c?.librador_cuit);set("fecha_emision",c?.fecha_emision);
+  set("tipo",c?.tipo_cheque);set("cmc7",c?.cmc7);
+  const bloq=!!c&&c.estado!=="Pendiente"&&c.estado!=="Vencido";
+  ["sociedad","monto"].forEach(k=>document.getElementById("et-"+k).disabled=bloq);
+  document.getElementById("et-aviso").textContent=c&&bloq?`Este cheque está ${c.estado.toLowerCase()}: el monto y la sociedad no se pueden cambiar.`:"";
+  document.getElementById("et-estado-aviso").innerHTML="";
+  openModal("modal-et");
+}
+async function etLeerPdf(input){
+  const f=input.files?.[0];if(!f)return;
+  const av=document.getElementById("et-estado-aviso");
+  try{
+    const d=await _echeqLeerPdf(f);
+    _etArchivo=f;
+    const set=(k,v)=>{if(v!==undefined&&v!==null&&v!=="")document.getElementById("et-"+k).value=v;};
+    set("monto",d.importe);set("fecha_pago",d.fecha_pago);set("fecha_emision",d.fecha_emision);set("numero",d.numero);set("id_cheque",d.id_cheque);
+    set("banco",d.emisor_banco);set("librador",d.emisor_razon);set("librador_cuit",d.emisor_cuit);set("tipo",d.tipo);set("cmc7",d.cmc7);
+    // ¿a nombre de qué sociedad vino?
+    const benef=String(d.beneficiario_cuit||"").replace(/\D/g,"");let soc=null;
+    for(const s of ["SUDES","POINTERS"]){const fi=await getFiscalSociedad(s);if(fi&&String(fi.cuit||"").replace(/\D/g,"")===benef)soc=s;}
+    if(soc)document.getElementById("et-sociedad").value=soc;
+    const avisos=[];
+    if(!soc&&benef)avisos.push(`El beneficiario del cheque (CUIT ${benef}) no es SUDES ni POINTERS: revisá la sociedad.`);
+    if(d.estado&&!/activo|emitido|vigente/i.test(d.estado))avisos.push(`Estado en el banco: ${d.estado}.`);
+    av.innerHTML=avisos.length?`<div style="color:var(--am);font-size:12px">⚠️ ${esc(avisos.join(" "))}</div>`:`<div style="color:var(--gr);font-size:12px">✓ Datos leídos del PDF. Revisalos antes de guardar.</div>`;
+  }catch(e){_etArchivo=f;av.innerHTML=`<div style="color:var(--am);font-size:12px">⚠️ ${esc(e.message||e)} — el archivo se guarda igual como respaldo y completás los datos a mano.</div>`;}
+}
+async function etGuardar(){
+  const g=k=>(document.getElementById("et-"+k)?.value||"").trim();
+  const monto=_r2(parseFloat(g("monto"))||0),venc=g("fecha_pago"),sociedad=g("sociedad");
+  if(!(monto>0)||!venc||!g("librador")){toast("Completá el monto, la fecha de pago y quién libra el cheque","err");return;}
+  if(g("numero")){
+    const ya=await sb(`cf_cobranzas?tipo=eq.ECheque&numero_cheque=eq.${encodeURIComponent(g("numero"))}&select=id,nombre`).catch(()=>[]);
+    if(ya.some(x=>x.id!==_etEditId)){toast(`El Echeq N° ${g("numero")} ya está cargado (${ya[0].nombre})`,"err");return;}
+  }
+  const btn=document.getElementById("et-btn");btn.disabled=true;
+  try{
+    const body={nombre:`Echeq ${g("numero")?"N° "+g("numero")+" — ":""}${g("librador")}`.slice(0,120),tipo:"ECheque",remitente:g("librador"),sociedad,monto,fecha_vencimiento:venc,
+      numero_cheque:g("numero")||null,id_cheque:g("id_cheque")||null,banco_emisor:g("banco")||null,librador:g("librador"),librador_cuit:(g("librador_cuit")||"").replace(/\D/g,"")||null,
+      fecha_emision:g("fecha_emision")||null,tipo_cheque:g("tipo")||null,cmc7:g("cmc7")||null,updated_at:new Date().toISOString()};
+    const prev=_etEditId?echeqsTer.find(x=>x.id===_etEditId):null;
+    if(prev&&prev.estado!=="Pendiente"&&prev.estado!=="Vencido"){delete body.monto;delete body.sociedad;}
+    let id=_etEditId;
+    if(id)await sb(`cf_cobranzas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(body)});
+    else{const [r]=await sb("cf_cobranzas",{method:"POST",body:JSON.stringify({...body,estado:"Pendiente"})});id=r?.id;}
+    if(_etArchivo&&id){
+      try{
+        const ext=/png/i.test(_etArchivo.type||"")?"png":/^image\//.test(_etArchivo.type||"")?"jpg":"pdf";
+        const path=`echeqs-terceros/${sociedad}/${(g("numero")||"sin-numero").replace(/[^\w-]/g,"")}_${Date.now()}.${ext}`;
+        const up=await fetch(`${SB}/storage/v1/object/extractos-bancarios/${path}`,{method:"POST",headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":_etArchivo.type||"application/pdf","x-upsert":"false"},body:_etArchivo});
+        if(up.ok)await sb(`cf_cobranzas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({pdf_path:path})});
+        else toast("⚠️ No se pudo guardar el archivo (los datos sí quedaron)","err");
+      }catch(_){toast("⚠️ No se pudo guardar el archivo (los datos sí quedaron)","err");}
+    }
+    closeModal("modal-et");toast(_etEditId?"Datos guardados":"Echeq cargado en la cartera","ok");
+    if(typeof loadCF==="function"&&typeof cfCobranzas!=="undefined"){try{cfCobranzas=await sb("cf_cobranzas?select=*&order=fecha_vencimiento");}catch(_){}}
+    renderEcheqsTerceros();
+  }catch(e){toast("Error: "+(e.message||e),"err");}
+  finally{btn.disabled=false;}
+}
+
+/* ── endosar ── */
+async function etAbrirEndoso(id){
+  const c=echeqsTer.find(x=>x.id===id);if(!c)return;
+  if(c.estado!=="Pendiente"){toast("Ese cheque ya no está en cartera","err");return;}
+  if(!proveedores.length)proveedores=await sb("proveedores?select=*&order=nombre.asc").catch(()=>[]);
+  _etEndosoId=id;_etFacturas=[];
+  document.getElementById("ete-info").innerHTML=`<b>${etMonto(c.monto)}</b> · ${esc(c.librador||c.remitente||"")}${c.numero_cheque?` · N° ${esc(c.numero_cheque)}`:""} · cobra el ${etF(c.fecha_vencimiento)} · <span style="color:var(--tx3)">${esc(c.sociedad)}</span>`;
+  const sel=document.getElementById("ete-prov");
+  sel.innerHTML='<option value="">— ¿A quién lo endosás? —</option>'+proveedores.filter(p=>p.activo!==false).map(p=>`<option value="${p.id}">${esc(p.nombre||"")}${p.cuit?" · "+esc(p.cuit):""}</option>`).join("");
+  document.getElementById("ete-facturas").innerHTML='<div style="font-size:12px;color:var(--tx3)">Elegí el proveedor para ver sus facturas pendientes.</div>';
+  document.getElementById("ete-email").value="";document.getElementById("ete-enviar").checked=true;
+  document.getElementById("ete-ctas-wrap").style.display="none";
+  document.getElementById("ete-btn").disabled=true;
+  openModal("modal-et-end");
+}
+async function etProvCambio(){
+  const c=echeqsTer.find(x=>x.id===_etEndosoId);
+  const prov=proveedores.find(p=>p.id===document.getElementById("ete-prov").value);
+  const box=document.getElementById("ete-facturas");
+  document.getElementById("ete-btn").disabled=!prov;
+  document.getElementById("ete-email").value=prov?.email||"";
+  if(!prov||!c){return;}
+  box.innerHTML='<div style="font-size:12px;color:var(--tx3)">Buscando facturas…</div>';
+  const cuit=String(prov.cuit||"").replace(/\D/g,"");
+  let fs=await sb(`comprobantes_compra?sociedad=eq.${c.sociedad}&estado=in.(pendiente,revisado)&select=*&order=fecha.asc`).catch(()=>[]);
+  fs=fs.filter(f=>!f.tipo?.startsWith("NC")&&(f.proveedor_maestro_id===prov.id||(cuit&&String(f.cuit||"").replace(/\D/g,"")===cuit)));
+  _etFacturas=fs;
+  const monto=_r2(c.monto);
+  box.innerHTML=fs.map(f=>{
+    const saldo=saldoComp(f),ok=saldo+0.01>=monto;
+    return`<label style="display:flex;gap:8px;align-items:flex-start;padding:7px 9px;border:1px solid var(--b);border-radius:8px;margin-bottom:6px;font-size:12px;${ok?"":"opacity:.55"}">
+      <input type="radio" name="ete-fact" value="${f.id}" ${ok?"":"disabled"} onchange="etModoCambio()"><div><b>Fact. ${esc(f.tipo||"")} ${esc(f.numero||"")}</b> · ${etF(f.fecha)} · saldo ${etMonto(saldo)}${ok?"":' <span style="color:var(--am)">(el saldo es menor al cheque: un cheque no se puede partir)</span>'}</div></label>`;
+  }).join("")+`<label style="display:flex;gap:8px;align-items:flex-start;padding:7px 9px;border:1px dashed var(--b);border-radius:8px;font-size:12px">
+      <input type="radio" name="ete-fact" value="" checked onchange="etModoCambio()"><div><b>Sin factura (a cuenta)</b><div style="color:var(--tx3)">Se le paga por adelantado: queda como anticipo abierto hasta que entregue el recibo.</div></div></label>`;
+  etModoCambio();
+}
+function etModoCambio(){
+  const v=document.querySelector("input[name=ete-fact]:checked")?.value||"";
+  document.getElementById("ete-ctas-wrap").style.display=v===""?"":"none";
+  document.getElementById("ete-btn").textContent=v===""?"↪ Endosar a cuenta":"Continuar al pago de la factura →";
+}
+async function etContinuarEndoso(){
+  const c=echeqsTer.find(x=>x.id===_etEndosoId);
+  const prov=proveedores.find(p=>p.id===document.getElementById("ete-prov").value);
+  if(!c||!prov){toast("Elegí el proveedor","err");return;}
+  const fid=document.querySelector("input[name=ete-fact]:checked")?.value||"";
+  if(fid){
+    const f=_etFacturas.find(x=>x.id===fid);
+    if(f&&!comprobantes.find(x=>x.id===fid))comprobantes.push(f);
+    closeModal("modal-et-end");
+    await abrirPagarComp(fid,{preCheque:c.id});
+    return;
+  }
+  await etEndosarACuenta(c,prov);
+}
+async function etEndosarACuenta(c,prov){
+  const btn=document.getElementById("ete-btn");
+  const email=document.getElementById("ete-email").value.trim(),enviar=document.getElementById("ete-enviar").checked;
+  if(enviar&&!/^\S+@\S+\.\S+$/.test(email)){toast("Escribí un email válido o destildá el envío","err");return;}
+  if(typeof _antDisponible==="function"&&!(await _antDisponible()))return;
+  btn.disabled=true;
+  try{
+    const [fresco]=await sb(`cf_cobranzas?id=eq.${c.id}&select=id,estado,monto`);
+    if(!fresco||fresco.estado!=="Pendiente")throw new Error("Ese cheque ya no está en cartera");
+    const sociedad=c.sociedad,fecha=today(),monto=_r2(c.monto),cuit=prov.cuit||null;
+    const nroCh=c.numero_cheque||"s/n";
+    const concepto=`Endoso Echeq N° ${nroCh} (${c.librador||c.remitente||"cliente"})`;
+    const numero=`OP-${fecha.slice(0,7).replace("-","")}-${String(Date.now()).slice(-4)}`;
+    const [op]=await sb("ordenes_pago",{method:"POST",body:JSON.stringify({comprobante_id:null,numero,proveedor:prov.nombre,cuit,tipo_factura:null,sociedad,
+      monto_bruto:monto,base_retencion:0,porcentaje_retencion:0,monto_retencion:0,neto_a_pagar:monto,medio_pago:ET_ENDOSO_MEDIO,
+      observaciones:`Pago a cuenta (sin factura) con ${concepto}. Vence el ${etF(c.fecha_vencimiento)}. Se cancela con el recibo del proveedor.`,fecha_pago:fecha,estado:"pagado",creado_por:loggedUser?.nombre||null,nro_operacion:c.numero_cheque||null})});
+    const [ant]=await sb("anticipos_proveedores",{method:"POST",body:JSON.stringify({sociedad,proveedor_id:prov.id,proveedor:prov.nombre,cuit,fecha,monto,concepto,medio:ET_ENDOSO_MEDIO,nro_operacion:c.numero_cheque||null,orden_pago_id:op.id,estado:"abierto",monto_aplicado:0,cobranza_id:c.id,creado_por:loggedUser?.nombre||null})});
+    await sb(`cf_cobranzas?id=eq.${c.id}`,{method:"PATCH",body:JSON.stringify({estado:"Endosado",endosado_a:prov.nombre,endosado_cuit:String(cuit||"").replace(/\D/g,"")||null,endosado_en:fecha,endoso_comprobante_id:null,updated_at:new Date().toISOString()})});
+    const ad={fecha,sociedad,tipo:"pago_compra",origen:"anticipo",origen_id:ant.id,descripcion:`Pago a cuenta con Echeq de terceros: ${prov.nombre} — ${numero}`,
+      lineas:[{codigo:ANT_CUENTA,debe:monto,desc:"Anticipo a proveedor"},{codigo:"1.1.01.005",haber:monto,desc:`Endoso Echeq N° ${nroCh}`}]};
+    try{
+      const a=await generarAsiento(ad);
+      if(a?._faltantes)mcfAbrir(a._faltantes,ad);
+      else if(a?.id)await sb(`anticipos_proveedores?id=eq.${ant.id}`,{method:"PATCH",body:JSON.stringify({asiento_pago_id:a.id})}).catch(()=>{});
+      else toast("⚠️ Asiento del endoso no generado","err");
+    }catch(e){toast("⚠️ Error asiento: "+(e.message||"").slice(0,60),"err");}
+    if(typeof ordenesGanancias!=="undefined")ordenesGanancias.unshift(op);
+    closeModal("modal-et-end");
+    toast(`✅ Echeq endosado a ${prov.nombre} · queda como anticipo abierto`,"ok");
+    if(enviar)await enviarComprobantePagoProveedor({id:op.id,tipo:"",numero,proveedor:prov.nombre,cuit,sociedad},op,{email});
+    renderEcheqsTerceros();
+    if(typeof antActualizarBadge==="function")antActualizarBadge();
+  }catch(e){toast("Error: "+(e.message||e),"err");}
+  finally{btn.disabled=false;}
+}
+
 /* ══ CURSO SIN CONEXIÓN (12 Oct 2026) ══
    Exporta un curso a un Word (.docx) editable y lo vuelve a leer para comparar los cambios antes de aplicarlos.
    El .docx se arma a mano con JSZip (sin IA) y se lee de su document.xml; lleva una "foto" del curso al exportar
@@ -27932,6 +28208,7 @@ async function eliminarAnticipo(id){
     otros.forEach(x=>ids.add(x.id));
     for(const aid of ids)await sb(`asientos_contables?id=eq.${aid}`,{method:"PATCH",body:JSON.stringify({anulado:true})});
     if(a.orden_pago_id)await sb(`ordenes_pago?id=eq.${a.orden_pago_id}`,{method:"DELETE"});
+    if(a.cobranza_id)await sb(`cf_cobranzas?id=eq.${a.cobranza_id}`,{method:"PATCH",body:JSON.stringify({estado:"Pendiente",endosado_a:null,endosado_cuit:null,endosado_en:null,endoso_comprobante_id:null,updated_at:new Date().toISOString()})}).catch(()=>{});
     await sb(`anticipos_proveedores?id=eq.${a.id}`,{method:"DELETE"});
     if(typeof ordenesGanancias!=="undefined")ordenesGanancias=ordenesGanancias.filter(o=>o.id!==a.orden_pago_id);
     toast("🗑 Anticipo eliminado. Podés volver a cargarlo","ok");
