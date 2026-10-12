@@ -4696,6 +4696,14 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg"><label class="fl">Medios de pago *</label><div id="pagar-comp-lineas"></div></div>
     <div class="fg"><label class="fl">Fecha de pago</label><input class="fi" id="pagar-comp-fecha" type="date"></div>
     <div class="fg"><label class="fl">Observaciones</label><input class="fi" id="pagar-comp-obs" type="text" placeholder="Opcional — referencia, CBU, etc."></div>
+    <div id="pagar-comp-aviso-wrap" style="border:1px solid var(--b);border-radius:8px;padding:8px 10px">
+      <label style="font-size:12px;display:flex;gap:6px;align-items:center;margin-bottom:6px;font-weight:600"><input type="checkbox" id="pagar-comp-enviar"> ✉️ Avisar al proveedor por mail (detalle del pago)</label>
+      <div class="g2">
+        <div class="fg"><label class="fl">Email del proveedor</label><input class="fi" id="pagar-comp-email" type="email" placeholder="proveedor@correo.com"></div>
+        <div class="fg"><label class="fl">Comprobante de pago (PDF o foto) — opcional</label><input class="fi" id="pagar-comp-comprobante" type="file" accept="application/pdf,image/*"></div>
+      </div>
+      <div style="font-size:11px;color:var(--tx3)">No hay orden de pago: el mail dice cómo se pagó (cada medio, con el detalle de los Echeq) y adjunta lo que subas.</div>
+    </div>
   </div>
   <div id="pagar-comp-hint" style="display:none;background:rgba(139,92,246,.10);border:1px solid rgba(139,92,246,.3);border-radius:8px;padding:7px 10px;font-size:11px;color:var(--tx2);margin:8px 0">Factura A: si corresponde retención de Ganancias, generá una orden de pago en lugar de pagar directo.</div>
   <div class="ma"><button class="bc" onclick="closeModal('modal-pagar-comp')">Cancelar</button><button class="bk" onclick="confirmarPagoComp()">💳 Confirmar pago</button></div>
@@ -26375,7 +26383,7 @@ function renderComprobantes(){
         ${c.archivo_url?`<button onclick="window.open('${c.archivo_url}','_blank')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:10px;padding:3px 7px;cursor:pointer" title="Ver archivo">👁</button>`:""}
         <button onclick="editComprobante('${c.id}')" style="background:none;border:1px solid ${faltaDesglose?"rgba(245,158,11,.6)":"var(--b)"};border-radius:5px;color:${faltaDesglose?"#FCD34D":"var(--tx3)"};font-size:10px;padding:3px 7px;cursor:pointer" title="${faltaDesglose?"Completar para Finnegans":"Editar"}">${faltaDesglose?"✏️":"✎"}</button>
         ${c.estado==="revisado"&&!c.tipo?.startsWith("NC")?_accionesPagoHTML(c,true):""}
-        ${c.estado==="pagado"&&!c.tipo?.startsWith("NC")?`<button onclick="reenviarComprobantePago('${c.id}')" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.4);border-radius:5px;color:#A78BFA;font-size:10px;padding:3px 7px;cursor:pointer" title="Reenviar al proveedor el comprobante de pago, la orden de pago y el certificado de retención">✉️ Reenviar</button>`:""}
+        ${(c.estado==="pagado"||_pagoParcial(c))&&!c.tipo?.startsWith("NC")?`<button onclick="reenviarComprobantePago('${c.id}')" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.4);border-radius:5px;color:#A78BFA;font-size:10px;padding:3px 7px;cursor:pointer" title="Reenviar al proveedor el comprobante de pago, la orden de pago y el certificado de retención">✉️ Reenviar</button>`:""}
         ${c.estado==="pendiente"
           ?`<button onclick="marcarEstadoComp('${c.id}','revisado')" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.4);border-radius:5px;color:#059669;font-size:10px;padding:3px 7px;cursor:pointer" title="Marcar como revisado — habilita OP y Finnegans">✓ OK</button>`
           :c.estado==="enviado_finnegans"
@@ -26553,6 +26561,12 @@ async function abrirPagarComp(id,opts={}){
   const pag=_r2(parseFloat(c.monto_pagado)||0);
   document.getElementById("pagar-comp-resumen").innerHTML=`<b>${esc(c.proveedor||"")}</b> · ${esNC?"NC":"Fact."} ${esc(c.tipo||"")} ${esc(c.numero||"")} · Total <b>${_extM(tot)}</b>${pag>0?` · Ya pagado <b>${_extM(pag)}</b>`:""} · <b>Saldo ${_extM(saldo)}</b>`;
   document.getElementById("pagar-comp-hint").style.display=(c.tipo==="A")?"":"none";
+  if(!proveedores.length)proveedores=await sb("proveedores?select=*&order=nombre.asc").catch(()=>[]);
+  const provC=_provDeComprobante(c);
+  document.getElementById("pagar-comp-email").value=provC?.email||"";
+  document.getElementById("pagar-comp-enviar").checked=!!provC?.email;
+  document.getElementById("pagar-comp-comprobante").value="";
+  document.getElementById("pagar-comp-aviso-wrap").style.display=esNC?"none":"";
   await plIniciar("pagar-comp",{sociedad:c.sociedad||"",total:saldo,exacto:false,unaLinea:esNC,preCheque:opts.preCheque});
   openModal("modal-pagar-comp");
 }
@@ -26809,6 +26823,14 @@ async function confirmarPagoComp(){
     if(mo?.es_personal&&!confirm(`⚠️ "${l.medio}" está marcado como cuenta/tarjeta PERSONAL, no de la empresa.\n\n¿Registrar igual este pago con ese medio?`))return;
   }
   const suma=_r2(lineas.reduce((s,l)=>s+l.monto,0));
+  // Aviso al proveedor (opcional): el pago directo no tiene orden de pago, el mail detalla cada medio
+  const enviarMail=!esNC&&!!document.getElementById("pagar-comp-enviar")?.checked;
+  const emailProv=(document.getElementById("pagar-comp-email")?.value||"").trim();
+  if(enviarMail&&!/^\S+@\S+\.\S+$/.test(emailProv)){toast("Escribí un email válido del proveedor o destildá el envío del mail","err");return;}
+  const saldoAntes=esNC?0:saldoComp(c);
+  let compPago=null;
+  const fileComp=document.getElementById("pagar-comp-comprobante")?.files?.[0]||null;
+  if(enviarMail&&fileComp){try{compPago=await _leerComprobantePago(fileComp);}catch(e){toast(e.message,"err");return;}}
   try{
     const fresco=await _pagoFresco(id);
     if(fresco?.estado==="pagado"){
@@ -26834,6 +26856,14 @@ async function confirmarPagoComp(){
     }
     closeModal("modal-pagar-comp");
     renderComprobantes();updateCompStats();
+    if(enviarMail){
+      const echeqFiles=[];
+      for(const l of lineas)if(l.tipo==="echeq"&&l.echeq?.file){try{echeqFiles.push(await _leerComprobantePago(l.echeq.file));}catch(e){}}
+      let dl=null;try{dl=await _descriptoresLineas(c,lineas);}catch(e){}
+      const refPago=`Fact. ${c.tipo||""} ${c.numero||""}`.trim();
+      const opMail={numero:refPago,neto_a_pagar:suma,fecha_pago:fecha,sociedad:c.sociedad,monto_retencion:0,medio_pago:lineas.map(_nombreMedioLinea).join(" + ")};
+      enviarComprobantePagoProveedor(c,opMail,{email:emailProv,comprobante:compPago,echeqFiles,lineas:dl,saldo:_r2(Math.max(0,saldoAntes-suma)),sinOP:true});
+    }
     if(cfTab==="pendientes")renderCFPendientes();
   }catch(e){toast("Error: "+e.message,"err");}
 }
@@ -27435,9 +27465,8 @@ async function _descriptoresLineas(c,lineas){
   }
   return out;
 }
-async function _descriptoresDeOrden(op){
-  const rows=await sb(`comprobante_pagos?orden_pago_id=eq.${op.id}&select=*&order=created_at`).catch(()=>[]);
-  if(!rows.length)return null;
+async function _descriptoresDeFilas(rows){
+  if(!rows||!rows.length)return null;
   const ids=a=>[...new Set(a.filter(Boolean))];
   const eIds=ids(rows.map(r=>r.echeq_propio_id)),cIds=ids(rows.map(r=>r.cobranza_id));
   const ech=eIds.length?await sb(`echeqs_propios?id=in.(${eIds.join(",")})&select=*`).catch(()=>[]):[];
@@ -27460,6 +27489,10 @@ async function _descriptoresDeOrden(op){
   });
   return{lineas,storage};
 }
+async function _descriptoresDeOrden(op){
+  const rows=await sb(`comprobante_pagos?orden_pago_id=eq.${op.id}&select=*&order=created_at`).catch(()=>[]);
+  return _descriptoresDeFilas(rows);
+}
 async function enviarComprobantePagoProveedor(c,op,extra={}){
   try{
     const prov=_provDeComprobante(c);
@@ -27477,7 +27510,7 @@ async function enviarComprobantePagoProveedor(c,op,extra={}){
       return;
     }
     const sinPrefijo=s=>s&&s.startsWith("data:")?s.slice(s.indexOf(",")+1):s;
-    const pdfOP=sinPrefijo(await generarPDFOrdenPago(op,true));
+    const pdfOP=extra.sinOP?null:sinPrefijo(await generarPDFOrdenPago(op,true));
     const cert=parseFloat(op.monto_retencion)>0?sinPrefijo(await generarPDFCertificadoRetencion(op,c,true)):null;
     const ech=!lineas&&_pagoMedioTipo(op.medio_pago)==="echeq"?await _echeqDeOrden(op):null;
     const ech1=lineas&&lineas.length===1&&lineas[0].tipo==="echeq"?lineas[0].echeq:null;
@@ -27487,7 +27520,7 @@ async function enviarComprobantePagoProveedor(c,op,extra={}){
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
       body:JSON.stringify({email,proveedor:c.proveedor,numero:op.numero,neto:op.neto_a_pagar,fecha:op.fecha_pago,sociedad:op.sociedad,retencion:parseFloat(op.monto_retencion)||0,pdf_base64:pdfOP,certificado_base64:cert,comprobante_pago:comp||null,
         echeq:e?{numero:e.numero,id_cheque:e.id_cheque,tipo_cheque:e.tipo_cheque,fecha_emision:e.fecha_emision,fecha_pago:e.fecha_pago,beneficiario:e.beneficiario}:null,
-        medios:lineas,adjuntos_extra:files.length?files:null,adjuntos_storage:extra.storage&&extra.storage.length?extra.storage:null,
+        directo:!!extra.sinOP,medios:lineas,adjuntos_extra:files.length?files:null,adjuntos_storage:extra.storage&&extra.storage.length?extra.storage:null,
         comprobante_storage_path:(!comp&&extra.comprobanteStoragePath)||null,saldo_pendiente:extra.saldo>0?extra.saldo:0})
     });
     const json=await res.json();
@@ -27505,7 +27538,7 @@ async function enviarComprobantePagoProveedor(c,op,extra={}){
       await sb(`proveedores?id=eq.${prov.id}`,{method:"PATCH",body:JSON.stringify({email:emailNuevo})}).catch(()=>{});prov.email=emailNuevo;
     }
     const nCheq=lineas?lineas.filter(l=>l.tipo==="echeq"||l.tipo==="endoso").length:(ech?1:0);
-    toast(email?`✉️ Enviado a ${email}: ${lineas&&lineas.length>1?`detalle de los ${lineas.length} medios de pago${nCheq?` y de ${nCheq===1?"el Echeq":"los "+nCheq+" Echeq"}`:""}`:(ech||ech1)?"detalle del Echeq":"comprobante de pago"}${cert?", orden de pago y certificado de retención":" y orden de pago"}`:"📎 Comprobante de pago guardado","ok");
+    toast(email?`✉️ Enviado a ${email}: ${lineas&&lineas.length>1?`detalle de los ${lineas.length} medios de pago${nCheq?` y de ${nCheq===1?"el Echeq":"los "+nCheq+" Echeq"}`:""}`:(ech||ech1)?"detalle del Echeq":"comprobante de pago"}${cert?", orden de pago y certificado de retención":extra.sinOP?"":" y orden de pago"}`:"📎 Comprobante de pago guardado","ok");
     return true;
   }catch(e){
     const sinConexion=/failed to fetch|networkerror|load failed/i.test(e.message||"");
@@ -28317,13 +28350,20 @@ async function reenviarComprobantePago(compId){
   const c=comprobantes.find(x=>x.id===compId);
   if(!c)return;
   const ops=await sb(`ordenes_pago?comprobante_id=eq.${compId}&estado=eq.pagado&select=*&order=fecha_pago.asc,created_at.asc`).catch(()=>[]);
-  if(!ops.length){toast("Esta factura se pagó sin orden de pago: no hay una orden para enviar","inf");return;}
-  _rpOPs=ops;_rpOP=ops[ops.length-1];_rpComp=c;
+  // Pagos directos (sin orden de pago): cada acto de pago es un «evento» con sus líneas
+  const filas=await sb(`comprobante_pagos?comprobante_id=eq.${compId}&orden_pago_id=is.null&select=*&order=created_at`).catch(()=>[]);
+  const eventos=new Map();
+  filas.forEach(r=>{const k=r.evento_id||r.id;if(!eventos.has(k))eventos.set(k,[]);eventos.get(k).push(r);});
+  const directos=[...eventos.entries()].map(([k,rs])=>({id:"ev:"+k,directo:true,filas:rs,numero:`Fact. ${c.tipo||""} ${c.numero||""}`.trim(),
+    neto_a_pagar:_r2(rs.reduce((s,r)=>s+(parseFloat(r.monto)||0),0)),monto_retencion:0,fecha_pago:rs[0].fecha,sociedad:c.sociedad||rs[0].sociedad,medio_pago:[...new Set(rs.map(r=>r.medio))].join(" + ")}));
+  const items=[...ops,...directos].sort((a,b)=>String(a.fecha_pago||"").localeCompare(String(b.fecha_pago||"")));
+  if(!items.length){toast("Esta factura todavía no tiene pagos registrados para enviar","inf");return;}
+  _rpOPs=items;_rpOP=items[items.length-1];_rpComp=c;
   const prov=_provDeComprobante(c);
   const sel=document.getElementById("rp-op");
-  sel.innerHTML=ops.map(o=>`<option value="${o.id}">${esc(o.numero)} · ${_extM(o.neto_a_pagar)}${o.fecha_pago?" · "+String(o.fecha_pago).slice(0,10).split("-").reverse().join("/"):""}</option>`).join("");
+  sel.innerHTML=items.map(o=>`<option value="${o.id}">${o.directo?"Pago directo":esc(o.numero)} · ${_extM(o.neto_a_pagar)}${o.fecha_pago?" · "+String(o.fecha_pago).slice(0,10).split("-").reverse().join("/"):""}</option>`).join("");
   sel.value=_rpOP.id;
-  document.getElementById("rp-op-wrap").style.display=ops.length>1?"":"none";
+  document.getElementById("rp-op-wrap").style.display=items.length>1?"":"none";
   document.getElementById("rp-proveedor").textContent=c.proveedor||"";
   document.getElementById("rp-email").value=prov?.email||"";
   rpCambioOP();
@@ -28332,10 +28372,11 @@ async function reenviarComprobantePago(compId){
 function rpCambioOP(){
   const id=document.getElementById("rp-op").value;
   _rpOP=_rpOPs.find(o=>o.id===id)||_rpOP;
-  document.getElementById("rp-numero").textContent=_rpOP.numero||"";
+  document.getElementById("rp-numero").textContent=_rpOP.directo?`Pago de ${_rpOP.numero}`:(_rpOP.numero||"");
   document.getElementById("rp-comprobante").value="";
   const guardado=_rpOP.comprobante_pago_path?" El comprobante de pago ya guardado se adjunta solo; si subís uno nuevo, reemplaza al guardado.":"";
-  document.getElementById("rp-detalle").textContent=(parseFloat(_rpOP.monto_retencion)>0?"Se envían la orden de pago y el certificado de retención, más el comprobante de pago.":"Se envía la orden de pago, más el comprobante de pago si lo tenés.")+guardado+" Si el pago tuvo varios medios o Echeq, el mail los detalla y adjunta el detalle de cada Echeq guardado.";
+  const base=_rpOP.directo?"Se envía el detalle del pago (sin orden de pago), más el comprobante de pago si lo adjuntás.":(parseFloat(_rpOP.monto_retencion)>0?"Se envían la orden de pago y el certificado de retención, más el comprobante de pago.":"Se envía la orden de pago, más el comprobante de pago si lo tenés.");
+  document.getElementById("rp-detalle").textContent=base+guardado+" Si el pago tuvo varios medios o Echeq, el mail los detalla y adjunta el detalle de cada Echeq guardado.";
 }
 async function confirmarReenvioPago(){
   if(!_rpOP||!_rpComp)return;
@@ -28346,9 +28387,9 @@ async function confirmarReenvioPago(){
     const f=document.getElementById("rp-comprobante").files?.[0]||null;
     let comp=null;
     if(f){try{comp=await _leerComprobantePago(f);}catch(e){toast(e.message,"err");return;}}
-    const desc=await _descriptoresDeOrden(_rpOP);
+    const desc=_rpOP.directo?await _descriptoresDeFilas(_rpOP.filas):await _descriptoresDeOrden(_rpOP);
     const saldo=saldoComp(_rpComp);
-    const ok=await enviarComprobantePagoProveedor(_rpComp,{..._rpOP,numero_comp:_rpComp.numero},{email,comprobante:comp,lineas:desc?.lineas,storage:desc?.storage,comprobanteStoragePath:_rpOP.comprobante_pago_path||null,saldo});
+    const ok=await enviarComprobantePagoProveedor(_rpComp,{..._rpOP,numero_comp:_rpComp.numero},{email,comprobante:comp,lineas:desc?.lineas,storage:desc?.storage,comprobanteStoragePath:_rpOP.comprobante_pago_path||null,saldo,sinOP:!!_rpOP.directo});
     if(ok)closeModal("modal-reenviar-pago");
   }finally{btn.disabled=false;btn.textContent="✉️ Enviar";}
 }

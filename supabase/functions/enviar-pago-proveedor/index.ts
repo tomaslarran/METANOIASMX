@@ -22,7 +22,9 @@ serve(async (req) => {
 
   try {
     const { email, proveedor, numero, neto, fecha, sociedad, retencion, pdf_base64, certificado_base64, comprobante_pago, echeq,
-      medios, adjuntos_extra, adjuntos_storage, comprobante_storage_path, saldo_pendiente } = await req.json();
+      medios, adjuntos_extra, adjuntos_storage, comprobante_storage_path, saldo_pendiente, directo } = await req.json();
+    // Pago directo (sin orden de pago): «numero» es la referencia de la factura, no el de una orden
+    const lblOP = directo ? "Pago de" : "Orden de pago";
     if (!email && !comprobante_pago) return new Response(JSON.stringify({ error: "email o comprobante requerido" }), { status: 400, headers: cors });
     const admin = () => createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -99,7 +101,7 @@ serve(async (req) => {
             ${multi ? `<p style="color:#555">Adjuntamos:</p>` : ""}
             <ul style="color:#555;line-height:1.7">${lista}</ul>
             <div style="background:white;border-left:4px solid #4a2eb4;padding:16px 20px;margin:20px 0;border-radius:4px">
-              <strong style="font-size:16px;color:#1a0a5e">${esEcheq ? `Echeq N° ${esc(echeq.numero)} · ` : ""}Orden de pago ${esc(numero)}</strong><br>
+              <strong style="font-size:16px;color:#1a0a5e">${esEcheq ? `Echeq N° ${esc(echeq.numero)} · ` : ""}${lblOP} ${esc(numero)}</strong><br>
               <span style="color:#888;font-size:14px">${esc(fecha)} · ${esEcheq ? "Importe del Echeq" : "Neto pagado"}: $${montoFmt}${Number(retencion) > 0 ? ` · Retención de Ganancias: $${retFmt}` : ""}</span>
               ${esEcheq ? `<br><span style="color:#555;font-size:14px">${echeq.fecha_emision ? `Emitido el ${esc(fFmt(echeq.fecha_emision))} · ` : ""}<strong>Fecha de pago: ${esc(fFmt(echeq.fecha_pago))}</strong>${echeq.beneficiario ? ` · A la orden de ${esc(echeq.beneficiario)}` : ""}${echeq.id_cheque ? `<br>Id del cheque: ${esc(echeq.id_cheque)}` : ""}</span>` : ""}
             </div>
@@ -149,8 +151,9 @@ serve(async (req) => {
         from: `"Metanoia SMX" <${Deno.env.get("SMTP_USER")}>`,
         to: email,
         cc: copia && copia.toLowerCase() !== String(email).trim().toLowerCase() ? copia : undefined,
-        subject: esEcheq ? `🧾 Pago con Echeq N° ${echeq.numero} — Orden de pago ${numero || ""} — Metanoia SMX`
-          : multi ? `🧾 Pago con ${lineas.length} medios — Orden de pago ${numero || ""} — Metanoia SMX`
+        subject: esEcheq ? `🧾 Pago con Echeq N° ${echeq.numero} — ${lblOP} ${numero || ""} — Metanoia SMX`
+          : multi ? `🧾 Pago con ${lineas.length} medios — ${lblOP} ${numero || ""} — Metanoia SMX`
+          : directo ? `📄 Pago de ${numero || "tu comprobante"} — Metanoia SMX`
           : `📄 Comprobante de pago ${numero || ""} — Metanoia SMX`,
         html,
         attachments,
