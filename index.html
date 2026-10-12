@@ -4759,6 +4759,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 <div class="modal" style="max-width:440px">
   <div class="mt">✉️ Reenviar comprobante de pago <button class="mt-close" onclick="closeModal('modal-reenviar-pago')">✕</button></div>
   <div style="font-size:13px;margin-bottom:10px"><b id="rp-numero"></b> · <span id="rp-proveedor"></span></div>
+  <div class="fg" id="rp-op-wrap" style="display:none"><label class="fl">Orden de pago a reenviar (esta factura tiene varias)</label><select class="fi" id="rp-op" onchange="rpCambioOP()"></select></div>
   <div class="fg"><label class="fl">Email del proveedor *</label><input class="fi" type="email" id="rp-email" placeholder="proveedor@correo.com"></div>
   <div class="fg"><label class="fl">Comprobante de pago (PDF o foto)</label><input class="fi" type="file" id="rp-comprobante" accept="application/pdf,image/*"></div>
   <div id="rp-detalle" style="font-size:11px;color:var(--tx3);margin-bottom:10px"></div>
@@ -27243,7 +27244,11 @@ async function confirmarPagarOP(){
     renderComprobantes();updateCompStats();
     if(cfTab==="pendientes")renderCFPendientes();
     if(curPage==="sueldos")renderSueldos();
-    enviarComprobantePagoProveedor(c,{...op,...patch,nro_operacion:nroOp||op.nro_operacion||"",numero_comp:c.numero},{email:enviarMail?emailProv:"",comprobante:compPago,echeqFiles});
+    (async()=>{
+      const opMail={...op,...patch,nro_operacion:nroOp||op.nro_operacion||"",numero_comp:c.numero};
+      let dl=null;try{dl=await _descriptoresLineas(c,lineas);}catch(e){}
+      enviarComprobantePagoProveedor(c,opMail,{email:enviarMail?emailProv:"",comprobante:compPago,echeqFiles,lineas:dl,saldo:completa?0:saldo});
+    })();
     _opPagar=null;
   }catch(e){toast("Error: "+e.message,"err");}
 }
@@ -27417,12 +27422,56 @@ async function generarPDFCertificadoRetencion(op,c,soloRetornar){
 }
 
 // Envía al proveedor el comprobante de pago + la orden de pago + el certificado de retención (si hubo), y guarda el comprobante
+async function _descriptoresLineas(c,lineas){
+  const out=[];
+  for(const l of lineas){
+    const d={tipo:l.tipo,medio:l.medio,etiqueta:_nombreMedioLinea(l),monto:_r2(l.monto),nro_operacion:l.nroOp||null};
+    if(l.tipo==="echeq"&&l.echeq){const e=l.echeq;d.echeq={numero:e.numero,id_cheque:e.id_cheque,tipo_cheque:e.tipo_cheque||e.tipo,fecha_emision:e.fecha_emision,fecha_pago:e.fecha_pago,beneficiario:e.beneficiario||c.proveedor};}
+    if(l.tipo==="endoso"&&l.cobranzaId){
+      const [ch]=await sb(`cf_cobranzas?id=eq.${l.cobranzaId}&select=*`).catch(()=>[]);
+      if(ch)d.endoso={numero:ch.numero_cheque,librador:ch.librador||ch.remitente,banco:ch.banco_emisor,fecha_pago:ch.fecha_vencimiento};
+    }
+    out.push(d);
+  }
+  return out;
+}
+async function _descriptoresDeOrden(op){
+  const rows=await sb(`comprobante_pagos?orden_pago_id=eq.${op.id}&select=*&order=created_at`).catch(()=>[]);
+  if(!rows.length)return null;
+  const ids=a=>[...new Set(a.filter(Boolean))];
+  const eIds=ids(rows.map(r=>r.echeq_propio_id)),cIds=ids(rows.map(r=>r.cobranza_id));
+  const ech=eIds.length?await sb(`echeqs_propios?id=in.(${eIds.join(",")})&select=*`).catch(()=>[]):[];
+  const cob=cIds.length?await sb(`cf_cobranzas?id=in.(${cIds.join(",")})&select=*`).catch(()=>[]):[];
+  const extDe=p=>String(p||"").split(".").pop().toLowerCase().replace(/[^a-z0-9]/g,"")||"pdf";
+  const lineas=[],storage=[];
+  rows.forEach(r=>{
+    const d={tipo:r.tipo_medio,medio:r.medio,etiqueta:r.medio,monto:_r2(r.monto),nro_operacion:r.nro_operacion||null};
+    const e=ech.find(x=>x.id===r.echeq_propio_id);
+    if(e){
+      d.echeq={numero:e.numero,id_cheque:e.id_cheque,tipo_cheque:e.tipo_cheque,fecha_emision:e.fecha_emision,fecha_pago:e.fecha_pago,beneficiario:e.beneficiario};
+      if(e.pdf_path)storage.push({bucket:"extractos-bancarios",path:e.pdf_path,nombre:`Echeq_${e.numero||"cheque"}.${extDe(e.pdf_path)}`});
+    }
+    const ch=cob.find(x=>x.id===r.cobranza_id);
+    if(ch){
+      d.endoso={numero:ch.numero_cheque,librador:ch.librador||ch.remitente,banco:ch.banco_emisor,fecha_pago:ch.fecha_vencimiento};
+      if(ch.pdf_path)storage.push({bucket:"extractos-bancarios",path:ch.pdf_path,nombre:`Echeq_terceros_${ch.numero_cheque||"cheque"}.${extDe(ch.pdf_path)}`});
+    }
+    lineas.push(d);
+  });
+  return{lineas,storage};
+}
 async function enviarComprobantePagoProveedor(c,op,extra={}){
   try{
     const prov=_provDeComprobante(c);
     const emailNuevo=extra.email!==undefined?extra.email:(prov?.email||"");
     const email=emailNuevo||"";
-    const hayComp=!!extra.comprobante;
+    // Pago en varias líneas: el mail detalla cada medio y adjunta el detalle de cada Echeq
+    const lineas=extra.lineas&&extra.lineas.length?extra.lineas:null;
+    const files=[...(extra.echeqFiles||[])];
+    let comp=extra.comprobante||null;
+    const soloCheques=!!lineas&&lineas.every(l=>l.tipo==="echeq"||l.tipo==="endoso");
+    if(!comp&&files.length&&(!lineas||soloCheques))comp=files.shift();
+    const hayComp=!!comp;
     if(!email&&!hayComp){
       if(extra.email===undefined)toast(`ℹ️ "${c.proveedor||"Proveedor"}" no tiene email cargado — no se pudo enviar el comprobante automáticamente`,"inf");
       return;
@@ -27430,11 +27479,16 @@ async function enviarComprobantePagoProveedor(c,op,extra={}){
     const sinPrefijo=s=>s&&s.startsWith("data:")?s.slice(s.indexOf(",")+1):s;
     const pdfOP=sinPrefijo(await generarPDFOrdenPago(op,true));
     const cert=parseFloat(op.monto_retencion)>0?sinPrefijo(await generarPDFCertificadoRetencion(op,c,true)):null;
-    const ech=_pagoMedioTipo(op.medio_pago)==="echeq"?await _echeqDeOrden(op):null;
+    const ech=!lineas&&_pagoMedioTipo(op.medio_pago)==="echeq"?await _echeqDeOrden(op):null;
+    const ech1=lineas&&lineas.length===1&&lineas[0].tipo==="echeq"?lineas[0].echeq:null;
+    const e=ech||ech1;
     const res=await fetch(`${SB}/functions/v1/enviar-pago-proveedor`,{
       method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},
-      body:JSON.stringify({email,proveedor:c.proveedor,numero:op.numero,neto:op.neto_a_pagar,fecha:op.fecha_pago,sociedad:op.sociedad,retencion:parseFloat(op.monto_retencion)||0,pdf_base64:pdfOP,certificado_base64:cert,comprobante_pago:extra.comprobante||null,echeq:ech?{numero:ech.numero,id_cheque:ech.id_cheque,tipo_cheque:ech.tipo_cheque,fecha_emision:ech.fecha_emision,fecha_pago:ech.fecha_pago,beneficiario:ech.beneficiario}:null})
+      body:JSON.stringify({email,proveedor:c.proveedor,numero:op.numero,neto:op.neto_a_pagar,fecha:op.fecha_pago,sociedad:op.sociedad,retencion:parseFloat(op.monto_retencion)||0,pdf_base64:pdfOP,certificado_base64:cert,comprobante_pago:comp||null,
+        echeq:e?{numero:e.numero,id_cheque:e.id_cheque,tipo_cheque:e.tipo_cheque,fecha_emision:e.fecha_emision,fecha_pago:e.fecha_pago,beneficiario:e.beneficiario}:null,
+        medios:lineas,adjuntos_extra:files.length?files:null,adjuntos_storage:extra.storage&&extra.storage.length?extra.storage:null,
+        comprobante_storage_path:(!comp&&extra.comprobanteStoragePath)||null,saldo_pendiente:extra.saldo>0?extra.saldo:0})
     });
     const json=await res.json();
     if(!res.ok||json.error)throw new Error(json.error||"Error desconocido");
@@ -27450,7 +27504,8 @@ async function enviarComprobantePagoProveedor(c,op,extra={}){
     if(email&&prov&&emailNuevo&&prov.email!==emailNuevo){
       await sb(`proveedores?id=eq.${prov.id}`,{method:"PATCH",body:JSON.stringify({email:emailNuevo})}).catch(()=>{});prov.email=emailNuevo;
     }
-    toast(email?`✉️ Enviado a ${email}: ${ech?"detalle del Echeq":"comprobante de pago"}${cert?", orden de pago y certificado de retención":" y orden de pago"}`:"📎 Comprobante de pago guardado","ok");
+    const nCheq=lineas?lineas.filter(l=>l.tipo==="echeq"||l.tipo==="endoso").length:(ech?1:0);
+    toast(email?`✉️ Enviado a ${email}: ${lineas&&lineas.length>1?`detalle de los ${lineas.length} medios de pago${nCheq?` y de ${nCheq===1?"el Echeq":"los "+nCheq+" Echeq"}`:""}`:(ech||ech1)?"detalle del Echeq":"comprobante de pago"}${cert?", orden de pago y certificado de retención":" y orden de pago"}`:"📎 Comprobante de pago guardado","ok");
     return true;
   }catch(e){
     const sinConexion=/failed to fetch|networkerror|load failed/i.test(e.message||"");
@@ -28181,7 +28236,8 @@ async function reenviarAnticipo(id){
   if(!op){toast("No encuentro la orden de pago de este anticipo","err");return;}
   if(!proveedores.length)proveedores=await sb("proveedores?select=*&order=nombre.asc").catch(()=>[]);
   const prov=proveedores.find(x=>x.id===a.proveedor_id);
-  _rpOP=op;_rpComp={id:op.id,tipo:"",numero:op.numero,proveedor:a.proveedor,cuit:a.cuit,sociedad:a.sociedad};
+  _rpOP=op;_rpOPs=[op];_rpComp={id:op.id,tipo:"",numero:op.numero,proveedor:a.proveedor,cuit:a.cuit,sociedad:a.sociedad};
+  document.getElementById("rp-op-wrap").style.display="none";
   document.getElementById("rp-numero").textContent=op.numero||"";
   document.getElementById("rp-proveedor").textContent=a.proveedor||"";
   document.getElementById("rp-email").value=prov?.email||"";
@@ -28256,20 +28312,30 @@ async function confirmarReciboAnticipo(){
 }
 
 // Reenviar el mail de una factura ya pagada con orden de pago (por ejemplo si falló el envío)
-let _rpOP=null,_rpComp=null;
+let _rpOP=null,_rpComp=null,_rpOPs=[];
 async function reenviarComprobantePago(compId){
   const c=comprobantes.find(x=>x.id===compId);
   if(!c)return;
-  const ops=await sb(`ordenes_pago?comprobante_id=eq.${compId}&estado=eq.pagado&select=*`).catch(()=>[]);
+  const ops=await sb(`ordenes_pago?comprobante_id=eq.${compId}&estado=eq.pagado&select=*&order=fecha_pago.asc,created_at.asc`).catch(()=>[]);
   if(!ops.length){toast("Esta factura se pagó sin orden de pago: no hay una orden para enviar","inf");return;}
-  _rpOP=ops[0];_rpComp=c;
+  _rpOPs=ops;_rpOP=ops[ops.length-1];_rpComp=c;
   const prov=_provDeComprobante(c);
-  document.getElementById("rp-numero").textContent=_rpOP.numero||"";
+  const sel=document.getElementById("rp-op");
+  sel.innerHTML=ops.map(o=>`<option value="${o.id}">${esc(o.numero)} · ${_extM(o.neto_a_pagar)}${o.fecha_pago?" · "+String(o.fecha_pago).slice(0,10).split("-").reverse().join("/"):""}</option>`).join("");
+  sel.value=_rpOP.id;
+  document.getElementById("rp-op-wrap").style.display=ops.length>1?"":"none";
   document.getElementById("rp-proveedor").textContent=c.proveedor||"";
   document.getElementById("rp-email").value=prov?.email||"";
-  document.getElementById("rp-comprobante").value="";
-  document.getElementById("rp-detalle").textContent=parseFloat(_rpOP.monto_retencion)>0?"Se envían la orden de pago y el certificado de retención, más el comprobante de pago si lo adjuntás.":"Se envía la orden de pago, más el comprobante de pago si lo adjuntás.";
+  rpCambioOP();
   openModal("modal-reenviar-pago");
+}
+function rpCambioOP(){
+  const id=document.getElementById("rp-op").value;
+  _rpOP=_rpOPs.find(o=>o.id===id)||_rpOP;
+  document.getElementById("rp-numero").textContent=_rpOP.numero||"";
+  document.getElementById("rp-comprobante").value="";
+  const guardado=_rpOP.comprobante_pago_path?" El comprobante de pago ya guardado se adjunta solo; si subís uno nuevo, reemplaza al guardado.":"";
+  document.getElementById("rp-detalle").textContent=(parseFloat(_rpOP.monto_retencion)>0?"Se envían la orden de pago y el certificado de retención, más el comprobante de pago.":"Se envía la orden de pago, más el comprobante de pago si lo tenés.")+guardado+" Si el pago tuvo varios medios o Echeq, el mail los detalla y adjunta el detalle de cada Echeq guardado.";
 }
 async function confirmarReenvioPago(){
   if(!_rpOP||!_rpComp)return;
@@ -28280,7 +28346,9 @@ async function confirmarReenvioPago(){
     const f=document.getElementById("rp-comprobante").files?.[0]||null;
     let comp=null;
     if(f){try{comp=await _leerComprobantePago(f);}catch(e){toast(e.message,"err");return;}}
-    const ok=await enviarComprobantePagoProveedor(_rpComp,{..._rpOP,numero_comp:_rpComp.numero},{email,comprobante:comp});
+    const desc=await _descriptoresDeOrden(_rpOP);
+    const saldo=saldoComp(_rpComp);
+    const ok=await enviarComprobantePagoProveedor(_rpComp,{..._rpOP,numero_comp:_rpComp.numero},{email,comprobante:comp,lineas:desc?.lineas,storage:desc?.storage,comprobanteStoragePath:_rpOP.comprobante_pago_path||null,saldo});
     if(ok)closeModal("modal-reenviar-pago");
   }finally{btn.disabled=false;btn.textContent="✉️ Enviar";}
 }
