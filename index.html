@@ -15180,7 +15180,7 @@ async function _cierreCargar(soc,mes){
   const vacio=()=>[];
   const [asientos,cobertura,comps,compsPag,ops,emps,pagosEmp,prest,extr,bm,cal,veps]=await Promise.all([
     _sbAll(`asientos_contables?sociedad=eq.${soc}&fecha=gte.${D1}&fecha=lte.${D2}&anulado=eq.false&select=id,tipo,fecha,origen,origen_id,descripcion,asientos_movimientos(debe,haber,plan_cuentas(codigo,nombre,tipo))`).catch(vacio),
-    _sbAll(`asientos_contables?anulado=eq.false&origen=in.(comprobante,comprobante_pago,orden_pago,pago_empleado,prestamo_cuota)&select=origen,origen_id`).catch(vacio),
+    _sbAll(`asientos_contables?anulado=eq.false&origen=in.(comprobante,comprobante_pago,orden_pago,pago_empleado,prestamo_cuota,anticipo,anticipo_recibo)&select=origen,origen_id`).catch(vacio),
     sb(`comprobantes_compra?sociedad=eq.${soc}&fecha=gte.${D1}&fecha=lte.${D2}&estado=in.(revisado,pagado)&select=id,proveedor,numero,tipo,total,estado,fecha`).catch(vacio),
     sb(`comprobantes_compra?sociedad=eq.${soc}&estado=eq.pagado&fecha_pago=gte.${D1}&fecha_pago=lte.${D2}&select=id,proveedor,numero,tipo,total,fecha_pago,medio_pago`).catch(vacio),
     sb(`ordenes_pago?sociedad=eq.${soc}&select=id,comprobante_id`).catch(vacio),
@@ -15194,9 +15194,14 @@ async function _cierreCargar(soc,mes){
   ]);
   let cuotas=[];
   if(prest.length)cuotas=await sb(`cf_prestamos_cuotas?prestamo_id=in.(${prest.map(p=>p.id).join(",")})&select=id,prestamo_id,nro_cuota,fecha,fecha_pago,pagada,monto_total`).catch(vacio);
+  // Pagos de facturas (incluye parciales) y anticipos a proveedores
+  const pagosEv=await sb(`comprobante_pagos?sociedad=eq.${soc}&select=id,comprobante_id,orden_pago_id,evento_id,fecha,monto,medio,created_at`).catch(vacio);
+  const idsEv=[...new Set(pagosEv.filter(r=>(r.fecha||"")>=D1&&(r.fecha||"")<=D2).map(r=>r.comprobante_id))];
+  const compsEv=idsEv.length?await sb(`comprobantes_compra?id=in.(${idsEv.join(",")})&select=id,proveedor,numero,tipo,total,monto_pagado,estado`).catch(vacio):[];
+  const anticipos=await sb(`anticipos_proveedores?sociedad=eq.${soc}&select=*`).catch(vacio);
   let cierre=null,sinTabla=false;
   try{cierre=(await sb(`cierres_mensuales?sociedad=eq.${soc}&periodo=eq.${mes}&select=*`))[0]||null;}catch(e){sinTabla=true;}
-  return{soc,mes,D1,D2,asientos,cobertura,comps,compsPag,ops,emps,pagosEmp,prest,cuotas,extr,bm,cal,veps,cierre,sinTabla};
+  return{soc,mes,D1,D2,asientos,cobertura,comps,compsPag,ops,emps,pagosEmp,prest,cuotas,extr,bm,cal,veps,cierre,sinTabla,pagosEv,compsEv,anticipos};
 }
 
 function _cierreResumen(d){
@@ -15261,10 +15266,63 @@ function _cierreChecks(d){
   else add("Facturas de compra contabilizadas","📄","ok",`${d.comps.length} factura${d.comps.length!==1?"s":""} del mes con asiento de devengado · comprobantes ${_extM(totComps)} / asientos ${_extM(res.devengadoProv)}`,
     Math.abs(totComps-res.devengadoProv)>1?[`Diferencia de ${_extM(totComps-res.devengadoProv)} entre el importe de las facturas y lo devengado (revisá notas de crédito o asientos manuales)`]:[]);
 
-  // 5. Pagos de facturas
-  const sinPago=d.compsPag.filter(c=>!(sPagoDir.has(c.id)||d.ops.some(o=>o.comprobante_id===c.id&&sOP.has(o.id))));
-  if(sinPago.length)add("Pagos de facturas contabilizados","💸","alerta",`${sinPago.length} pago${sinPago.length>1?"s":""} sin asiento`,[...lista(sinPago,c=>`${c.proveedor||"?"} · ${c.medio_pago||""} · ${_extM(c.total)}`),"Corré 🔄 Generar históricos en el Libro Diario"]);
-  else add("Pagos de facturas contabilizados","💸","ok",`${d.compsPag.length} pago${d.compsPag.length!==1?"s":""} del mes con asiento`);
+  // 5. Pagos de facturas: cada acto de pago del mes, incluidos los parciales
+  const evMap=new Map();
+  (d.pagosEv||[]).forEach(r=>{const k=r.evento_id||r.id;if(!evMap.has(k))evMap.set(k,[]);evMap.get(k).push(r);});
+  const eventos=[...evMap.values()].map(rs=>({cid:rs[0].comprobante_id,opId:rs[0].orden_pago_id,fecha:rs[0].fecha||"",monto:_r2(rs.reduce((s,r)=>s+(parseFloat(r.monto)||0),0)),medios:[...new Set(rs.map(r=>r.medio).filter(Boolean))].join(" + ")}));
+  const evMes=eventos.filter(e=>e.fecha>=d.D1&&e.fecha<=d.D2);
+  const nomC=id=>{const c=(d.compsEv||[]).find(x=>x.id===id);return c?`${c.proveedor||"?"} · ${c.tipo||""} ${c.numero||""}`:"Factura";};
+  // Un pago con orden de pago tiene su asiento colgado de la orden; un pago directo, del comprobante (uno por cada pago)
+  const sinAsOP=evMes.filter(e=>e.opId&&!sOP.has(e.opId));
+  const directos=eventos.filter(e=>!e.opId);
+  const cntAsDir=id=>d.cobertura.filter(c=>c.origen==="comprobante_pago"&&c.origen_id===id).length;
+  const sinAsDir=[];
+  [...new Set(directos.map(e=>e.cid))].forEach(cid=>{
+    const faltan=directos.filter(e=>e.cid===cid).length-cntAsDir(cid);
+    if(faltan>0)directos.filter(e=>e.cid===cid&&e.fecha>=d.D1&&e.fecha<=d.D2).slice(-faltan).forEach(e=>sinAsDir.push(e));
+  });
+  const sinAsiento=[...sinAsOP,...sinAsDir];
+  // Facturas pagadas antes de los pagos en varias líneas (sin filas en comprobante_pagos): como siempre
+  const idsConEv=new Set(eventos.map(e=>e.cid));
+  const pagLegacy=d.compsPag.filter(c=>!idsConEv.has(c.id));
+  const sinPagoLegacy=pagLegacy.filter(c=>!(sPagoDir.has(c.id)||d.ops.some(o=>o.comprobante_id===c.id&&sOP.has(o.id))));
+  const nPagos=evMes.length+pagLegacy.length,nSin=sinAsiento.length+sinPagoLegacy.length;
+  const parciales=(d.compsEv||[]).filter(c=>c.estado!=="pagado"&&(parseFloat(c.monto_pagado)||0)>0);
+  const subSaldo=lista(parciales,c=>`Saldo pendiente: ${c.proveedor||"?"} · ${c.tipo||""} ${c.numero||""} · queda ${_extM(Math.max(0,Math.abs(parseFloat(c.total)||0)-(parseFloat(c.monto_pagado)||0)))}`,4);
+  if(nSin)add("Pagos de facturas contabilizados","💸","alerta",`${nSin} pago${nSin>1?"s":""} sin asiento`,
+    [...lista(sinAsiento,e=>`${nomC(e.cid)} · ${e.medios} · ${_extM(e.monto)}`),...lista(sinPagoLegacy,c=>`${c.proveedor||"?"} · ${c.medio_pago||""} · ${_extM(c.total)}`),"Corré 🔄 Generar históricos (Impuestos → Libro Diario)",...subSaldo]);
+  else add("Pagos de facturas contabilizados","💸","ok",`${nPagos} pago${nPagos!==1?"s":""} del mes con asiento${parciales.length?` · ${parciales.length} factura${parciales.length!==1?"s":""} con pago parcial pendiente`:""}`,subSaldo);
+
+  // 5b. Anticipos a proveedores: pagos sin factura que se cancelan con un recibo
+  const ants=(d.anticipos||[]).filter(a=>a.estado!=="anulado");
+  if(ants.length){
+    const enMes=f=>(f||"")>=d.D1&&(f||"")<=d.D2;
+    const antMes=ants.filter(a=>enMes(a.fecha));
+    const asAnt=new Set(d.cobertura.filter(c=>c.origen==="anticipo").map(c=>c.origen_id));
+    const sinAsAnt=antMes.filter(a=>!asAnt.has(a.id));
+    const recMes=ants.flatMap(a=>(a.recibos||[]).filter(r=>enMes(r.fecha)).map(r=>({a,r})));
+    const sinAsRec=recMes.filter(x=>!x.r.asiento_id);
+    const abiertos=ants.filter(a=>a.estado==="abierto"&&(a.fecha||"")<=d.D2);
+    const saldoAb=_r2(abiertos.reduce((s,a)=>s+(parseFloat(a.monto)||0)-(parseFloat(a.monto_aplicado)||0),0));
+    // El movimiento del mes en 1.1.05.001 tiene que coincidir con los anticipos pagados (debe) y los recibos cargados (haber)
+    const cta=res.cuentas.find(c=>c.codigo==="1.1.05.001");
+    const pagadoMes=_r2(antMes.reduce((s,a)=>s+(parseFloat(a.monto)||0),0));
+    const recibidoMes=_r2(recMes.reduce((s,x)=>s+(parseFloat(x.r.monto)||0),0));
+    const difD=_r2((cta?.debe||0)-pagadoMes),difH=_r2((cta?.haber||0)-recibidoMes);
+    const limite=new Date(new Date(d.D2+"T00:00:00Z").getTime()-60*86400000).toISOString().slice(0,10);
+    const viejos=abiertos.filter(a=>(a.fecha||"")<limite);
+    const subA=[];
+    if(sinAsAnt.length)subA.push(...lista(sinAsAnt,a=>`Anticipo sin asiento: ${a.proveedor} · ${_extM(a.monto)} (${a.fecha})`));
+    if(sinAsRec.length)subA.push(...lista(sinAsRec,x=>`Recibo sin asiento: ${x.a.proveedor} · recibo ${x.r.numero} · ${_extM(x.r.monto)}`));
+    if(Math.abs(difD)>1||Math.abs(difH)>1)subA.push(`La cuenta 1.1.05.001 se movió ${_extM(cta?.debe||0)} al debe y ${_extM(cta?.haber||0)} al haber, pero los anticipos del mes suman ${_extM(pagadoMes)} y los recibos ${_extM(recibidoMes)}`);
+    if(viejos.length)subA.push(...lista(viejos,a=>`Abierto hace más de 60 días: ${a.proveedor} · ${_extM(a.monto-(a.monto_aplicado||0))} (${a.fecha}) — pedí el recibo`,4));
+    const nAb=abiertos.length;
+    const txt=`${antMes.length} anticipo${antMes.length!==1?"s":""} pagado${antMes.length!==1?"s":""} y ${recMes.length} recibo${recMes.length!==1?"s":""} cargado${recMes.length!==1?"s":""} en el mes · ${nAb} abierto${nAb!==1?"s":""} por ${_extM(saldoAb)} (saldo a favor con proveedores)`;
+    if(!antMes.length&&!recMes.length&&!abiertos.length){/* ese mes no hay nada que controlar */}
+    else if(sinAsAnt.length||sinAsRec.length)add("Anticipos a proveedores","📎","error",txt,subA);
+    else if(Math.abs(difD)>1||Math.abs(difH)>1||viejos.length)add("Anticipos a proveedores","📎","alerta",txt,subA);
+    else add("Anticipos a proveedores","📎",nAb?"info":"ok",txt,nAb?["Se cancelan al cargar el recibo del proveedor (Comprobantes → 📎 Anticipos)."]:[]);
+  }
 
   // 6. Sueldos
   const empIds=new Set(d.emps.map(e=>e.id));
