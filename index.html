@@ -24692,6 +24692,66 @@ async function _echeqRegistrarDebito(e,{fecha,bancoMovId}={}){
   await sb(`echeqs_propios?id=eq.${e.id}`,{method:"PATCH",body:JSON.stringify(patch)});
   Object.assign(e,patch);
 }
+// Anular un Echeq propio emitido (todavía no debitado): se deshace el pago que cubría y la factura vuelve a quedar pendiente.
+//  · Pago con orden de pago de un solo medio: se anula el asiento de la orden y la orden vuelve a «pendiente de pago».
+//  · Pago directo (o varios medios): asiento inverso solo por este Echeq; los otros medios del pago no se tocan.
+//  · Si la orden de pago tiene varios medios, no se anula un Echeq suelto (habría que rehacer la orden).
+async function _reabrirFacturaPorPago(c,quita){
+  const paga=_r2(Math.max(0,(parseFloat(c.monto_pagado)||0)-quita));
+  const restantes=await sb(`comprobante_pagos?comprobante_id=eq.${c.id}&select=medio`).catch(()=>[]);
+  const patch={monto_pagado:paga,updated_at:new Date().toISOString()};
+  if(c.estado==="pagado"){patch.estado="revisado";patch.fecha_pago=null;patch.medio_pago=restantes.length?[...new Set(restantes.map(r=>r.medio).filter(Boolean))].join(" + "):null;}
+  await sb(`comprobantes_compra?id=eq.${c.id}`,{method:"PATCH",body:JSON.stringify(patch)});
+  const loc=(typeof comprobantes!=="undefined"?comprobantes:[]).find(x=>x.id===c.id);if(loc)Object.assign(loc,patch);
+}
+async function echeqAnular(id){
+  const [e]=await sb(`echeqs_propios?id=eq.${id}&select=*`).catch(()=>[]);
+  if(!e)return;
+  if(e.estado!=="emitido"){toast(e.estado==="debitado"?"Ese Echeq ya fue debitado por el banco: no se puede anular":"Solo se puede anular un Echeq pendiente de débito","err");return;}
+  const fila=(await sb(`comprobante_pagos?echeq_propio_id=eq.${id}&select=*`).catch(()=>[]))[0]||null;
+  const opId=e.orden_pago_id||fila?.orden_pago_id||null;
+  const cid=e.comprobante_id||fila?.comprobante_id||null;
+  const [c]=cid?await sb(`comprobantes_compra?id=eq.${cid}&select=*`).catch(()=>[]):[];
+  let op=null;
+  if(opId){
+    [op]=await sb(`ordenes_pago?id=eq.${opId}&select=*`).catch(()=>[]);
+    const filasOP=await sb(`comprobante_pagos?orden_pago_id=eq.${opId}&select=id`).catch(()=>[]);
+    if(filasOP.length>1){toast(`Este Echeq se pagó junto con otros medios en la orden ${op?.numero||""}: no se puede anular solo. Hay que rehacer esa orden.`,"err");return;}
+  }
+  const monto=_r2(e.monto);
+  const msj=`¿Anular el Echeq N° ${e.numero||"s/n"} por ${_extM(monto)}${e.beneficiario?` (a la orden de ${e.beneficiario})`:""}?\n\n`+
+    (c?`Se deshace el pago: ${op?`la orden ${op.numero} vuelve a «pendiente de pago» y `:""}la factura ${c.tipo||""} ${c.numero||""} queda pendiente${op?"":` por ${_extM(monto)} más`}.\n\n`:"")+
+    `Recordá anularlo también en el home banking del banco.`;
+  if(!confirm(msj))return;
+  try{
+    // 1) Contabilidad
+    if(op){
+      const as=await sb(`asientos_contables?anulado=eq.false&origen=eq.orden_pago&origen_id=eq.${opId}&select=id`).catch(()=>[]);
+      for(const a of as)await sb(`asientos_contables?id=eq.${a.id}`,{method:"PATCH",body:JSON.stringify({anulado:true})});
+    }else{
+      const ad={fecha:today(),sociedad:e.sociedad,tipo:"ajuste",origen:"echeq_anulado",origen_id:e.id,descripcion:`Anulación Echeq N° ${e.numero||"s/n"} — ${e.beneficiario||""}`,
+        lineas:[{codigo:ECHEQ_CUENTA_PEND,debe:monto,desc:"Echeq anulado"},{codigo:"2.1.01.001",haber:monto,desc:"Proveedores (se reabre la deuda)"}]};
+      const a=await generarAsiento(ad);
+      if(a?._faltantes){mcfAbrir(a._faltantes,ad);return;}
+      if(!a)throw new Error("No se pudo generar el asiento inverso");
+    }
+    // 2) Línea de pago, factura y orden de pago
+    if(fila)await sb(`comprobante_pagos?id=eq.${fila.id}`,{method:"DELETE"});
+    if(c)await _reabrirFacturaPorPago(c,op?_r2(parseFloat(op.monto_bruto)||monto):monto);   // la orden cancelaba el bruto (neto + retención)
+    if(op){
+      const patch={estado:"borrador",fecha_pago:null,comprobante_pago_path:null};
+      await sb(`ordenes_pago?id=eq.${op.id}`,{method:"PATCH",body:JSON.stringify(patch)});
+      const loc=(typeof ordenesGanancias!=="undefined"?ordenesGanancias:[]).find(x=>x.id===op.id);if(loc)Object.assign(loc,patch);
+    }
+    // 3) El Echeq
+    await sb(`echeqs_propios?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado:"anulado"})});
+    cfCompPagos=null;
+    toast(`↩ Echeq N° ${e.numero||"s/n"} anulado${c?` · la factura ${c.numero||""} volvió a quedar pendiente`:""}`,"ok");
+    renderEcheqs();
+    if(typeof renderComprobantes==="function"){renderComprobantes();updateCompStats();}
+    if(typeof cfTab!=="undefined"&&cfTab==="pendientes"&&typeof renderCFPendientes==="function")renderCFPendientes();
+  }catch(err){toast("No se pudo anular: "+String(err.message||err).slice(0,120),"err");}
+}
 async function echeqMarcarDebitado(id){
   const e=echeqsPropios.find(x=>x.id===id);
   if(!e)return;
@@ -24725,7 +24785,7 @@ async function renderEcheqs(){
         <td style="padding:8px 10px;text-align:center;${venc?"color:var(--am);font-weight:700":"color:var(--tx3)"}">${fmtF(e.fecha_pago)}${venc?" ⚠️":""}</td>
         <td style="padding:8px 10px;text-align:center"><span style="background:${bg};color:${col};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${tx}</span></td>
         <td style="padding:8px 10px;text-align:center"><div style="display:flex;gap:6px;justify-content:center">
-          ${e.estado==="emitido"?`<button onclick="echeqMarcarDebitado('${e.id}')" style="font-size:11px;padding:3px 8px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:var(--gr);border-radius:6px;cursor:pointer;white-space:nowrap">✓ Debitado</button>`:""}
+          ${e.estado==="emitido"?`<button onclick="echeqMarcarDebitado('${e.id}')" style="font-size:11px;padding:3px 8px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:var(--gr);border-radius:6px;cursor:pointer;white-space:nowrap">✓ Debitado</button><button onclick="echeqAnular('${e.id}')" title="Anular el Echeq y deshacer el pago" style="font-size:11px;padding:3px 8px;background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.3);color:var(--re);border-radius:6px;cursor:pointer;white-space:nowrap">↩ Anular</button>`:""}
           ${e.pdf_path?`<button onclick="abrirPdfResumen('${esc(e.pdf_path)}')" style="font-size:11px;padding:3px 8px;background:var(--surf2);border:1px solid var(--b);color:var(--tx3);border-radius:6px;cursor:pointer">📄 PDF</button>`:""}
         </div></td></tr>`;}).join("")}
       </tbody></table></div>`:`<div style="text-align:center;padding:40px;color:var(--tx3)"><div style="font-size:32px;margin-bottom:10px">🧾</div><div style="font-size:14px">Todavía no hay Echeq propios</div><div style="font-size:12px;margin-top:6px">Se registran solos al pagar una factura con un medio de pago tipo Echeq.</div></div>`}`;
@@ -27706,6 +27766,7 @@ async function renderEcheqsTerceros(){
         <td style="padding:8px 10px;text-align:center"><div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
           ${c.estado==="Pendiente"?btn(`etAbrirEndoso('${c.id}')`,"↪ Endosar","Usarlo para pagar a un proveedor","rgba(139,92,246,.16)"):""}
           ${c.estado==="Pendiente"?btn(`abrirRegistrarCobro('${c.id}','cobranza')`,"💰 Cobrar","Depositarlo / registrar el cobro"):""}
+          ${c.estado==="Endosado"?btn(`etDeshacerEndoso('${c.id}')`,"↩ Deshacer endoso","Devolver el cheque a la cartera y deshacer el pago","rgba(239,68,68,.10)"):""}
           ${btn(`etAbrir('${c.id}')`,"✎ Datos","Ver o completar los datos del cheque")}
           ${c.pdf_path?btn(`abrirPdfResumen('${esc(c.pdf_path)}')`,"📄 PDF","Ver el archivo del cheque"):""}
         </div></td></tr>`;}).join("")}
@@ -27784,6 +27845,77 @@ async function etGuardar(){
 }
 
 /* ── endosar ── */
+async function etDeshacerEndoso(id){
+  const [c]=await sb(`cf_cobranzas?id=eq.${id}&select=*`).catch(()=>[]);
+  if(!c)return;
+  if(c.estado!=="Endosado"){toast("Ese cheque no está endosado","err");return;}
+  const monto=_r2(c.monto);
+  const restaurar=()=>sb(`cf_cobranzas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado:"Pendiente",endosado_a:null,endosado_cuit:null,endosado_en:null,endoso_comprobante_id:null,updated_at:new Date().toISOString()})});
+  const fin=async(msg)=>{
+    cfCompPagos=null;toast(msg,"ok");
+    try{if(typeof cfCobranzas!=="undefined")cfCobranzas=await sb("cf_cobranzas?select=*&order=fecha_vencimiento");}catch(_){}
+    await renderEcheqsTerceros();
+    if(typeof renderComprobantes==="function"){renderComprobantes();updateCompStats();}
+    if(typeof antActualizarBadge==="function")antActualizarBadge();
+  };
+  const anularAsientos=async(origen,origenId,extraIds=[])=>{
+    const ids=new Set(extraIds.filter(Boolean));
+    const otros=await sb(`asientos_contables?anulado=eq.false&origen=eq.${origen}&origen_id=eq.${origenId}&select=id`).catch(()=>[]);
+    otros.forEach(x=>ids.add(x.id));
+    for(const a of ids)await sb(`asientos_contables?id=eq.${a}`,{method:"PATCH",body:JSON.stringify({anulado:true})});
+  };
+  // a) Endoso a cuenta (sin factura): hay un anticipo
+  const [ant]=await sb(`anticipos_proveedores?cobranza_id=eq.${id}&estado=neq.anulado&select=*`).catch(()=>[]);
+  if(ant){
+    if((parseFloat(ant.monto_aplicado)||0)>0||(ant.recibos||[]).length){toast("Este endoso ya tiene recibos cargados del proveedor: eliminá primero el anticipo desde Comprobantes → 📎 Anticipos","err");return;}
+    if(!confirm(`¿Deshacer el endoso del Echeq N° ${c.numero_cheque||"s/n"} a ${c.endosado_a||"el proveedor"}?\n\nSe elimina el anticipo y la orden de pago que se generaron y el cheque vuelve a la cartera. Recordá dejar sin efecto el endoso también en el home banking.`))return;
+    try{
+      await anularAsientos("anticipo",ant.id,[ant.asiento_pago_id]);
+      if(ant.orden_pago_id)await sb(`ordenes_pago?id=eq.${ant.orden_pago_id}`,{method:"DELETE"});
+      await sb(`anticipos_proveedores?id=eq.${ant.id}`,{method:"DELETE"});
+      if(typeof ordenesGanancias!=="undefined")ordenesGanancias=ordenesGanancias.filter(o=>o.id!==ant.orden_pago_id);
+      await restaurar();
+      await fin("↩ Endoso deshecho: el cheque volvió a la cartera y se eliminó el anticipo");
+    }catch(err){toast("No se pudo deshacer: "+String(err.message||err).slice(0,120),"err");}
+    return;
+  }
+  // b) Endoso contra una factura: hay una línea de pago
+  const fila=(await sb(`comprobante_pagos?cobranza_id=eq.${id}&select=*`).catch(()=>[]))[0]||null;
+  const cid=c.endoso_comprobante_id||fila?.comprobante_id||null;
+  const [f]=cid?await sb(`comprobantes_compra?id=eq.${cid}&select=*`).catch(()=>[]):[];
+  const opId=fila?.orden_pago_id||null;
+  let op=null;
+  if(opId){
+    [op]=await sb(`ordenes_pago?id=eq.${opId}&select=*`).catch(()=>[]);
+    const filasOP=await sb(`comprobante_pagos?orden_pago_id=eq.${opId}&select=id`).catch(()=>[]);
+    if(filasOP.length>1){toast(`Este cheque se endosó junto con otros medios en la orden ${op?.numero||""}: no se puede deshacer solo. Hay que rehacer esa orden.`,"err");return;}
+  }
+  const msj=`¿Deshacer el endoso del Echeq N° ${c.numero_cheque||"s/n"} por ${_extM(monto)} a ${c.endosado_a||"el proveedor"}?\n\n`+
+    (f?`Se deshace el pago: ${op?`la orden ${op.numero} vuelve a «pendiente de pago» y `:""}la factura ${f.tipo||""} ${f.numero||""} queda pendiente${op?"":` por ${_extM(monto)} más`}.\n\n`:"El cheque vuelve a la cartera (no encuentro un pago asociado para deshacer).\n\n")+
+    "Recordá dejar sin efecto el endoso también en el home banking.";
+  if(!confirm(msj))return;
+  try{
+    if(fila||f){
+      if(op)await anularAsientos("orden_pago",opId);
+      else{
+        const ad={fecha:today(),sociedad:c.sociedad,tipo:"ajuste",origen:"endoso_deshecho",origen_id:c.id,descripcion:`Endoso deshecho Echeq de terceros N° ${c.numero_cheque||"s/n"} — ${c.endosado_a||""}`,
+          lineas:[{codigo:"1.1.01.005",debe:monto,desc:"Cheque de terceros vuelve a cartera"},{codigo:"2.1.01.001",haber:monto,desc:"Proveedores (se reabre la deuda)"}]};
+        const a=await generarAsiento(ad);
+        if(a?._faltantes){mcfAbrir(a._faltantes,ad);return;}
+        if(!a)throw new Error("No se pudo generar el asiento inverso");
+      }
+      if(fila)await sb(`comprobante_pagos?id=eq.${fila.id}`,{method:"DELETE"});
+      if(f)await _reabrirFacturaPorPago(f,op?_r2(parseFloat(op.monto_bruto)||monto):monto);
+      if(op){
+        const patch={estado:"borrador",fecha_pago:null,comprobante_pago_path:null};
+        await sb(`ordenes_pago?id=eq.${op.id}`,{method:"PATCH",body:JSON.stringify(patch)});
+        const loc=(typeof ordenesGanancias!=="undefined"?ordenesGanancias:[]).find(x=>x.id===op.id);if(loc)Object.assign(loc,patch);
+      }
+    }
+    await restaurar();
+    await fin(`↩ Endoso deshecho: el cheque volvió a la cartera${f?` y la factura ${f.numero||""} quedó pendiente`:""}`);
+  }catch(err){toast("No se pudo deshacer: "+String(err.message||err).slice(0,120),"err");}
+}
 async function etAbrirEndoso(id){
   const c=echeqsTer.find(x=>x.id===id);if(!c)return;
   if(c.estado!=="Pendiente"){toast("Ese cheque ya no está en cartera","err");return;}
