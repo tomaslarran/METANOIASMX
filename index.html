@@ -19461,7 +19461,7 @@ function updateCfrResumen(){
     res.innerHTML=`Valor restante estimado: <strong>$${Math.round(restante).toLocaleString("es-AR")}</strong>`;
     res.style.color=restante<0?"#FCA5A5":"var(--tx3)";
   } else {
-    const movs=cfInvMovs.filter(m=>m.inversion_id===id);
+    const movs=cfInvMovs.filter(m=>m.inversion_id===id&&m.tipo!=="Aporte de capital");
     const yaRescatado=movs.reduce((s,m)=>s+(m.monto||0),0);
     const totalRecup=yaRescatado+monto;
     const rend=totalRecup-(inv.capital||0);
@@ -19611,8 +19611,8 @@ async function saveRescate(){
     if(tipo==="total"){
       patch.estado="Rescatada";
       patch.fecha_rescate=fecha;
-      // monto_recuperado = suma total de todos los movimientos
-      const totalRecup=cfInvMovs.filter(m=>m.inversion_id===id).reduce((s,m)=>s+(m.monto||0),0);
+      // monto_recuperado = suma de rescates (excluye aportes de capital)
+      const totalRecup=cfInvMovs.filter(m=>m.inversion_id===id&&m.tipo!=="Aporte de capital").reduce((s,m)=>s+(m.monto||0),0);
       patch.monto_recuperado=totalRecup;
     } else {
       // Parcial: actualizar valor_actual restando lo rescatado
