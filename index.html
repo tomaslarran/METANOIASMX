@@ -24973,7 +24973,12 @@ async function vepSeleccionarArchivo(input){
     });
     let uploadRes=await subirVep();
     if(!uploadRes.ok&&(uploadRes.status===401||uploadRes.status===403)&&await sbRefreshToken())uploadRes=await subirVep();
-    if(!uploadRes.ok)throw new Error(await uploadRes.text());
+    if(!uploadRes.ok&&(uploadRes.status===401||uploadRes.status===403||uploadRes.status===400)){
+      // Respaldo: el upload directo a Storage a veces lo rechaza la RLS (bug de plataforma): subir vía función con service_role
+      const r2=await fetchEdge("subir-archivo-storage",{bucket:"impuestos-vep",path:fname,fileBase64:await _blobToBase64(file),contentType:file.type||"application/pdf",upsert:true});
+      const d2=await r2.json().catch(()=>({}));
+      if(!r2.ok||d2.error)throw new Error(d2.error||("HTTP "+r2.status));
+    }else if(!uploadRes.ok)throw new Error(await uploadRes.text());
     vepArchivoPath=fname;
     vepArchivoUrl=`${SB}/storage/v1/object/public/impuestos-vep/${fname}`;
     label.textContent=file.name;
@@ -25423,7 +25428,7 @@ async function backfillAsientos(){
 function _ldFiltros(){
   const hoyStr=today();
   const primerDia=hoyStr.slice(0,7)+"-01";
-  return{soc:"",desde:primerDia,hasta:hoyStr,tipo:""};
+  return{soc:"",desde:primerDia,hasta:hoyStr,tipo:"",anulados:false};
 }
 
 async function renderLibroDiario(){
@@ -25452,6 +25457,7 @@ async function renderLibroDiario(){
         <option value="sueldo"${f.tipo==="sueldo"?" selected":""}>Sueldo</option>
         <option value="ajuste_manual"${f.tipo==="ajuste_manual"?" selected":""}>Ajuste manual</option>
       </select>
+      <label style="font-size:12px;color:var(--tx2);display:flex;align-items:center;gap:5px;cursor:pointer" title="Los asientos anulados no cuentan en los libros: quedan solo como constancia"><input type="checkbox" ${f.anulados?"checked":""} onchange="window._ldF.anulados=this.checked;_ldCargar()"> Ver anulados</label>
     </div>
       ${loggedUser?.rol==="admin"?`<button class="bs admin-only-el" id="ld-backfill-btn" onclick="backfillAsientos()" style="margin-left:auto;font-size:11px;padding:5px 12px" title="Genera asientos para registros históricos sin asiento">🔄 Generar históricos</button>`:""}
     </div>
@@ -25468,6 +25474,7 @@ async function _ldCargar(){
   if(f.desde)q+=`&fecha=gte.${f.desde}`;
   if(f.hasta)q+=`&fecha=lte.${f.hasta}`;
   if(f.tipo)q+=`&tipo=eq.${f.tipo}`;
+  if(!f.anulados)q+=`&anulado=eq.false`;
   try{
     const asientos=await sb(q);
     if(!asientos.length){body.innerHTML=`<div style="color:var(--tx3);font-size:12px;padding:24px 0;text-align:center">Sin asientos para el período seleccionado</div>`;return;}
@@ -25477,10 +25484,10 @@ async function _ldCargar(){
       asientos.map(a=>{
         const col=tipoBadge[a.tipo]||"var(--tx3)";
         const lbl=tipoLabel[a.tipo]||a.tipo;
-        return`<div style="border:1px solid var(--b);border-radius:10px;overflow:hidden;margin-bottom:6px">
+        return`<div style="border:1px solid var(--b);border-radius:10px;overflow:hidden;margin-bottom:6px${a.anulado?";opacity:.55":""}">
           <div style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;background:var(--surf2)" onclick="_ldToggle('${a.id}',this)">
             <div style="flex:1;min-width:0">
-              <div style="font-size:12px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.descripcion||"Sin descripción")}</div>
+              <div style="font-size:12px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${a.anulado?"text-decoration:line-through":""}">${a.anulado?`<span style="text-decoration:none;display:inline-block;margin-right:6px;font-size:10px;font-weight:700;color:var(--re);border:1px solid var(--re);padding:0 5px;border-radius:6px">ANULADO</span>`:""}${esc(a.descripcion||"Sin descripción")}</div>
               <div style="font-size:11px;color:var(--tx3);margin-top:2px">${fmt(a.fecha)}
                 <span style="margin-left:6px;font-weight:600;color:${col};background:${col}18;border:1px solid ${col}40;padding:1px 6px;border-radius:8px;font-size:10px">${esc(lbl)}</span>
                 · ${esc(a.sociedad||"")}${a.creado_por?` · ${esc(a.creado_por)}`:""}
@@ -28824,6 +28831,15 @@ function delComprobante(id,proveedor,numero){
   const desc=proveedor+(numero?` N° ${numero}`:"");
   confirmDel(`¿Eliminar la factura de "${desc}"? Esta acción no se puede deshacer.`,async()=>{
     try{
+      // Anular los asientos (devengado, pagos, órdenes de pago) para que no queden huérfanos duplicando los libros
+      try{
+        const ops=await sb(`ordenes_pago?comprobante_id=eq.${id}&select=id`).catch(()=>[]);
+        const orig=[["comprobante",id],["comprobante_pago",id],...ops.map(o=>["orden_pago",o.id])];
+        for(const [o,oid] of orig){
+          const as=await sb(`asientos_contables?anulado=eq.false&origen=eq.${o}&origen_id=eq.${oid}&select=id`).catch(()=>[]);
+          for(const x of as)await sb(`asientos_contables?id=eq.${x.id}`,{method:"PATCH",body:JSON.stringify({anulado:true})});
+        }
+      }catch(_){}
       await sb(`comprobantes_compra?id=eq.${id}`,{method:"DELETE"});
       comprobantes=comprobantes.filter(c=>c.id!==id);
       renderComprobantes();updateCompStats();updateSideBadges();
