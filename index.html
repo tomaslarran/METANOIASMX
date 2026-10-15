@@ -3398,7 +3398,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
           </div>
           <button id="vep-ia-btn" class="btn sec" onclick="analizarVEPconIA()" style="display:none;margin-top:8px;font-size:12px">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
-            ✨ Extraer datos con IA
+            ✨ Extraer con IA (gasta tokens)
           </button>
           <div id="vep-ia-status" style="margin-top:6px"></div>
         </div>
@@ -24957,15 +24957,73 @@ function openCargarVEP(){
   document.getElementById("vep-ia-status").textContent="";
 }
 
+function _vepParsearTexto(txt){
+  const t=String(txt||"").replace(/ /g," ");
+  const norm=s=>s.normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperCase();
+  const T=norm(t);
+  const d={numero_vep:"",cuit:"",fecha_vencimiento:"",monto:0,tipo_impuesto:"",periodo:"",sociedad:""};
+  let m=/NRO\.?\s*VEP(?:\s*CONSOLIDADO)?\s*:?\s*(\d{6,})/.exec(T);if(m)d.numero_vep=m[1];
+  m=/CUIT\s*:?\s*(\d{2}-?\d{8}-?\d)/.exec(T);if(m)d.cuit=m[1].replace(/\D/g,"");
+  m=/DIA DE EXPIRACION\s*:?\s*(\d{4}-\d{2}-\d{2})/.exec(T)||/VENCIMIENTO\s*:?\s*(\d{4}-\d{2}-\d{2})/.exec(T);
+  if(m)d.fecha_vencimiento=m[1];
+  else{m=/(?:EXPIRACION|VENCIMIENTO)\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/.exec(T);if(m)d.fecha_vencimiento=`${m[3]}-${m[2]}-${m[1]}`;}
+  // Monto: el total es el mayor importe «$ x.xxx,xx» del volante (en un VEP consolidado los subveps suman al total)
+  const num=s=>parseFloat(s.replace(/\./g,"").replace(",","."));
+  const re=/\$\s*([\d.]+,\d{2})/g;const montos=[];let x;
+  while((x=re.exec(t))!==null)montos.push(num(x[1]));
+  if(montos.length)d.monto=Math.max(...montos);
+  // Tipo de impuesto por las descripciones
+  const tipoPor=[[/AUTONOMO/,"Autonomos"],[/GANANCIAS|GCIAS|GCIA\b/,"Ganancias"],[/INGRESOS BRUTOS|IIBB|ACTIVIDADES ECONOMICAS/,"IIBB"],[/SICORE|RETENCIONES? (?:PRACTICADAS|IMPUESTO)/,"SICORE"],[/\bIVA\b|VALOR AGREGADO/,"IVA"],[/SEG\.?\s*SOCIAL|SEGURIDAD SOCIAL|EMPLEADOR|F\.?\s?931|CARGAS SOCIALES|CONTRIB\.?\s*SEG|SUSS/,"Cargas sociales"]];
+  for(const [r,v] of tipoPor){if(r.test(T)){d.tipo_impuesto=v;break;}}
+  // Período (si el volante lo informa)
+  m=/PERIODO(?: FISCAL)?\s*:?\s*(\d{4})[-\/]?(\d{2})\b/.exec(T)||/PERIODO(?: FISCAL)?\s*:?\s*(\d{2})\/(\d{4})/.exec(T);
+  if(m)d.periodo=m[1].length===4?`${m[1]}-${m[2]}`:`${m[2]}-${m[1]}`;
+  d.faltan=[];if(!d.monto)d.faltan.push("monto");if(!d.fecha_vencimiento)d.faltan.push("vencimiento");if(!d.numero_vep)d.faltan.push("N° de VEP");
+  return d;
+}
+async function _vepLeerPdf(file){
+  if(!/pdf$/i.test(file.type)&&!/\.pdf$/i.test(file.name))throw new Error("no es un PDF");
+  await _extCargarPdfJs();
+  const doc=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+  let txt="";
+  for(let p=1;p<=Math.min(doc.numPages,3);p++){
+    const pg=await doc.getPage(p);const items=(await pg.getTextContent()).items.filter(i=>i.str.trim());
+    // ordenar por renglón (y descendente) y luego por x, uniendo en líneas
+    items.sort((a,b)=>Math.abs(b.transform[5]-a.transform[5])>3?b.transform[5]-a.transform[5]:a.transform[4]-b.transform[4]);
+    let y=null;items.forEach(i=>{const yy=i.transform[5];if(y===null||Math.abs(yy-y)>3){txt+="\n";y=yy;}else txt+=" ";txt+=i.str.trim();});
+    txt+="\n";
+  }
+  const d=_vepParsearTexto(txt);
+  if(d.cuit){
+    try{for(const s of ["SUDES","POINTERS"]){const f=await getFiscalSociedad(s);if(f&&String(f.cuit||"").replace(/\D/g,"")===d.cuit){d.sociedad=s;break;}}}catch(_){}
+  }
+  return d;
+}
 async function vepSeleccionarArchivo(input){
   const file=input.files[0]; if(!file)return;
   const label=document.getElementById("vep-archivo-label");
+  const status=document.getElementById("vep-ia-status");
+  const iaBtn=document.getElementById("vep-ia-btn");
+  iaBtn.style.display="none"; status.textContent="";
+  label.textContent="Leyendo...";
+  // 1) Lectura local del PDF (sin IA, sin costo): completa los campos del formulario
+  let leido=null,faltan=[];
+  try{
+    leido=await _vepLeerPdf(file);
+    if(leido.tipo_impuesto)document.getElementById("vep-tipo").value=leido.tipo_impuesto;
+    if(leido.sociedad)document.getElementById("vep-sociedad").value=leido.sociedad;
+    if(leido.periodo)document.getElementById("vep-periodo").value=leido.periodo;
+    if(leido.fecha_vencimiento)document.getElementById("vep-vencimiento").value=leido.fecha_vencimiento;
+    if(leido.monto)document.getElementById("vep-monto").value=leido.monto;
+    if(leido.numero_vep)document.getElementById("vep-numero").value=leido.numero_vep;
+    faltan=leido.faltan||[];
+  }catch(e){faltan=["datos"];console.warn("VEP: no se pudo leer el PDF localmente:",e);}
+  // 2) Guardar el PDF (no frena la carga si falla)
   label.textContent="Subiendo...";
+  let subido=false;
   try{
     const ext=file.name.split(".").pop().toLowerCase();
     const fname=`vep_${Date.now()}.${ext}`;
-    const {createClient}=window.supabase||{};
-    // Upload directo a storage via REST
     const subirVep=()=>fetch(`${SB}/storage/v1/object/impuestos-vep/${fname}`,{
       method:"POST",
       headers:{"apikey":KEY,"Authorization":`Bearer ${authToken||KEY}`,"Content-Type":file.type,"x-upsert":"true"},
@@ -24981,11 +25039,17 @@ async function vepSeleccionarArchivo(input){
     }else if(!uploadRes.ok)throw new Error(await uploadRes.text());
     vepArchivoPath=fname;
     vepArchivoUrl=`${SB}/storage/v1/object/public/impuestos-vep/${fname}`;
-    label.textContent=file.name;
-    const iaBtn=document.getElementById("vep-ia-btn");
-    iaBtn.style.display="";
-    toast("Archivo subido","ok");
-  }catch(e){ label.textContent="Error al subir"; toast("Error: "+e.message.slice(0,80),"err"); }
+    subido=true;
+  }catch(e){console.warn("VEP: no se pudo guardar el PDF:",e);}
+  label.textContent=file.name+(subido?"":" (sin guardar el PDF)");
+  // 3) Aviso: lo leído sin IA, o la IA como último recurso (manual)
+  if(!faltan.length){
+    status.innerHTML=`<span style="color:var(--gr);font-size:12px">✓ Datos leídos del PDF (sin IA) — revisá y confirmá${leido&&!leido.periodo?" · completá el período":""}</span>`;
+    toast("Datos leídos del PDF","ok");
+  }else{
+    status.innerHTML=`<span style="color:var(--am,#F59E0B);font-size:12px">No pude leer: ${esc(faltan.join(", "))}. Completalo a mano${subido?" o usá la IA (gasta tokens)":""}.</span>`;
+    if(subido)iaBtn.style.display="";
+  }
 }
 
 async function analizarVEPconIA(){
