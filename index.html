@@ -3492,10 +3492,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <input type="file" id="comp-file-input" accept="image/*,application/pdf" style="display:none" onchange="handleCompFile(this.files[0])">
     </div>
 
+    <div id="comp-qr-status" style="display:none;margin:0 0 14px"></div>
     <!-- Botón IA -->
     <button id="comp-ia-btn" class="btn sec" style="width:100%;margin-bottom:16px;display:none" onclick="analizarConIA()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
-      ✨ Analizar con IA — completar datos automáticamente
+      ✨ Completar con IA (gasta tokens) — solo si el QR no alcanza
     </button>
 
     <!-- Formulario -->
@@ -28932,6 +28933,7 @@ function openNuevoComprobante(){
     const elFecha=document.getElementById("comp-fecha");if(elFecha)elFecha.value=today();
     const elUpload=document.getElementById("comp-upload-content");if(elUpload)elUpload.innerHTML=`<div style="font-size:28px;margin-bottom:6px">📄</div><div style="font-size:13px;color:var(--tx2);font-weight:600">Tocá para subir o arrastrá aquí</div><div style="font-size:11px;color:var(--tx3);margin-top:4px">Foto, JPG, PNG o PDF · desde cámara o galería</div>`;
     const iaBtn=document.getElementById("comp-ia-btn");if(iaBtn)iaBtn.style.display="none";
+    const qrSt=document.getElementById("comp-qr-status");if(qrSt){qrSt.style.display="none";qrSt.innerHTML="";}
     // Pre-rellenar proveedor si el usuario es proveedor externo
     if(esProveedor){
       const elProv=document.getElementById("comp-prov");if(elProv)elProv.value=loggedUser.nombre||"";
@@ -29044,6 +29046,112 @@ async function comprimirImagen(file){
   });
 }
 
+// ── Lectura del QR de ARCA en facturas de compra (sin IA) ──────────────────────────────────────────
+// El QR de toda factura electrónica trae: CUIT del emisor, tipo, punto de venta, número, fecha, importe total, CAE.
+let _jsQRPromise=null;
+function _cargarJsQR(){
+  if(window.jsQR)return Promise.resolve();
+  if(!_jsQRPromise)_jsQRPromise=new Promise((res,rej)=>{
+    const s=document.createElement("script");s.src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js";
+    s.onload=res;s.onerror=()=>{_jsQRPromise=null;rej(new Error("no se pudo cargar jsQR"));};document.head.appendChild(s);
+  });
+  return _jsQRPromise;
+}
+// URL del QR → datos. Devuelve null si no es un QR de comprobante de ARCA.
+function _compParsearQR(texto){
+  try{
+    const m=/[?&]p=([^&#\s]+)/.exec(String(texto||""));if(!m)return null;
+    const j=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1]).replace(/-/g,"+").replace(/_/g,"/")))));
+    if(!j||!j.cuit||!j.nroCmp||!(j.importe>=0))return null;
+    return{cuit:String(j.cuit),tipoCmp:Number(j.tipoCmp),ptoVta:Number(j.ptoVta),nroCmp:Number(j.nroCmp),fecha:String(j.fecha||""),importe:Number(j.importe),moneda:j.moneda||"PES",codAut:String(j.codAut||""),nroDocRec:String(j.nroDocRec||"")};
+  }catch(e){return null;}
+}
+const _QR_TIPO={1:"A",2:"A",3:"NC-A",6:"B",7:"B",8:"NC-B",11:"C",12:"C",13:"NC-C",51:"M"};
+async function _compLeerQR(file){
+  await _cargarJsQR();
+  const probar=cv=>{const ctx=cv.getContext("2d");const im=ctx.getImageData(0,0,cv.width,cv.height);const r=window.jsQR(im.data,im.width,im.height);return r?_compParsearQR(r.data):null;};
+  if(/pdf$/i.test(file.type)||/\.pdf$/i.test(file.name)){
+    await _extCargarPdfJs();
+    const doc=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+    for(let p=1;p<=Math.min(doc.numPages,2);p++){
+      const page=await doc.getPage(p);
+      for(const sc of [2,3]){
+        const vp=page.getViewport({scale:sc});const cv=document.createElement("canvas");cv.width=Math.ceil(vp.width);cv.height=Math.ceil(vp.height);
+        await page.render({canvasContext:cv.getContext("2d"),viewport:vp}).promise;
+        const q=probar(cv);if(q)return q;
+      }
+    }
+    return null;
+  }
+  // foto: puede o no tener el QR legible
+  const url=URL.createObjectURL(file);
+  try{
+    const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=url;});
+    const cv=document.createElement("canvas");cv.width=img.width;cv.height=img.height;cv.getContext("2d").drawImage(img,0,0);
+    return probar(cv);
+  }finally{URL.revokeObjectURL(url);}
+}
+const _cuitFmt=c=>{const d=String(c||"").replace(/\D/g,"");return d.length===11?`${d.slice(0,2)}-${d.slice(2,10)}-${d.slice(10)}`:d;};
+
+// Completa el formulario con lo que trae el QR. Devuelve un texto para mostrar.
+async function _compAplicarQR(q){
+  const dig=s=>String(s||"").replace(/\D/g,"");
+  const cuitE=dig(q.cuit);
+  const num=`${String(q.ptoVta).padStart(4,"0")}-${String(q.nroCmp).padStart(8,"0")}`;
+  const tipo=_QR_TIPO[q.tipoCmp];
+  // Proveedor del maestro por CUIT (esto también sugiere el tipo según su condición de IVA: el QR lo pisa después)
+  const p=(typeof proveedores!=="undefined"?proveedores:[]).find(x=>dig(x.cuit)===cuitE);
+  let prov="";
+  const elProv=document.getElementById("comp-prov");
+  if(p){selectProvMaestro(p.id);prov=p.nombre;}
+  else{
+    const pf=(typeof proveedoresFinn!=="undefined"?proveedoresFinn:[]).find(x=>dig(x.cuit)===cuitE);
+    if(pf){selectProvFinn(pf.nombre,pf.cuit||_cuitFmt(cuitE));prov=pf.nombre;}
+    else if(elProv&&elProv.value&&elProv.value===window._compQRProvAuto){
+      // venía de un archivo anterior leído del QR: no dejar un proveedor ajeno
+      elProv.value="";document.getElementById("comp-prov-maestro-id").value="";setCompProvBadge(null);
+    }
+  }
+  window._compQRProvAuto=prov;
+  document.getElementById("comp-cuit").value=p?.cuit||_cuitFmt(cuitE);
+  if(tipo)document.getElementById("comp-tipo").value=tipo;
+  document.getElementById("comp-numero").value=num;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(q.fecha))document.getElementById("comp-fecha").value=q.fecha;
+  document.getElementById("comp-total").value=q.importe.toFixed(2);
+  // Sociedad: por el CUIT del receptor
+  let soc="";
+  try{for(const s of ["SUDES","POINTERS"]){const f=await getFiscalSociedad(s);if(f&&dig(f.cuit)===dig(q.nroDocRec)){soc=s;break;}}}catch(_){}
+  if(soc){const el=document.getElementById("comp-sociedad");if(el)el.value=soc;}
+  sugerirProductosFinn();
+  // ¿Ya está cargada?
+  const dup=(typeof comprobantes!=="undefined"?comprobantes:[]).find(c=>c.id!==editCompId&&dig(c.cuit)===cuitE&&c.numero===num&&String(c.tipo||"").replace("NC-","")===String(tipo||"").replace("NC-",""));
+  return{prov,num,tipo,soc,dup,importe:q.importe};
+}
+function _compQRPanel(r,sinDesglose=true){
+  const st=document.getElementById("comp-qr-status");if(!st)return;
+  const btn=(rate,txt)=>`<button type="button" class="bs" style="font-size:11px;padding:4px 10px" onclick="_compAsignarTotal(${rate})">${txt}</button>`;
+  st.style.display="";
+  st.innerHTML=`<div style="font-size:12px;color:var(--gr)">✓ Leído del QR de ARCA (sin IA): ${esc(r.tipo||"")} ${esc(r.num)} · total ${_extM(r.importe)}${r.prov?` · ${esc(r.prov)}`:" · <span style=\"color:var(--am,#F59E0B)\">proveedor no está en el maestro: completá el nombre</span>"}</div>`+
+    (r.dup?`<div style="font-size:12px;color:var(--re);margin-top:4px">⚠️ Esta factura ya está cargada (${esc(r.dup.proveedor||"")} ${esc(r.dup.numero)}, estado ${esc(r.dup.estado||"")}). Revisá antes de guardar.</div>`:"")+
+    `<div style="font-size:11px;color:var(--tx3);margin-top:6px">El QR no trae el neto ni el IVA. Asignar el total a:</div>
+     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">${btn(21,"Todo 21%")}${btn(10.5,"Todo 10,5%")}${btn(27,"Todo 27%")}${btn(0,"Exento / sin IVA")}</div>
+     <div style="font-size:10px;color:var(--tx3);margin-top:4px">Si la factura mezcla alícuotas o trae percepciones, cargalo a mano o usá «✨ IA» (gasta tokens).</div>`;
+}
+// Reparte el total (del QR) en neto + IVA con una sola alícuota
+function _compAsignarTotal(rate){
+  const T=parseFloat(document.getElementById("comp-total").value)||0;if(!T){toast("No hay total para repartir","err");return;}
+  ["comp-neto21","comp-neto105","comp-neto27","comp-neto-exento","comp-perc-iva","comp-perc-iva-15","comp-perc-iibb","comp-imp-int","comp-otros"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  const campo={21:"comp-neto21",10.5:"comp-neto105",27:"comp-neto27",0:"comp-neto-exento"}[rate];
+  const neto=Math.round(T/(1+rate/100)*100)/100;
+  document.getElementById(campo).value=neto.toFixed(2);
+  recalcDesdeDesglose();
+  // que el total quede exactamente el del comprobante (el IVA absorbe el redondeo)
+  document.getElementById("comp-iva-monto").value=(Math.round((T-neto)*100)/100).toFixed(2);
+  document.getElementById("comp-total").value=T.toFixed(2);
+  sugerirProductosFinn();
+  toast(rate?`Neto ${_extM(neto)} + IVA ${rate}% = ${_extM(T)}`:`Total ${_extM(T)} sin IVA`,"ok");
+}
+
 async function handleCompFile(file){
   if(!file)return;
   const maxMB=10;
@@ -29052,6 +29160,12 @@ async function handleCompFile(file){
   try{
     // Comprimir si es imagen
     if(!file.type.includes("pdf"))file=await comprimirImagen(file);
+    // Lectura gratis del QR de ARCA (sin IA): completa tipo, número, fecha, CUIT, proveedor y total
+    try{
+      const q=await _compLeerQR(file);
+      if(q){const r=await _compAplicarQR(q);_compQRPanel(r);toast("Datos leídos del QR (sin IA)","ok");}
+      else{const st=document.getElementById("comp-qr-status");if(st){st.style.display="";st.innerHTML=`<div style="font-size:12px;color:var(--tx3)">No encontré el QR de ARCA en el archivo: completá a mano o usá la IA (gasta tokens).</div>`;}}
+    }catch(e){console.warn("QR:",e);}
     const ext=file.type.includes("pdf")?"pdf":"jpg";
     const fname=`${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
     const SUPA_URL="https://jppxmdvddvbsvymogvcp.supabase.co";

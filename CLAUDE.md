@@ -1894,3 +1894,12 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 - **La IA queda como respaldo manual:** el botón se llama «✨ Extraer con IA (gasta tokens)» y solo aparece si el lector local no pudo sacar monto/vencimiento/N° de VEP.
 - Probado con 7 VEP reales de ARCA (pdf.js real): 6 completos; el séptimo es un VEP ya pagado, sin fecha de expiración. **No probado con un VEP de Ganancias/IIBB/cargas sociales de las sociedades** (no había uno a mano): si el tipo o el período no salen bien, mandar ese PDF para ajustar las palabras clave en `_vepParsearTexto`.
 - **Idea siguiente (mismo criterio):** las facturas de compra en PDF de ARCA traen un **QR con los datos en JSON** (CUIT emisor, tipo, punto de venta, número, fecha, importe, CAE): se podrían leer sin IA y dejar `leer-factura` solo para fotos/PDF sin QR.
+
+### 🧾 Facturas de compra: lectura del QR de ARCA sin IA (15 Oct 2026)
+**Pedido de Tomás:** mismo criterio que el VEP, el extracto y los Echeq: no gastar tokens en lo que se puede leer gratis.
+- Al subir una factura en Comprobantes, `_compLeerQR` renderiza el PDF (o foto) con pdf.js y busca el **QR de ARCA** con jsQR (cargado de jsDelivr `jsqr@1.4.0`; cdnjs no lo tiene). El QR trae **CUIT del emisor, tipo, punto de venta, número, fecha, importe total y CAE** → completa tipo (A/B/C/M y NC-A/B/C), número `0001-00001017`, fecha, CUIT con guiones, **proveedor (buscado por CUIT en el maestro; si no está, deja el nombre vacío)**, **sociedad (por el CUIT del receptor)** y total.
+- **Avisa si la factura ya está cargada** (mismo CUIT + tipo + número), con el estado.
+- **El QR no trae neto ni IVA:** el panel muestra botones **«Todo 21% / 10,5% / 27% / Exento»** que reparten el total (el IVA absorbe el redondeo para que el total quede exacto). Si la factura mezcla alícuotas o trae percepciones, se carga a mano o con IA.
+- La IA queda como respaldo explícito: «✨ Completar con IA (gasta tokens) — solo si el QR no alcanza». Tipos que no son factura/NC (ej. 63 liquidación) no pisan el tipo.
+- Probado con 15 facturas reales en PDF (13 con QR legible; los certificados y el balance no tienen QR) y 19 controles sobre el código real del panel (jsdom + pdf.js + jsQR).
+- **No cambia:** `whatsapp-agente` (carga por WhatsApp) y `leer-factura` siguen usando IA; el QR podría aplicarse ahí también.
