@@ -1140,6 +1140,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
         Estado de resultados
       </div>
+      <div class="sitem" onclick="goPage('facturas',this)" id="nav-facturas">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l3-2 3 2 3-2 3 2 3-2 1 .7V2z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        Facturas emitidas
+      </div>
       <div class="sitem" onclick="cfTab='cierre';goTo('cashflow',this)" id="nav-cierre">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         Cierre de mes
@@ -1657,6 +1661,15 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="btn pri" id="el-btn-sync" onclick="elSincronizar()">🔄 Sincronizar ahora</button>
   </div>
   <div id="el-contenido"></div>
+</div>
+
+<div id="pg-facturas" style="display:none">
+  <div class="pg-header">
+    <div><div class="pg-title">Facturas emitidas</div><div class="pg-title-sub">Facturación electrónica ARCA — comprobantes de venta con CAE</div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec" onclick="feProbarConexion()">🔌 Probar conexión ARCA</button><button class="btn pri" onclick="feAbrirEmitir()">+ Emitir factura</button></div>
+  </div>
+  <div id="fe-banner"></div>
+  <div id="fe-lista"><div class="loading"><div class="loader"></div><div class="lt">Cargando facturas...</div></div></div>
 </div>
 
 <div id="pg-planes" style="display:none">
@@ -6596,6 +6609,7 @@ function goPage(name,el){
   if(name==="mensajes"){document.getElementById("msgs-layout")?.classList.remove("thread-open");loadMensajesInternos();renderConvList();}
   if(name==="inventario")loadInventario();
   if(name==="planes")loadPlanes();
+  if(name==="facturas")loadFacturasEmitidas();
   if(name==="elearning")loadElearning();
   if(name==="comprobantes"){loadComprobantes();cargarProductosFinn();}
   if(name==="impuestos")loadImpuestos();
@@ -21740,6 +21754,328 @@ let elBusq="";
 const _elCuit=c=>{const d=String(c||"").replace(/\D/g,"");return d.length===11?d.replace(/^(\d{2})(\d{8})(\d)$/,"$1-$2-$3"):(c||"—");};
 const _elFecha=v=>v?new Date(v).toLocaleDateString("es-AR"):"—";
 const _elDias=v=>v?Math.ceil((Date.parse(String(v).slice(0,10))-Date.parse(today()))/86400000):null;
+
+// ═══ FACTURAS EMITIDAS (facturación electrónica ARCA) ═══════════════════════════════════════════════
+let feFacturas=[],feConfig=[],feFiltro={soc:"",estado:"",mes:""},feItems=[];
+const FE_TIPOS={1:"Factura A",2:"Nota de Débito A",3:"Nota de Crédito A",6:"Factura B",7:"Nota de Débito B",8:"Nota de Crédito B",11:"Factura C",12:"Nota de Débito C",13:"Nota de Crédito C"};
+const FE_COND_IVA={1:"IVA Responsable Inscripto",4:"IVA Sujeto Exento",5:"Consumidor Final",6:"Responsable Monotributo",7:"Sujeto No Categorizado",13:"Monotributista Social",15:"IVA No Alcanzado"};
+const FE_CONDS_POR_LETRA={A:[1,6,13],B:[1,4,5,6,7,13,15]};
+const FE_ES_NC=t=>[3,8,13].includes(Number(t));
+const feLetra=t=>({1:"A",2:"A",3:"A",6:"B",7:"B",8:"B",11:"C",12:"C",13:"C"}[Number(t)]||"");
+const feNum=f=>`${String(f.pto_vta).padStart(4,"0")}-${String(f.cbte_numero).padStart(8,"0")}`;
+const feM=v=>"$"+(Number(v)||0).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
+const feFechaAR=d=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(d||"");return m?`${m[3]}/${m[2]}/${m[1]}`:(d||"");};
+const feR2=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
+const feCondDeFiscal=c=>({responsable_inscripto:1,monotributista:6,monotributo:6,exento:4,consumidor_final:5}[c]||null);
+
+async function loadFacturasEmitidas(){
+  const el=document.getElementById("fe-lista");
+  if(el)el.innerHTML=`<div class="loading"><div class="loader"></div><div class="lt">Cargando facturas...</div></div>`;
+  try{
+    [feFacturas,feConfig]=await Promise.all([sb("facturas_emitidas?select=*&order=fecha.desc,cbte_numero.desc&limit=500"),sb("arca_config?select=*").catch(()=>[])]);
+  }catch(e){
+    feFacturas=[];feConfig=[];
+    if(el)el.innerHTML=`<div class="empty"><div class="ei">🧾</div>No se pudo leer <code>facturas_emitidas</code>: ${esc(String(e.message||e).slice(0,120))}<br><span style="font-size:12px;color:var(--tx3)">Falta correr <b>sql_arca_facturacion.sql</b> en Supabase.</span></div>`;
+    feBanner();return;
+  }
+  feBanner();feRender();
+}
+function feBanner(){
+  const b=document.getElementById("fe-banner");if(!b)return;
+  const activas=feConfig.filter(c=>c.activo);
+  if(!activas.length){
+    b.innerHTML=`<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--tx2);margin-bottom:14px">
+      <b style="color:var(--am,#F59E0B)">⚠️ La facturación electrónica todavía no está activada.</b> Para poder emitir hace falta el certificado de ARCA por sociedad, cargar los secrets en Supabase y poner <code>activo = true</code> en <code>arca_config</code>. Los pasos están en <b>guia_arca_facturacion.md</b>.</div>`;
+    return;
+  }
+  b.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${feConfig.map(c=>{
+    const prod=c.ambiente==="produccion";
+    const col=!c.activo?"var(--tx3)":prod?"var(--gr)":"var(--am,#F59E0B)";
+    return`<div style="border:1px solid ${col};border-radius:10px;padding:8px 12px;font-size:12px;color:var(--tx2)"><b style="color:${col}">${esc(c.sociedad)}</b> · ${!c.activo?"desactivada":prod?"PRODUCCIÓN":"PRUEBA (sin validez fiscal)"} · punto de venta ${esc(c.pto_vta)}</div>`;}).join("")}</div>`;
+}
+function feFiltradas(){
+  return feFacturas.filter(f=>(!feFiltro.soc||f.sociedad===feFiltro.soc)&&(!feFiltro.estado||f.estado===feFiltro.estado)&&(!feFiltro.mes||String(f.fecha||"").startsWith(feFiltro.mes)));
+}
+function feRender(){
+  const el=document.getElementById("fe-lista");if(!el)return;
+  const lista=feFiltradas();
+  const aut=lista.filter(f=>f.estado==="autorizada");
+  const sg=f=>FE_ES_NC(f.cbte_tipo)?-1:1;
+  const sum=k=>aut.reduce((s,f)=>s+sg(f)*(parseFloat(f[k])||0),0);
+  const badge={autorizada:["#10B981","Autorizada"],rechazada:["#EF4444","Rechazada"],pendiente:["#F59E0B","Pendiente"],anulada:["#9CA3AF","Anulada"]};
+  const filtros=`<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+    <select class="fi mini-sel" style="width:120px" onchange="feFiltro.soc=this.value;feRender()"><option value="">Ambas</option><option value="SUDES"${feFiltro.soc==="SUDES"?" selected":""}>SUDES</option><option value="POINTERS"${feFiltro.soc==="POINTERS"?" selected":""}>POINTERS</option></select>
+    <select class="fi mini-sel" style="width:140px" onchange="feFiltro.estado=this.value;feRender()"><option value="">Todos los estados</option>${Object.entries(badge).map(([k,v])=>`<option value="${k}"${feFiltro.estado===k?" selected":""}>${v[1]}</option>`).join("")}</select>
+    <input class="fi" type="month" value="${esc(feFiltro.mes)}" style="width:150px" onchange="feFiltro.mes=this.value;feRender()">
+    ${feFiltro.soc||feFiltro.estado||feFiltro.mes?`<button class="btn sm" onclick="feFiltro={soc:'',estado:'',mes:''};feRender()">✕ Limpiar</button>`:""}</div>`;
+  const kpis=`<div class="stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px">
+    <div class="sc"><div class="sc-l">🧾 Comprobantes autorizados</div><div class="sc-v">${aut.length}</div><div class="sc-s">${lista.length-aut.length} sin autorizar</div></div>
+    <div class="sc"><div class="sc-l">Neto facturado</div><div class="sc-v">${feM(sum("neto")+sum("exento")+sum("no_gravado"))}</div><div class="sc-s">notas de crédito restan</div></div>
+    <div class="sc"><div class="sc-l">IVA débito fiscal</div><div class="sc-v">${feM(sum("iva"))}</div></div>
+    <div class="sc"><div class="sc-l">Total facturado</div><div class="sc-v" style="color:var(--gr)">${feM(sum("total"))}</div></div></div>`;
+  if(!lista.length){el.innerHTML=filtros+kpis+`<div class="empty"><div class="ei">🧾</div>${feFacturas.length?"Ninguna factura con esos filtros":"Todavía no se emitió ninguna factura"}</div>`;return;}
+  el.innerHTML=filtros+kpis+`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:var(--surf2);border-bottom:1px solid var(--b)">${["Fecha","Comprobante","Receptor","Neto","IVA","Total","CAE","Estado",""].map((h,i)=>`<th style="padding:8px 10px;text-align:${i>=3&&i<=5?"right":"left"};color:var(--tx3);font-weight:600">${h}</th>`).join("")}</tr></thead><tbody>
+    ${lista.map(f=>{
+      const [col,lbl]=badge[f.estado]||["#9CA3AF",f.estado];const nc=FE_ES_NC(f.cbte_tipo);
+      return`<tr style="border-bottom:1px solid var(--b)${f.estado==="rechazada"?";background:rgba(239,68,68,.05)":""}">
+      <td style="padding:8px 10px;white-space:nowrap">${esc(feFechaAR(f.fecha))}</td>
+      <td style="padding:8px 10px"><div style="font-weight:600;color:var(--tx)">${esc(FE_TIPOS[f.cbte_tipo]||"Tipo "+f.cbte_tipo)}</div><div style="font-size:11px;color:var(--tx3);font-family:monospace">${esc(feNum(f))} · ${esc(f.sociedad)}${f.ambiente==="homologacion"?" · <span style=\"color:var(--am,#F59E0B)\">PRUEBA</span>":""}</div></td>
+      <td style="padding:8px 10px"><div>${esc(f.receptor_nombre||"—")}</div><div style="font-size:11px;color:var(--tx3);font-family:monospace">${esc(f.receptor_doc_nro||"")}</div></td>
+      <td style="padding:8px 10px;text-align:right;color:var(--tx2)">${nc?"−":""}${feM((parseFloat(f.neto)||0)+(parseFloat(f.exento)||0)+(parseFloat(f.no_gravado)||0))}</td>
+      <td style="padding:8px 10px;text-align:right;color:var(--tx2)">${nc?"−":""}${feM(f.iva)}</td>
+      <td style="padding:8px 10px;text-align:right;font-weight:700;color:${nc?"var(--re)":"var(--tx)"}">${nc?"−":""}${feM(f.total)}</td>
+      <td style="padding:8px 10px;font-size:11px;font-family:monospace;color:var(--tx3)">${f.cae?esc(f.cae)+`<div>vto ${esc(feFechaAR(f.cae_vto))}</div>`:"—"}</td>
+      <td style="padding:8px 10px"><span style="font-size:10px;font-weight:700;color:${col};border:1px solid ${col};border-radius:8px;padding:1px 7px">${esc(lbl)}</span></td>
+      <td style="padding:8px 10px;white-space:nowrap">${f.estado==="autorizada"?`<button class="btn sm" style="font-size:10px;padding:2px 7px" onclick="feDescargarPDF('${f.id}')">📄 PDF</button> `:""}<button class="btn sm" style="font-size:10px;padding:2px 7px" onclick="feVerDetalle('${f.id}')">ℹ️</button></td></tr>`;}).join("")}
+    </tbody></table></div>`;
+}
+
+// ── Prueba de conexión ──
+async function feProbarConexion(){
+  const activas=feConfig.filter(c=>c.activo);
+  if(!activas.length){toast("No hay ninguna sociedad activada en arca_config","err");return;}
+  for(const c of activas){
+    try{
+      const res=await fetchEdge("arca-facturacion",{action:"estado",sociedad:c.sociedad});
+      const d=await res.json();
+      if(!res.ok||d.error)throw new Error(d.error||("HTTP "+res.status));
+      const u=d.ultimos||{};
+      toast(`✓ ${c.sociedad}: conectado a ARCA (${d.ambiente}). Último comprobante A ${u[1]??"—"} · B ${u[6]??"—"}`,"ok");
+    }catch(e){toast(`✗ ${c.sociedad}: ${String(e.message||e).slice(0,140)}`,"err");}
+  }
+}
+
+// ── Emitir ──
+function feTotales(){
+  const por={};let exento=0;
+  feItems.forEach(it=>{const n=feR2(parseFloat(it.neto)||0);if(!(n>0))return;
+    if(Number(it.alicuota)===-1)exento+=n;else por[it.alicuota]=feR2((por[it.alicuota]||0)+n);});
+  let neto=0,iva=0;Object.entries(por).forEach(([pct,base])=>{neto+=base;iva+=feR2(base*Number(pct)/100);});
+  neto=feR2(neto);iva=feR2(iva);exento=feR2(exento);
+  return{neto,iva,exento,total:feR2(neto+iva+exento)};
+}
+function feAbrirEmitir(){
+  if(!document.getElementById("modal-fe-emitir")){
+    const d=document.createElement("div");d.className="mov";d.id="modal-fe-emitir";d.onclick=e=>{if(e.target===d)closeM("modal-fe-emitir");};
+    d.innerHTML=`<div class="modal" style="max-width:660px"><div class="mt"><span>🧾 Emitir factura electrónica</span><button class="mt-close" onclick="closeM('modal-fe-emitir')">✕</button></div>
+    <div style="padding:0 20px 20px">
+      <div id="fe-amb" style="font-size:12px;margin-bottom:10px"></div>
+      <div class="fgrid">
+        <div class="fg"><label class="fl">Sociedad *</label><select class="fi" id="fe-soc" onchange="feSocCambio()"><option value="SUDES">SUDES</option><option value="POINTERS">POINTERS</option></select></div>
+        <div class="fg"><label class="fl">Comprobante *</label><select class="fi" id="fe-tipo" onchange="feTipoCambio()"><option value="1">Factura A</option><option value="6">Factura B</option><option value="3">Nota de Crédito A</option><option value="8">Nota de Crédito B</option></select></div>
+        <div class="fg"><label class="fl">Fecha *</label><input class="fi" id="fe-fecha" type="date"></div>
+      </div>
+      <div class="fgrid">
+        <div class="fg"><label class="fl">Concepto</label><select class="fi" id="fe-concepto"><option value="2">Servicios</option><option value="1">Productos</option><option value="3">Productos y servicios</option></select></div>
+        <div class="fg"><label class="fl">Referencia (opcional)</label><input class="fi" id="fe-ref" placeholder="Ej: id del pago · evita facturar dos veces"></div>
+      </div>
+      <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px;margin:10px 0 6px">Receptor</div>
+      <div class="fgrid">
+        <div class="fg"><label class="fl">CUIT *</label><input class="fi" id="fe-cuit" placeholder="30-12345678-9" onblur="feBuscarReceptor()"></div>
+        <div class="fg"><label class="fl">Razón social / nombre *</label><input class="fi" id="fe-nombre"></div>
+        <div class="fg"><label class="fl">Condición frente al IVA *</label><select class="fi" id="fe-cond"></select></div>
+      </div>
+      <label id="fe-cf-wrap" style="display:none;font-size:12px;color:var(--tx2);margin:4px 0 8px"><input type="checkbox" id="fe-cf" onchange="feCFCambio()"> Consumidor final sin identificar (sin CUIT)</label>
+      <div id="fe-asoc" style="display:none;margin:6px 0;padding:10px;border:1px dashed var(--b2);border-radius:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--tx3);margin-bottom:6px">COMPROBANTE QUE SE ANULA / MODIFICA *</div>
+        <div class="fgrid"><div class="fg"><label class="fl">Tipo</label><select class="fi" id="fe-asoc-tipo"><option value="1">Factura A</option><option value="6">Factura B</option></select></div>
+        <div class="fg"><label class="fl">Punto de venta</label><input class="fi" id="fe-asoc-pv" type="number" placeholder="2"></div>
+        <div class="fg"><label class="fl">Número</label><input class="fi" id="fe-asoc-nro" type="number" placeholder="79"></div>
+        <div class="fg"><label class="fl">Fecha</label><input class="fi" id="fe-asoc-fecha" type="date"></div></div></div>
+      <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px;margin:10px 0 6px">Ítems (importes netos, sin IVA)</div>
+      <div id="fe-items"></div>
+      <button class="btn sm" style="margin-top:6px" onclick="feAgregarItem()">+ Agregar ítem</button>
+      <div id="fe-tot" style="margin-top:12px;padding:10px 12px;background:var(--surf2);border-radius:8px;font-size:12px"></div>
+      <div class="ma" style="margin-top:14px"><button class="bc" onclick="closeM('modal-fe-emitir')">Cancelar</button><button class="bk" id="fe-btn" onclick="feEmitir()">Emitir con ARCA</button></div>
+    </div></div>`;
+    document.body.appendChild(d);
+  }
+  document.getElementById("fe-fecha").value=today();
+  ["fe-ref","fe-cuit","fe-nombre","fe-asoc-pv","fe-asoc-nro","fe-asoc-fecha"].forEach(id=>{document.getElementById(id).value="";});
+  document.getElementById("fe-tipo").value="1";document.getElementById("fe-concepto").value="2";
+  const cf=document.getElementById("fe-cf");cf.checked=false;
+  const act=feConfig.find(c=>c.activo);if(act)document.getElementById("fe-soc").value=act.sociedad;
+  feItems=[{descripcion:"",neto:"",alicuota:21}];
+  feTipoCambio();feSocCambio();feRenderItems();
+  openM("modal-fe-emitir");
+}
+function feSocCambio(){
+  const c=feConfig.find(x=>x.sociedad===document.getElementById("fe-soc").value);
+  const a=document.getElementById("fe-amb");
+  a.innerHTML=!c?`<span style="color:var(--re)">⚠️ Esta sociedad no tiene configuración ARCA.</span>`:!c.activo?`<span style="color:var(--re)">⚠️ La facturación electrónica de ${esc(c.sociedad)} está desactivada.</span>`:
+    c.ambiente==="produccion"?`<span style="color:var(--gr)">● PRODUCCIÓN</span> — el comprobante tiene validez fiscal.`:`<span style="color:var(--am,#F59E0B)">● PRUEBA (homologación)</span> — el comprobante no tiene validez fiscal.`;
+}
+function feTipoCambio(){
+  const tipo=Number(document.getElementById("fe-tipo").value),letra=feLetra(tipo);
+  const sel=document.getElementById("fe-cond"),prev=sel.value;
+  sel.innerHTML=FE_CONDS_POR_LETRA[letra].map(k=>`<option value="${k}">${esc(FE_COND_IVA[k])}</option>`).join("");
+  if(prev&&[...sel.options].some(o=>o.value===prev))sel.value=prev;
+  document.getElementById("fe-cf-wrap").style.display=letra==="B"?"":"none";
+  if(letra!=="B"){document.getElementById("fe-cf").checked=false;feCFCambio();}
+  document.getElementById("fe-asoc").style.display=FE_ES_NC(tipo)?"":"none";
+  document.getElementById("fe-asoc-tipo").value=letra==="A"?"1":"6";
+}
+function feCFCambio(){
+  const on=document.getElementById("fe-cf").checked;
+  document.getElementById("fe-cuit").disabled=on;
+  if(on){document.getElementById("fe-cuit").value="";document.getElementById("fe-cond").value="5";if(!document.getElementById("fe-nombre").value)document.getElementById("fe-nombre").value="Consumidor Final";}
+}
+async function feBuscarReceptor(){
+  const d=String(document.getElementById("fe-cuit").value||"").replace(/\D/g,"");if(d.length!==11)return;
+  const con=`${d.slice(0,2)}-${d.slice(2,10)}-${d.slice(10)}`;
+  try{
+    let nombre="",cond=null;
+    const [cl]=await sb(`elearning_clientes?cuit=eq.${d}&select=nombre_completo,razon_social,condicion_fiscal`).catch(()=>[]);
+    if(cl){nombre=cl.razon_social||cl.nombre_completo||"";cond=feCondDeFiscal(cl.condicion_fiscal);}
+    if(!nombre){const [al]=await sb(`alumnos?or=(cuit.eq.${d},cuit.eq.${con})&select=nombre,apellido`).catch(()=>[]);if(al)nombre=`${al.apellido||""} ${al.nombre||""}`.trim();}
+    if(!nombre){const [pr]=await sb(`proveedores?or=(cuit.eq.${d},cuit.eq.${con})&select=nombre,condicion_iva`).catch(()=>[]);if(pr){nombre=pr.nombre||"";cond=cond||({responsable_inscripto:1,monotributo:6,exento:4}[pr.condicion_iva]||null);}}
+    const nom=document.getElementById("fe-nombre");if(nombre&&!nom.value)nom.value=nombre;
+    const sel=document.getElementById("fe-cond");if(cond&&[...sel.options].some(o=>Number(o.value)===cond))sel.value=String(cond);
+  }catch(_){}
+}
+function feAgregarItem(){feItems.push({descripcion:"",neto:"",alicuota:21});feRenderItems();}
+function feQuitarItem(i){feItems.splice(i,1);if(!feItems.length)feItems.push({descripcion:"",neto:"",alicuota:21});feRenderItems();}
+function feItemSet(i,k,v){feItems[i][k]=k==="alicuota"?Number(v):v;feTotalesVista();}
+function feRenderItems(){
+  document.getElementById("fe-items").innerHTML=feItems.map((it,i)=>`<div style="display:grid;grid-template-columns:1fr 120px 100px 28px;gap:6px;margin-bottom:6px">
+    <input class="fi" placeholder="Descripción" value="${esc(it.descripcion)}" oninput="feItemSet(${i},'descripcion',this.value)">
+    <input class="fi" type="number" step="0.01" min="0" placeholder="Neto" value="${esc(it.neto)}" oninput="feItemSet(${i},'neto',this.value)">
+    <select class="fi" onchange="feItemSet(${i},'alicuota',this.value)">${[[21,"IVA 21%"],[10.5,"IVA 10,5%"],[27,"IVA 27%"],[0,"IVA 0%"],[-1,"Exento"]].map(([v,l])=>`<option value="${v}"${Number(it.alicuota)===v?" selected":""}>${l}</option>`).join("")}</select>
+    <button class="btn sm danger" style="padding:0" onclick="feQuitarItem(${i})" title="Quitar">✕</button></div>`).join("");
+  feTotalesVista();
+}
+function feTotalesVista(){
+  const t=feTotales();
+  document.getElementById("fe-tot").innerHTML=`Neto ${feM(t.neto)}${t.exento?` · Exento ${feM(t.exento)}`:""} · IVA ${feM(t.iva)} · <b style="font-size:14px">Total ${feM(t.total)}</b>`;
+}
+async function feEmitir(){
+  const v=id=>document.getElementById(id).value.trim();
+  const soc=v("fe-soc"),tipo=Number(v("fe-tipo")),cf=document.getElementById("fe-cf").checked;
+  const cfg=feConfig.find(c=>c.sociedad===soc);
+  if(!cfg||!cfg.activo){toast(`La facturación electrónica de ${soc} no está activada`,"err");return;}
+  const cuit=v("fe-cuit").replace(/\D/g,"");
+  if(!cf&&cuit.length!==11){toast("Ingresá el CUIT del receptor (11 dígitos)","err");return;}
+  if(!v("fe-nombre")){toast("Falta el nombre o razón social del receptor","err");return;}
+  const items=feItems.filter(it=>parseFloat(it.neto)>0).map(it=>({descripcion:it.descripcion||"Servicios",neto:feR2(parseFloat(it.neto)),alicuota:Number(it.alicuota)}));
+  if(!items.length){toast("Cargá al menos un ítem con importe","err");return;}
+  const t=feTotales();
+  const body={action:"emitir",sociedad:soc,cbte_tipo:tipo,fecha:v("fe-fecha"),concepto:Number(v("fe-concepto")),origen:"panel",
+    receptor:cf?{doc_tipo:99,doc_nro:"0",nombre:v("fe-nombre"),cond_iva_id:5}:{doc_tipo:80,doc_nro:cuit,nombre:v("fe-nombre"),cond_iva_id:Number(v("fe-cond"))},items};
+  if(v("fe-ref"))body.referencia=v("fe-ref");
+  if(FE_ES_NC(tipo)){
+    const pv=Number(v("fe-asoc-pv")),nro=Number(v("fe-asoc-nro"));
+    if(!pv||!nro){toast("Indicá el comprobante que se anula (punto de venta y número)","err");return;}
+    body.comprobante_asociado={tipo:Number(v("fe-asoc-tipo")),pto_vta:pv,numero:nro,fecha:v("fe-asoc-fecha")||undefined};
+  }
+  const prod=cfg.ambiente==="produccion";
+  if(!confirm(`¿Emitir ${FE_TIPOS[tipo]} por ${feM(t.total)} a ${v("fe-nombre")}?\n\n`+(prod?"ESTÁS EN PRODUCCIÓN: el comprobante tiene validez fiscal y no se puede borrar (solo se anula con una nota de crédito).":"Ambiente de PRUEBA: el comprobante no tiene validez fiscal.")))return;
+  if(prod)body.confirmar_produccion=true;
+  const btn=document.getElementById("fe-btn");btn.disabled=true;btn.textContent="Emitiendo...";
+  try{
+    const res=await fetchEdge("arca-facturacion",body);
+    const d=await res.json().catch(()=>({}));
+    if(!res.ok||d.error){await loadFacturasEmitidas();throw new Error(d.error||("HTTP "+res.status));}
+    closeM("modal-fe-emitir");
+    toast(`✓ ${FE_TIPOS[tipo]} ${feNum(d.factura)} autorizada · CAE ${d.factura.cae}${d.factura.repetida?" (ya estaba emitida)":""}`,"ok");
+    await loadFacturasEmitidas();
+    feDescargarPDF(d.factura.id,d.factura);
+  }catch(e){toast("No se pudo emitir: "+String(e.message||e).slice(0,200),"err");}
+  finally{btn.disabled=false;btn.textContent="Emitir con ARCA";}
+}
+
+// ── Detalle (observaciones de ARCA) ──
+function feVerDetalle(id){
+  const f=feFacturas.find(x=>x.id===id);if(!f)return;
+  const obs=Array.isArray(f.observaciones)?f.observaciones:[];
+  let d=document.getElementById("modal-fe-det");
+  if(!d){d=document.createElement("div");d.className="mov";d.id="modal-fe-det";d.onclick=e=>{if(e.target===d)closeM("modal-fe-det");};document.body.appendChild(d);}
+  d.innerHTML=`<div class="modal" style="max-width:520px"><div class="mt"><span>${esc(FE_TIPOS[f.cbte_tipo]||"")} ${esc(feNum(f))}</span><button class="mt-close" onclick="closeM('modal-fe-det')">✕</button></div>
+  <div style="padding:0 20px 20px;font-size:12px;color:var(--tx2);line-height:1.7">
+    <div><b>Estado:</b> ${esc(f.estado)}${f.resultado?` (resultado ARCA: ${esc(f.resultado)})`:""} · <b>Ambiente:</b> ${esc(f.ambiente)}</div>
+    <div><b>Receptor:</b> ${esc(f.receptor_nombre||"—")} · ${esc(f.receptor_doc_nro||"")} · ${esc(FE_COND_IVA[f.receptor_cond_iva_id]||"")}</div>
+    <div><b>CAE:</b> ${esc(f.cae||"—")} ${f.cae_vto?`· vence ${esc(feFechaAR(f.cae_vto))}`:""}</div>
+    ${f.referencia?`<div><b>Referencia:</b> ${esc(f.referencia)}</div>`:""}
+    ${f.comprobante_asociado?`<div><b>Comprobante asociado:</b> ${esc(FE_TIPOS[f.comprobante_asociado.tipo]||"")} ${esc(String(f.comprobante_asociado.pto_vta||"").padStart(4,"0"))}-${esc(String(f.comprobante_asociado.numero||"").padStart(8,"0"))}</div>`:""}
+    <div style="margin-top:8px"><b>Mensajes de ARCA:</b>${obs.length?`<ul style="margin:4px 0 0 18px">${obs.map(o=>`<li>${esc(o.codigo||"")} ${esc(o.mensaje||"")}</li>`).join("")}</ul>`:" ninguno"}</div>
+    ${f.estado==="pendiente"?`<div style="margin-top:8px;color:var(--am,#F59E0B)">Quedó pendiente: no se sabe si ARCA llegó a autorizarla. Volvé a emitir con la misma referencia y el sistema consulta a ARCA antes de pedir otro número.</div>`:""}
+  </div></div>`;
+  openM("modal-fe-det");
+}
+
+// ── PDF con QR ──
+async function feDescargarPDF(id,fila){
+  const f=fila||feFacturas.find(x=>x.id===id);if(!f)return;
+  try{const doc=await feGenerarPDF(f);doc.save(`${(FE_TIPOS[f.cbte_tipo]||"Comprobante").replace(/ /g,"_")}_${feNum(f)}.pdf`);}
+  catch(e){toast("No se pudo generar el PDF: "+String(e.message||e).slice(0,100),"err");}
+}
+async function feGenerarPDF(f){
+  if(!window.jspdf)throw new Error("no se cargó el generador de PDF");
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  const fiscal=(await getFiscalSociedad(f.sociedad))||{};
+  let logo=null;try{logo=await getLogoDataUrl(f.sociedad);}catch(_){}
+  const letra=feLetra(f.cbte_tipo),nc=FE_ES_NC(f.cbte_tipo);
+  const L=12,R=198;
+  if(f.ambiente==="homologacion"){   // marca de agua detrás del contenido
+    doc.setTextColor(248,200,200);doc.setFont("helvetica","bold");doc.setFontSize(34);
+    doc.text("PRUEBA - SIN VALIDEZ FISCAL",105,160,{align:"center",angle:30});doc.setTextColor(0);
+  }
+  // Encabezado
+  doc.setDrawColor(60);doc.setLineWidth(.4);doc.rect(L,10,R-L,40);
+  doc.line(105,10,105,50);doc.setFillColor(255,255,255);doc.rect(97,10,16,16,"FD");
+  doc.setFont("helvetica","bold");doc.setFontSize(26);doc.text(letra,105,22,{align:"center"});
+  doc.setFontSize(7);doc.text(`COD. ${String(f.cbte_tipo).padStart(3,"0")}`,105,25.2,{align:"center"});
+  let x=L+3;
+  if(logo){try{const p=doc.getImageProperties(logo),h=14,w=h*(p.width/p.height);doc.addImage(logo,"PNG",L+3,13,Math.min(w,34),h);x=L+3;}catch(_){}}
+  doc.setFont("helvetica","bold");doc.setFontSize(12);doc.text(fiscal.razon_social||f.sociedad,L+3,logo?33:20,{maxWidth:80});
+  doc.setFont("helvetica","normal");doc.setFontSize(8.5);
+  doc.text(`Domicilio: ${fiscal.domicilio||"—"}`,L+3,logo?38:28,{maxWidth:80});
+  doc.text(`Condición frente al IVA: ${fiscal.condicion_iva||"Responsable Inscripto"}`,L+3,logo?43:33,{maxWidth:80});
+  doc.setFont("helvetica","bold");doc.setFontSize(15);doc.text((FE_TIPOS[f.cbte_tipo]||"Comprobante").toUpperCase().replace(/ [ABC]$/,""),118,19,{maxWidth:78});
+  doc.setFontSize(10);doc.text(`Nº ${feNum(f)}`,118,27);
+  doc.setFont("helvetica","normal");doc.setFontSize(9);
+  doc.text(`Fecha de emisión: ${feFechaAR(f.fecha)}`,118,34);
+  doc.text(`CUIT: ${fiscal.cuit||"—"}`,118,40);
+  // Receptor
+  doc.rect(L,53,R-L,18);doc.setFontSize(9);
+  doc.setFont("helvetica","bold");doc.text("CUIT:",L+3,59);doc.text("Apellido y Nombre / Razón Social:",L+3,65);
+  doc.setFont("helvetica","normal");doc.text(f.receptor_doc_tipo===99?"—":String(f.receptor_doc_nro||""),L+14,59);doc.text(String(f.receptor_nombre||""),L+60,65,{maxWidth:R-L-65});
+  doc.setFont("helvetica","bold");doc.text("Condición frente al IVA:",105,59);doc.setFont("helvetica","normal");doc.text(FE_COND_IVA[f.receptor_cond_iva_id]||"",142,59,{maxWidth:54});
+  let y=76;
+  if(nc&&f.comprobante_asociado){doc.setFont("helvetica","italic");doc.setFontSize(8.5);doc.text(`Comprobante asociado: ${FE_TIPOS[f.comprobante_asociado.tipo]||""} ${String(f.comprobante_asociado.pto_vta||"").padStart(4,"0")}-${String(f.comprobante_asociado.numero||"").padStart(8,"0")}`,L,y);y+=5;}
+  // Ítems
+  const items=Array.isArray(f.items)&&f.items.length?f.items:(Array.isArray(f.alicuotas)?f.alicuotas.map(a=>({descripcion:"Servicios",neto:a.BaseImp,alicuota:a.pct})):[]);
+  doc.setFillColor(235,235,240);doc.rect(L,y,R-L,7,"F");doc.setFont("helvetica","bold");doc.setFontSize(8.5);
+  doc.text("Descripción",L+2,y+5);doc.text("Cant.",112,y+5,{align:"right"});doc.text("Precio unit.",146,y+5,{align:"right"});doc.text("% IVA",164,y+5,{align:"right"});doc.text("Subtotal",R-2,y+5,{align:"right"});
+  y+=7;doc.setFont("helvetica","normal");
+  items.forEach(it=>{
+    const n=Number(it.neto)||0;
+    const lines=doc.splitTextToSize(String(it.descripcion||"Servicios"),80);
+    doc.text(lines,L+2,y+5);doc.text("1,00",112,y+5,{align:"right"});doc.text(feM(n),146,y+5,{align:"right"});
+    doc.text(Number(it.alicuota)===-1?"Exento":`${String(Number(it.alicuota)).replace(".",",")}%`,164,y+5,{align:"right"});doc.text(feM(n),R-2,y+5,{align:"right"});
+    y+=Math.max(7,lines.length*4.2+3);doc.setDrawColor(210);doc.line(L,y,R,y);
+  });
+  // Totales
+  y=Math.max(y+6,190);doc.setDrawColor(60);doc.setFontSize(9.5);
+  const tot=(lbl,val,bold)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.text(lbl,140,y,{align:"right"});doc.text(feM(val),R-2,y,{align:"right"});y+=5.5;};
+  tot("Importe Neto Gravado: $",f.neto);
+  (Array.isArray(f.alicuotas)?f.alicuotas:[]).forEach(a=>tot(`IVA ${String(a.pct).replace(".",",")}%: $`,a.Importe));
+  if(Number(f.exento))tot("Importe Exento: $",f.exento);
+  if(Number(f.no_gravado))tot("Importe No Gravado: $",f.no_gravado);
+  doc.setFontSize(11.5);tot("IMPORTE TOTAL: $",f.total,true);
+  // Pie: QR + CAE
+  const yq=250;
+  if(f.qr_url&&typeof qrcode==="function"){
+    try{const qr=qrcode(0,"M");qr.addData(f.qr_url);qr.make();const n=qr.getModuleCount(),size=32,mod=size/n;
+      doc.setFillColor(0,0,0);for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(qr.isDark(r,c))doc.rect(L+c*mod,yq+r*mod,mod+.05,mod+.05,"F");
+    }catch(_){}
+  }
+  doc.setFont("helvetica","bold");doc.setFontSize(9.5);doc.text("Comprobante Autorizado",L+38,yq+6);
+  doc.setFont("helvetica","normal");doc.text(`CAE N°: ${f.cae||"—"}`,R-2,yq+6,{align:"right"});doc.text(`Fecha de Vto. de CAE: ${feFechaAR(f.cae_vto)}`,R-2,yq+12,{align:"right"});
+  doc.setFontSize(7.5);doc.setTextColor(110);doc.text("Esta administración federal no se responsabiliza por los datos ingresados en el detalle de la operación.",L+38,yq+18,{maxWidth:R-L-40});doc.setTextColor(0);
+  return doc;
+}
 
 async function loadElearning(){
   const el=document.getElementById("el-contenido");
