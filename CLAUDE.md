@@ -1901,5 +1901,5 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 - **Avisa si la factura ya está cargada** (mismo CUIT + tipo + número), con el estado.
 - **El QR no trae neto ni IVA:** el panel muestra botones **«Todo 21% / 10,5% / 27% / Exento»** que reparten el total (el IVA absorbe el redondeo para que el total quede exacto). Si la factura mezcla alícuotas o trae percepciones, se carga a mano o con IA.
 - La IA queda como respaldo explícito: «✨ Completar con IA (gasta tokens) — solo si el QR no alcanza». Tipos que no son factura/NC (ej. 63 liquidación) no pisan el tipo.
-- Probado con 15 facturas reales en PDF (13 con QR legible; los certificados y el balance no tienen QR) y 19 controles sobre el código real del panel (jsdom + pdf.js + jsQR).
+- Probado con 16 facturas reales en PDF (14 con QR legible; 2 facturas viejas no lo traen; los certificados y el balance tampoco) y 19 controles sobre el código real del panel (jsdom + pdf.js + jsQR).
 - **No cambia:** `whatsapp-agente` (carga por WhatsApp) y `leer-factura` siguen usando IA; el QR podría aplicarse ahí también.
