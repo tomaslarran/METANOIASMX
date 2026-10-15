@@ -1923,3 +1923,30 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 - Probado con 29 controles sobre el código real (totales, filtros, validaciones, cuerpo enviado a la función en prueba/producción, B a consumidor final, nota de crédito, error de ARCA) y el PDF renderizado y revisado a ojo (factura y nota de crédito).
 - **Sin ARCA real todavía:** falta el trámite del certificado (ver 13 Oct). Hasta entonces la pantalla se puede abrir pero «Emitir» avisa que la sociedad está desactivada.
 - **Pendiente:** enganche con `sync-elearning` (`pago.aprobado` → emitir y devolver el PDF a la plataforma), asientos `devengado_venta`/`cobro_venta` por CUIT desde `facturas_emitidas`, Libro IVA Ventas, factura C / FCE MiPyME si hicieran falta, y anular una factura emitida desde el listado (hoy se hace con una nota de crédito a mano).
+
+---
+
+## 📌 Cierre de jornada — 13/15 Oct 2026 (retomar desde acá)
+
+**Hecho (todo publicado, panel en v89):**
+- **Facturación electrónica ARCA — base técnica:** edge function `arca-facturacion` (WSAA + WSFEv1) **ya deployada**, tablas `arca_config`/`arca_tokens`/`facturas_emitidas` creadas (SUDES y POINTERS cargadas en homologación, **desactivadas**), guía `guia_arca_facturacion.md` y **`Guia_certificado_ARCA.pdf`** (para quien tenga la clave fiscal; incluye los `.csr`). Los pedidos de certificado y las claves privadas de homologación están en `C:\Users\admin\arca_certs\` (**fuera de OneDrive; nunca subir las `.key`**).
+- **Pantalla Contabilidad → Facturas emitidas** (listado, emisión A/B y NC A/B, PDF con QR, prueba de conexión). Falta el certificado para emitir de verdad.
+- **Lectura sin IA:** VEP (pdf.js) y facturas de compra (QR de ARCA con jsQR); la IA queda como botón manual «gasta tokens».
+- **Subida de archivos:** función `subir-archivo-storage` (respaldo cuando Storage rechaza por RLS) ya deployada; Valentina confirmó que el VEP funciona.
+- **Cuotas de préstamos:** ✎ editar (medio/fecha/monto) y ↩ revertir el pago.
+- **Libro Diario:** oculta anulados por defecto («Ver anulados»); `delComprobante` anula los asientos.
+- **Limpieza de datos (con respaldo en `backups/`):** egreso de caja duplicado de San Lorenzo ($13.569,58 del 5/07) y pago huérfano de Aerolíneas (OP-202607-0741: caja + asiento anulado + OP). La factura 0060-00456816 de Aerolíneas quedó pendiente de pago; **OP-202607-8227 (San Lorenzo, Efectivo) se dejó como está** por decisión de Tomás.
+
+**Pendiente de Tomás (en este orden):**
+1. **Trámite del certificado de homologación de ARCA** (SUDES y POINTERS): pasar el PDF a quien tenga la clave fiscal → recibir los `.crt` → cargar secrets `ARCA_CERT_*`/`ARCA_KEY_*` en Supabase → `UPDATE arca_config SET activo=true` → «🔌 Probar conexión ARCA» en la pantalla.
+2. Probar en pantalla: subir una factura real (QR), editar/revertir una cuota, cargar un VEP de Ganancias/IIBB/cargas sociales (si el tipo o el período no salen bien, mandar el PDF para ajustar `_vepParsearTexto`).
+3. Los de antes: 🔄 Generar históricos, importar extractos jul/ago/sep (SUDES y POINTERS) y cerrar meses, renovar certificado MiPyME de SUDES (vence 31/10), categoría IIBB de los 46 proveedores, anticipos de IIBB jul/ago/sep, cambio de dominio (esperando la reunión de equipo).
+4. Con Estela: comprobantes a emitir (A/B/NC, FCE MiPyME) y criterios provisorios de asientos (VEP, Echeq de terceros). Con Agustín: fecha de corte del plugin de Finnegans (**nunca facturar con los dos a la vez**).
+
+**Pendiente de desarrollo (por prioridad):**
+1. Asientos de ventas `devengado_venta`/`cobro_venta` por CUIT desde `facturas_emitidas` + control «ingresos» en el cierre de mes (Fase 3 contable).
+2. Enganche con `sync-elearning`: `pago.aprobado` → emitir (función `arca-facturacion` ya acepta `x-cron-secret`; habrá que desactivar «Verify JWT») y devolver el PDF/CAE a la plataforma.
+3. Libro IVA Ventas desde `facturas_emitidas`.
+4. Botón de corrección (editar/revertir) para **sueldos** y pagos de **VEP**; anular una factura emitida desde el listado.
+5. Aplicar el QR de ARCA también en `whatsapp-agente`/`leer-factura` (hoy usan IA).
+6. Cuenta en dólares/ICBC, rol `contable` + numeración Tango (esperando a Auren), partir Cash Flow + Ctrl+K, asientos de inversiones (Avantia), IIBB/SUSS en la OP.
