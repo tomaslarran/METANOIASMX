@@ -1903,3 +1903,12 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 - La IA queda como respaldo explícito: «✨ Completar con IA (gasta tokens) — solo si el QR no alcanza». Tipos que no son factura/NC (ej. 63 liquidación) no pisan el tipo.
 - Probado con 16 facturas reales en PDF (14 con QR legible; 2 facturas viejas no lo traen; los certificados y el balance tampoco) y 19 controles sobre el código real del panel (jsdom + pdf.js + jsQR).
 - **No cambia:** `whatsapp-agente` (carga por WhatsApp) y `leer-factura` siguen usando IA; el QR podría aplicarse ahí también.
+
+### ✎ Corregir el pago de una cuota de préstamo: editar o revertir (15 Oct 2026)
+**Pedido de Tomás:** al pagar una cuota se podía elegir mal el medio (ej. «Efectivo» cuando salió de la cuenta Macro) y no había cómo corregirlo.
+- **Dónde:** en el cronograma de cada préstamo (Cash Flow → Préstamos), las cuotas pagadas muestran **✎** y **↩** al lado de «Pagada»; y en **Pendientes de pago → Historial**, las filas de cuotas tienen la columna **Corregir** con «✎ Editar» / «↩ Revertir».
+- **✎ Editar:** reabre el modal de pago con **fecha, monto y medio actuales** (el medio y el monto se leen del asiento activo de la cuota: la cuota no guarda el medio) y al guardar **reemplaza el asiento** (anula el anterior y genera el nuevo con la cuenta del medio elegido; si cambia el monto, la diferencia va a intereses como siempre). **No toca el saldo del préstamo** (no se descuenta dos veces).
+- **↩ Revertir:** con confirmación, la cuota vuelve a **pendiente** (sin fecha de pago), se **anula su asiento**, se **restituye el saldo** del préstamo (suma el capital de la cuota) y las cuotas pendientes se recalculan, y si estaba cruzada con un movimiento del banco, ese movimiento **queda libre** (`conciliado=false`). Ojo: si el pago era real y está en el extracto, el próximo «🔗 Cruzar con el banco» puede volver a marcarla pagada.
+- Limitación: el medio no queda guardado en la cuota; solo en el asiento (por eso una cuota sin asiento se edita igual y genera uno nuevo).
+- Probado con 19 controles sobre el código real (pagar con Efectivo → editar a Macro POINTERS → cambiar monto → revertir → cancelar la confirmación). Sin SQL ni funciones nuevas.
+- **Pendiente:** el mismo botón de corrección para **sueldos** y **órdenes de pago** (hoy las OP se anulan solo si no están pagadas) y para pagos de **VEP**.
