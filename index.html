@@ -21880,6 +21880,7 @@ function feAbrirEmitir(){
       <label id="fe-cf-wrap" style="display:none;font-size:12px;color:var(--tx2);margin:4px 0 8px"><input type="checkbox" id="fe-cf" onchange="feCFCambio()"> Consumidor final sin identificar (sin CUIT)</label>
       <div id="fe-asoc" style="display:none;margin:6px 0;padding:10px;border:1px dashed var(--b2);border-radius:8px">
         <div style="font-size:11px;font-weight:700;color:var(--tx3);margin-bottom:6px">COMPROBANTE QUE SE ANULA / MODIFICA *</div>
+        <div class="fg" style="margin-bottom:8px"><label class="fl">Facturas del cliente</label><select class="fi" id="fe-asoc-sel" onchange="feAsocElegir(this.value)"></select></div>
         <div class="fgrid"><div class="fg"><label class="fl">Tipo</label><select class="fi" id="fe-asoc-tipo"><option value="1">Factura A</option><option value="6">Factura B</option></select></div>
         <div class="fg"><label class="fl">Punto de venta</label><input class="fi" id="fe-asoc-pv" type="number" placeholder="2"></div>
         <div class="fg"><label class="fl">Número</label><input class="fi" id="fe-asoc-nro" type="number" placeholder="79"></div>
@@ -21901,8 +21902,9 @@ function feAbrirEmitir(){
   feTipoCambio();feSocCambio();feRenderItems();
   openM("modal-fe-emitir");
   feCargarListas();
+  feAsocRefrescar();
 }
-function feSocCambio(){
+function feSocCambio(){setTimeout(feAsocRefrescar,0);
   const c=feConfig.find(x=>x.sociedad===document.getElementById("fe-soc").value);
   const a=document.getElementById("fe-amb");
   a.innerHTML=!c?`<span style="color:var(--re)">⚠️ Esta sociedad no tiene configuración ARCA.</span>`:!c.activo?`<span style="color:var(--re)">⚠️ La facturación electrónica de ${esc(c.sociedad)} está desactivada.</span>`:
@@ -21917,6 +21919,7 @@ function feTipoCambio(){
   if(letra!=="B"){document.getElementById("fe-cf").checked=false;feCFCambio();}
   document.getElementById("fe-asoc").style.display=FE_ES_NC(tipo)?"":"none";
   document.getElementById("fe-asoc-tipo").value=letra==="A"?"1":"6";
+  feAsocRefrescar();
 }
 function feCFCambio(){
   const on=document.getElementById("fe-cf").checked;
@@ -21971,6 +21974,7 @@ function _feAplicarCliente(c){
   document.getElementById("fe-nombre").value=c.nombre;
   const sel=document.getElementById("fe-cond");
   if(c.cond&&[...sel.options].some(o=>Number(o.value)===Number(c.cond)))sel.value=String(c.cond);
+  feAsocRefrescar();
 }
 function feElegirCliente(val){
   const c=feClientes.find(x=>_feCliLabel(x)===val);
@@ -21991,6 +21995,7 @@ async function feBuscarReceptor(){
   }catch(_){}
 }
 function feCuitInput(el){
+  feAsocRefrescar();
   if(String(el.value||"").replace(/\D/g,"").length===11)feBuscarReceptor();
 }
 function feItemDesc(i,el){
@@ -22047,6 +22052,45 @@ async function feGuardarProducto(){
     toast("✓ Producto creado","ok");
   }catch(e){toast("No se pudo crear el producto: "+String(e.message||e).slice(0,140),"err");}
   finally{btn.disabled=false;}
+}
+
+// ── Nota de crédito: elegir la factura que se anula entre las del cliente ──
+function feAcreditado(f){
+  return feFacturas.filter(n=>n.estado==="autorizada"&&FE_ES_NC(n.cbte_tipo)&&n.comprobante_asociado&&n.sociedad===f.sociedad&&n.ambiente===f.ambiente&&
+    Number(n.comprobante_asociado.tipo)===Number(f.cbte_tipo)&&Number(n.comprobante_asociado.pto_vta)===Number(f.pto_vta)&&Number(n.comprobante_asociado.numero)===Number(f.cbte_numero))
+    .reduce((s,n)=>s+(parseFloat(n.total)||0),0);
+}
+function feAsocRefrescar(){
+  const sel=document.getElementById("fe-asoc-sel");if(!sel)return;
+  const tipo=Number(document.getElementById("fe-tipo").value);
+  if(!FE_ES_NC(tipo)){sel.innerHTML="";return;}
+  const soc=document.getElementById("fe-soc").value,cfg=feConfig.find(c=>c.sociedad===soc),letra=feLetra(tipo);
+  const cuit=String(document.getElementById("fe-cuit").value||"").replace(/\D/g,"");
+  const cand=feFacturas.filter(f=>f.estado==="autorizada"&&!FE_ES_NC(f.cbte_tipo)&&f.sociedad===soc&&(!cfg||f.ambiente===cfg.ambiente)&&feLetra(f.cbte_tipo)===letra&&
+    (cuit.length!==11||String(f.receptor_doc_nro||"").replace(/\D/g,"")===cuit));
+  cand.sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||(b.cbte_numero-a.cbte_numero));
+  const vacio=cand.length?`— Elegí la factura que se anula (${cand.length}${cuit.length===11?" de este cliente":""}) —`
+    :(cuit.length===11?"Este cliente no tiene facturas autorizadas: completá los datos a mano":"Cargá el cliente para ver sus facturas");
+  sel.innerHTML=`<option value="">${esc(vacio)}</option>`+cand.map(f=>{
+    const ac=feAcreditado(f);
+    return`<option value="${esc(f.id)}">${esc(FE_TIPOS[f.cbte_tipo]||"")} ${esc(feNum(f))} · ${esc(feFechaAR(f.fecha))} · ${esc(feM(f.total))}${cuit.length===11?"":" · "+esc(f.receptor_nombre||"")}${ac>0?` · ya acreditado ${esc(feM(ac))}`:""}</option>`;}).join("");
+}
+function feAsocElegir(id){
+  const f=feFacturas.find(x=>x.id===id);if(!f)return;
+  const D=k=>document.getElementById(k);
+  D("fe-asoc-tipo").value=String(f.cbte_tipo);D("fe-asoc-pv").value=f.pto_vta;D("fe-asoc-nro").value=f.cbte_numero;D("fe-asoc-fecha").value=String(f.fecha||"").slice(0,10);
+  const cuit=String(f.receptor_doc_nro||"").replace(/\D/g,"");
+  if(!D("fe-cuit").value&&cuit.length===11)D("fe-cuit").value=_feFmtCuit(cuit);
+  if(!D("fe-nombre").value)D("fe-nombre").value=f.receptor_nombre||"";
+  const cond=D("fe-cond");if(f.receptor_cond_iva_id&&[...cond.options].some(o=>Number(o.value)===Number(f.receptor_cond_iva_id)))cond.value=String(f.receptor_cond_iva_id);
+  const ac=feAcreditado(f);
+  if(feItems.some(it=>parseFloat(it.neto)>0))return;        // ya cargó importes: no se los pisa
+  if(ac>0){toast(`Esa factura ya tiene notas de crédito por ${feM(ac)}: cargá el importe que falta acreditar`,"inf");return;}
+  const its=Array.isArray(f.items)?f.items:[];
+  if(!its.length)return;
+  feItems=its.map(it=>({descripcion:it.descripcion||"",neto:String(it.neto??""),alicuota:Number(it.alicuota),codigo:it.codigo_producto||undefined}));
+  feRenderItems();
+  toast("Cargué los ítems de la factura (anulación total). Si es parcial, ajustá los importes.","inf");
 }
 
 function feAgregarItem(){feItems.push({descripcion:"",neto:"",alicuota:21});feRenderItems();}
