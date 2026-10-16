@@ -1666,7 +1666,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 <div id="pg-facturas" style="display:none">
   <div class="pg-header">
     <div><div class="pg-title">Facturas emitidas</div><div class="pg-title-sub">Facturación electrónica ARCA — comprobantes de venta con CAE</div></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec" onclick="feImpAbrir()">📥 Importar emitidas de ARCA</button><button class="btn sec" onclick="feProbarConexion()">🔌 Probar conexión ARCA</button><button class="btn pri" onclick="feAbrirEmitir()">+ Emitir factura</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec" onclick="feContabilizarPendientes()" title="Genera el asiento de devengado de las ventas reales que todavía no lo tienen">🧮 Contabilizar ventas</button><button class="btn sec" onclick="feImpAbrir()">📥 Importar emitidas de ARCA</button><button class="btn sec" onclick="feProbarConexion()">🔌 Probar conexión ARCA</button><button class="btn pri" onclick="feAbrirEmitir()">+ Emitir factura</button></div>
   </div>
   <div id="fe-banner"></div>
   <div id="fe-lista"><div class="loading"><div class="loader"></div><div class="lt">Cargando facturas...</div></div></div>
@@ -22127,7 +22127,7 @@ function feImpParsear(rows,config,existentes,previas){
     const r=rows[i];if(!r||!r[I.fecha])continue;
     const tm=/^(\d+)/.exec(String(r[I.tipo]||"").trim());
     const f={sociedad:cfg.sociedad,ambiente:"produccion",pto_vta:parseInt(r[I.pv],10)||0,cbte_tipo:tm?Number(tm[1]):0,cbte_numero:parseInt(r[I.desde],10)||0,
-      fecha:_feImpFecha(r[I.fecha]),moneda:"PES",estado:"autorizada",resultado:"A",cae:String(r[I.cae]||"").replace(/\D/g,"")||null,origen:"arca_importado"};
+      fecha:_feImpFecha(r[I.fecha]),moneda:"PES",estado:"autorizada",resultado:"A",cae:String(r[I.cae]||"").replace(/\D/g,"")||null,origen:"arca_importado",qr_url:null,comprobante_asociado:null};
     const problemas=[];
     if(!f.fecha)problemas.push("fecha inválida");
     if(!f.cbte_tipo)problemas.push("tipo de comprobante no reconocido");
@@ -22216,12 +22216,62 @@ async function feImpConfirmar(){
   const btn=document.getElementById("fe-imp-btn");btn.disabled=true;btn.textContent="Importando...";
   try{
     const lote=nuevas.map(f=>{const o={...f};Object.keys(o).forEach(k=>{if(k.startsWith("_"))delete o[k];});return o;});
-    for(let i=0;i<lote.length;i+=100)await sb("facturas_emitidas",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify(lote.slice(i,i+100))});
+    const creadas=[];
+    for(let i=0;i<lote.length;i+=100)creadas.push(...(await sb("facturas_emitidas",{method:"POST",headers:{"Prefer":"return=representation"},body:JSON.stringify(lote.slice(i,i+100))})||[]));
+    let conAsiento=0,faltan=new Set();
+    for(const f of creadas.sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)))){const r=await feAsientoVenta(f).catch(()=>({ok:false}));if(r.ok)conAsiento++;else if(r.faltantes)r.faltantes.forEach(x=>faltan.add(x));}
+    if(faltan.size)toast(`No se generaron los asientos: faltan las cuentas ${[...faltan].join(", ")} en el plan. Después usá «Contabilizar ventas».`,"err");
+    else if(conAsiento)toast(`✓ ${conAsiento} asiento${conAsiento===1?"":"s"} de venta generado${conAsiento===1?"":"s"}`,"ok");
     closeM("modal-fe-imp");
     toast(`✓ ${lote.length} comprobante${lote.length===1?"":"s"} importado${lote.length===1?"":"s"} de ARCA (${feImp.sociedad})`,"ok");
     feFiltro={soc:"",estado:"",mes:"",amb:"produccion"};
     await loadFacturasEmitidas();
   }catch(e){toast("No se pudo importar: "+String(e.message||e).slice(0,160),"err");btn.disabled=false;btn.textContent="Reintentar";}
+}
+
+// ── Contabilidad de ventas: asiento de devengado por cada comprobante emitido (solo producción) ──
+// CRITERIO PROVISORIO (confirmar con la contadora): Debe Deudores por ventas / Haber Ingresos de la sociedad e IVA Débito Fiscal.
+// La nota de crédito es el asiento invertido. El cobro (cobro_venta) todavía no se asienta: llega con la conciliación de ventas.
+const FE_CTA_DEUDORES="1.1.02.002",FE_CTA_IVA_DEBITO="2.1.03.001",FE_CTA_INGRESOS={SUDES:"4.1.01.001",POINTERS:"4.2.01.001"};
+function feLineasVenta(f){
+  const total=feR2(Math.abs(parseFloat(f.total)||0));if(!(total>0))return null;
+  const iva=feR2(Math.abs(parseFloat(f.iva)||0)),ingreso=feR2(total-iva);
+  const cta=FE_CTA_INGRESOS[f.sociedad];if(!cta)return null;
+  const nc=FE_ES_NC(f.cbte_tipo),L=[];
+  if(nc){
+    if(ingreso>0)L.push({codigo:cta,debe:ingreso,desc:"Ingresos (NC)"});
+    if(iva>0)L.push({codigo:FE_CTA_IVA_DEBITO,debe:iva,desc:"IVA Débito (NC)"});
+    L.push({codigo:FE_CTA_DEUDORES,haber:total,desc:"Deudores por ventas (NC)"});
+  }else{
+    L.push({codigo:FE_CTA_DEUDORES,debe:total,desc:"Deudores por ventas"});
+    if(ingreso>0)L.push({codigo:cta,haber:ingreso,desc:"Ingresos"});
+    if(iva>0)L.push({codigo:FE_CTA_IVA_DEBITO,haber:iva,desc:"IVA Débito Fiscal"});
+  }
+  return L;
+}
+const feDescAsiento=f=>`Devengado venta: ${FE_TIPOS[f.cbte_tipo]||"Comprobante"} N°${feNum(f)} — ${f.receptor_nombre||"s/d"}`;
+async function feAsientoVenta(f){
+  if(!f||f.ambiente!=="produccion"||f.estado!=="autorizada"||f.asiento_id)return{ok:false,motivo:"no aplica"};
+  if(typeof generarAsiento!=="function")return{ok:false,motivo:"sin módulo contable"};
+  const lineas=feLineasVenta(f);if(!lineas)return{ok:false,motivo:"sin importe o sin cuenta de ingresos"};
+  const a=await generarAsiento({fecha:f.fecha,sociedad:f.sociedad,tipo:"devengado_venta",origen:"factura_emitida",origen_id:f.id,descripcion:feDescAsiento(f),lineas});
+  if(a&&a._faltantes)return{ok:false,faltantes:a._faltantes};
+  if(!a||!a.id)return{ok:false,motivo:"no se pudo generar el asiento"};
+  await sb(`facturas_emitidas?id=eq.${f.id}`,{method:"PATCH",body:JSON.stringify({asiento_id:a.id})});
+  f.asiento_id=a.id;
+  return{ok:true,asiento:a};
+}
+async function feContabilizarPendientes(){
+  const pend=feFacturas.filter(f=>f.ambiente==="produccion"&&f.estado==="autorizada"&&!f.asiento_id);
+  if(!pend.length){toast("No hay ventas pendientes de contabilizar","inf");return;}
+  if(!confirm(`¿Generar el asiento de devengado de ${pend.length} comprobante${pend.length===1?"":"s"} emitido${pend.length===1?"":"s"}?\nDebe Deudores por ventas / Haber Ingresos e IVA Débito Fiscal.`))return;
+  let ok=0,faltan=new Set(),otros=0;
+  for(const f of pend.sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)))){
+    const r=await feAsientoVenta(f).catch(()=>({ok:false}));
+    if(r.ok)ok++;else if(r.faltantes)r.faltantes.forEach(x=>faltan.add(x));else otros++;
+  }
+  toast(faltan.size?`Faltan cuentas en el plan: ${[...faltan].join(", ")}`:`✓ ${ok} asiento${ok===1?"":"s"} generado${ok===1?"":"s"}${otros?` · ${otros} sin generar`:""}`,faltan.size||otros?"err":"ok");
+  await loadFacturasEmitidas();
 }
 
 function feAgregarItem(){feItems.push({descripcion:"",neto:"",alicuota:21});feRenderItems();}
@@ -22260,6 +22310,7 @@ async function feEmitir(){
     if(!res.ok||d.error){await loadFacturasEmitidas();throw new Error(d.error||("HTTP "+res.status));}
     closeM("modal-fe-emitir");
     toast(`✓ ${FE_TIPOS[tipo]} ${feNum(d.factura)} autorizada · CAE ${d.factura.cae}${d.factura.repetida?" (ya estaba emitida)":""}`,"ok");
+    if(d.factura&&d.factura.ambiente==="produccion"){const r=await feAsientoVenta(d.factura).catch(()=>({ok:false}));if(r.faltantes)toast(`No se generó el asiento de la venta: faltan las cuentas ${r.faltantes.join(", ")}`,"err");}
     await loadFacturasEmitidas();
     feDescargarPDF(d.factura.id,d.factura);
   }catch(e){toast("No se pudo emitir: "+String(e.message||e).slice(0,200),"err");}
