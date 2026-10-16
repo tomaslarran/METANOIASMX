@@ -21871,8 +21871,9 @@ function feAbrirEmitir(){
         <div class="fg"><label class="fl">Referencia (opcional)</label><input class="fi" id="fe-ref" placeholder="Ej: id del pago · evita facturar dos veces"></div>
       </div>
       <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px;margin:10px 0 6px">Receptor</div>
+      <div class="fg" style="margin-bottom:8px"><label class="fl">Buscar cliente ya cargado (nombre o CUIT)</label><input class="fi" id="fe-cli-q" list="fe-dl-cli" autocomplete="off" placeholder="Empezá a escribir y elegí de la lista" oninput="feElegirCliente(this.value)"><datalist id="fe-dl-cli"></datalist></div>
       <div class="fgrid">
-        <div class="fg"><label class="fl">CUIT *</label><input class="fi" id="fe-cuit" placeholder="30-12345678-9" onblur="feBuscarReceptor()"></div>
+        <div class="fg"><label class="fl">CUIT *</label><input class="fi" id="fe-cuit" placeholder="30-12345678-9" oninput="feCuitInput(this)" onblur="feBuscarReceptor()"></div>
         <div class="fg"><label class="fl">Razón social / nombre *</label><input class="fi" id="fe-nombre"></div>
         <div class="fg"><label class="fl">Condición frente al IVA *</label><select class="fi" id="fe-cond"></select></div>
       </div>
@@ -21885,20 +21886,21 @@ function feAbrirEmitir(){
         <div class="fg"><label class="fl">Fecha</label><input class="fi" id="fe-asoc-fecha" type="date"></div></div></div>
       <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px;margin:10px 0 6px">Ítems (importes netos, sin IVA)</div>
       <div id="fe-items"></div>
-      <button class="btn sm" style="margin-top:6px" onclick="feAgregarItem()">+ Agregar ítem</button>
+      <button class="btn sm" style="margin-top:6px" onclick="feAgregarItem()">+ Agregar ítem</button> <button class="btn sm" style="margin-top:6px" onclick="feNuevoProducto()">＋ Nuevo producto</button>
       <div id="fe-tot" style="margin-top:12px;padding:10px 12px;background:var(--surf2);border-radius:8px;font-size:12px"></div>
       <div class="ma" style="margin-top:14px"><button class="bc" onclick="closeM('modal-fe-emitir')">Cancelar</button><button class="bk" id="fe-btn" onclick="feEmitir()">Emitir con ARCA</button></div>
     </div></div>`;
     document.body.appendChild(d);
   }
   document.getElementById("fe-fecha").value=today();
-  ["fe-ref","fe-cuit","fe-nombre","fe-asoc-pv","fe-asoc-nro","fe-asoc-fecha"].forEach(id=>{document.getElementById(id).value="";});
+  ["fe-ref","fe-cuit","fe-nombre","fe-cli-q","fe-asoc-pv","fe-asoc-nro","fe-asoc-fecha"].forEach(id=>{document.getElementById(id).value="";});
   document.getElementById("fe-tipo").value="1";document.getElementById("fe-concepto").value="2";
   const cf=document.getElementById("fe-cf");cf.checked=false;
   const act=feConfig.find(c=>c.activo);if(act)document.getElementById("fe-soc").value=act.sociedad;
   feItems=[{descripcion:"",neto:"",alicuota:21}];
   feTipoCambio();feSocCambio();feRenderItems();
   openM("modal-fe-emitir");
+  feCargarListas();
 }
 function feSocCambio(){
   const c=feConfig.find(x=>x.sociedad===document.getElementById("fe-soc").value);
@@ -21921,30 +21923,135 @@ function feCFCambio(){
   document.getElementById("fe-cuit").disabled=on;
   if(on){document.getElementById("fe-cuit").value="";document.getElementById("fe-cond").value="5";if(!document.getElementById("fe-nombre").value)document.getElementById("fe-nombre").value="Consumidor Final";}
 }
+// ── Listas para elegir: clientes ya cargados y productos del catálogo de Finnegans ──
+let feClientes=[],_feClientesT=0;
+const FE_ALIC_DE_IVA={"21":21,"10.5":10.5,"27":27,"exento":-1,"nograv":0};
+const _feFmtCuit=d=>`${d.slice(0,2)}-${d.slice(2,10)}-${d.slice(10)}`;
+const _feProdLabel=p=>p.nombre&&_normProd(p.nombre)!==_normProd(p.codigo)?`${p.codigo} — ${p.nombre}`:p.codigo;
+function feProductosLista(){
+  return productosFinn.filter(p=>p.activo&&p.uso!=="interno").sort((a,b)=>(a.uso===b.uso?0:a.uso==="venta"?-1:1)||String(a.codigo).localeCompare(String(b.codigo),"es"));
+}
+async function feCargarListas(){
+  try{if(!productosFinn.length)await cargarProductosFinn();}catch(_){}
+  feRenderListaProductos();
+  if(feClientes.length&&Date.now()-_feClientesT<300000){feRenderListaClientes();return;}
+  const m=new Map();
+  const add=(cuit,nombre,cond,origen)=>{
+    const d=String(cuit||"").replace(/\D/g,"");nombre=String(nombre||"").trim();
+    if(d.length!==11||!nombre)return;
+    const x=m.get(d);
+    if(!x)m.set(d,{cuit:d,nombre,cond:cond||null,origen});else if(cond&&!x.cond)x.cond=cond;
+  };
+  const q=p=>sb(p).catch(()=>[]);
+  const [fe,el,pr,al]=await Promise.all([
+    q("facturas_emitidas?select=receptor_doc_nro,receptor_nombre,receptor_cond_iva_id&order=fecha.desc&limit=500"),
+    q("elearning_clientes?select=cuit,nombre_completo,razon_social,condicion_fiscal&limit=2000"),
+    q("proveedores?select=nombre,cuit,condicion_iva&limit=2000"),
+    q("alumnos?select=nombre,apellido,cuit&limit=3000")]);
+  (fe||[]).forEach(f=>add(f.receptor_doc_nro,f.receptor_nombre,f.receptor_cond_iva_id,"facturado antes"));
+  (el||[]).forEach(c=>add(c.cuit,c.razon_social||c.nombre_completo,feCondDeFiscal(c.condicion_fiscal),"plataforma"));
+  (pr||[]).forEach(p=>add(p.cuit,p.nombre,{responsable_inscripto:1,monotributo:6,exento:4}[p.condicion_iva]||null,"proveedor"));
+  (al||[]).forEach(a=>add(a.cuit,`${a.apellido||""} ${a.nombre||""}`,null,"alumno"));
+  feClientes=[...m.values()].sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"));
+  _feClientesT=Date.now();
+  feRenderListaClientes();
+}
+const _feCliLabel=c=>`${c.nombre} · ${_feFmtCuit(c.cuit)}`;
+function feRenderListaClientes(){
+  const dl=document.getElementById("fe-dl-cli");if(!dl)return;
+  dl.innerHTML=feClientes.map(c=>`<option value="${esc(_feCliLabel(c))}" label="${esc(c.origen)}"></option>`).join("");
+}
+function feRenderListaProductos(){
+  let dl=document.getElementById("fe-dl-prod");
+  if(!dl){dl=document.createElement("datalist");dl.id="fe-dl-prod";document.body.appendChild(dl);}
+  dl.innerHTML=feProductosLista().map(p=>`<option value="${esc(_feProdLabel(p))}" label="${esc(p.uso==="venta"?"venta":"compra")}${p.iva?` · IVA ${esc(p.iva==="exento"?"exento":p.iva==="nograv"?"no gravado":p.iva+"%")}`:""}"></option>`).join("");
+}
+function _feAplicarCliente(c){
+  document.getElementById("fe-cuit").value=_feFmtCuit(c.cuit);
+  document.getElementById("fe-nombre").value=c.nombre;
+  const sel=document.getElementById("fe-cond");
+  if(c.cond&&[...sel.options].some(o=>Number(o.value)===Number(c.cond)))sel.value=String(c.cond);
+}
+function feElegirCliente(val){
+  const c=feClientes.find(x=>_feCliLabel(x)===val);
+  if(c)_feAplicarCliente(c);
+}
 async function feBuscarReceptor(){
   const d=String(document.getElementById("fe-cuit").value||"").replace(/\D/g,"");if(d.length!==11)return;
-  const con=`${d.slice(0,2)}-${d.slice(2,10)}-${d.slice(10)}`;
+  const c=feClientes.find(x=>x.cuit===d);
+  if(c){_feAplicarCliente(c);return;}
+  const con=_feFmtCuit(d);
   try{
     let nombre="",cond=null;
     const [cl]=await sb(`elearning_clientes?cuit=eq.${d}&select=nombre_completo,razon_social,condicion_fiscal`).catch(()=>[]);
     if(cl){nombre=cl.razon_social||cl.nombre_completo||"";cond=feCondDeFiscal(cl.condicion_fiscal);}
     if(!nombre){const [al]=await sb(`alumnos?or=(cuit.eq.${d},cuit.eq.${con})&select=nombre,apellido`).catch(()=>[]);if(al)nombre=`${al.apellido||""} ${al.nombre||""}`.trim();}
     if(!nombre){const [pr]=await sb(`proveedores?or=(cuit.eq.${d},cuit.eq.${con})&select=nombre,condicion_iva`).catch(()=>[]);if(pr){nombre=pr.nombre||"";cond=cond||({responsable_inscripto:1,monotributo:6,exento:4}[pr.condicion_iva]||null);}}
-    const nom=document.getElementById("fe-nombre");if(nombre&&!nom.value)nom.value=nombre;
-    const sel=document.getElementById("fe-cond");if(cond&&[...sel.options].some(o=>Number(o.value)===cond))sel.value=String(cond);
+    if(nombre)_feAplicarCliente({cuit:d,nombre,cond});
   }catch(_){}
 }
-function feAgregarItem(){feItems.push({descripcion:"",neto:"",alicuota:21});feRenderItems();}
-function feQuitarItem(i){feItems.splice(i,1);if(!feItems.length)feItems.push({descripcion:"",neto:"",alicuota:21});feRenderItems();}
-function feItemSet(i,k,v){feItems[i][k]=k==="alicuota"?Number(v):v;feTotalesVista();}
+function feCuitInput(el){
+  if(String(el.value||"").replace(/\D/g,"").length===11)feBuscarReceptor();
+}
+function feItemDesc(i,el){
+  const v=el.value;
+  const p=feProductosLista().find(x=>_feProdLabel(x)===v);
+  if(!p){feItems[i].descripcion=v;feItems[i].codigo=undefined;feTotalesVista();return;}
+  feItems[i].codigo=p.codigo;
+  feItems[i].descripcion=p.nombre||p.codigo;
+  if(p.iva&&FE_ALIC_DE_IVA[p.iva]!==undefined)feItems[i].alicuota=FE_ALIC_DE_IVA[p.iva];
+  feRenderItems();
+}
 function feRenderItems(){
   document.getElementById("fe-items").innerHTML=feItems.map((it,i)=>`<div style="display:grid;grid-template-columns:1fr 120px 100px 28px;gap:6px;margin-bottom:6px">
-    <input class="fi" placeholder="Descripción" value="${esc(it.descripcion)}" oninput="feItemSet(${i},'descripcion',this.value)">
+    <input class="fi" list="fe-dl-prod" autocomplete="off" placeholder="Elegí un producto o escribí la descripción" title="${it.codigo?`Producto de Finnegans: ${esc(it.codigo)}`:""}" value="${esc(it.descripcion)}" oninput="feItemDesc(${i},this)">
     <input class="fi" type="number" step="0.01" min="0" placeholder="Neto" value="${esc(it.neto)}" oninput="feItemSet(${i},'neto',this.value)">
     <select class="fi" onchange="feItemSet(${i},'alicuota',this.value)">${[[21,"IVA 21%"],[10.5,"IVA 10,5%"],[27,"IVA 27%"],[0,"IVA 0%"],[-1,"Exento"]].map(([v,l])=>`<option value="${v}"${Number(it.alicuota)===v?" selected":""}>${l}</option>`).join("")}</select>
     <button class="btn sm danger" style="padding:0" onclick="feQuitarItem(${i})" title="Quitar">✕</button></div>`).join("");
   feTotalesVista();
 }
+
+// ── Crear un producto nuevo desde el formulario ──
+function feNuevoProducto(){
+  let d=document.getElementById("modal-fe-prod");
+  if(!d){
+    d=document.createElement("div");d.className="mov";d.id="modal-fe-prod";d.onclick=e=>{if(e.target===d)closeM("modal-fe-prod");};
+    d.innerHTML=`<div class="modal" style="max-width:460px"><div class="mt"><span>＋ Nuevo producto</span><button class="mt-close" onclick="closeM('modal-fe-prod')">✕</button></div>
+    <div style="padding:0 20px 20px">
+      <div class="fg"><label class="fl">Código *</label><input class="fi" id="fp-cod" placeholder="Ej: CURSOS_ONLINE"></div>
+      <div class="fg"><label class="fl">Nombre / descripción *</label><input class="fi" id="fp-nom" placeholder="Ej: Curso online de simulación"></div>
+      <div class="fgrid">
+        <div class="fg"><label class="fl">IVA</label><select class="fi" id="fp-iva"><option value="21">21%</option><option value="10.5">10,5%</option><option value="27">27%</option><option value="exento">Exento</option><option value="">Sin definir</option></select></div>
+        <div class="fg"><label class="fl">Uso</label><select class="fi" id="fp-uso"><option value="venta">Venta</option><option value="compra">Compra</option></select></div>
+      </div>
+      <div style="font-size:11px;color:var(--tx3);margin-top:6px">El código tiene que ser el mismo que tengas en Finnegans: es lo que va en el Excel de importación. Si todavía no existe allá, creálo también en Finnegans.</div>
+      <div class="ma" style="margin-top:14px"><button class="bc" onclick="closeM('modal-fe-prod')">Cancelar</button><button class="bk" id="fp-btn" onclick="feGuardarProducto()">Guardar</button></div>
+    </div></div>`;
+    document.body.appendChild(d);
+  }
+  ["fp-cod","fp-nom"].forEach(id=>{document.getElementById(id).value="";});
+  openM("modal-fe-prod");
+}
+async function feGuardarProducto(){
+  const cod=document.getElementById("fp-cod").value.trim(),nom=document.getElementById("fp-nom").value.trim();
+  if(!cod||!nom){toast("Completá el código y el nombre","err");return;}
+  if(productosFinn.some(p=>_normProd(p.codigo)===_normProd(cod))){toast("Ya existe un producto con ese código","err");return;}
+  const btn=document.getElementById("fp-btn");btn.disabled=true;
+  try{
+    await sb("productos_finnegans",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify({codigo:cod,nombre:nom,stockeable:false,uso:document.getElementById("fp-uso").value,iva:document.getElementById("fp-iva").value||null,activo:true,actualizado_en:new Date().toISOString()})});
+    await cargarProductosFinn();feRenderListaProductos();
+    closeM("modal-fe-prod");
+    // lo deja elegido en el primer ítem vacío
+    const i=feItems.findIndex(it=>!it.descripcion&&!(parseFloat(it.neto)>0));
+    if(i>=0){const p=productosFinn.find(x=>x.codigo===cod);if(p){feItems[i].codigo=p.codigo;feItems[i].descripcion=p.nombre||p.codigo;if(p.iva&&FE_ALIC_DE_IVA[p.iva]!==undefined)feItems[i].alicuota=FE_ALIC_DE_IVA[p.iva];feRenderItems();}}
+    toast("✓ Producto creado","ok");
+  }catch(e){toast("No se pudo crear el producto: "+String(e.message||e).slice(0,140),"err");}
+  finally{btn.disabled=false;}
+}
+
+function feAgregarItem(){feItems.push({descripcion:"",neto:"",alicuota:21});feRenderItems();}
+function feQuitarItem(i){feItems.splice(i,1);if(!feItems.length)feItems.push({descripcion:"",neto:"",alicuota:21});feRenderItems();}
+function feItemSet(i,k,v){feItems[i][k]=k==="alicuota"?Number(v):v;feTotalesVista();}
 function feTotalesVista(){
   const t=feTotales();
   document.getElementById("fe-tot").innerHTML=`Neto ${feM(t.neto)}${t.exento?` · Exento ${feM(t.exento)}`:""} · IVA ${feM(t.iva)} · <b style="font-size:14px">Total ${feM(t.total)}</b>`;
@@ -21957,7 +22064,7 @@ async function feEmitir(){
   const cuit=v("fe-cuit").replace(/\D/g,"");
   if(!cf&&cuit.length!==11){toast("Ingresá el CUIT del receptor (11 dígitos)","err");return;}
   if(!v("fe-nombre")){toast("Falta el nombre o razón social del receptor","err");return;}
-  const items=feItems.filter(it=>parseFloat(it.neto)>0).map(it=>({descripcion:it.descripcion||"Servicios",neto:feR2(parseFloat(it.neto)),alicuota:Number(it.alicuota)}));
+  const items=feItems.filter(it=>parseFloat(it.neto)>0).map(it=>({descripcion:it.descripcion||"Servicios",codigo_producto:it.codigo||undefined,neto:feR2(parseFloat(it.neto)),alicuota:Number(it.alicuota)}));
   if(!items.length){toast("Cargá al menos un ítem con importe","err");return;}
   const t=feTotales();
   const body={action:"emitir",sociedad:soc,cbte_tipo:tipo,fecha:v("fe-fecha"),concepto:Number(v("fe-concepto")),origen:"panel",
