@@ -1950,3 +1950,21 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 4. Botón de corrección (editar/revertir) para **sueldos** y pagos de **VEP**; anular una factura emitida desde el listado.
 5. Aplicar el QR de ARCA también en `whatsapp-agente`/`leer-factura` (hoy usan IA).
 6. Cuenta en dólares/ICBC, rol `contable` + numeración Tango (esperando a Auren), partir Cash Flow + Ctrl+K, asientos de inversiones (Avantia), IIBB/SUSS en la OP.
+
+---
+
+## 📌 Cierre de jornada — 16 Oct 2026 (retomar el lunes, después de la reunión con los contadores)
+
+**Facturación electrónica ARCA — POINTERS funcionando en homologación (panel v91):**
+- Un solo certificado, a nombre del CUIL de Tomás (20420180552): WSASS crea el certificado siempre para el CUIT con el que se entra; la sociedad se indica en "Crear autorización a servicio" (CUIT representada). Alias `panelmetanoia`, vence 15/10/2028. Autorización `wsfe` creada para POINTERS (30716965852). Los pedidos de certificado por sociedad (`sudes_homo`, `pointers_homo`) ya no se usan.
+- Archivos en `C:\Users\admin\arca_certs\` (fuera de OneDrive, **nunca subir las .key**): `tomas_homo.key/.csr/.crt` (pruebas) y `tomas_prod.key/.csr` (producción, alias `panelmetanoiaprod`, **falta el .crt**).
+- Secrets `ARCA_CERT_POINTERS` / `ARCA_KEY_POINTERS` cargados; `arca_config` POINTERS `activo=true` en homologación. **SUDES sigue desactivada** (no se toca la facturación actual de SUDES hasta terminar con POINTERS). SUDES es con el CUIL de Valentina: ella adhiere WSASS para SUDES y se lo delega a Tomás (o lo hace ella); después alcanza con crear la autorización `wsfe` para 30716991179 y cargar `ARCA_CERT_SUDES`/`ARCA_KEY_SUDES` (el mismo certificado).
+- Probado de punta a punta: "Probar conexión" OK, factura A y nota de crédito A emitidas con CAE de homologación; PDF con logo y QR conformes (Tomás).
+- **Formulario de emisión mejorado:** buscador de clientes ya cargados (facturas anteriores, plataforma, proveedores, alumnos; se completa solo al escribir un CUIT conocido), productos del catálogo de Finnegans en los ítems (completan nombre e IVA; el código viaja en `items[].codigo_producto`), botón ＋ Nuevo producto (alta en `productos_finnegans`), y en la nota de crédito un desplegable con las facturas del cliente (completa tipo/punto de venta/número/fecha e ítems; marca "ya acreditado"). Pruebas: `test_fe.js` 29 + `test_fe2.js` 26.
+- **El PDF se puede seguir editando en producción:** lo dibuja el panel (`feGenerarPDF`) con datos guardados; ARCA no aprueba la plantilla. Se regeneran con la plantilla vigente. Idea pendiente: guardar una copia del PDF al emitir para congelarlo.
+
+**Para pasar POINTERS a producción (lo hace Tomás en ARCA):** (1) "Administración de Certificados Digitales" → pegar `tomas_prod.csr`, alias `panelmetanoiaprod`, bajar el `.crt`; (2) Administrador de Relaciones → relación con "Facturación Electrónica" para POINTERS; (3) "Administración de puntos de venta y domicilios" → punto de venta nuevo, sistema "RECE para aplicativo y web services", **distinto del de Finnegans**. Después: cargar secrets de producción (hoy la función lee un solo par por sociedad, `ARCA_CERT_<SOC>`: pasar a producción pisa el de pruebas; si se quiere probar en paralelo, hay que cambiar la función para leer secrets por ambiente, `_PROD`), poner `ambiente='produccion'` y `pto_vta` nuevo en `arca_config`, y emitir una factura chica real para verificar con el QR en el sitio de ARCA. En producción la emisión exige confirmación y el comprobante solo se anula con nota de crédito.
+
+**A definir el lunes (con los contadores):** qué comprobantes se emiten (A/B/NC, Factura de Crédito MiPyME), cuándo se deja Finnegans para los servicios de POINTERS (nunca facturar lo mismo por los dos lados) y el criterio contable de las ventas.
+
+**Próximo paso propuesto: cargar las facturas ya emitidas** (las que hizo Finnegans y las de la plataforma) en el panel para que las ventas queden en `facturas_emitidas` y alimenten el asiento `devengado_venta`/`cobro_venta`, el Libro IVA Ventas y el control de ingresos del cierre de mes. Fuente a decidir: el export "Mis Comprobantes Emitidos" de ARCA (trae CAE, receptor, importes por alícuota; se leería sin IA) o el export de ventas de Finnegans. Hay que distinguirlas de las emitidas por el panel (columna `origen`) y cuidar que no se dupliquen.
