@@ -13,7 +13,7 @@ Cada sociedad y cada ambiente lleva su propio par clave + certificado. Reemplaz�
 
 ```bash
 openssl genrsa -out sudes_homo.key 2048
-openssl req -new -key sudes_homo.key -subj "/C=AR/O=SUDES S.A.S./CN=panel-metanoia/serialNumber=CUIT 30716991179" -out sudes_homo.csr
+openssl req -new -key sudes_homo.key -subj "/C=AR/O=SUDES S.A.S./CN=panelmetanoia/serialNumber=CUIT 30716991179" -out sudes_homo.csr
 ```
 
 - **La `.key` es privada: no se manda por mail ni se sube a ningún lado salvo a los Secrets de Supabase.** Si se pierde hay que repetir el trámite.
@@ -21,7 +21,7 @@ openssl req -new -key sudes_homo.key -subj "/C=AR/O=SUDES S.A.S./CN=panel-metano
 
 ### B. Homologación (pruebas)
 1. Entrar a ARCA con clave fiscal → servicio **WSASS – Autoservicio de acceso a WebServices – Homologación** (si no aparece, se adhiere desde *Administrador de Relaciones de Clave Fiscal*).
-2. *Nuevo certificado* → alias `panel-metanoia` → pegar el contenido del `.csr` → descargar el `.crt`.
+2. *Nuevo certificado* → alias `panelmetanoia` → pegar el contenido del `.csr` → descargar el `.crt`.
 3. *Crear autorización a servicio* → el alias → servicio **wsfe (Facturación Electrónica)**.
 4. Punto de venta de prueba: en homologación se puede usar el `1`; si ARCA lo rechaza, dar de alta uno desde WSASS / pedirle a ARCA el listado con `FEParamGetPtosVenta`.
 
