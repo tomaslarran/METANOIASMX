@@ -156,11 +156,12 @@ body.light-mode .sel option{background:#ffffff;color:#1A1D2E}
 .fsep{width:1px;height:18px;background:var(--b);margin:0 1px}
 
 /* ── PAGE TITLE ── */
-.pg-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
-.pg-header-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.pg-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px}
+.pg-header-actions{display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap}
 .pgh{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:8px;flex-wrap:wrap}
 .pgh-left{flex:1;min-width:0}
-.pgh-right{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.pgh-right{display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap}
+.hist-filtros{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 @media(max-width:480px){.hide-xs{display:none}}
 .pg-title{font-family:var(--fc);font-size:22px;font-weight:700;letter-spacing:-0.02em}
 .pg-title-sub{font-size:12px;color:var(--tx3);margin-top:2px}
@@ -269,8 +270,9 @@ body.light-mode .mini-sel option{background:#ffffff;color:#1A1D2E}
 .curso-detail{background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);margin-top:16px;overflow:hidden}
 .cd-header{padding:16px 20px;border-bottom:1px solid var(--b);display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .cd-title{font-family:var(--fc);font-size:18px;font-weight:700;letter-spacing:-0.02em}
-.cd-tabs{display:flex;gap:2px;padding:0 20px;border-bottom:1px solid var(--b)}
-.cd-tab{padding:10px 14px;font-size:12px;font-weight:500;color:var(--tx2);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.cd-tabs{display:flex;gap:2px;padding:0 20px;border-bottom:1px solid var(--b);overflow-x:auto;overflow-y:visible;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.cd-tabs::-webkit-scrollbar{display:none}
+.cd-tab{padding:10px 14px;font-size:12px;font-weight:500;color:var(--tx2);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;flex-shrink:0}
 .cd-tab:hover{color:var(--tx)}
 .cd-tab.on{color:var(--tx);border-bottom-color:var(--pu)}
 .cd-body{padding:20px}
@@ -533,7 +535,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   #rbtn,#newBtn,#usel{display:none!important}
   .topbar{padding-left:12px;padding-right:12px;gap:8px}
   /* Botones de cabecera de página: scroll horizontal en mobile */
-  .pg-header-actions,.pgh-right{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-shrink:0;padding-bottom:2px}
+  .pg-header-actions,.pgh-right{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-shrink:0;flex-wrap:nowrap;padding-bottom:2px}
   .pg-header-actions::-webkit-scrollbar,.pgh-right::-webkit-scrollbar{display:none}
   /* Notif panel: ancho completo */
   .np{width:calc(100vw - 16px);right:8px;left:8px}
