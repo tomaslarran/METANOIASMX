@@ -537,6 +537,8 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   /* Botones de cabecera de página: en mobile, scroll horizontal */
   .pg-header-actions,.pgh-right{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px}
   .pg-header-actions::-webkit-scrollbar,.pgh-right::-webkit-scrollbar{display:none}
+  /* Botón primario de acción en mobile: aparece primero en la barra */
+  .mob-first{order:-1}
   /* Notif panel: ancho completo */
   .np{width:calc(100vw - 16px);right:8px;left:8px}
   /* Toast: centrado abajo */
@@ -3346,7 +3348,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         Circularización
       </button>
       <button class="btn sec admin-only-el" onclick="abrirProductosFinn()" title="Actualizar el catálogo de productos de Finnegans desde su export">🔄 Productos Finnegans</button>
-      <button class="btn sec" onclick="openNuevoComprobante()">
+      <button class="btn sec mob-first" onclick="openNuevoComprobante()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Nueva factura
       </button>
