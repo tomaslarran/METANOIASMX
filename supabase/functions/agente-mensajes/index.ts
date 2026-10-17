@@ -120,7 +120,7 @@ serve(async (req) => {
     const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody));
     const expected = "sha256=" + Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("");
     if (signature !== expected) {
-      console.warn("Firma Meta inválida (ignorada temporalmente):", signature.slice(0, 30));
+      return new Response("Forbidden", { status: 403 });
     }
   }
 

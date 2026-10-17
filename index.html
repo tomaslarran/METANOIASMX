@@ -30,6 +30,7 @@
   --bl:#3B82F6;--bll:rgba(59,130,246,.12);
   --te:#14B8A6;--tl:rgba(20,184,166,.12);
   --pk:#EC4899;--pkl:rgba(236,72,153,.12);
+  --ac:var(--pu);--ve:var(--gr);
   --r:8px;--rl:12px;--rlg:16px;
   --f:'Inter',sans-serif;--fc:'Space Grotesk','Inter',sans-serif;
   --sidebar:240px;
@@ -3358,7 +3359,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div id="avisos-compra-wrap"></div>
 
   <!-- Stats -->
-  <div class="stats" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px" id="comp-stats">
+  <div class="stats" style="grid-template-columns:repeat(6,1fr);margin-bottom:16px" id="comp-stats">
     <div class="sc"><div class="sc-l">Total del mes</div><div class="sc-v vb" id="comp-stat-total">—</div><div class="sc-s" id="comp-stat-mes">cargando...</div></div>
     <div class="sc"><div class="sc-l">IVA del mes</div><div class="sc-v va" id="comp-stat-iva">—</div><div class="sc-s">crédito fiscal</div></div>
     <div class="sc"><div class="sc-l">Pendientes</div><div class="sc-v" id="comp-stat-pend" style="color:var(--am)">—</div><div class="sc-s">a revisar</div></div>
@@ -8143,7 +8144,7 @@ function _renderNPSPanel(el,cursoId,respuestas,insc,envios=[]){
           <div style="font-size:10px;color:${col};font-weight:700">${r.score>=9?'Promotor':r.score>=7?'Pasivo':'Detractor'}</div>
           <button onclick="eliminarNPSRespuesta('${r.id}','${cursoId}')" style="background:none;border:none;color:var(--re);cursor:pointer;font-size:16px;padding:2px 4px;line-height:1">×</button>`
         :`<input type="number" min="0" max="10" placeholder="0–10" id="nps-inp-${a.id}-${cursoId}" style="width:56px;padding:4px 6px;font-size:14px;font-weight:700;text-align:center;background:var(--surf);border:1px solid var(--b);border-radius:6px;color:var(--tx)" oninput="if(this.value>10)this.value=10;if(this.value<0)this.value=0">
-          <button class="btn pri" style="font-size:11px;padding:4px 10px" onclick="registrarNPS('${cursoId}','${a.id}','${nombre}',null)">Guardar</button>`}
+          <button class="btn pri" style="font-size:11px;padding:4px 10px" onclick="registrarNPS('${cursoId}','${a.id}','${nombre.replace(/'/g,"\\'")}',null)">Guardar</button>`}
       </div>
       ${r?.comentario?`<div style="font-size:12px;color:var(--tx2);font-style:italic;margin-top:6px;padding-top:6px;border-top:1px solid var(--b)">💬 "${esc(r.comentario)}"</div>`:''}
     </div>`;
@@ -10954,7 +10955,7 @@ function _filtrarVincularCurso(q){
   if(!list)return;
   const Q=(q||"").toLowerCase();
   const matches=(cursos||[]).filter(c=>(c.nombre||"").toLowerCase().includes(Q)).slice(0,20);
-  list.innerHTML=matches.length?matches.map(c=>`<div style="padding:7px 10px;border:1px solid var(--b);border-radius:8px;cursor:pointer;font-size:12px" onclick="_elegirCursoVinculado('${c.id}',${JSON.stringify(c.nombre||"")})">${esc(c.nombre)} <span style="color:var(--tx3);font-size:11px">· ${esc(c.estado||"")}</span></div>`).join(""):`<div style="color:var(--tx3);font-size:12px;padding:8px 0">Sin resultados</div>`;
+  list.innerHTML=matches.length?matches.map(c=>`<div style="padding:7px 10px;border:1px solid var(--b);border-radius:8px;cursor:pointer;font-size:12px" onclick="_elegirCursoVinculado('${c.id}','${esc(c.nombre||"").replace(/'/g,"\\'")}' )">${esc(c.nombre)} <span style="color:var(--tx3);font-size:11px">· ${esc(c.estado||"")}</span></div>`).join(""):`<div style="color:var(--tx3);font-size:12px;padding:8px 0">Sin resultados</div>`;
 }
 function _elegirCursoVinculado(id,nombre){
   _cursoIACursoVinculado=id;
@@ -22576,7 +22577,7 @@ function renderPlanes(){
       ${p.descripcion?`<div style="font-size:13px;color:var(--text2);line-height:1.5">${esc(p.descripcion)}</div>`:''}
       ${p.requisito?`<div style="font-size:12px;color:var(--text3)">Requiere: ${esc(p.requisito)}</div>`:''}
       <div style="display:flex;gap:8px;margin-top:4px">
-        <button class="btn sm" onclick="planesOpenEdit(${JSON.stringify(JSON.stringify(p))})">Editar</button>
+        <button class="btn sm" onclick="planesOpenEdit('${p.id}')">Editar</button>
         <button class="btn sm sec" onclick="planesDel('${p.id}','${esc(p.nombre)}')">Eliminar</button>
       </div>
     </div>`;
@@ -22598,8 +22599,9 @@ function planesOpenNew(){
   openM('modal-plan');
 }
 
-function planesOpenEdit(jsonStr){
-  const p=JSON.parse(jsonStr);
+function planesOpenEdit(id){
+  const p=_planes.find(x=>x.id===id);
+  if(!p)return;
   document.getElementById("plan-id").value=p.id;
   document.getElementById("plan-nombre").value=p.nombre||'';
   document.getElementById("plan-descripcion").value=p.descripcion||'';
@@ -23777,7 +23779,7 @@ function renderPortalComprobantes(data){
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
         ${c.archivo_url?`<button onclick="window.open('${c.archivo_url}','_blank')" style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:11px;padding:4px 8px;cursor:pointer" title="Ver archivo">👁</button>`:""}
-        ${canEdit?`<button onclick='openPortalFactura(${JSON.stringify(c)})' style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:11px;padding:4px 8px;cursor:pointer" title="Editar">✎</button>`:""}
+        ${canEdit?`<button onclick='openPortalFactura(${JSON.stringify(c).replace(/'/g,"&#39;")})' style="background:none;border:1px solid var(--b);border-radius:5px;color:var(--tx3);font-size:11px;padding:4px 8px;cursor:pointer" title="Editar">✎</button>`:""}
         ${canEdit?`<button onclick="deletePortalFactura('${c.id}')" style="background:none;border:1px solid rgba(239,68,68,.4);border-radius:5px;color:#f87171;font-size:11px;padding:4px 8px;cursor:pointer" title="Eliminar">🗑</button>`:""}
       </div>
     </div>`;
@@ -30018,7 +30020,7 @@ function onCompProvInput(){
   if(proveedoresFinn.length){
     const maestroNames=new Set(proveedores.map(p=>p.nombre?.toLowerCase()));
     proveedoresFinn.filter(p=>p.nombre&&p.nombre.toLowerCase().includes(ql)&&!maestroNames.has(p.nombre.toLowerCase())).slice(0,5).forEach(p=>{
-      items.push(`<div onclick="selectProvFinn(${JSON.stringify(p.nombre)},${JSON.stringify(p.cuit||"")})"
+      items.push(`<div onclick="selectProvFinn('${esc(p.nombre).replace(/'/g,"\\'")}','${esc(p.cuit||"").replace(/'/g,"\\'")}' )"
         style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--b);font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px"
         onmouseenter="this.style.background='var(--surf2)'" onmouseleave="this.style.background=''">
         <span style="font-weight:500">${esc(p.nombre)}</span>
