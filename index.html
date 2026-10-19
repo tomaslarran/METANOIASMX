@@ -3303,6 +3303,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <button class="fb admin-only-el" id="itab-libro" onclick="setImpTab('libro',this)">📒 Libro Diario</button>
     <button class="fb admin-only-el" id="itab-resultados" onclick="setImpTab('resultados',this)">📊 Resultados</button>
     <button class="fb admin-only-el" id="itab-paquete" onclick="setImpTab('paquete',this)">📦 Paquete Auren</button>
+    <button class="fb admin-only-el" id="itab-balance" onclick="setImpTab('balance',this)">⚖️ Balance y apertura</button>
   </div>
   <div id="imp-tab-iva"></div>
   <div id="imp-tab-iibb" style="display:none"></div>
@@ -3315,6 +3316,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div id="imp-tab-libro" style="display:none"></div>
   <div id="imp-tab-resultados" style="display:none"></div>
   <div id="imp-tab-paquete" style="display:none"></div>
+  <div id="imp-tab-balance" style="display:none"></div>
 </div>
 
 <!-- ══ COMPROBANTES DE COMPRA ══ -->
@@ -22118,7 +22120,7 @@ async function feGuardarProducto(){
 
 // ── Nota de crédito: elegir la factura que se anula entre las del cliente ──
 function feAcreditado(f){
-  return feFacturas.filter(n=>n.estado==="autorizada"&&FE_ES_NC(n.cbte_tipo)&&n.comprobante_asociado&&n.sociedad===f.sociedad&&n.ambiente===f.ambiente&&
+  return (feFacturas.length?feFacturas:impFacturasEmitidas).filter(n=>n.estado==="autorizada"&&FE_ES_NC(n.cbte_tipo)&&n.comprobante_asociado&&n.sociedad===f.sociedad&&n.ambiente===f.ambiente&&
     Number(n.comprobante_asociado.tipo)===Number(f.cbte_tipo)&&Number(n.comprobante_asociado.pto_vta)===Number(f.pto_vta)&&Number(n.comprobante_asociado.numero)===Number(f.cbte_numero))
     .reduce((s,n)=>s+(parseFloat(n.total)||0),0);
 }
@@ -22349,11 +22351,12 @@ async function feCargarCobros(){
 }
 function feSaldoCobro(f){
   if(!f||FE_ES_NC(f.cbte_tipo)||f.ambiente!=="produccion"||f.estado!=="autorizada")return null;
-  return Math.max(0,feR2((parseFloat(f.total)||0)-(feCobros[f.id]||0)));
+  return Math.max(0,feR2((parseFloat(f.total)||0)-feAcreditado(f)-(feCobros[f.id]||0)));
 }
 function feCobroCelda(f){
   const s=feSaldoCobro(f);
   if(s===null)return"—";
+  if(feAcreditado(f)>=(parseFloat(f.total)||0)-0.01)return`<span style="color:var(--tx3)">Anulada por nota de crédito</span>`;
   if(s<0.01)return`<span style="color:var(--gr);font-weight:700">✓ Cobrada</span>`;
   const cobrado=feCobros[f.id]||0;
   return cobrado>0?`<span style="color:var(--am,#F59E0B);font-weight:700">Saldo ${feM(s)}</span>`:`<span style="color:var(--tx3)">Pendiente ${feM(s)}</span>`;
@@ -25324,7 +25327,7 @@ const GANANCIAS_TASA=0.35; // SRL
 
 function setImpTab(tab,btn){
   impTab=tab;
-  ["iva","iibb","autonomos","ganancias","vep","auren","parametros","plancuentas","libro","resultados","paquete"].forEach(t=>{
+  ["iva","iibb","autonomos","ganancias","vep","auren","parametros","plancuentas","libro","resultados","paquete","balance"].forEach(t=>{
     const el=document.getElementById("imp-tab-"+t);
     const b=document.getElementById("itab-"+t);
     if(el)el.style.display=t===tab?"":"none";
@@ -25341,6 +25344,7 @@ function setImpTab(tab,btn){
   if(tab==="libro")renderLibroDiario();
   if(tab==="resultados")renderEstadoResultados();
   if(tab==="paquete")renderPaquete();
+  if(tab==="balance")renderBalance();
 }
 
 /* ══ CALENDARIO IMPOSITIVO (fechas tope Auren) ══ */
@@ -26862,6 +26866,252 @@ async function descargarPaqueteAuren(){
   }catch(e){toast("No se pudo generar el paquete: "+String(e.message||e).slice(0,140),"err");}
 }
 // ── FIN PAQUETE PARA AUREN ──
+
+// ── APERTURA Y BALANCE GENERAL ──────────────────────────────────────────────────────────────────────
+// Balance general desde los asientos (solo los del ejercicio vigente, que arranca el 1/7) y carga del asiento de apertura con los
+// saldos al cierre del ejercicio anterior. La planilla de Auren trae sus propios códigos: se mapean una vez a las cuentas del panel.
+const _balState={soc:"SUDES",hasta:"",sub:"balance",apertura:null,invertir:false,fecha:"",plan:[]};
+const _balR2=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
+const _balNorm=s=>String(s??"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
+const _balM=v=>"$"+(Number(v)||0).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
+function balEjercicioDesde(hasta){
+  const [y,m]=String(hasta).split("-").map(Number);
+  return `${m>=7?y:y-1}-07-01`;
+}
+// Función pura: de los asientos (con sus movimientos y cuentas) al balance general
+function buildBalanceGeneral(asientos){
+  const cta={};let apertura=0;
+  asientos.forEach(a=>{
+    if(a.tipo==="apertura")apertura++;
+    (a.asientos_movimientos||[]).forEach(m=>{
+      const pc=m.plan_cuentas;if(!pc)return;
+      const c=cta[pc.codigo]=cta[pc.codigo]||{codigo:pc.codigo,nombre:pc.nombre,tipo:pc.tipo,debe:0,haber:0};
+      c.debe+=parseFloat(m.debe)||0;c.haber+=parseFloat(m.haber)||0;
+    });
+  });
+  const lista=Object.values(cta).sort((a,b)=>a.codigo.localeCompare(b.codigo,"es",{numeric:true}));
+  const sec=(tipo,deudora)=>lista.filter(c=>c.tipo===tipo).map(c=>({codigo:c.codigo,nombre:c.nombre,saldo:_balR2(deudora?c.debe-c.haber:c.haber-c.debe)})).filter(c=>Math.abs(c.saldo)>=0.005);
+  const activo=sec("activo",true),pasivo=sec("pasivo",false),pn=sec("patrimonio_neto",false),ingresos=sec("ingreso",false),egresos=sec("egreso",true);
+  const tot=l=>_balR2(l.reduce((s,c)=>s+c.saldo,0));
+  const t={activo:tot(activo),pasivo:tot(pasivo),pn:tot(pn),ingresos:tot(ingresos),egresos:tot(egresos)};
+  t.resultado=_balR2(t.ingresos-t.egresos);
+  t.diferencia=_balR2(t.activo-(t.pasivo+t.pn+t.resultado));
+  return{activo,pasivo,pn,ingresos,egresos,totales:t,apertura,movimientos:lista.length};
+}
+// ── Lectura de la planilla de saldos ──
+function aperNum(v){
+  if(typeof v==="number")return isFinite(v)?v:0;
+  let s=String(v??"").trim();if(!s)return 0;
+  let neg=false;
+  if(/^\(.*\)$/.test(s)){neg=true;s=s.slice(1,-1);}
+  s=s.replace(/[$\s]/g,"");
+  if(/-$/.test(s)){neg=!neg;s=s.slice(0,-1);}
+  if(/^-/.test(s)){neg=!neg;s=s.slice(1);}
+  if(/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s))s=s.replace(/\./g,"").replace(",",".");
+  else if(/,\d{1,2}$/.test(s))s=s.replace(/\./g,"").replace(",",".");
+  else s=s.replace(/,/g,"");
+  const n=parseFloat(s);
+  return isNaN(n)?0:(neg?-n:n);
+}
+function aperParsear(rows){
+  let hi=-1;
+  for(let i=0;i<Math.min(rows.length,40);i++){
+    const cs=(rows[i]||[]).map(_balNorm);
+    if(cs.some(c=>/(^debe|deudor|^haber|acreedor|^saldo)/.test(c))){hi=i;break;}
+  }
+  if(hi<0)throw new Error("No encontré el encabezado: la planilla necesita columnas Debe/Haber, Deudor/Acreedor o Saldo.");
+  const H=rows[hi].map(_balNorm);
+  const col=(re,excl)=>H.findIndex((h,i)=>re.test(h)&&!(excl||[]).includes(i));
+  const iDebe=col(/(^debe|deudor)/),iHaber=col(/(^haber|acreedor)/);
+  const iSaldo=col(/^saldo/,[iDebe,iHaber]);
+  const iCod=col(/^(codigo|cod |cod$|cta|nro cuenta|n cuenta|numero)/);
+  const iNom=col(/(nombre|descripcion|denominacion|detalle|cuenta)/,[iCod]);
+  if(iDebe<0&&iHaber<0&&iSaldo<0)throw new Error("No encontré columnas de importes (Debe/Haber o Saldo).");
+  const filas=[];
+  for(let i=hi+1;i<rows.length;i++){
+    const r=rows[i]||[];
+    let cod=iCod>=0?String(r[iCod]??"").trim():"",nom=iNom>=0?String(r[iNom]??"").trim():"";
+    if(!cod&&nom){const m=/^(\d+(?:[.\-]\d+)*)\s*[-–]?\s*(.*)$/.exec(nom);if(m&&m[2]){cod=m[1];nom=m[2];}}
+    if(!cod&&!nom)continue;
+    if(/^total/.test(_balNorm(nom||cod)))continue;
+    const saldo=iSaldo>=0&&iDebe<0&&iHaber<0?aperNum(r[iSaldo]):aperNum(iDebe>=0?r[iDebe]:0)-aperNum(iHaber>=0?r[iHaber]:0);
+    if(Math.abs(saldo)<0.005)continue;
+    filas.push({cod,nombre:nom,saldo:_balR2(saldo)});
+  }
+  if(!filas.length)throw new Error("La planilla no tiene cuentas con saldo.");
+  return{filas,modo:iDebe>=0||iHaber>=0?"debe-haber":"saldo"};
+}
+// Sugerencia de cuenta del panel: por código exacto, por nombre igual o por nombre contenido (si es único)
+function aperSugerir(f,plan){
+  const imp=plan.filter(c=>c.imputable&&c.activa!==false);
+  if(f.cod){const x=imp.find(c=>c.codigo===f.cod);if(x)return x.codigo;}
+  const n=_balNorm(f.nombre);if(!n)return"";
+  const igual=imp.filter(c=>_balNorm(c.nombre)===n);if(igual.length===1)return igual[0].codigo;
+  const cont=imp.filter(c=>{const m=_balNorm(c.nombre);return m&&n.length>=5&&(m.includes(n)||n.includes(m));});
+  return cont.length===1?cont[0].codigo:"";
+}
+// Líneas del asiento: una por cuenta destino (varias cuentas de la planilla pueden ir a la misma cuenta del panel)
+function aperLineas(items){
+  const por={};
+  items.forEach(it=>{if(it.codigo)por[it.codigo]=_balR2((por[it.codigo]||0)+it.saldo);});
+  const lineas=Object.entries(por).filter(([,v])=>Math.abs(v)>=0.005).map(([codigo,v])=>v>0?{codigo,debe:v,desc:"Apertura"}:{codigo,haber:-v,desc:"Apertura"});
+  const d=_balR2(lineas.reduce((s,l)=>s+(l.debe||0),0)),h=_balR2(lineas.reduce((s,l)=>s+(l.haber||0),0));
+  return{lineas,debe:d,haber:h,diferencia:_balR2(d-h)};
+}
+// Próximo código libre bajo un grupo de nivel 3 (ej. 1.1.06 → 1.1.06.001)
+function aperProximoCodigo(grupo,plan){
+  const hijos=plan.filter(c=>c.codigo.startsWith(grupo+".")&&c.codigo.split(".").length===grupo.split(".").length+1).map(c=>parseInt(c.codigo.split(".").pop(),10)||0);
+  return `${grupo}.${String((hijos.length?Math.max(...hijos):0)+1).padStart(3,"0")}`;
+}
+const _balTipoNombre={activo:"Activo",pasivo:"Pasivo",patrimonio_neto:"Patrimonio neto",ingreso:"Ingresos",egreso:"Egresos"};
+
+async function _balCargarPlan(){
+  const r=await sb("plan_cuentas?select=*&order=codigo.asc&limit=1000").catch(()=>[]);
+  if(r.length){_balState.plan=r;if(typeof planCuentas!=="undefined")planCuentas=r;}
+  return _balState.plan;
+}
+async function renderBalance(){
+  const el=document.getElementById("imp-tab-balance");if(!el)return;
+  const st=_balState;if(!st.hasta)st.hasta=today();if(!st.fecha)st.fecha=balEjercicioDesde(today());
+  el.innerHTML=`<div class="fbar" style="margin-bottom:14px">
+    <button class="fb${st.sub==="balance"?" on":""}" onclick="_balState.sub='balance';renderBalance()">Balance general</button>
+    <button class="fb${st.sub==="apertura"?" on":""}" onclick="_balState.sub='apertura';renderBalance()">🏁 Cargar apertura</button></div>
+    <div id="bal-body"></div>`;
+  if(st.sub==="apertura")return renderApertura();
+  const body=document.getElementById("bal-body");
+  const desde=balEjercicioDesde(st.hasta);
+  body.innerHTML=`<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+    <select class="fi mini-sel" style="width:120px" onchange="_balState.soc=this.value;renderBalance()"><option value="SUDES"${st.soc==="SUDES"?" selected":""}>SUDES</option><option value="POINTERS"${st.soc==="POINTERS"?" selected":""}>POINTERS</option></select>
+    <span style="font-size:12px;color:var(--tx3)">al</span><input class="fi" type="date" value="${esc(st.hasta)}" style="width:150px" onchange="_balState.hasta=this.value;renderBalance()">
+    <button class="btn" onclick="descargarBalanceGeneral()">📥 Excel</button></div><div id="bal-res" style="color:var(--tx3);font-size:12px">Calculando...</div>`;
+  try{
+    const as=await sb(`asientos_contables?select=id,tipo,fecha,asientos_movimientos(debe,haber,plan_cuentas(codigo,nombre,tipo))&sociedad=eq.${st.soc}&anulado=eq.false&fecha=gte.${desde}&fecha=lte.${st.hasta}&limit=5000`);
+    const b=buildBalanceGeneral(as);st._ultimo=b;st._desde=desde;
+    const fila=(c)=>`<tr style="border-bottom:1px solid var(--b2)"><td style="padding:5px 10px;font-family:monospace;font-size:11px;color:var(--tx3);white-space:nowrap">${esc(c.codigo)}</td><td style="padding:5px 8px;font-size:12px">${esc(c.nombre)}</td><td style="padding:5px 10px;text-align:right;font-size:12px;font-variant-numeric:tabular-nums;color:${c.saldo<0?"var(--re)":"var(--tx)"}">${_balM(c.saldo)}</td></tr>`;
+    const seccion=(titulo,lista,total,col)=>`<div style="margin-bottom:18px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:${col};margin-bottom:6px">${titulo}</div>${lista.length?`<table style="width:100%;border-collapse:collapse"><tbody>${lista.map(fila).join("")}</tbody><tfoot><tr style="border-top:2px solid var(--b)"><td colspan="2" style="padding:6px 10px;font-weight:700;font-size:12px">Total ${titulo.toLowerCase()}</td><td style="padding:6px 10px;text-align:right;font-weight:700;font-size:13px">${_balM(total)}</td></tr></tfoot></table>`:`<div style="font-size:12px;color:var(--tx3)">Sin saldos</div>`}</div>`;
+    const t=b.totales,sinApertura=!b.apertura;
+    document.getElementById("bal-res").innerHTML=`
+      ${sinApertura?`<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--tx2);margin-bottom:12px">⚠️ Este ejercicio (desde ${esc(feFechaAR(desde))}) todavía no tiene asiento de apertura: los saldos de abajo son solo los movimientos desde esa fecha y no incluyen lo que había al 30/06. Cargalos en «Cargar apertura».</div>`:""}
+      <div style="font-size:11px;color:var(--tx3);margin-bottom:12px">Ejercicio desde ${esc(feFechaAR(desde))} · ${b.movimientos} cuentas con movimiento. Los asientos anteriores al inicio del ejercicio no se incluyen.</div>
+      <div class="stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px">
+        <div class="sc"><div class="sc-l">Activo</div><div class="sc-v">${_balM(t.activo)}</div></div>
+        <div class="sc"><div class="sc-l">Pasivo</div><div class="sc-v">${_balM(t.pasivo)}</div></div>
+        <div class="sc"><div class="sc-l">Patrimonio neto</div><div class="sc-v">${_balM(t.pn)}</div></div>
+        <div class="sc"><div class="sc-l">Resultado del ejercicio</div><div class="sc-v" style="color:${t.resultado>=0?"var(--gr)":"var(--re)"}">${_balM(t.resultado)}</div></div>
+        <div class="sc"><div class="sc-l">Control de integridad</div><div class="sc-v" style="color:${Math.abs(t.diferencia)<0.5?"var(--gr)":"var(--re)"}">${_balM(t.diferencia)}</div><div class="sc-s">${Math.abs(t.diferencia)<0.5?"debe = haber en todos los asientos":"hay asientos descuadrados: revisar el Libro Diario"}</div></div></div>
+      ${seccion("Activo",b.activo,t.activo,"#10B981")}${seccion("Pasivo",b.pasivo,t.pasivo,"#EF4444")}${seccion("Patrimonio neto",b.pn,t.pn,"#7C3AED")}${seccion("Ingresos",b.ingresos,t.ingresos,"#3B82F6")}${seccion("Egresos",b.egresos,t.egresos,"#F59E0B")}`;
+  }catch(e){document.getElementById("bal-res").innerHTML=`<div style="color:var(--re)">No se pudo calcular el balance: ${esc(String(e.message||e).slice(0,160))}</div>`;}
+}
+async function descargarBalanceGeneral(){
+  const b=_balState._ultimo;if(!b){toast("Esperá a que cargue el balance","inf");return;}
+  try{
+    if(typeof XLSX==="undefined"){await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+    const t=b.totales,rows=[[`Balance general — ${_balState.soc}`],[`Ejercicio desde ${feFechaAR(_balState._desde)} hasta ${feFechaAR(_balState.hasta)}`],[]];
+    [["ACTIVO",b.activo,t.activo],["PASIVO",b.pasivo,t.pasivo],["PATRIMONIO NETO",b.pn,t.pn],["INGRESOS",b.ingresos,t.ingresos],["EGRESOS",b.egresos,t.egresos]].forEach(([n,l,tt])=>{rows.push([n]);l.forEach(c=>rows.push([c.codigo,c.nombre,c.saldo]));rows.push(["","Total "+n.toLowerCase(),tt],[]);});
+    rows.push(["","Resultado del ejercicio",t.resultado],["","Diferencia (activo − pasivo − PN − resultado)",t.diferencia]);
+    const wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet(rows);ws["!cols"]=[{wch:14},{wch:52},{wch:18}];XLSX.utils.book_append_sheet(wb,ws,"Balance");
+    XLSX.writeFile(wb,`balance_general_${_balState.soc}_${_balState.hasta}.xlsx`);
+  }catch(e){toast("No se pudo generar el Excel: "+String(e.message||e).slice(0,120),"err");}
+}
+
+// ── Pantalla «Cargar apertura» ──
+async function renderApertura(){
+  const st=_balState,body=document.getElementById("bal-body");if(!body)return;
+  await _balCargarPlan();
+  body.innerHTML=`<div style="font-size:12px;color:var(--tx2);line-height:1.6;margin-bottom:12px">Cargá el <b>balance de sumas y saldos al 30/06</b> que da Auren (Excel o CSV) para arrancar el ejercicio con los saldos reales. Tiene que traer el nombre o el código de cada cuenta y columnas <b>Debe/Haber</b>, <b>Deudor/Acreedor</b> o <b>Saldo</b>. Después elegís a qué cuenta del panel corresponde cada una.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <select class="fi mini-sel" style="width:120px" onchange="_balState.soc=this.value;_balState.apertura=null;renderBalance()"><option value="SUDES"${st.soc==="SUDES"?" selected":""}>SUDES</option><option value="POINTERS"${st.soc==="POINTERS"?" selected":""}>POINTERS</option></select>
+      <span style="font-size:12px;color:var(--tx3)">fecha de apertura</span><input class="fi" type="date" value="${esc(st.fecha)}" style="width:150px" onchange="_balState.fecha=this.value">
+      <input type="file" id="apr-file" accept=".xlsx,.xls,.csv" class="fi" style="max-width:300px" onchange="aperLeerArchivo(this)"></div>
+    <div id="apr-prev"></div>`;
+  if(st.apertura)aperRenderMapeo();
+}
+async function aperLeerArchivo(inp){
+  const file=inp.files[0],prev=document.getElementById("apr-prev");if(!file)return;
+  prev.innerHTML=`<div style="font-size:12px;color:var(--tx3)">Leyendo planilla...</div>`;
+  try{
+    if(typeof XLSX==="undefined"){await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+    const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:""});
+    const r=aperParsear(rows),plan=await _balCargarPlan();
+    _balState.apertura={filas:r.filas.map(f=>({...f,dest:aperSugerir(f,plan),nuevo:null})),modo:r.modo,archivo:file.name};
+    _balState.invertir=false;
+    aperRenderMapeo();
+  }catch(e){prev.innerHTML=`<div style="color:var(--re);font-size:12px">✗ ${esc(String(e.message||e))}</div>`;}
+}
+function aperResumen(){
+  const ap=_balState.apertura;if(!ap)return null;
+  const signo=_balState.invertir?-1:1;
+  const items=ap.filas.map((f,i)=>({saldo:f.saldo*signo,codigo:f.dest==="__omitir"?"":(f.dest==="__nueva"?((f.nuevo&&f.nuevo.codigo)||"__n"+i):f.dest)}));
+  const sinMapear=ap.filas.filter(f=>!f.dest||(f.dest==="__nueva"&&!(f.nuevo&&f.nuevo.nombre&&f.nuevo.grupo))).length;
+  const omitidas=ap.filas.filter(f=>f.dest==="__omitir").length;
+  const L=aperLineas(items);
+  return{...L,sinMapear,omitidas,items};
+}
+function aperRenderMapeo(){
+  const ap=_balState.apertura,prev=document.getElementById("apr-prev");if(!ap||!prev)return;
+  const plan=_balState.plan,imp=plan.filter(c=>c.imputable&&c.activa!==false).sort((a,b)=>a.codigo.localeCompare(b.codigo,"es",{numeric:true}));
+  const opts=(sel)=>`<option value="">— elegir cuenta —</option><option value="__omitir"${sel==="__omitir"?" selected":""}>— omitir (no se carga) —</option><option value="__nueva"${sel==="__nueva"?" selected":""}>➕ Crear cuenta nueva…</option>`+["activo","pasivo","patrimonio_neto"].map(t=>`<optgroup label="${_balTipoNombre[t]}">${imp.filter(c=>c.tipo===t).map(c=>`<option value="${esc(c.codigo)}"${sel===c.codigo?" selected":""}>${esc(c.codigo)} — ${esc(c.nombre)}</option>`).join("")}</optgroup>`).join("");
+  const sig=_balState.invertir?-1:1;
+  const filasHTML=ap.filas.map((f,i)=>`<tr style="border-top:1px solid var(--b)"><td style="padding:6px 8px"><span style="font-family:monospace;color:var(--tx3)">${esc(f.cod)}</span> ${esc(f.nombre)}</td>
+      <td style="padding:6px 8px;text-align:right;white-space:nowrap;color:${f.saldo*sig<0?"var(--re)":"var(--tx)"}">${_balM(Math.abs(f.saldo))} ${f.saldo*sig>0?"D":"H"}</td>
+      <td style="padding:6px 8px"><select class="fi" style="font-size:12px;width:100%" onchange="aperElegir(${i},this.value)">${opts(f.dest)}</select>
+      ${f.dest==="__nueva"?aperNuevaHTML(i,f):""}</td></tr>`).join("");
+  const r=aperResumen();
+  prev.innerHTML=`<div style="font-size:12px;margin-bottom:8px"><b>${esc(ap.archivo)}</b> · ${ap.filas.length} cuentas con saldo · formato: ${ap.modo==="saldo"?"una columna de saldo":"Debe/Haber"}${ap.modo==="saldo"?` · <label><input type="checkbox" ${_balState.invertir?"checked":""} onchange="_balState.invertir=this.checked;aperRenderMapeo()"> los saldos positivos son <b>acreedores</b> (invertir)</label>`:""}</div>
+    <div style="max-height:420px;overflow:auto;border:1px solid var(--b);border-radius:8px"><table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:var(--surf2)">${["Cuenta de la planilla","Saldo","Cuenta del panel"].map((h,i)=>`<th style="padding:6px 8px;text-align:${i===1?"right":"left"};color:var(--tx3)">${h}</th>`).join("")}</tr></thead><tbody>
+    ${filasHTML}</tbody></table></div>
+    <div id="apr-tot" style="margin-top:12px;padding:10px 12px;background:var(--surf2);border-radius:8px;font-size:12px">${aperTotalesHTML(r)}</div>
+    <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn pri" id="apr-btn" onclick="aperGenerar()"${r.sinMapear||Math.abs(r.diferencia)>=0.5?" disabled":""}>🏁 Generar asiento de apertura</button><span id="apr-aviso" style="font-size:12px;color:var(--tx3)"></span></div>`;
+}
+function aperTotalesHTML(r){
+  const ok=!r.sinMapear&&Math.abs(r.diferencia)<0.5;
+  return`Debe ${_balM(r.debe)} · Haber ${_balM(r.haber)} · <b style="color:${Math.abs(r.diferencia)<0.5?"var(--gr)":"var(--re)"}">diferencia ${_balM(r.diferencia)}</b>${r.sinMapear?` · <span style="color:var(--am,#F59E0B)">faltan elegir ${r.sinMapear} cuenta${r.sinMapear===1?"":"s"}</span>`:""}${r.omitidas?` · ${r.omitidas} omitida${r.omitidas===1?"":"s"}`:""}${ok?" · <span style=\"color:var(--gr)\">listo para generar</span>":""}`;
+}
+function aperNuevaHTML(i,f){
+  const plan=_balState.plan,n=f.nuevo||{nombre:f.nombre,tipo:f.saldo>0?"activo":"pasivo",grupo:""};
+  const grupos=plan.filter(c=>!c.imputable&&c.nivel===3&&c.tipo===n.tipo&&c.activa!==false).sort((a,b)=>a.codigo.localeCompare(b.codigo,"es",{numeric:true}));
+  if(!f.nuevo)f.nuevo={nombre:n.nombre,tipo:n.tipo,grupo:grupos[0]?grupos[0].codigo:"",codigo:""};
+  if(!f.nuevo.grupo&&grupos[0])f.nuevo.grupo=grupos[0].codigo;
+  return`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><input class="fi" style="font-size:12px;flex:2;min-width:160px" value="${esc(f.nuevo.nombre)}" oninput="_balState.apertura.filas[${i}].nuevo.nombre=this.value;aperRefrescarTot()">
+    <select class="fi" style="font-size:12px;flex:1" onchange="aperNuevoTipo(${i},this.value)">${["activo","pasivo","patrimonio_neto"].map(t=>`<option value="${t}"${f.nuevo.tipo===t?" selected":""}>${_balTipoNombre[t]}</option>`).join("")}</select>
+    <select class="fi" style="font-size:12px;flex:2" onchange="_balState.apertura.filas[${i}].nuevo.grupo=this.value;aperRenderMapeo()">${grupos.map(g=>`<option value="${esc(g.codigo)}"${f.nuevo.grupo===g.codigo?" selected":""}>${esc(g.codigo)} ${esc(g.nombre)}</option>`).join("")}</select>
+    <span style="font-size:11px;color:var(--tx3);align-self:center">${f.nuevo.grupo?"se crea dentro de "+esc(f.nuevo.grupo):"elegí un grupo"}</span></div>`;
+}
+function aperElegir(i,v){_balState.apertura.filas[i].dest=v;if(v!=="__nueva")_balState.apertura.filas[i].nuevo=null;aperRenderMapeo();}
+function aperNuevoTipo(i,t){const f=_balState.apertura.filas[i];f.nuevo.tipo=t;f.nuevo.grupo="";aperRenderMapeo();}
+function aperRefrescarTot(){const r=aperResumen(),t=document.getElementById("apr-tot"),b=document.getElementById("apr-btn");if(t)t.innerHTML=aperTotalesHTML(r);if(b)b.disabled=!!(r.sinMapear||Math.abs(r.diferencia)>=0.5);}
+async function aperGenerar(){
+  const st=_balState,ap=st.apertura;if(!ap)return;
+  const r=aperResumen();
+  if(r.sinMapear||Math.abs(r.diferencia)>=0.5){toast("Falta elegir cuentas o el asiento no balancea","err");return;}
+  if(!st.fecha){toast("Indicá la fecha de apertura","err");return;}
+  const btn=document.getElementById("apr-btn");btn.disabled=true;
+  try{
+    const previas=await sb(`asientos_contables?select=id&tipo=eq.apertura&anulado=eq.false&sociedad=eq.${st.soc}&fecha=gte.${balEjercicioDesde(st.fecha)}&fecha=lte.${st.fecha}`);
+    if(previas.length){
+      if(!confirm(`${st.soc} ya tiene un asiento de apertura en este ejercicio. ¿Anularlo y cargar el nuevo?`)){btn.disabled=false;return;}
+      for(const p of previas)await sb(`asientos_contables?id=eq.${p.id}`,{method:"PATCH",body:JSON.stringify({anulado:true})});
+    }
+    // cuentas nuevas
+    const nuevas=ap.filas.filter(f=>f.dest==="__nueva"&&f.nuevo);
+    for(const f of nuevas){
+      const n=f.nuevo,padre=st.plan.find(c=>c.codigo===n.grupo);
+      n.codigo=aperProximoCodigo(n.grupo,st.plan);
+      const [c]=await sb("plan_cuentas",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({codigo:n.codigo,nombre:n.nombre.trim(),tipo:n.tipo,naturaleza:n.tipo==="activo"?"deudora":"acreedora",cuenta_padre_id:padre?padre.id:null,nivel:4,imputable:true,activa:true})});
+      st.plan.push(c);if(typeof planCuentas!=="undefined")planCuentas=st.plan;
+    }
+    const rFinal=aperResumen();   // ahora las cuentas nuevas ya tienen su código real
+    const a=await generarAsiento({fecha:st.fecha,sociedad:st.soc,tipo:"apertura",origen:"apertura_ejercicio",origen_id:(window.crypto&&crypto.randomUUID)?crypto.randomUUID():null,
+      descripcion:`Asiento de apertura del ejercicio — saldos al ${feFechaAR(new Date(Date.parse(st.fecha)-86400000).toISOString().slice(0,10))} (${ap.archivo})`,lineas:rFinal.lineas});
+    if(!a||a._faltantes||!a.id)throw new Error(a&&a._faltantes?"faltan cuentas: "+a._faltantes.join(", "):"no se pudo generar el asiento");
+    st.apertura=null;
+    toast(`✓ Asiento de apertura generado con ${r.lineas.length} cuentas${nuevas.length?` (${nuevas.length} cuenta${nuevas.length===1?"":"s"} nueva${nuevas.length===1?"":"s"})`:""}`,"ok");
+    st.sub="balance";renderBalance();
+  }catch(e){toast("No se pudo cargar la apertura: "+String(e.message||e).slice(0,160),"err");btn.disabled=false;}
+}
+// ── FIN APERTURA Y BALANCE GENERAL ──
 
 function impMeses(){
   // Genera meses: 3 atrás hasta 3 adelante desde hoy
