@@ -1,4 +1,4 @@
-const corsHeaders = {
+﻿const corsHeaders = {
   "Access-Control-Allow-Origin": "https://tomaslarran.github.io",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
@@ -23,7 +23,7 @@ async function chequearLimiteIA(supabase: any, email: string | null) {
   if (organizacionId) {
     const { data } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").eq("id", organizacionId).maybeSingle();
     organizacion = data;
-  } else if (!email) {
+  } else {
     const { data } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").limit(1).maybeSingle();
     organizacion = data;
     organizacionId = organizacion?.id ?? null;

@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+﻿import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const cors = {
@@ -26,7 +26,7 @@ async function chequearLimiteIA(supabase: any, email: string | null) {
   if (organizacionId) {
     const { data } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").eq("id", organizacionId).maybeSingle();
     organizacion = data;
-  } else if (!email) {
+  } else {
     const { data } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").limit(1).maybeSingle();
     organizacion = data;
     organizacionId = organizacion?.id ?? null;
