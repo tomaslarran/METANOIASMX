@@ -18954,6 +18954,7 @@ async function confirmarRegistrarCobro(){
         }
       })();
       toast(msgLibre,"ok");
+      await feCobroDesdeCashFlow({fecha,soc,monto:montoLibre,facturaTxt:factura,medio,dest}).catch(()=>{});
       // Si es cobro de curso, marcar todas sus inscripciones pendientes como Pagado
       const cIdLibre=document.getElementById("rcob-curso-id").value;
       if(cIdLibre){
@@ -18978,6 +18979,7 @@ async function confirmarRegistrarCobro(){
       Object.assign(c,{estado:"Cobrado",fecha_cobro:fecha,numero_factura:factura});
       if(c.concepto_id&&c.fecha_vencimiento)await actualizarRealDesdeCobranzas(c.concepto_id,c.fecha_vencimiento.slice(0,7));
       toast(msg,"ok");
+      await feCobroDesdeCashFlow({fecha,soc,monto,facturaTxt:factura,medio,dest}).catch(()=>{});
       renderCFCobranzas();renderCFResumen();
 
     } else {
@@ -21829,6 +21831,7 @@ async function loadFacturasEmitidas(){
   if(el)el.innerHTML=`<div class="loading"><div class="loader"></div><div class="lt">Cargando facturas...</div></div>`;
   try{
     [feFacturas,feConfig]=await Promise.all([sb("facturas_emitidas?select=*&order=fecha.desc,cbte_numero.desc&limit=500"),sb("arca_config?select=*").catch(()=>[])]);
+    feCobros=await feCargarCobros();
   }catch(e){
     feFacturas=[];feConfig=[];
     if(el)el.innerHTML=`<div class="empty"><div class="ei">🧾</div>No se pudo leer <code>facturas_emitidas</code>: ${esc(String(e.message||e).slice(0,120))}<br><span style="font-size:12px;color:var(--tx3)">Falta correr <b>sql_arca_facturacion.sql</b> en Supabase.</span></div>`;
@@ -21869,10 +21872,11 @@ function feRender(){
     <div class="sc"><div class="sc-l">🧾 Comprobantes autorizados</div><div class="sc-v">${aut.length}</div><div class="sc-s">${lista.length-aut.length} sin autorizar</div></div>
     <div class="sc"><div class="sc-l">Neto facturado</div><div class="sc-v">${feM(sum("neto")+sum("exento")+sum("no_gravado"))}</div><div class="sc-s">notas de crédito restan</div></div>
     <div class="sc"><div class="sc-l">IVA débito fiscal</div><div class="sc-v">${feM(sum("iva"))}</div></div>
-    <div class="sc"><div class="sc-l">Total facturado</div><div class="sc-v" style="color:var(--gr)">${feM(sum("total"))}</div></div></div>`;
+    <div class="sc"><div class="sc-l">Total facturado</div><div class="sc-v" style="color:var(--gr)">${feM(sum("total"))}</div></div>
+    <div class="sc"><div class="sc-l">Por cobrar</div><div class="sc-v" style="color:var(--am,#F59E0B)">${feM(aut.reduce((s,f)=>s+(feSaldoCobro(f)||0),0))}</div><div class="sc-s">saldo de las ventas reales</div></div></div>`;
   if(!lista.length){el.innerHTML=filtros+kpis+`<div class="empty"><div class="ei">🧾</div>${feFacturas.length?"Ninguna factura con esos filtros":"Todavía no se emitió ninguna factura"}</div>`;return;}
   el.innerHTML=filtros+kpis+`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;border-collapse:collapse;font-size:12px">
-    <thead><tr style="background:var(--surf2);border-bottom:1px solid var(--b)">${["Fecha","Comprobante","Receptor","Neto","IVA","Total","CAE","Estado",""].map((h,i)=>`<th style="padding:8px 10px;text-align:${i>=3&&i<=5?"right":"left"};color:var(--tx3);font-weight:600">${h}</th>`).join("")}</tr></thead><tbody>
+    <thead><tr style="background:var(--surf2);border-bottom:1px solid var(--b)">${["Fecha","Comprobante","Receptor","Neto","IVA","Total","CAE","Estado","Cobro",""].map((h,i)=>`<th style="padding:8px 10px;text-align:${i>=3&&i<=5?"right":"left"};color:var(--tx3);font-weight:600">${h}</th>`).join("")}</tr></thead><tbody>
     ${lista.map(f=>{
       const [col,lbl]=badge[f.estado]||["#9CA3AF",f.estado];const nc=FE_ES_NC(f.cbte_tipo);
       return`<tr style="border-bottom:1px solid var(--b)${f.estado==="rechazada"?";background:rgba(239,68,68,.05)":""}">
@@ -21884,7 +21888,8 @@ function feRender(){
       <td style="padding:8px 10px;text-align:right;font-weight:700;color:${nc?"var(--re)":"var(--tx)"}">${nc?"−":""}${feM(f.total)}</td>
       <td style="padding:8px 10px;font-size:11px;font-family:monospace;color:var(--tx3)">${f.cae?esc(f.cae)+`<div>vto ${esc(feFechaAR(f.cae_vto))}</div>`:"—"}</td>
       <td style="padding:8px 10px"><span style="font-size:10px;font-weight:700;color:${col};border:1px solid ${col};border-radius:8px;padding:1px 7px">${esc(lbl)}</span></td>
-      <td style="padding:8px 10px;white-space:nowrap">${f.estado==="autorizada"?`<button class="btn sm" style="font-size:10px;padding:2px 7px" onclick="feDescargarPDF('${f.id}')">📄 PDF</button> `:""}<button class="btn sm" style="font-size:10px;padding:2px 7px" onclick="feVerDetalle('${f.id}')">ℹ️</button></td></tr>`;}).join("")}
+      <td style="padding:8px 10px;font-size:11px;white-space:nowrap">${feCobroCelda(f)}</td>
+      <td style="padding:8px 10px;white-space:nowrap">${f.estado==="autorizada"?`<button class="btn sm" style="font-size:10px;padding:2px 7px" onclick="feDescargarPDF('${f.id}')">📄 PDF</button> `:""}${(feSaldoCobro(f)||0)>0.01?`<button class="btn sm" style="font-size:10px;padding:2px 7px" title="Contabilizar un cobro de esta factura" onclick="feCobroAbrir('${f.id}')">🧮 Cobro</button> `:""}<button class="btn sm" style="font-size:10px;padding:2px 7px" onclick="feVerDetalle('${f.id}')">ℹ️</button></td></tr>`;}).join("")}
     </tbody></table></div>`;
 }
 
@@ -22328,6 +22333,114 @@ async function feContabilizarPendientes(){
   }
   toast(faltan.size?`Faltan cuentas en el plan: ${[...faltan].join(", ")}`:`✓ ${ok} asiento${ok===1?"":"s"} generado${ok===1?"":"s"}${otros?` · ${otros} sin generar`:""}`,faltan.size||otros?"err":"ok");
   await loadFacturasEmitidas();
+}
+
+// ── Cobros de ventas: cancelan los deudores por ventas (asiento cobro_venta) ──
+// El cobro se asienta contra la factura emitida: Debe la cuenta donde entró la plata / Haber Deudores por ventas (1.1.02.002).
+// Lo cobrado de cada factura sale de sus asientos (origen factura_emitida_cobro): no hay columnas nuevas ni estado duplicado.
+let feCobros={};
+async function feCargarCobros(){
+  try{
+    const as=await sb("asientos_contables?select=origen_id,asientos_movimientos(debe,haber,plan_cuentas(codigo))&origen=eq.factura_emitida_cobro&anulado=eq.false&limit=5000");
+    const m={};
+    as.forEach(a=>(a.asientos_movimientos||[]).forEach(mv=>{if(mv.plan_cuentas&&mv.plan_cuentas.codigo===FE_CTA_DEUDORES)m[a.origen_id]=feR2((m[a.origen_id]||0)+(parseFloat(mv.haber)||0)-(parseFloat(mv.debe)||0));}));
+    return m;
+  }catch(e){return{};}
+}
+function feSaldoCobro(f){
+  if(!f||FE_ES_NC(f.cbte_tipo)||f.ambiente!=="produccion"||f.estado!=="autorizada")return null;
+  return Math.max(0,feR2((parseFloat(f.total)||0)-(feCobros[f.id]||0)));
+}
+function feCobroCelda(f){
+  const s=feSaldoCobro(f);
+  if(s===null)return"—";
+  if(s<0.01)return`<span style="color:var(--gr);font-weight:700">✓ Cobrada</span>`;
+  const cobrado=feCobros[f.id]||0;
+  return cobrado>0?`<span style="color:var(--am,#F59E0B);font-weight:700">Saldo ${feM(s)}</span>`:`<span style="color:var(--tx3)">Pendiente ${feM(s)}</span>`;
+}
+// Cuenta contable donde entra el cobro, según el destino elegido
+function feCuentaCobro({medio,dest,soc}){
+  if(dest==="inversion")return"1.1.04.001";
+  const mp=(typeof mediosPago!=="undefined"?mediosPago:[]).find(m=>m.nombre===medio);
+  if(mp&&mp.tipo==="cheque")return"1.1.01.005";
+  if(mp&&mp.tipo==="efectivo")return"1.1.01.001";
+  return getBancoCodigoPorMedio(medio,soc);
+}
+function feBuscarFacturaPorTexto(txt,soc){
+  const m=/(?:\b([ABC])\s*-?\s*)?(\d{1,5})\s*-\s*(\d{1,8})/i.exec(String(txt||""));
+  if(!m)return null;
+  const letra=(m[1]||"").toUpperCase(),pto=parseInt(m[2],10),nro=parseInt(m[3],10);
+  const cand=impFacturasEmitidas.filter(f=>f.sociedad===soc&&Number(f.pto_vta)===pto&&Number(f.cbte_numero)===nro&&!FE_ES_NC(f.cbte_tipo)&&(!letra||feLetra(f.cbte_tipo)===letra));
+  return cand.length===1?cand[0]:null; // si hay dos comprobantes con ese número (A y B) y no se indicó la letra, no se adivina
+}
+async function feAsientoCobro(f,{fecha,monto,cuenta}){
+  if(typeof generarAsiento!=="function")return{ok:false,motivo:"sin módulo contable"};
+  const saldo=feSaldoCobro(f);
+  if(saldo===null)return{ok:false,motivo:"la factura no admite cobro"};
+  const imp=feR2(Math.min(parseFloat(monto)||0,saldo));
+  if(!(imp>0))return{ok:false,motivo:saldo<0.01?"la factura ya está cobrada":"importe inválido"};
+  const a=await generarAsiento({fecha,sociedad:f.sociedad,tipo:"cobro_venta",origen:"factura_emitida_cobro",origen_id:f.id,
+    descripcion:`Cobro venta: ${FE_TIPOS[f.cbte_tipo]||"Comprobante"} N°${feNum(f)} — ${f.receptor_nombre||"s/d"}`,
+    lineas:[{codigo:cuenta,debe:imp,desc:"Cobro"},{codigo:FE_CTA_DEUDORES,haber:imp,desc:"Deudores por ventas"}]});
+  if(a&&a._faltantes)return{ok:false,faltantes:a._faltantes};
+  if(!a||!a.id)return{ok:false,motivo:"no se pudo generar el asiento"};
+  feCobros[f.id]=feR2((feCobros[f.id]||0)+imp);
+  return{ok:true,importe:imp,asiento:a,excedente:feR2((parseFloat(monto)||0)-imp)};
+}
+// Enganche con el flujo de Cobranzas de Cash Flow: si el cobro lleva el N° de una factura emitida, se asienta solo
+async function feCobroDesdeCashFlow({fecha,soc,monto,facturaTxt,medio,dest}){
+  if(!facturaTxt)return null;
+  const f=feBuscarFacturaPorTexto(facturaTxt,soc);
+  if(!f){toast(`Cobro registrado. No se contabilizó contra ninguna venta: no encontré la factura emitida «${facturaTxt}» de ${soc}.`,"inf");return null;}
+  if(!Object.keys(feCobros).length)feCobros=await feCargarCobros();
+  const r=await feAsientoCobro(f,{fecha,monto,cuenta:feCuentaCobro({medio,dest,soc})});
+  if(r.ok)toast(`🧮 Asiento de cobro generado contra ${FE_TIPOS[f.cbte_tipo]} ${feNum(f)}${r.excedente>0.5?` (sobraron ${feM(r.excedente)} sin imputar)`:""}`,"ok");
+  else if(r.faltantes)toast(`No se generó el asiento de cobro: faltan las cuentas ${r.faltantes.join(", ")}`,"err");
+  else if(r.motivo)toast(`Cobro registrado; asiento no generado: ${r.motivo}`,"inf");
+  return r;
+}
+// Pantalla Facturas emitidas → «Contabilizar cobro»: solo el asiento (para cobros que ya están cargados en caja, banco o cobranzas)
+function feCobroAbrir(id){
+  const f=feFacturas.find(x=>x.id===id);if(!f)return;
+  const s=feSaldoCobro(f);if(s===null||s<0.01){toast("Esa factura no tiene saldo por cobrar","inf");return;}
+  let d=document.getElementById("modal-fe-cobro");
+  if(!d){
+    d=document.createElement("div");d.className="mov";d.id="modal-fe-cobro";d.onclick=e=>{if(e.target===d)closeM("modal-fe-cobro");};
+    d.innerHTML=`<div class="modal" style="max-width:520px"><div class="mt"><span>🧮 Contabilizar cobro</span><button class="mt-close" onclick="closeM('modal-fe-cobro')">✕</button></div>
+    <div style="padding:0 20px 20px"><input type="hidden" id="fc-id">
+      <div id="fc-res" style="font-size:12px;color:var(--tx2);line-height:1.6;margin-bottom:10px"></div>
+      <div class="fgrid">
+        <div class="fg"><label class="fl">Fecha del cobro *</label><input class="fi" id="fc-fecha" type="date"></div>
+        <div class="fg"><label class="fl">Importe cobrado *</label><input class="fi" id="fc-monto" type="number" step="0.01" min="0"></div>
+      </div>
+      <div class="fg"><label class="fl">¿Dónde entró la plata? *</label><select class="fi" id="fc-cta"></select></div>
+      <div style="font-size:11px;color:var(--tx3);line-height:1.5;margin-top:6px">Esto <b>solo genera el asiento</b> (Debe la cuenta elegida / Haber Deudores por ventas). No crea movimientos de caja ni de banco: usalo para cobros que ya cargaste. Para un cobro nuevo, usá Cash Flow → Cobranzas con el N° de esta factura y el asiento sale solo.</div>
+      <div class="ma" style="margin-top:14px"><button class="bc" onclick="closeM('modal-fe-cobro')">Cancelar</button><button class="bk" id="fc-btn" onclick="feCobroGuardar()">Generar asiento</button></div>
+    </div></div>`;
+    document.body.appendChild(d);
+  }
+  const ctas=[["1.1.01.001","Caja efectivo"],[f.sociedad==="POINTERS"?"1.1.01.003":"1.1.01.002",`Banco Macro ${f.sociedad}`],["1.1.01.005","Cheques de terceros en cartera"],["1.1.04.001","Inversiones (cheque depositado en el fondo)"]];
+  document.getElementById("fc-cta").innerHTML=ctas.map(([c,n])=>`<option value="${c}">${esc(n)}</option>`).join("");
+  document.getElementById("fc-id").value=id;
+  document.getElementById("fc-fecha").value=today();
+  document.getElementById("fc-monto").value=s;
+  document.getElementById("fc-res").innerHTML=`<b>${esc(FE_TIPOS[f.cbte_tipo]||"")} ${esc(feNum(f))}</b> · ${esc(f.receptor_nombre||"")}<br>Total ${feM(f.total)} · cobrado ${feM(feCobros[id]||0)} · <b>saldo ${feM(s)}</b>`;
+  openM("modal-fe-cobro");
+}
+async function feCobroGuardar(){
+  const id=document.getElementById("fc-id").value,f=feFacturas.find(x=>x.id===id);if(!f)return;
+  const fecha=document.getElementById("fc-fecha").value,monto=parseFloat(document.getElementById("fc-monto").value)||0,cuenta=document.getElementById("fc-cta").value;
+  if(!fecha||!(monto>0)){toast("Completá la fecha y el importe","err");return;}
+  const btn=document.getElementById("fc-btn");btn.disabled=true;
+  try{
+    const r=await feAsientoCobro(f,{fecha,monto,cuenta});
+    if(r.ok){
+      closeM("modal-fe-cobro");
+      toast(`✓ Cobro contabilizado por ${feM(r.importe)}${r.excedente>0.5?` (el importe excedía el saldo en ${feM(r.excedente)})`:""}`,"ok");
+      feRender();
+    }else toast(r.faltantes?`Faltan las cuentas ${r.faltantes.join(", ")} en el plan`:("No se pudo contabilizar: "+(r.motivo||"error")),"err");
+  }catch(e){toast("No se pudo contabilizar el cobro: "+String(e.message||e).slice(0,140),"err");}
+  finally{btn.disabled=false;}
 }
 
 function feAgregarItem(){feItems.push({descripcion:"",neto:"",alicuota:21});feRenderItems();}
