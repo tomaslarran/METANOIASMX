@@ -20551,10 +20551,12 @@ async function confirmarPagoCuota(){
     }
     closeM("modal-pago-cuota");
     toast(edit?"✓ Pago de la cuota actualizado":`✓ Cuota pagada — ${fmtNum(c?.monto_total,true)}`,"ok");
-    renderCFPrestamos();
-    renderCFResumen();
-    renderCFPendientes();
-    if(curPage==="alertas")renderAlertas();
+    _renderCronogramaCuotas(prestId);
+    setTimeout(()=>{
+      try{renderCFResumen();}catch(_){}
+      try{renderCFPendientes();}catch(_){}
+      try{if(curPage==="alertas")renderAlertas();}catch(_){}
+    },0);
   }catch(e){toast("Error: "+e.message,"err")}
   finally{btn.disabled=false;_mpcCuotaId=null;_mpcPrestId=null;_mpcEdit=false;}
 }
@@ -20575,6 +20577,46 @@ function _refrescarTrasCuota(){
   try{renderCFPendientes();}catch(_){}
   try{if(typeof renderPendHistorial==="function"&&document.getElementById("pendientes-content"))renderPendHistorial();}catch(_){}
   try{if(curPage==="alertas")renderAlertas();}catch(_){}
+}
+// Actualiza solo el cronograma de un préstamo sin re-renderizar toda la lista
+function _renderCronogramaCuotas(prestId){
+  const div=document.getElementById(`prest-cuotas-${prestId}`);
+  if(!div)return;
+  const p=cfPrestamos.find(x=>x.id===prestId);
+  if(!p)return;
+  const cuotas=(cfPrestCuotas||[]).filter(c=>c.prestamo_id===prestId).sort((a,b)=>(a.nro_cuota||0)-(b.nro_cuota||0));
+  const tbody=div.querySelector("tbody");
+  if(tbody){
+    tbody.innerHTML=cuotas.map(c=>{
+      const dc=c.fecha?days(c.fecha):null;
+      const venc=!c.pagada&&dc!==null&&dc<0;
+      const prox=!c.pagada&&dc!==null&&dc<=3&&dc>=0;
+      return`<tr style="border-top:1px solid var(--surf2);${c.pagada?"opacity:.5":""}${venc?" background:rgba(239,68,68,.05)":""}${prox?" background:rgba(245,158,11,.05)":""}">
+        <td style="padding:6px 10px;color:var(--tx3)">${c.nro_cuota||"—"}</td>
+        <td style="padding:6px 10px;color:${venc?"#FCA5A5":prox?"#FCD34D":"var(--tx2)"}">${fmt(c.fecha)}${venc?" ⚠":prox?" ⏰":""}</td>
+        <td style="padding:6px 10px;text-align:right;font-weight:600;color:var(--tx)">${fmtNum(c.monto_total,true)}</td>
+        <td style="padding:6px 10px;text-align:right;color:var(--gr)">${fmtNum(c.capital)}</td>
+        <td style="padding:6px 10px;text-align:right;color:#FCA5A5">${fmtNum(c.intereses)}</td>
+        <td style="padding:6px 10px;text-align:right;color:var(--tx3)">${fmtNum(c.saldo_restante)}</td>
+        <td style="padding:6px 10px;text-align:center">
+          ${c.pagada?`<span class="badge bdo" style="font-size:10px">Pagada</span> <button class="btn sm" style="font-size:10px;padding:1px 6px;margin-left:4px" title="Cambiar fecha, monto o medio de pago" onclick="editarPagoCuota('${c.id}','${p.id}')">✎</button><button class="btn sm" style="font-size:10px;padding:1px 6px" title="Revertir el pago: la cuota vuelve a pendiente" onclick="revertirPagoCuota('${c.id}','${p.id}')">↩</button>`:
+            `<button class="btn sm" style="font-size:10px;padding:2px 8px" onclick="marcarCuotaPagada('${c.id}','${p.id}')">Marcar pagada</button>`}
+        </td>
+      </tr>`;
+    }).join("");
+  }
+  const tfoot=div.querySelector("tfoot");
+  if(tfoot){
+    const totalCapital=cuotas.reduce((s,c)=>s+(c.capital||0),0);
+    const totalIntereses=cuotas.reduce((s,c)=>s+(c.intereses||0),0);
+    tfoot.innerHTML=`<tr style="background:var(--surf2);border-top:2px solid var(--b)">
+      <td colspan="2" style="padding:7px 10px;font-weight:700;color:var(--tx)">TOTAL</td>
+      <td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--tx)">${fmtNum(cuotas.reduce((s,c)=>s+(c.monto_total||0),0),true)}</td>
+      <td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--gr)">${totalCapital?fmtNum(totalCapital,true):"—"}</td>
+      <td style="padding:7px 10px;text-align:right;font-weight:700;color:#FCA5A5">${totalIntereses?fmtNum(totalIntereses,true):"—"}</td>
+      <td colspan="2"></td>
+    </tr>`;
+  }
 }
 // ✎ Editar: reabre el modal de pago con los datos actuales; al guardar se reemplaza el asiento (no toca el saldo del préstamo)
 async function editarPagoCuota(cuotaId,prestId){
@@ -20615,7 +20657,13 @@ async function revertirPagoCuota(cuotaId,prestId){
     await sb(`cf_prestamos?id=eq.${prestId}`,{method:"PATCH",body:JSON.stringify({saldo_actual:nuevoSaldo,cuotas_pendientes:cuotasPend,updated_at:new Date().toISOString()})});
     p.saldo_actual=nuevoSaldo;p.cuotas_pendientes=cuotasPend;
     toast(`↩ Pago revertido: la cuota volvió a pendiente${nAs?" y se anuló su asiento":""}${bm.length?" · movimiento del banco liberado":""}`,"ok");
-    _refrescarTrasCuota();
+    _renderCronogramaCuotas(prestId);
+    setTimeout(()=>{
+      try{renderCFResumen();}catch(_){}
+      try{renderCFPendientes();}catch(_){}
+      try{if(typeof renderPendHistorial==="function"&&document.getElementById("pendientes-content"))renderPendHistorial();}catch(_){}
+      try{if(curPage==="alertas")renderAlertas();}catch(_){}
+    },0);
   }catch(e){toast("No se pudo revertir: "+String(e.message||e).slice(0,100),"err");}
 }
 
@@ -26193,7 +26241,7 @@ async function backfillAsientos(){
       const lineas=[];
       if(cap>0)lineas.push({codigo:"2.1.02.001",debe:cap,desc:"Capital cuota"});
       if(intereses>0)lineas.push({codigo:"5.3.01.001",debe:intereses,desc:"Intereses"});
-      lineas.push({codigo:getBancoCodigoPorMedio("",soc),haber:total,desc:"Pago cuota"});
+      lineas.push({codigo:getBancoCodigoPorMedio("Macro",soc),haber:total,desc:"Pago cuota"});
       await hacer({fecha:c.fecha_pago||c.fecha||today(),sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:c.id,descripcion:`Cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${prest.nombre||"Préstamo"}`,lineas},`Cuota #${c.nro_cuota||"?"} — ${prest.nombre||"Préstamo"}`);
     }
 
