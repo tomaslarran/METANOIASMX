@@ -896,6 +896,8 @@ CREATE POLICY "Solo autenticados" ON elearning_suscripciones FOR ALL TO authenti
 - [x] Secrets `ELEARNING_WEBHOOK_SECRET` y `ELEARNING_URL` cargados, `sync-elearning` deployada (29 Sep 2026)
 - [x] Secret `ELEARNING_API_TOKEN` cargado (5 Oct 2026) — "🔄 Sincronizar ahora" funciona: trajo 6 cursos y 17 inscripciones. Las rutas `/api/cursos`, `/api/inscripciones`, `/api/alumnos`, `/api/eventos` existen (401 sin token)
 - [x] SQL de las 7 tablas `elearning_*` corrido (29 Sep 2026); `sync-elearning` con "Verify JWT" desactivado en el dashboard (necesario para que el webhook de Laravel llegue a la función)
+- [x] **Enganche `pago.aprobado` → ARCA + email al alumno** (19 Oct 2026): `sync-elearning` ahora procesa `pago.aprobado` con `procesarPagoAprobado()` — (1) busca al cliente por CUIT en `elearning_clientes`, (2) si `arca_config` de POINTERS está en producción y activo emite la factura vía `arca-facturacion` con `x-cron-secret`, (3) actualiza `elearning_pagos` con CAE y datos de la factura si ARCA aceptó, (4) notifica a los admins del cobro, (5) envía email al alumno (SMTP) con confirmación del pago + detalle de la factura si se emitió. Si ARCA no está en producción todavía, el email sale igual sin la sección de comprobante. Falla silenciosa en `catch` — nunca rompe el webhook.
+- ⚠️ **IVA al 21% — confirmar con Estela**: `procesarPagoAprobado` usa `alicuota: 21` por defecto. Si los cursos de capacitación médica son IVA-exento (art. 7 ley 23.349), hay que cambiar a `alicuota: 0` o `neto: d.monto, alicuota: 0` en esa función.
 - [ ] Primer evento real del webhook — al 5 Oct 2026 todavía no llegó ninguno: **no hubo ningún pago todavía** (las 17 inscripciones son registros sin cobro). Cuando entre el primer pago, revisar la pestaña Eventos de Cursos → E-learning
 - [ ] Vista en el panel: estado de cuenta en la ficha del alumno (pagos, facturas, suscripción) + listado de suscripciones por vencer + listado de pagos pendientes para seguimiento
 - [ ] Mail de seguimiento a los que se registraron y no pagaron (Agostina Sarmiento, Giovanna Massaglia, Nicolás Pérez y otros) — tarea de Tomás de la reunión del 29/09
@@ -1945,11 +1947,12 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 
 **Pendiente de desarrollo (por prioridad):**
 1. Asientos de ventas `devengado_venta`/`cobro_venta` por CUIT desde `facturas_emitidas` + control «ingresos» en el cierre de mes (Fase 3 contable).
-2. Enganche con `sync-elearning`: `pago.aprobado` → emitir (función `arca-facturacion` ya acepta `x-cron-secret`; habrá que desactivar «Verify JWT») y devolver el PDF/CAE a la plataforma.
+2. ~~Enganche `pago.aprobado` → ARCA + email~~ ✅ Implementado (19 Oct 2026) — ver sección E-learning. **Redeploy pendiente de `sync-elearning`.**
 3. Libro IVA Ventas desde `facturas_emitidas`.
 4. Botón de corrección (editar/revertir) para **sueldos** y pagos de **VEP**; anular una factura emitida desde el listado.
 5. Aplicar el QR de ARCA también en `whatsapp-agente`/`leer-factura` (hoy usan IA).
 6. Cuenta en dólares/ICBC, rol `contable` + numeración Tango (esperando a Auren), partir Cash Flow + Ctrl+K, asientos de inversiones (Avantia), IIBB/SUSS en la OP.
+7. **Módulo Productos** (pendiente de planificación, surgido 19 Oct 2026): catálogo unificado de lo que se vende — cursos presenciales, cursos digitales (sin clases), productos físicos (simuladores de sutura, etc.) y suscripciones. Cada producto debe poder parametrizarse para publicarse en la plataforma e-learning, tener control de stock (para físicos), código de producto de ARCA, precio y categoría de IVA. Antes de construirlo: definir el modelo de datos (¿una tabla `productos` central con tipo, o separado por dominio?), el flujo de publicación en e-learning (agregar a la API de Agustín), y la integración con `inscripciones`/`facturas_emitidas`.
 
 ---
 

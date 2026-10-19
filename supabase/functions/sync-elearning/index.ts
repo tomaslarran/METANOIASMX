@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import nodemailer from "npm:nodemailer@6.9.9";
 
 const cors = {
   "Access-Control-Allow-Origin": "https://tomaslarran.github.io",
@@ -260,6 +261,12 @@ async function procesarEvento(supabase: SB, ev: any, cuit: string | null) {
     if (error) throw new Error(error.message);
   }
 
+  // Facturar con ARCA y notificar al alumno solo cuando el pago queda aprobado
+  if (!pagoYaResuelto && ev.tipo === "pago.aprobado") {
+    await procesarPagoAprobado(supabase, d, cuit, a).catch((e: Error) =>
+      console.error("procesarPagoAprobado:", e.message));
+  }
+
   if (ev.tipo === "factura.emitida" || ev.tipo === "factura.error") {
     const campos = ev.tipo === "factura.emitida"
       ? {
@@ -329,6 +336,158 @@ async function procesarEvento(supabase: SB, ev: any, cuit: string | null) {
         porVencer ? "elearning_suscripcion_por_vencer" : "elearning_suscripcion_vencida",
         fecha || "sin_fecha", mensaje);
     }
+  }
+}
+
+// Determina tipo de comprobante ARCA y condición de IVA del receptor según condición fiscal del cliente
+function condFiscalACbte(condicion: string | null): { cbte_tipo: number; cond_iva_id: number } {
+  switch (condicion) {
+    case "responsable_inscripto": return { cbte_tipo: 1, cond_iva_id: 1 };   // Factura A, RI
+    case "monotributista":        return { cbte_tipo: 1, cond_iva_id: 6 };   // Factura A, monotributista
+    case "exento":                return { cbte_tipo: 6, cond_iva_id: 4 };   // Factura B, exento
+    case "monotributo_social":    return { cbte_tipo: 1, cond_iva_id: 13 };  // Factura A, MS
+    default:                      return { cbte_tipo: 6, cond_iva_id: 5 };   // Factura B, consumidor final
+  }
+}
+
+async function procesarPagoAprobado(supabase: SB, d: any, cuit: string | null, a: any) {
+  const ahora = new Date().toISOString();
+
+  // Datos del cliente para el mail y ARCA
+  const { data: clienteRows } = await supabase.from("elearning_clientes").select("*")
+    .eq("cuit", cuit ?? "").limit(1);
+  const cliente = clienteRows?.[0] ?? null;
+  const emailDestino = cliente?.email || a.email || d.alumno_email || null;
+  const nombreCliente = cliente?.nombre_completo || nombreAlumno(a);
+
+  // ¿Está ARCA de POINTERS en producción y activo?
+  const { data: arcaCfg } = await supabase.from("arca_config")
+    .select("ambiente,activo,pto_vta").eq("sociedad", "POINTERS").limit(1);
+  const arca = arcaCfg?.[0] ?? null;
+  const arcaActiva = arca?.activo && arca?.ambiente === "produccion";
+
+  let facturaEmitida: any = null;
+
+  if (arcaActiva && d.pago_id && d.monto) {
+    try {
+      const cbte = condFiscalACbte(cliente?.condicion_fiscal ?? null);
+      // IVA al 21% — confirmar con la contadora si corresponde exento para servicios médico-educativos
+      const neto = Math.round((d.monto / 1.21) * 100) / 100;
+      const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/arca-facturacion`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-cron-secret": Deno.env.get("CRON_SECRET")!,
+        },
+        body: JSON.stringify({
+          action: "emitir",
+          sociedad: "POINTERS",
+          cbte_tipo: cbte.cbte_tipo,
+          receptor: {
+            doc_nro: cuit || "0",
+            nombre: nombreCliente,
+            cond_iva_id: cbte.cond_iva_id,
+          },
+          items: [{ descripcion: d.concepto || "Servicios de capacitación médica", neto, alicuota: 21 }],
+          referencia: String(d.pago_id),
+          origen: "elearning",
+          confirmar_produccion: true,
+        }),
+      });
+      const rj = await r.json();
+      if (rj.cae && !rj.error) {
+        facturaEmitida = rj;
+        // Actualizar elearning_pagos con los datos de la factura emitida por el panel
+        await supabase.from("elearning_pagos").upsert({
+          pago_id: String(d.pago_id),
+          cuit,
+          factura_estado: "emitida",
+          factura_tipo: String(rj.cbte_tipo ?? ""),
+          factura_punto_venta: String(rj.pto_vta ?? arca.pto_vta ?? ""),
+          factura_numero: String(rj.cbte_numero ?? ""),
+          factura_fecha: rj.fecha ?? null,
+          factura_neto: rj.neto ?? null,
+          factura_iva: rj.iva ?? null,
+          factura_total: rj.total ?? null,
+          cae: rj.cae,
+          cae_vencimiento: rj.cae_vto ?? null,
+          factura_pdf_url: rj.qr_url ?? null,
+          factura_error: null,
+          updated_at: ahora,
+        }, { onConflict: "pago_id" });
+      } else {
+        console.error("ARCA rechazó la factura:", rj.error ?? JSON.stringify(rj));
+        await notificarAdmins(supabase, "elearning_factura_error",
+          `🧾 ARCA rechazó la factura del pago ${d.pago_id} (${nombreCliente}): ${rj.error ?? "sin detalle"}`);
+      }
+    } catch (e: any) {
+      console.error("Error al emitir factura ARCA:", e.message);
+      await notificarAdmins(supabase, "elearning_factura_error",
+        `🧾 Error al emitir factura ARCA para pago ${d.pago_id}: ${e.message}`);
+    }
+  }
+
+  // Notificar admins del cobro
+  const monto = d.monto ? `$${Number(d.monto).toLocaleString("es-AR")}` : "";
+  await notificarAdmins(supabase, "elearning_pago_aprobado",
+    `💳 Pago aprobado: ${nombreCliente} · ${monto} · ${d.concepto || "plataforma"}${facturaEmitida ? ` · Fact. ${facturaEmitida.cbte_numero}` : ""}`);
+
+  // Email al alumno
+  if (!emailDestino) return;
+  try {
+    const smtp = Deno.env.get("SMTP_HOST");
+    const smtpUser = Deno.env.get("SMTP_USER");
+    const smtpPass = Deno.env.get("SMTP_PASS");
+    if (!smtp || !smtpUser || !smtpPass) return;
+
+    const transporter = nodemailer.createTransport({
+      host: smtp, port: 465, secure: true,
+      auth: { user: smtpUser, pass: smtpPass },
+    });
+
+    const facturaHtml = facturaEmitida
+      ? `
+        <div style="background:#f0fdf4;border-left:4px solid #16a34a;padding:16px 20px;margin:20px 0;border-radius:4px;">
+          <strong style="color:#15803d;">Comprobante emitido</strong><br>
+          <span style="color:#555;font-size:14px;">
+            ${facturaEmitida.cbte_tipo === 1 ? "Factura A" : "Factura B"}
+            0${String(facturaEmitida.pto_vta ?? "").padStart(3, "0")}-${String(facturaEmitida.cbte_numero ?? "").padStart(8, "0")} ·
+            Total: $${Number(facturaEmitida.total ?? 0).toLocaleString("es-AR")} ·
+            CAE: ${facturaEmitida.cae}
+          </span>
+        </div>`
+      : `<p style="color:#555;">En breve recibirás el comprobante de pago correspondiente.</p>`;
+
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+        <div style="background:#4a2eb4;padding:24px;text-align:center;">
+          <h1 style="color:white;margin:0;font-size:24px;">Metanoia SMX</h1>
+          <p style="color:#d4c6ff;margin:4px 0 0;font-size:13px;">Capacitación Médica · Simulación Clínica</p>
+        </div>
+        <div style="padding:32px 24px;background:#fafafa;">
+          <p style="font-size:16px;color:#333;">Hola <strong>${nombreCliente}</strong>,</p>
+          <p style="color:#555;">Confirmamos que recibimos tu pago:</p>
+          <div style="background:white;border-left:4px solid #4a2eb4;padding:16px 20px;margin:20px 0;border-radius:4px;">
+            <strong style="font-size:18px;color:#1a0a5e;">${d.concepto || "Servicios de capacitación médica"}</strong><br>
+            <span style="color:#888;font-size:14px;">Importe: ${monto} · Medio: ${d.medio_pago || "plataforma"}</span>
+          </div>
+          ${facturaHtml}
+          <p style="color:#555;">Si tenés alguna consulta, respondé este mail o escribinos por WhatsApp.</p>
+          <p style="color:#555;margin-top:24px;">Equipo Metanoia SMX</p>
+        </div>
+        <div style="background:#1a0a5e;padding:16px;text-align:center;">
+          <p style="color:#9a8ccc;font-size:12px;margin:0;">Metanoia SMX · Salta, Argentina</p>
+        </div>
+      </div>`;
+
+    await transporter.sendMail({
+      from: `"Metanoia SMX" <${smtpUser}>`,
+      to: emailDestino,
+      subject: `✅ Pago recibido — ${d.concepto || "Metanoia SMX"}`,
+      html,
+    });
+  } catch (e: any) {
+    console.error("Error al enviar mail de pago:", e.message);
   }
 }
 
