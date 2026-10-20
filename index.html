@@ -18984,6 +18984,7 @@ async function confirmarRegistrarCobro(){
       if(c.concepto_id&&c.fecha_vencimiento)await actualizarRealDesdeCobranzas(c.concepto_id,c.fecha_vencimiento.slice(0,7));
       toast(msg,"ok");
       if(c.recibo_id)await recDepositoCheque({fecha,soc,monto,medio,dest,cobranza:c}).catch(()=>{});
+      else if(String(c.notas||"").includes(FE_TAG_CARTERA))await feCobroChequeCartera({fecha,soc,monto,facturaTxt:factura,medio,dest,cobranza:c}).catch(()=>{});
       else await feCobroDesdeCashFlow({fecha,soc,monto,facturaTxt:factura,medio,dest}).catch(()=>{});
       renderCFCobranzas();renderCFResumen();
 
@@ -22402,6 +22403,29 @@ async function feCobroDesdeCashFlow({fecha,soc,monto,facturaTxt,medio,dest}){
   else if(r.motivo)toast(`Cobro registrado; asiento no generado: ${r.motivo}`,"inf");
   return r;
 }
+// Cheques que ya estaban en cartera al 30/06 (los balances los traen como «Valores en cartera» contra «Anticipos de clientes»):
+// al cobrarlos NO es un ingreso nuevo. (1) depósito: Debe cuenta de destino / Haber cartera 1.1.01.005; (2) si se indica la factura que
+// cancelan, se aplica el anticipo: Debe 2.1.07.001 Anticipos de clientes / Haber Deudores. Sin factura, el anticipo queda abierto.
+const FE_TAG_CARTERA="[EN CARTERA 30/06]";
+const FE_CTA_ANTICIPOS_CLIENTES="2.1.07.001";
+async function feCobroChequeCartera({fecha,soc,monto,facturaTxt,medio,dest,cobranza}){
+  if(typeof generarAsiento!=="function")return null;
+  const cuenta=feCuentaCobro({medio,dest,soc}),imp=feR2(parseFloat(monto)||0);
+  if(!(imp>0))return null;
+  if(cuenta!=="1.1.01.005"){
+    const a=await generarAsiento({fecha,sociedad:soc,tipo:"ajuste",origen:"cheque_cartera_deposito",origen_id:cobranza.id,descripcion:`Depósito de cheque en cartera — ${cobranza.nombre||"cheque"}`,lineas:[{codigo:cuenta,debe:imp,desc:"Depósito"},{codigo:"1.1.01.005",haber:imp,desc:"Cheques en cartera"}]});
+    if(a&&a.id)toast(`🧮 Depósito asentado (cartera → ${cuenta})`,"ok");
+    else{toast("No se generó el asiento del depósito"+(a&&a._faltantes?": faltan las cuentas "+a._faltantes.join(", "):""),"err");return null;}
+  }
+  if(!facturaTxt){toast("El anticipo de cliente sigue abierto: aplicalo cuando se facture (Facturas emitidas → Contabilizar cobro con la cuenta Anticipos).","inf");return null;}
+  const f=feBuscarFacturaPorTexto(facturaTxt,soc);
+  if(!f){toast(`Depósito asentado. No encontré la factura emitida «${facturaTxt}» de ${soc} para aplicar el anticipo.`,"inf");return null;}
+  if(!Object.keys(feCobros).length)feCobros=await feCargarCobros();
+  const r=await feAsientoCobro(f,{fecha,monto:imp,cuenta:FE_CTA_ANTICIPOS_CLIENTES});
+  if(r.ok)toast(`🧮 Anticipo aplicado a ${FE_TIPOS[f.cbte_tipo]} ${feNum(f)}`,"ok");
+  else if(r.motivo)toast("Depósito asentado; anticipo no aplicado: "+r.motivo,"inf");
+  return r;
+}
 // Pantalla Facturas emitidas → «Contabilizar cobro»: solo el asiento (para cobros que ya están cargados en caja, banco o cobranzas)
 function feCobroAbrir(id){
   const f=feFacturas.find(x=>x.id===id);if(!f)return;
@@ -22422,7 +22446,7 @@ function feCobroAbrir(id){
     </div></div>`;
     document.body.appendChild(d);
   }
-  const ctas=[["1.1.01.001","Caja efectivo"],[f.sociedad==="POINTERS"?"1.1.01.003":"1.1.01.002",`Banco Macro ${f.sociedad}`],["1.1.01.005","Cheques de terceros en cartera"],["1.1.04.001","Inversiones (cheque depositado en el fondo)"]];
+  const ctas=[["1.1.01.001","Caja efectivo"],[f.sociedad==="POINTERS"?"1.1.01.003":"1.1.01.002",`Banco Macro ${f.sociedad}`],["1.1.01.005","Cheques de terceros en cartera"],["1.1.04.001","Inversiones (cheque depositado en el fondo)"],["2.1.07.001","Anticipos de clientes (aplica un anticipo ya recibido)"]];
   document.getElementById("fc-cta").innerHTML=ctas.map(([c,n])=>`<option value="${c}">${esc(n)}</option>`).join("");
   document.getElementById("fc-id").value=id;
   document.getElementById("fc-fecha").value=today();
