@@ -31592,8 +31592,10 @@ async function procesarImportArca(){
     };
     if(idx.fecha<0||idx.cuit<0||idx.total<0)throw new Error("El archivo no tiene las columnas esperadas de ARCA.");
 
-    const existentes=new Set(comprobantes.map(c=>_arcaKey(c.cuit,c.tipo,c.numero||"")));
-    const nuevos=[];let omitidosDup=0,noSoportados=0,sinFecha=0;
+    const enBase=await sb("comprobantes_compra?select=cuit,tipo,numero&limit=20000").catch(()=>comprobantes);
+    const existentes=new Set(enBase.map(c=>_arcaKey(c.cuit,c.tipo,c.numero||"")));
+    const inicioEj=balEjercicioDesde(today());
+    const nuevos=[];let omitidosDup=0,noSoportados=0,sinFecha=0,ejercicioCerrado=0;
 
     for(let i=headerIdx+1;i<rows.length;i++){
       const r=rows[i];
@@ -31602,6 +31604,7 @@ async function procesarImportArca(){
       if(!fecha){sinFecha++;continue;}
       const tipo=_arcaMapTipo(r[idx.tipo]);
       if(!tipo){noSoportados++;continue;}
+      if(fecha<inicioEj){ejercicioCerrado++;continue;}
       const numero=_arcaNumero(r[idx.pv],r[idx.nd]);
       const cuit=String(r[idx.cuit]||"").replace(/\D/g,"");
       const key=_arcaKey(cuit,tipo,numero);
@@ -31640,6 +31643,9 @@ async function procesarImportArca(){
       return;
     }
 
+    const porMes={};nuevos.forEach(n=>{const k=n.fecha.slice(0,7);porMes[k]=porMes[k]||{n:0,t:0};porMes[k].n++;porMes[k].t+=n.total;});
+    const resumen=Object.keys(porMes).sort().map(k=>`  ${k}: ${porMes[k].n} comprobantes ($${Math.round(porMes[k].t).toLocaleString("es-AR")})`).join("\n");
+    if(!confirm(`Se van a importar ${nuevos.length} comprobantes NUEVOS en ${sociedad}:\n\n${resumen}\n\nYa estaban cargados (se omiten): ${omitidosDup}\nDel ejercicio anterior, cerrado (se omiten): ${ejercicioCerrado}\nTipos no soportados (cargar a mano): ${noSoportados}\n\n¿Importar?`)){status.textContent="Importación cancelada.";return;}
     status.textContent=`Importando ${nuevos.length} comprobantes...`;
     const CHUNK=200;
     for(let i=0;i<nuevos.length;i+=CHUNK){
