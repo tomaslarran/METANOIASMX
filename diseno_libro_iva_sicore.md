@@ -24,3 +24,12 @@ Lo que pidieron: **TXT para importar en ARCA el Libro IVA Compras y el Libro IVA
 - Ejemplo del manual (registro de una retención con factura): `0110/12/2002012300000456   30,002170561   50,0011/12/200200   50,00   0,00 8023111111111   00000000000000`.
 - Manual: https://archivo.consejo.org.ar/aplicativos/sicore/files/dit.sicore.AP_INS_sicore-54.pdf (versión 2015; la vigente es SICORE v9 release 22 — confirmar cambios).
 - Datos en el panel: las retenciones practicadas salen de `ordenes_pago` (régimen RG 830, base, % efectivo, importe, CUIT del proveedor) — ya están en el Paquete Auren (hoja Retenciones).
+
+## Tablas de códigos — CONFIRMADAS contra ARCA (20 Oct 2026)
+Fuente: https://www.arca.gob.ar/libro-iva-digital/documentos/Libro-IVA-Digital-Tablas-del-Sistema.pdf (feb. 2025) y las Especificaciones rev. 30/07/2025.
+- **Alícuotas (4 dígitos):** 0003 = 0% · 0004 = 10,5% · 0005 = 21% · 0006 = 27% · 0008 = 5% · 0009 = 2,5%.
+- **Código de operación:** blanco o `0` (no corresponde; se usa cuando hay alícuota > 0) · `E` exentas · `N` no gravado · `A` no alcanzado · `C` canje · `X` importación/exportación del exterior · `Z` zona franca · `T` reintegro Dto. 1043/2016 · `D` devolución IVA turistas. Si la alícuota es 0 hay que informar E/N/A/etc.
+- **Tipo de comprobante (3 dígitos):** 001 Fact. A · 002 ND A · 003 NC A · 004 Recibo A · 006 Fact. B · 007 ND B · 008 NC B · 009 Recibo B · 011 Fact. C · 012 ND C · 013 NC C · 015 Recibo C · 017/018 liq. servicios públicos A/B · 019 Fact. exportación · 033 liq. primaria de granos (el resto, incl. 051 en adelante, en la tabla completa).
+- **Documento:** 80 CUIT · 86 CUIL · 87 CDI · 96 DNI · 94 pasaporte · 99 sin identificar / venta global diaria (importe < tope, consumidor final).
+- **Moneda:** `PES` pesos argentinos (la importación pregunta si los importes están en pesos o en moneda original).
+- **Reglas de generación:** archivos en **ANSI** (ISO 8859-1 / Windows-1252) · cabecera y alícuotas en **el mismo orden** · comprobantes **B y C: cantidad de alícuotas = 0** (y sin registro de alícuotas) · un registro de alícuotas por cada alícuota del comprobante · CUIT/CUIL/CDI existentes en ARCA · si el campo "tipo de cambio" no aplica, `0001000000` (4+6) para pesos.
