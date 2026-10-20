@@ -4,7 +4,7 @@
 //   ultimo    { sociedad, cbte_tipo }               → último número autorizado del punto de venta
 //   consultar { sociedad, cbte_tipo, cbte_numero }  → datos de un comprobante ya autorizado
 //   emitir    { sociedad, cbte_tipo, receptor, items|importes, referencia, ... } → pide el CAE
-// Secrets: ARCA_CERT_SUDES / ARCA_KEY_SUDES / ARCA_CERT_POINTERS / ARCA_KEY_POINTERS (PEM completo, con saltos de línea).
+// Secrets: ARCA_CERT_SUDES / ARCA_KEY_SUDES / ARCA_CERT_POINTERS / ARCA_KEY_POINTERS (homologación) y las mismas con sufijo _PROD (producción): ARCA_CERT_POINTERS_PROD / ARCA_KEY_POINTERS_PROD (PEM completo, con saltos de línea).
 // Opcionales: ARCA_WSAA_URL, ARCA_WSFE_URL (para sobreescribir las URLs oficiales).
 // La sociedad, su CUIT, el punto de venta y el ambiente (homologacion|produccion) salen de la tabla arca_config.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -89,8 +89,8 @@ async function loginWSAA(cfg: Cfg, certPem: string, keyPem: string) {
 // ───────────────────────── config / credenciales ─────────────────────────
 interface Cfg { sociedad: string; cuit: string; razon_social: string; pto_vta: number; ambiente: "homologacion" | "produccion"; activo: boolean; condicion_iva?: string; }
 
-function credenciales(sociedad: string) {
-  const s = sociedad.toUpperCase();
+function credenciales(sociedad: string, ambiente: string) {
+  const s = sociedad.toUpperCase() + (ambiente === "produccion" ? "_PROD" : "");
   const cert = (Deno.env.get(`ARCA_CERT_${s}`) || "").replace(/\\n/g, "\n");
   const key = (Deno.env.get(`ARCA_KEY_${s}`) || "").replace(/\\n/g, "\n");
   if (!cert || !key) throw new Error(`Faltan los secrets ARCA_CERT_${s} / ARCA_KEY_${s} en Supabase`);
@@ -100,7 +100,7 @@ function credenciales(sociedad: string) {
 async function tokenValido(supabase: any, cfg: Cfg) {
   const { data } = await supabase.from("arca_tokens").select("*").eq("sociedad", cfg.sociedad).eq("ambiente", cfg.ambiente).maybeSingle();
   if (data && new Date(data.expira).getTime() - Date.now() > 5 * 60 * 1000) return { token: data.token as string, sign: data.sign as string };
-  const { cert, key } = credenciales(cfg.sociedad);
+  const { cert, key } = credenciales(cfg.sociedad, cfg.ambiente);
   const t = await loginWSAA(cfg, cert, key);
   await supabase.from("arca_tokens").upsert({ sociedad: cfg.sociedad, ambiente: cfg.ambiente, token: t.token, sign: t.sign, expira: t.expira, updated_at: new Date().toISOString() }, { onConflict: "sociedad,ambiente" });
   return { token: t.token, sign: t.sign };
