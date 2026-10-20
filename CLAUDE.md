@@ -2080,3 +2080,32 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 - **Ajuste del 20 Oct (Tomás): corte de la información contable al 30/09.** El **cierre piloto con María y Marcos es el de septiembre**; el extracto de octubre se importa en noviembre (junto con el cierre de octubre). Extractos a importar ahora: agosto y septiembre de SUDES y POINTERS (julio ya está). Los comprobantes de octubre ya cargados quedan como están.
 - **Extractos (20 Oct, v110):** (1) el PDF original de los extractos, del certificado MiPyME y de los Echeq ahora se sube con respaldo por `subir-archivo-storage` cuando Storage rechaza el upload directo (RLS): helper `_subirStorage`. Los 3 extractos que habían quedado sin PDF (POINTERS sep, SUDES jul y ago) se adjuntaron a mano, verificando CUIT y período de cada archivo. (2) El cruce banco ↔ cuotas de préstamos acepta la **fecha de pago o la de vencimiento (±6 días)** y, como último intento, hasta **$10** de diferencia de centavos: antes las cuotas marcadas pagadas con fecha posterior no cruzaban. Quedan 3 débitos «PRESTAMOS REC» de POINTERS sin cuota ($917.639,34 · $914.460,24 · $911.179,14): probablemente un préstamo no cargado.
 - Estado al 20/10 de los extractos de POINTERS jul–sep: contabilizados, saldos encadenados (31/7 → 1/8 → 1/9), asientos de gastos bancarios balanceados; pendientes de conciliar: remuneraciones (11M, sin cruce con Sueldos), préstamos, transferencias a terceros, impuestos AFIP, una transferencia propia y un rescate de fondo con diferencia de $228.
+
+---
+
+## 📌 Cierre de jornada — 20 Oct 2026 (retomar mañana)
+
+**Hecho hoy (todo publicado, panel v110):**
+- **Balances al 30/06** de SUDES y POINTERS cargados como **asiento de apertura** (cuadran con el auditor), PDFs guardados en el panel (pestaña «📚 Balances guardados») + 28 cuentas nuevas del plan.
+- **Cheques de FENIX alineados** con los balances (cartera y anticipos de clientes) y cobro de los que faltan resuelto (`feCobroChequeCartera`).
+- **Reinvertir** suma un aporte a la misma inversión; los cobros pueden acreditarse en inversiones rescatadas.
+- **TXT para María:** Libro IVA Digital (ventas y compras) calcado a su archivo de agosto POINTERS, y **SICORE Ganancias** reproduciendo byte a byte su archivo de junio. Tablas de códigos confirmadas contra ARCA.
+- **POINTERS facturando en producción en ARCA** (certificado, relación, punto de venta 3, secrets `_PROD`, función redeployada). Factura A 0003-00000001 de prueba constatada por ARCA y anulada con nota de crédito.
+- **Plan de salida de Finnegans** acordado (sección «Plan de salida de Finnegans») con **corte contable al 30/09** y cierre piloto de septiembre con María y Marcos.
+- **Comprobantes de ARCA** (julio–octubre, ambas sociedades) importados: no falta ningún tipo soportado; se eliminó un duplicado real (Operadora), se corrigió el CUIT de Jacaranda, el importador acepta Tique Factura A y muestra vista previa.
+- **Extractos del Macro** importados: POINTERS jul–sep y SUDES jul–ago, con sus PDF adjuntos; el cruce con cuotas de préstamos mejorado.
+
+**Pendiente (Tomás):**
+1. **Extracto de SUDES de septiembre** (lo único que falta importar; octubre queda para noviembre).
+2. Conciliar lo que quedó suelto: remuneraciones (11M), 3 débitos de préstamos de POINTERS ($917.639,34 · $914.460,24 · $911.179,14: ¿qué préstamo?), transferencias a terceros, impuestos de AFIP y el rescate de fondo con $228 de diferencia.
+3. Correr «🔄 Generar históricos» (si no se corrió después de cargar todo) y revisar/dar OK a los comprobantes pendientes (el OK genera el IVA crédito).
+4. Cargar a mano: Recibos C de Hellberg (SUDES y POINTERS) y Notas de Débito A de OSDE.
+5. Mandar el export o fotos de los **productos de Finnegans** con su configuración (alícuota, cuentas de compra/venta, tipo) para el catálogo único.
+6. Con María: criterio de las **Liquidaciones A del Banco Macro** (IVA de comisiones, hoy ya asentado desde el extracto: no cargarlas como compra), condición de inscripto/no inscripto de las retenciones de SICORE, fecha del comprobante vs imputación (Logística e IPS), IVA de los cursos (21% o exento) y qué vencimientos de septiembre hay que presentar. Agenda para la demostración del cierre piloto.
+
+**Pendiente (Claude), por prioridad:**
+1. Cuando esté SUDES septiembre: control completo de los extractos de ambas sociedades y comparación del Libro IVA del panel contra el de María, mes por mes.
+2. **Catálogo único de productos** (Fase 2; punto de corte 25/10, aditivo y apagado hasta validarlo) y validaciones tipo ERP (Fase 3).
+3. Pantalla «Control contra ARCA» para la demostración a los contadores.
+4. Conciliar remuneraciones con Sueldos, y mejorar el cruce de transferencias y pagos.
+5. Los de antes: enganche de la plataforma (`pago.aprobado` → factura y recibo automáticos), asientos de inversiones, cuenta en dólares, rol `contable`, Libro IVA con las liquidaciones del banco una vez definido el criterio.
