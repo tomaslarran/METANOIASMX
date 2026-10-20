@@ -3965,7 +3965,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="fg"><label class="fl">Notas</label><input class="fi" id="cfr-notas" type="text" placeholder="Ej: rescate anticipado, TNA obtenida..."></div>
     <div id="cfr-reinvertir-wrap" style="display:none;align-items:center;gap:8px;padding:10px 0 6px;border-top:1px solid var(--b);margin-top:8px">
       <input type="checkbox" id="cfr-reinvertir" style="accent-color:var(--ac);width:15px;height:15px">
-      <label for="cfr-reinvertir" style="font-size:13px;color:var(--tx2);cursor:pointer">Reinvertir — abrir formulario de nueva inversión al guardar</label>
+      <label for="cfr-reinvertir" style="font-size:13px;color:var(--tx2);cursor:pointer">Reinvertir — sumar un aporte de capital a esta misma inversión al guardar</label>
     </div>
     <div class="ma"><button class="bc" onclick="closeModal('modal-cf-rescate')">Cancelar</button><button class="bk" id="cfr-save-btn" onclick="saveRescate()">Confirmar rescate</button></div>
   </div>
@@ -18642,8 +18642,12 @@ function setRcobDest(dest){
   if(dest==="inversion"){document.getElementById("rcob-inv-rows").innerHTML="";rcobAgregarInvRow();}
 }
 function _rcobInvOpts(soc){
-  const activas=cfInversiones.filter(i=>i.estado==="Activa"&&(i.sociedad===soc||i.sociedad==="Ambas"||["AMPARO","MARIO","Personal"].includes(i.sociedad)));
-  return activas.length?activas.map(i=>`<option value="${i.id}">${esc(i.nombre)}${i.entidad?" ("+esc(i.entidad)+")":""} — $${Math.round(i.valor_actual||i.capital||0).toLocaleString("es-AR")}</option>`).join(""):` <option value="">— Sin inversiones activas —</option>`;
+  const delSoc=i=>i.sociedad===soc||i.sociedad==="Ambas"||["AMPARO","MARIO","Personal"].includes(i.sociedad);
+  const activas=cfInversiones.filter(i=>i.estado==="Activa"&&delSoc(i));
+  const resc=cfInversiones.filter(i=>i.estado==="Rescatada"&&delSoc(i));
+  const opt=(i,r)=>`<option value="${i.id}">${esc(i.nombre)}${i.entidad?" ("+esc(i.entidad)+")":""} — ${r?"rescatada, se reactiva":"$"+Math.round(i.valor_actual||i.capital||0).toLocaleString("es-AR")}</option>`;
+  const todas=activas.map(i=>opt(i,false)).join("")+resc.map(i=>opt(i,true)).join("");
+  return todas||` <option value="">— Sin inversiones —</option>`;
 }
 function rcobAgregarInvRow(){
   const rows=document.getElementById("rcob-inv-rows");
@@ -18824,9 +18828,7 @@ async function confirmarRegistrarCobro(){
           inversion_id:f.iid,tipo:"Aporte de capital",fecha,monto:f.mon,notas:notasBase
         })});
         cfInvMovs.unshift(mov);
-        const nuevoCapital=(parseFloat(inv.capital)||0)+f.mon;
-        const nuevoValor=(parseFloat(inv.valor_actual)||parseFloat(inv.capital)||0)+f.mon;
-        const patch={capital:nuevoCapital,valor_actual:nuevoValor,updated_at:new Date().toISOString()};
+        const patch=_invPatchAporte(inv,f.mon);
         await sb(`cf_inversiones?id=eq.${f.iid}`,{method:"PATCH",body:JSON.stringify(patch)});
         Object.assign(inv,patch);
         nombres.push(inv.nombre);
@@ -18935,9 +18937,7 @@ async function confirmarRegistrarCobro(){
             inversion_id:invId,tipo:"Aporte de capital",fecha,monto:montoReal,notas:notasInv
           })});
           cfInvMovs.unshift(mov);
-          const nuevoCapital=(parseFloat(inv.capital)||0)+montoReal;
-          const nuevoValor=(parseFloat(inv.valor_actual)||parseFloat(inv.capital)||0)+montoReal;
-          const patch={capital:nuevoCapital,valor_actual:nuevoValor,updated_at:new Date().toISOString()};
+          const patch=_invPatchAporte(inv,montoReal);
           await sb(`cf_inversiones?id=eq.${invId}`,{method:"PATCH",body:JSON.stringify(patch)});
           Object.assign(inv,patch);
           return `📈 Cobrado · acreditado en ${inv.nombre}`;
@@ -19266,7 +19266,7 @@ function renderCFInversiones(){
                 <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
                   ${isActiva?`<button class="btn sm" style="background:var(--gr);color:#fff" onclick="openAgregarCapital('${inv.id}')">💰 + Capital</button>`:""}
                   ${isActiva?`<button class="btn sm pri" onclick="openRescateModal('${inv.id}')">Rescatar</button>`:""}
-                  ${!isActiva?`<button class="btn sm pri" onclick="reinvertirEnFondo('${inv.id}')">🔁 Reinvertir</button>`:""}
+                  ${!isActiva?`<button class="btn sm pri" onclick="openAgregarCapital('${inv.id}')">🔁 Reinvertir</button>`:""}
                   <button class="btn sm" onclick="editCFInv('${inv.id}')">✎</button>
                   <button class="btn sm danger" onclick="delCFInv('${inv.id}')">✕</button>
                 </div>
@@ -19502,16 +19502,23 @@ function updateCfrResumen(){
   }
 }
 
-function openAgregarCapital(id){
+// Aporte a una inversión: si estaba rescatada se reactiva (mismo nombre, objetivo y calificación); queda como un movimiento más.
+function _invPatchAporte(inv,monto){
+  const act=inv.estado==="Activa";
+  const p={capital:(parseFloat(inv.capital)||0)+monto,valor_actual:(act?(parseFloat(inv.valor_actual)||parseFloat(inv.capital)||0):0)+monto,updated_at:new Date().toISOString()};
+  if(!act){p.estado="Activa";p.fecha_rescate=null;}
+  return p;
+}
+function openAgregarCapital(id,montoSugerido){
   const inv=cfInversiones.find(i=>i.id===id);if(!inv)return;
   document.getElementById("mac-inv-id").value=id;
-  document.getElementById("mac-title").textContent=`Agregar capital: ${inv.nombre}`;
+  document.getElementById("mac-title").textContent=inv.estado==="Activa"?`Agregar capital: ${inv.nombre}`:`Reinvertir en: ${inv.nombre}`;
   document.getElementById("mac-info").innerHTML=
     `<strong>${esc(inv.nombre)}</strong> · ${inv.tipo||""} · ${inv.sociedad||""}<br>
      Capital actual: <strong>$${Math.round(inv.capital||0).toLocaleString("es-AR")}</strong> ·
      Valor actual: <strong style="color:var(--gr)">$${Math.round(inv.valor_actual||inv.capital||0).toLocaleString("es-AR")}</strong>`;
   document.getElementById("mac-fecha").value=today();
-  document.getElementById("mac-monto").value="";
+  document.getElementById("mac-monto").value=montoSugerido?String(montoSugerido):"";
   document.getElementById("mac-notas").value="";
   document.getElementById("mac-resumen").style.display="none";
   document.getElementById("mac-save-btn").disabled=false;
@@ -19526,7 +19533,7 @@ function updateMacResumen(){
   const el=document.getElementById("mac-resumen");
   if(!inv||!monto){el.style.display="none";return;}
   const nuevoCapital=(inv.capital||0)+monto;
-  const nuevoValor=(inv.valor_actual||inv.capital||0)+monto;
+  const nuevoValor=(inv.estado==="Activa"?(inv.valor_actual||inv.capital||0):0)+monto;
   el.style.display="block";
   el.innerHTML=`Nuevo capital: <strong>$${Math.round(nuevoCapital).toLocaleString("es-AR")}</strong> · Nuevo valor: <strong style="color:var(--gr)">$${Math.round(nuevoValor).toLocaleString("es-AR")}</strong>`;
 }
@@ -19549,14 +19556,13 @@ async function confirmarAgregarCapital(){
     cfInvMovs.unshift(mov);
 
     // 2. Actualizar capital y valor_actual en la inversión
-    const nuevoCapital=(parseFloat(inv.capital)||0)+monto;
-    const nuevoValor=(parseFloat(inv.valor_actual)||parseFloat(inv.capital)||0)+monto;
-    const patch={capital:nuevoCapital,valor_actual:nuevoValor,updated_at:new Date().toISOString()};
+    const reactiva=inv.estado!=="Activa";
+    const patch=_invPatchAporte(inv,monto);
     await sb(`cf_inversiones?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(patch)});
     const idx=cfInversiones.findIndex(i=>i.id===id);
     if(idx>=0)cfInversiones[idx]={...cfInversiones[idx],...patch};
 
-    toast("Capital agregado ✓","ok");
+    toast(reactiva?"Reinversión registrada: la inversión vuelve a estar activa ✓":"Capital agregado ✓","ok");
     closeModal("modal-agregar-capital");
     renderCFInversiones();
     if(curPage==="graficos")renderFinanciero();
@@ -19658,19 +19664,7 @@ async function saveRescate(){
     toast(tipo==="total"?"Inversión rescatada ✓":"Rescate parcial registrado ✓","ok");
     closeModal("modal-cf-rescate");
     renderCFInversiones();
-    if(tipo==="total"&&reinvertir){
-      const src=cfInversiones.find(i=>i.id===id);
-      openAddInversion();
-      if(src){
-        document.getElementById("cfi-tipo").value=src.tipo||"FCI";
-        document.getElementById("cfi-entidad").value=src.entidad||"";
-        document.getElementById("cfi-soc").value=src.sociedad||"SUDES";
-        document.getElementById("cfi-tasa").value=src.tasa||"";
-        document.getElementById("cfi-capital").value=monto||src.capital||"";
-        document.getElementById("cfi-inicio").value=fecha;
-        document.getElementById("mci-title").textContent="Reinversión (basada en rescate)";
-      }
-    }
+    if(tipo==="total"&&reinvertir)openAgregarCapital(id,monto);
   }catch(e){toast("Error: "+e.message,"err")}
   finally{btn.disabled=false}
 }

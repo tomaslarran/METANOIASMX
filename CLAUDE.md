@@ -2039,3 +2039,8 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 
 ### 📑 Formatos TXT para María / Auren (20 Oct 2026)
 - La contadora se llama **María** (María Estela). Pidió: **TXT para importar en ARCA el Libro IVA Compras y Ventas** y **TXT de SICORE – retenciones de Ganancias (SIAP)**. Diseños oficiales y reglas en `diseno_libro_iva_sicore.md`. Pendiente construir los generadores en el Paquete Auren (Libro IVA: layouts conocidos; SICORE: falta que María pase su formato de importación) y verificar las tablas de códigos en las Especificaciones de ARCA.
+
+### 🔁 Reinvertir = aporte a la misma inversión (20 Oct 2026)
+- **Reinvertir** (botón en inversiones rescatadas y casilla «Reinvertir» al rescatar total) ya no crea una inversión nueva: abre «Agregar capital» sobre **la misma inversión** y, al guardar, la **reactiva** (estado Activa, sin fecha de rescate) con un movimiento «Aporte de capital». Conserva nombre, objetivo, calificación de riesgo, plazo y entidad. Helper único `_invPatchAporte(inv,monto)`: capital acumulado + monto; el valor actual de una inversión rescatada arranca de 0 + monto.
+- **Cobrar un eCheck/cheque en una inversión:** el selector de destino de Cobranzas ahora también lista las inversiones **rescatadas** («rescatada, se reactiva»); al cobrar, se reactivan igual que con Reinvertir (3 caminos: varias filas, una sola, agregar capital).
+- Sin SQL ni funciones nuevas (panel v104).
