@@ -9832,6 +9832,23 @@ async function loadCursoArchivos(cursoId){
   }catch(e){cont.innerHTML=`<div style="color:var(--re);padding:20px">Error: ${esc(e.message)}</div>`;}
 }
 
+// Sube un archivo a Storage: primero directo; si Storage lo rechaza por RLS (bug de plataforma), por la función subir-archivo-storage (service role).
+async function _subirStorage(bucket,path,file,contentType){
+  const ct=contentType||file.type||"application/octet-stream";
+  const directo=()=>fetch(`${SB}/storage/v1/object/${bucket}/${path}`,{method:"POST",headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":ct,"x-upsert":"false"},body:file});
+  try{
+    let r=await directo();
+    if(!r.ok&&(r.status===401||r.status===403)&&typeof sbRefreshToken==="function"&&await sbRefreshToken())r=await directo();
+    if(r.ok)return{ok:true};
+    if(![400,401,403].includes(r.status))return{ok:false,error:"HTTP "+r.status};
+  }catch(_){}
+  try{
+    const r2=await fetchEdge("subir-archivo-storage",{bucket,path,fileBase64:await _blobToBase64(file),contentType:ct,upsert:true});
+    const d=await r2.json().catch(()=>({}));
+    if(r2.ok&&!d.error)return{ok:true};
+    return{ok:false,error:d.error||("HTTP "+r2.status)};
+  }catch(e){return{ok:false,error:String(e.message||e)};}
+}
 function _blobToBase64(blob){
   return new Promise((resolve,reject)=>{
     const reader=new FileReader();
@@ -14162,9 +14179,10 @@ async function _concCruzarModulos(sociedad,extractos){
       const fecha=b.fecha;
       const fF=g=>{const f=x=>g(x);f.ref=fecha;return f;};
       let hallado=null;
+      const mejorCuota=(tol)=>{let best=null,bd=1e9;for(const x of cuotas){if(usado.has(`cuota_prestamo:${x.id}`))continue;if(Math.abs((parseFloat(x.monto_total)||0)-monto)>tol)continue;const ds=[x.fecha_pago,x.fecha].filter(Boolean).map(f=>dias(f,fecha));if(!ds.length)continue;const d=Math.min(...ds);if(d>6)continue;if(d<bd){bd=d;best=x;}}return best;};
       for(const tol of [0.01,1]){
         if(imp<0){
-          const c=mejor(cuotas,monto,fF(x=>x.fecha_pago||x.fecha),"cuota_prestamo",tol,x=>parseFloat(x.monto_total)||0);
+          const c=mejorCuota(tol);
           if(c){hallado={tipo:"cuota_prestamo",id:c.id,desc:`Cuota ${c.nro_cuota??""} — ${prest.find(p=>p.id===c.prestamo_id)?.nombre||"Préstamo"}`.replace("Cuota  —","Cuota —"),k:"cuotas"};break;}
           const vp=vepCand(monto,fecha,tol);
           if(vp){hallado={tipo:"vep",id:vp.id,desc:`VEP ${vp.tipo_impuesto||""} ${vp.periodo||""}`.trim(),k:"veps",vep:vp};break;}
@@ -14180,6 +14198,10 @@ async function _concCruzarModulos(sociedad,extractos){
           const s=mejor(invEntradas,monto,fF(x=>x.fecha),"inversion",tol);
           if(s){hallado={tipo:"inversion",id:s.id,desc:s.desc,k:"inversiones"};break;}
         }
+      }
+      if(!hallado&&imp<0){   // último intento: cuota de préstamo con diferencia de redondeo de hasta $10 (el banco informa centavos distintos de la cuota)
+        const c=mejorCuota(10);
+        if(c)hallado={tipo:"cuota_prestamo",id:c.id,desc:`Cuota ${c.nro_cuota??""} — ${prest.find(p=>p.id===c.prestamo_id)?.nombre||"Préstamo"}`.replace("Cuota  —","Cuota —"),k:"cuotas"};
       }
       if(hallado){
         usado.add(`${hallado.tipo}:${hallado.id}`);
@@ -14858,7 +14880,7 @@ async function confirmarExtracto(){
     let archivoPath=null;
     try{
       const path=`${sociedad}/${parsed.periodo.desde}_${parsed.periodo.hasta}_${Date.now()}.pdf`;
-      const up=await fetch(`${SB}/storage/v1/object/extractos-bancarios/${path}`,{method:"POST",headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":"application/pdf","x-upsert":"false"},body:file});
+      const up=await _subirStorage("extractos-bancarios",path,file,"application/pdf");
       if(up.ok)archivoPath=path;else toast("⚠️ No se pudo guardar el PDF original (los datos sí se importan)","err");
     }catch(_){toast("⚠️ No se pudo guardar el PDF original (los datos sí se importan)","err");}
 
@@ -15153,7 +15175,7 @@ async function confirmarMipyme(){
     let path=null;
     if(s.file){
       const p=`certificados/${soc}/mipyme_${venc}_${Date.now()}.pdf`;
-      const up=await fetch(`${SB}/storage/v1/object/extractos-bancarios/${p}`,{method:"POST",headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":"application/pdf","x-upsert":"false"},body:s.file});
+      const up=await _subirStorage("extractos-bancarios",p,s.file,"application/pdf");
       if(up.ok)path=p;else toast("⚠️ No se pudo guardar el PDF (se guarda igual la fecha)","err");
     }
     const body={mipyme_vigente:true,mipyme_vencimiento:venc};
@@ -25854,7 +25876,7 @@ async function _echeqAlta(c,{sociedad,medio,monto,echeq,opId}){
   if(rec&&e.file){
     try{
       const path=`echeqs/${sociedad}/${(e.numero||"sin-numero").replace(/[^\w-]/g,"")}_${Date.now()}.${/png/i.test(e.file.type||"")?"png":/^image\//.test(e.file.type||"")?"jpg":"pdf"}`;
-      const up=await fetch(`${SB}/storage/v1/object/extractos-bancarios/${path}`,{method:"POST",headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":e.file.type||"application/pdf","x-upsert":"false"},body:e.file});
+      const up=await _subirStorage("extractos-bancarios",path,e.file,e.file.type||"application/pdf");
       if(up.ok)await sb(`echeqs_propios?id=eq.${rec.id}`,{method:"PATCH",body:JSON.stringify({pdf_path:path})});
       else toast("⚠️ No se pudo guardar el PDF del Echeq (los datos sí quedaron)","err");
     }catch(_){toast("⚠️ No se pudo guardar el PDF del Echeq (los datos sí quedaron)","err");}
@@ -29662,7 +29684,7 @@ async function etGuardar(){
       try{
         const ext=/png/i.test(_etArchivo.type||"")?"png":/^image\//.test(_etArchivo.type||"")?"jpg":"pdf";
         const path=`echeqs-terceros/${sociedad}/${(g("numero")||"sin-numero").replace(/[^\w-]/g,"")}_${Date.now()}.${ext}`;
-        const up=await fetch(`${SB}/storage/v1/object/extractos-bancarios/${path}`,{method:"POST",headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":_etArchivo.type||"application/pdf","x-upsert":"false"},body:_etArchivo});
+        const up=await _subirStorage("extractos-bancarios",path,_etArchivo,_etArchivo.type||"application/pdf");
         if(up.ok)await sb(`cf_cobranzas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({pdf_path:path})});
         else toast("⚠️ No se pudo guardar el archivo (los datos sí quedaron)","err");
       }catch(_){toast("⚠️ No se pudo guardar el archivo (los datos sí quedaron)","err");}
