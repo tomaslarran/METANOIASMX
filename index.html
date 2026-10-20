@@ -1673,8 +1673,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div><div class="pg-title">Facturas emitidas</div><div class="pg-title-sub">Facturación electrónica ARCA — comprobantes de venta con CAE</div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec" onclick="feContabilizarPendientes()" title="Genera el asiento de devengado de las ventas reales que todavía no lo tienen">🧮 Contabilizar ventas</button><button class="btn sec" onclick="feImpAbrir()">📥 Importar emitidas de ARCA</button><button class="btn sec" onclick="feProbarConexion()">🔌 Probar conexión ARCA</button><button class="btn pri" onclick="feAbrirEmitir()">+ Emitir factura</button></div>
   </div>
+  <div class="fbar" style="margin-bottom:12px"><button class="fb on" id="fv-facturas" onclick="feSetVista('facturas')">🧾 Facturas emitidas</button><button class="fb" id="fv-recibos" onclick="feSetVista('recibos')">📄 Recibos de cobro</button></div>
   <div id="fe-banner"></div>
   <div id="fe-lista"><div class="loading"><div class="loader"></div><div class="lt">Cargando facturas...</div></div></div>
+  <div id="fe-recibos" style="display:none"></div>
 </div>
 
 <div id="pg-planes" style="display:none">
@@ -18981,7 +18983,8 @@ async function confirmarRegistrarCobro(){
       Object.assign(c,{estado:"Cobrado",fecha_cobro:fecha,numero_factura:factura});
       if(c.concepto_id&&c.fecha_vencimiento)await actualizarRealDesdeCobranzas(c.concepto_id,c.fecha_vencimiento.slice(0,7));
       toast(msg,"ok");
-      await feCobroDesdeCashFlow({fecha,soc,monto,facturaTxt:factura,medio,dest}).catch(()=>{});
+      if(c.recibo_id)await recDepositoCheque({fecha,soc,monto,medio,dest,cobranza:c}).catch(()=>{});
+      else await feCobroDesdeCashFlow({fecha,soc,monto,facturaTxt:factura,medio,dest}).catch(()=>{});
       renderCFCobranzas();renderCFResumen();
 
     } else {
@@ -21834,6 +21837,7 @@ async function loadFacturasEmitidas(){
   try{
     [feFacturas,feConfig]=await Promise.all([sb("facturas_emitidas?select=*&order=fecha.desc,cbte_numero.desc&limit=500"),sb("arca_config?select=*").catch(()=>[])]);
     feCobros=await feCargarCobros();
+    await recCargar();
   }catch(e){
     feFacturas=[];feConfig=[];
     if(el)el.innerHTML=`<div class="empty"><div class="ei">🧾</div>No se pudo leer <code>facturas_emitidas</code>: ${esc(String(e.message||e).slice(0,120))}<br><span style="font-size:12px;color:var(--tx3)">Falta correr <b>sql_arca_facturacion.sql</b> en Supabase.</span></div>`;
@@ -22346,6 +22350,8 @@ async function feCargarCobros(){
     const as=await sb("asientos_contables?select=origen_id,asientos_movimientos(debe,haber,plan_cuentas(codigo))&origen=eq.factura_emitida_cobro&anulado=eq.false&limit=5000");
     const m={};
     as.forEach(a=>(a.asientos_movimientos||[]).forEach(mv=>{if(mv.plan_cuentas&&mv.plan_cuentas.codigo===FE_CTA_DEUDORES)m[a.origen_id]=feR2((m[a.origen_id]||0)+(parseFloat(mv.haber)||0)-(parseFloat(mv.debe)||0));}));
+    const rf=await sb("recibo_facturas?select=factura_id,importe,recibos(estado)&limit=5000").catch(()=>[]);
+    (Array.isArray(rf)?rf:[]).forEach(x=>{if(!x.factura_id||(x.recibos&&x.recibos.estado==="anulado"))return;m[x.factura_id]=feR2((m[x.factura_id]||0)+(parseFloat(x.importe)||0));});
     return m;
   }catch(e){return{};}
 }
@@ -22444,6 +22450,258 @@ async function feCobroGuardar(){
     }else toast(r.faltantes?`Faltan las cuentas ${r.faltantes.join(", ")} en el plan`:("No se pudo contabilizar: "+(r.motivo||"error")),"err");
   }catch(e){toast("No se pudo contabilizar el cobro: "+String(e.message||e).slice(0,140),"err");}
   finally{btn.disabled=false;}
+}
+
+// ── RECIBOS DE COBRO ────────────────────────────────────────────────────────────────────────────────
+// Un recibo cancela una o varias facturas emitidas. Se arma con lo que entregó el cliente (efectivo, transferencia, cheque o Echeq)
+// más las retenciones que nos practicó en su orden de pago. Asiento: Debe valores y retenciones sufridas / Haber Deudores por ventas.
+// El cheque queda en cartera (1.1.01.005) y en Cobranzas; al depositarlo se asienta el pasaje a la cuenta. Numeración propia por sociedad.
+let feRecibos=[],feRecibosOk=true,feVista="facturas";
+const REC_VALORES={efectivo:"Efectivo",transferencia:"Transferencia / depósito",cheque:"Cheque",echeq:"Echeq"};
+const REC_RET={ganancias:["Retención de Ganancias","1.1.03.005"],iva:["Retención de IVA","1.1.03.006"],iibb:["Retención de IIBB","1.1.03.007"],suss:["Retención de SUSS","1.1.03.008"]};
+const REC_CTA_CARTERA="1.1.01.005";
+const _rec={soc:"SUDES",fecha:"",cuit:"",nombre:"",op:"",obs:"",facts:{},valores:[],ret:[]};
+const _recN=v=>parseFloat(v)||0;
+async function recCargar(){
+  try{feRecibos=await sb("recibos?select=*&order=created_at.desc&limit=1000");feRecibosOk=true;}
+  catch(e){feRecibos=[];feRecibosOk=false;}
+}
+function recCuentaValor(tipo,soc){
+  if(tipo==="efectivo")return"1.1.01.001";
+  if(tipo==="transferencia")return soc==="POINTERS"?"1.1.01.003":"1.1.01.002";
+  return REC_CTA_CARTERA;                                  // cheque y Echeq entran a la cartera
+}
+function recProximoNumero(soc){
+  const n=feRecibos.filter(r=>r.sociedad===soc).reduce((m,r)=>Math.max(m,parseInt(r.numero_int,10)||0),0)+1;
+  return{n,numero:`R-0001-${String(n).padStart(8,"0")}`};
+}
+// Función pura: controla que el recibo cierre (valores + retenciones = facturas que cancela)
+function recValidar(d){
+  const err=[],fa=d.facturas.filter(x=>x.importe>0);
+  const tF=feR2(fa.reduce((s,x)=>s+x.importe,0)),tV=feR2(d.valores.reduce((s,x)=>s+_recN(x.importe),0)),tR=feR2(d.retenciones.reduce((s,x)=>s+_recN(x.importe),0));
+  if(!fa.length)err.push("Elegí al menos una factura para cancelar");
+  fa.forEach(x=>{if(x.importe>x.saldo+0.01)err.push(`${x.nombre||"Una factura"}: el importe supera su saldo (${feM(x.saldo)})`);});
+  if(fa.length&&!(tV+tR>0))err.push("Cargá lo que entregó el cliente: valores y/o retenciones");
+  const dif=feR2(tF-tV-tR);
+  if(fa.length&&tV+tR>0&&Math.abs(dif)>0.01)err.push(dif>0?`Faltan ${feM(dif)} para cubrir las facturas`:`Sobran ${feM(-dif)}: valores y retenciones superan las facturas`);
+  return{tF,tV,tR,dif,err};
+}
+// Líneas del asiento: una por cuenta
+function recLineas({soc,valores,retenciones,total}){
+  const por={};
+  valores.forEach(v=>{const c=recCuentaValor(v.tipo,soc);por[c]=feR2((por[c]||0)+_recN(v.importe));});
+  retenciones.forEach(r=>{const x=REC_RET[r.tipo];if(!x)return;por[x[1]]=feR2((por[x[1]]||0)+_recN(r.importe));});
+  return[...Object.entries(por).filter(([,v])=>v>0).map(([codigo,v])=>({codigo,debe:v,desc:"Recibo"})),{codigo:FE_CTA_DEUDORES,haber:feR2(total),desc:"Deudores por ventas"}];
+}
+function recClientes(soc){
+  const m={};
+  feFacturas.filter(f=>f.sociedad===soc&&(feSaldoCobro(f)||0)>0.01).forEach(f=>{
+    const k=String(f.receptor_doc_nro||"");if(!m[k])m[k]={cuit:k,nombre:f.receptor_nombre||k,n:0,saldo:0};
+    m[k].n++;m[k].saldo=feR2(m[k].saldo+feSaldoCobro(f));
+  });
+  return Object.values(m).sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"));
+}
+const recFacturasCliente=(soc,cuit)=>feFacturas.filter(f=>f.sociedad===soc&&String(f.receptor_doc_nro||"")===String(cuit)&&(feSaldoCobro(f)||0)>0.01).sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha))||(a.cbte_numero-b.cbte_numero));
+function recDatos(){
+  const st=_rec,fs=recFacturasCliente(st.soc,st.cuit);
+  return{
+    facturas:fs.map(f=>({id:f.id,saldo:feSaldoCobro(f),importe:feR2(_recN(st.facts[f.id])),nombre:`${FE_TIPOS[f.cbte_tipo]||""} ${feNum(f)}`})),
+    valores:st.valores.filter(v=>_recN(v.importe)>0),retenciones:st.ret.filter(r=>_recN(r.importe)>0)
+  };
+}
+// ── Vista Facturas / Recibos ──
+function feSetVista(v){
+  feVista=v;
+  ["facturas","recibos"].forEach(k=>{const b=document.getElementById("fv-"+k);if(b)b.classList.toggle("on",k===v);});
+  const f=document.getElementById("fe-lista"),b=document.getElementById("fe-banner"),r=document.getElementById("fe-recibos");
+  if(f)f.style.display=v==="facturas"?"":"none";if(b)b.style.display=v==="facturas"?"":"none";if(r)r.style.display=v==="recibos"?"":"none";
+  if(v==="recibos")renderRecibos();
+}
+function renderRecibos(){
+  const el=document.getElementById("fe-recibos");if(!el)return;
+  if(!feRecibosOk){el.innerHTML=`<div class="empty"><div class="ei">🧾</div>Falta crear las tablas de recibos.<br><span style="font-size:12px;color:var(--tx3)">Corré <b>sql_recibos.sql</b> en Supabase → SQL Editor y volvé a abrir esta pantalla.</span></div>`;return;}
+  const act=feRecibos.filter(r=>r.estado!=="anulado"),tot=act.reduce((s,r)=>s+_recN(r.total),0);
+  const resumenValores=r=>(Array.isArray(r.valores)?r.valores:[]).map(v=>`${REC_VALORES[v.tipo]||v.tipo} ${feM(v.importe)}`).concat((Array.isArray(r.retenciones)?r.retenciones:[]).map(x=>`${(REC_RET[x.tipo]||[x.tipo])[0]} ${feM(x.importe)}`)).join(" · ");
+  el.innerHTML=`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px"><button class="btn pri" onclick="recAbrir()">＋ Nuevo recibo</button>
+    <span style="font-size:12px;color:var(--tx3)">${act.length} recibo${act.length===1?"":"s"} emitido${act.length===1?"":"s"} · ${feM(tot)} cobrados</span></div>`+
+  (feRecibos.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--surf2);border-bottom:1px solid var(--b)">${["Fecha","Recibo","Cliente","Total","Valores y retenciones","Estado",""].map((h,i)=>`<th style="padding:8px 10px;text-align:${i===3?"right":"left"};color:var(--tx3);font-weight:600">${h}</th>`).join("")}</tr></thead><tbody>
+    ${feRecibos.map(r=>`<tr style="border-bottom:1px solid var(--b)${r.estado==="anulado"?";opacity:.55":""}"><td style="padding:8px 10px;white-space:nowrap">${esc(feFechaAR(r.fecha))}</td>
+      <td style="padding:8px 10px"><b>${esc(r.numero)}</b><div style="font-size:11px;color:var(--tx3)">${esc(r.sociedad)}${r.op_cliente?" · OP "+esc(r.op_cliente):""}</div></td>
+      <td style="padding:8px 10px">${esc(r.cliente_nombre||"")}<div style="font-size:11px;color:var(--tx3);font-family:monospace">${esc(r.cliente_cuit||"")}</div></td>
+      <td style="padding:8px 10px;text-align:right;font-weight:700">${feM(r.total)}</td>
+      <td style="padding:8px 10px;font-size:11px;color:var(--tx2)">${esc(resumenValores(r))}</td>
+      <td style="padding:8px 10px">${r.estado==="anulado"?`<span style="color:var(--tx3)">Anulado</span>`:`<span style="color:var(--gr);font-weight:700">Emitido</span>`}</td>
+      <td style="padding:8px 10px;white-space:nowrap"><button class="btn sm" style="font-size:10px;padding:2px 7px" onclick="recDescargarPDF('${r.id}')">📄 PDF</button>${r.estado!=="anulado"?` <button class="btn sm danger" style="font-size:10px;padding:2px 7px" onclick="recAnular('${r.id}')">Anular</button>`:""}</td></tr>`).join("")}
+    </tbody></table></div>`:`<div class="empty"><div class="ei">🧾</div>Todavía no se emitió ningún recibo.</div>`);
+}
+// ── Pantalla «Nuevo recibo» ──
+function recAbrir(){
+  if(!feRecibosOk){toast("Falta correr sql_recibos.sql en Supabase","err");return;}
+  Object.assign(_rec,{fecha:today(),cuit:"",nombre:"",op:"",obs:"",facts:{},valores:[],ret:[]});
+  let d=document.getElementById("modal-rec");
+  if(!d){d=document.createElement("div");d.className="mov";d.id="modal-rec";d.onclick=e=>{if(e.target===d)closeM("modal-rec");};document.body.appendChild(d);}
+  recRender();openM("modal-rec");
+}
+function recRender(){
+  const st=_rec,d=document.getElementById("modal-rec");if(!d)return;
+  const cli=recClientes(st.soc),fs=st.cuit?recFacturasCliente(st.soc,st.cuit):[];
+  const selTipo=(opts,sel,fn)=>`<select class="fi" style="font-size:12px" onchange="${fn}">${Object.entries(opts).map(([k,v])=>`<option value="${k}"${sel===k?" selected":""}>${esc(Array.isArray(v)?v[0]:v)}</option>`).join("")}</select>`;
+  d.innerHTML=`<div class="modal" style="max-width:780px"><div class="mt"><span>🧾 Nuevo recibo de cobro</span><button class="mt-close" onclick="closeM('modal-rec')">✕</button></div>
+  <div style="padding:0 20px 20px;max-height:78vh;overflow:auto">
+    <div class="fgrid">
+      <div class="fg"><label class="fl">Sociedad *</label><select class="fi" onchange="recSoc(this.value)"><option value="SUDES"${st.soc==="SUDES"?" selected":""}>SUDES</option><option value="POINTERS"${st.soc==="POINTERS"?" selected":""}>POINTERS</option></select></div>
+      <div class="fg"><label class="fl">Fecha *</label><input class="fi" type="date" value="${esc(st.fecha)}" onchange="_rec.fecha=this.value"></div>
+      <div class="fg"><label class="fl">N° de OP del cliente</label><input class="fi" value="${esc(st.op)}" placeholder="Orden de pago que trae las retenciones" oninput="_rec.op=this.value"></div>
+    </div>
+    <div class="fg"><label class="fl">Cliente (con facturas pendientes) *</label><select class="fi" onchange="recCliente(this.value)"><option value="">${cli.length?"— elegí un cliente —":"No hay facturas pendientes de cobro"}</option>${cli.map(c=>`<option value="${esc(c.cuit)}"${st.cuit===c.cuit?" selected":""}>${esc(c.nombre)} — ${c.n} factura${c.n===1?"":"s"} · ${esc(feM(c.saldo))}</option>`).join("")}</select></div>
+    ${st.cuit?`<div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px;margin:12px 0 6px">Facturas que cancela <a href="#" style="font-weight:400;text-transform:none;letter-spacing:0" onclick="recTodas();return false">(seleccionar todas)</a></div>
+    <div style="border:1px solid var(--b);border-radius:8px;overflow:hidden">${fs.map(f=>{const on=st.facts[f.id]!==undefined,s=feSaldoCobro(f);return`<div style="display:grid;grid-template-columns:28px 1fr 110px 120px;gap:8px;align-items:center;padding:6px 10px;border-top:1px solid var(--b)"><input type="checkbox" ${on?"checked":""} onchange="recToggleFact('${f.id}',this.checked)"><div style="font-size:12px"><b>${esc(FE_TIPOS[f.cbte_tipo]||"")} ${esc(feNum(f))}</b> <span style="color:var(--tx3)">${esc(feFechaAR(f.fecha))}</span></div><div style="font-size:12px;text-align:right;color:var(--tx3)">saldo ${esc(feM(s))}</div><input class="fi" type="number" step="0.01" min="0" style="font-size:12px;text-align:right" ${on?"":"disabled"} value="${on?esc(st.facts[f.id]):""}" oninput="recImporteFact('${f.id}',this.value)"></div>`;}).join("")}</div>`:""}
+    <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px;margin:14px 0 6px">Valores recibidos</div>
+    ${st.valores.map((v,i)=>`<div style="display:grid;grid-template-columns:150px 120px 1fr ${v.tipo==="cheque"||v.tipo==="echeq"?"130px ":""}28px;gap:6px;margin-bottom:6px">${selTipo(REC_VALORES,v.tipo,`recValorSet(${i},'tipo',this.value)`)}
+      <input class="fi" type="number" step="0.01" min="0" style="font-size:12px;text-align:right" placeholder="Importe" value="${esc(v.importe)}" oninput="recValorSet(${i},'importe',this.value)">
+      <input class="fi" style="font-size:12px" placeholder="${v.tipo==="cheque"||v.tipo==="echeq"?"N° y banco del cheque":v.tipo==="transferencia"?"N° de operación":"Detalle"}" value="${esc(v.detalle)}" oninput="recValorSet(${i},'detalle',this.value)">
+      ${v.tipo==="cheque"||v.tipo==="echeq"?`<input class="fi" type="date" style="font-size:12px" title="Fecha de cobro del cheque" value="${esc(v.fecha)}" onchange="recValorSet(${i},'fecha',this.value)">`:""}
+      <button class="btn sm danger" style="padding:0" onclick="recDelValor(${i})" title="Quitar">✕</button></div>`).join("")}
+    <button class="btn sm" onclick="recAddValor()">＋ Agregar valor</button>
+    <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px;margin:14px 0 6px">Retenciones que nos practicó</div>
+    ${st.ret.map((r,i)=>`<div style="display:grid;grid-template-columns:190px 120px 1fr 28px;gap:6px;margin-bottom:6px">${selTipo(REC_RET,r.tipo,`recRetSet(${i},'tipo',this.value)`)}
+      <input class="fi" type="number" step="0.01" min="0" style="font-size:12px;text-align:right" placeholder="Importe" value="${esc(r.importe)}" oninput="recRetSet(${i},'importe',this.value)">
+      <input class="fi" style="font-size:12px" placeholder="N° de certificado" value="${esc(r.certificado)}" oninput="recRetSet(${i},'certificado',this.value)">
+      <button class="btn sm danger" style="padding:0" onclick="recDelRet(${i})" title="Quitar">✕</button></div>`).join("")}
+    <button class="btn sm" onclick="recAddRet()">＋ Agregar retención</button>
+    <div class="fg" style="margin-top:12px"><label class="fl">Observaciones</label><input class="fi" value="${esc(st.obs)}" oninput="_rec.obs=this.value"></div>
+    <div id="rec-res" style="margin-top:12px;padding:10px 12px;background:var(--surf2);border-radius:8px;font-size:12px"></div>
+    <div class="ma" style="margin-top:14px"><button class="bc" onclick="closeM('modal-rec')">Cancelar</button><button class="bk" id="rec-btn" onclick="recGuardar()">Emitir recibo</button></div>
+  </div></div>`;
+  recResumen();
+}
+function recResumen(){
+  const el=document.getElementById("rec-res");if(!el)return;
+  const v=recValidar(recDatos()),ok=!v.err.length;
+  el.innerHTML=`Facturas que cancela <b>${feM(v.tF)}</b> · Valores <b>${feM(v.tV)}</b> · Retenciones <b>${feM(v.tR)}</b> · <b style="color:${Math.abs(v.dif)<0.01&&v.tF>0?"var(--gr)":"var(--re)"}">diferencia ${feM(v.dif)}</b>${ok?` · <span style="color:var(--gr)">listo para emitir</span>`:`<div style="color:var(--am,#F59E0B);margin-top:4px">${esc(v.err[0])}</div>`}`;
+}
+function recSoc(s){Object.assign(_rec,{soc:s,cuit:"",nombre:"",facts:{}});recRender();}
+function recCliente(c){const x=recClientes(_rec.soc).find(k=>k.cuit===c);Object.assign(_rec,{cuit:c,nombre:x?x.nombre:"",facts:{}});recRender();}
+function recToggleFact(id,on){if(on){const f=feFacturas.find(x=>x.id===id);_rec.facts[id]=feSaldoCobro(f);}else delete _rec.facts[id];recRender();}
+function recTodas(){recFacturasCliente(_rec.soc,_rec.cuit).forEach(f=>{_rec.facts[f.id]=feSaldoCobro(f);});recRender();}
+function recImporteFact(id,v){_rec.facts[id]=v;recResumen();}
+function recFaltante(){const v=recValidar(recDatos());return Math.max(0,v.dif);}
+function recAddValor(){_rec.valores.push({tipo:"transferencia",importe:recFaltante()||"",detalle:"",fecha:""});recRender();}
+function recValorSet(i,k,v){_rec.valores[i][k]=v;if(k==="tipo")recRender();else recResumen();}
+function recDelValor(i){_rec.valores.splice(i,1);recRender();}
+function recAddRet(){_rec.ret.push({tipo:"ganancias",importe:"",certificado:""});recRender();}
+function recRetSet(i,k,v){_rec.ret[i][k]=v;if(k==="tipo")recRender();else recResumen();}
+function recDelRet(i){_rec.ret.splice(i,1);recRender();}
+
+async function recGuardar(){
+  const st=_rec,d=recDatos(),v=recValidar(d);
+  if(!st.cuit){toast("Elegí el cliente","err");return;}
+  if(!st.fecha){toast("Indicá la fecha del recibo","err");return;}
+  if(v.err.length){toast(v.err[0],"err");return;}
+  if(typeof generarAsiento!=="function"){toast("No está cargado el módulo contable","err");return;}
+  const btn=document.getElementById("rec-btn");btn.disabled=true;btn.textContent="Emitiendo...";
+  const movs=[];let recibo=null;
+  try{
+    const num=recProximoNumero(st.soc);
+    const valores=d.valores.map(x=>({tipo:x.tipo,importe:feR2(x.importe),detalle:x.detalle||"",fecha:x.fecha||""}));
+    const retenciones=d.retenciones.map(x=>({tipo:x.tipo,importe:feR2(x.importe),certificado:x.certificado||""}));
+    [recibo]=await sb("recibos",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({sociedad:st.soc,numero:num.numero,numero_int:num.n,fecha:st.fecha,cliente_cuit:st.cuit,cliente_nombre:st.nombre,op_cliente:st.op||null,total:v.tF,valores,retenciones,observaciones:st.obs||null,creado_por:loggedUser?.nombre||null})});
+    await sb("recibo_facturas",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify(d.facturas.filter(x=>x.importe>0).map(x=>({recibo_id:recibo.id,factura_id:x.id,importe:feR2(x.importe)})))});
+    // tesorería de cada valor recibido
+    const concepto=`Recibo ${recibo.numero} — ${st.nombre}`;
+    for(const val of valores){
+      if(val.tipo==="efectivo"){
+        const [r]=await sb("caja_movimientos",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({sociedad:st.soc,fecha:st.fecha,tipo:"ingreso",concepto,categoria:"Cobros",monto:val.importe,medio_pago:"Efectivo",observaciones:val.detalle||null,creado_por:loggedUser?.nombre||null})});
+        movs.push({t:"caja",id:r.id});
+      }else if(val.tipo==="transferencia"){
+        const [r]=await sb("banco_movimientos",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({sociedad:st.soc,fecha:st.fecha,concepto:val.detalle?`${concepto} · ${val.detalle}`:concepto,importe:val.importe,saldo:null,conciliado:false,referencia:recibo.numero})});
+        movs.push({t:"banco",id:r.id});
+      }else{
+        const [r]=await sb("cf_cobranzas",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({nombre:`${val.tipo==="echeq"?"Echeq":"Cheque"} ${st.nombre} · ${recibo.numero}`,tipo:val.tipo==="echeq"?"ECheque":"Cheque",remitente:st.nombre,sociedad:st.soc,monto:val.importe,fecha_vencimiento:val.fecha||st.fecha,estado:"Pendiente",numero_cheque:val.detalle||null,notas:`Recibo ${recibo.numero}${st.op?" · OP "+st.op:""}`,recibo_id:recibo.id})});
+        movs.push({t:"cobranza",id:r.id});
+      }
+    }
+    const a=await generarAsiento({fecha:st.fecha,sociedad:st.soc,tipo:"cobro_venta",origen:"recibo",origen_id:recibo.id,descripcion:concepto,lineas:recLineas({soc:st.soc,valores,retenciones,total:v.tF})});
+    if(!a||a._faltantes||!a.id)throw new Error(a&&a._faltantes?"faltan cuentas en el plan: "+a._faltantes.join(", "):"no se pudo generar el asiento");
+    await sb(`recibos?id=eq.${recibo.id}`,{method:"PATCH",body:JSON.stringify({asiento_id:a.id,movimientos:movs})});
+    recibo.asiento_id=a.id;recibo.movimientos=movs;
+    closeM("modal-rec");
+    toast(`✓ Recibo ${recibo.numero} emitido por ${feM(v.tF)}`,"ok");
+    await loadFacturasEmitidas();renderRecibos();
+    recDescargarPDF(recibo.id,recibo);
+  }catch(e){
+    // no dejar nada a medias
+    for(const m of movs){const tb={caja:"caja_movimientos",banco:"banco_movimientos",cobranza:"cf_cobranzas"}[m.t];await sb(`${tb}?id=eq.${m.id}`,{method:"DELETE"}).catch(()=>{});}
+    if(recibo)await sb(`recibos?id=eq.${recibo.id}`,{method:"DELETE"}).catch(()=>{});
+    toast("No se pudo emitir el recibo: "+String(e.message||e).slice(0,160),"err");
+    btn.disabled=false;btn.textContent="Emitir recibo";
+  }
+}
+async function recAnular(id){
+  const r=feRecibos.find(x=>x.id===id);if(!r||r.estado==="anulado")return;
+  const cob=await sb(`cf_cobranzas?select=id,estado,nombre&recibo_id=eq.${id}`).catch(()=>[]);
+  const cobrado=cob.filter(c=>c.estado!=="Pendiente");
+  if(cobrado.length){toast(`No se puede anular: el cheque «${cobrado[0].nombre}» ya figura como ${cobrado[0].estado}. Revertí ese cobro primero.`,"err");return;}
+  if(!confirm(`¿Anular el recibo ${r.numero}?\n\nSe anula su asiento, se quitan los movimientos de caja, banco y los cheques en Cobranzas que generó, y las facturas vuelven a quedar con saldo.`))return;
+  try{
+    await sb(`recibos?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({estado:"anulado"})});
+    if(r.asiento_id)await sb(`asientos_contables?id=eq.${r.asiento_id}`,{method:"PATCH",body:JSON.stringify({anulado:true})});
+    for(const m of (Array.isArray(r.movimientos)?r.movimientos:[])){const tb={caja:"caja_movimientos",banco:"banco_movimientos",cobranza:"cf_cobranzas"}[m.t];if(tb)await sb(`${tb}?id=eq.${m.id}`,{method:"DELETE"}).catch(()=>{});}
+    toast(`Recibo ${r.numero} anulado`,"ok");
+    await loadFacturasEmitidas();renderRecibos();
+  }catch(e){toast("No se pudo anular: "+String(e.message||e).slice(0,140),"err");}
+}
+// Al depositar/cobrar un cheque que vino con un recibo: pasa de la cartera a la cuenta elegida
+async function recDepositoCheque({fecha,soc,monto,medio,dest,cobranza}){
+  if(typeof generarAsiento!=="function")return null;
+  const cuenta=feCuentaCobro({medio,dest,soc});
+  const a=await generarAsiento({fecha,sociedad:soc,tipo:"ajuste",origen:"recibo_cheque",origen_id:cobranza.id,descripcion:`Depósito de cheque — ${cobranza.nombre}`,lineas:[{codigo:cuenta,debe:feR2(monto),desc:"Depósito"},{codigo:REC_CTA_CARTERA,haber:feR2(monto),desc:"Cheques en cartera"}]});
+  if(a&&a.id)toast(`🧮 Asiento del depósito generado (cartera → ${cuenta})`,"ok");
+  else if(a&&a._faltantes)toast(`No se generó el asiento del depósito: faltan las cuentas ${a._faltantes.join(", ")}`,"err");
+  return a;
+}
+// ── PDF del recibo ──
+async function recDetalleFacturas(r){
+  if(r._facts)return r._facts;
+  const rows=await sb(`recibo_facturas?select=importe,facturas_emitidas(cbte_tipo,pto_vta,cbte_numero,fecha,total)&recibo_id=eq.${r.id}`).catch(()=>[]);
+  return rows.map(x=>({f:x.facturas_emitidas||{},importe:x.importe}));
+}
+async function recGenerarPDF(r){
+  if(!window.jspdf)throw new Error("no se cargó el generador de PDF");
+  const {jsPDF}=window.jspdf,doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  const fiscal=(await getFiscalSociedad(r.sociedad))||{};let logo=null;try{logo=await getLogoDataUrl(r.sociedad);}catch(_){}
+  const facts=await recDetalleFacturas(r),L=12,R=198;
+  if(r.estado==="anulado"){doc.setTextColor(248,200,200);doc.setFont("helvetica","bold");doc.setFontSize(60);doc.text("ANULADO",105,150,{align:"center",angle:30});doc.setTextColor(0);}
+  doc.setDrawColor(60);doc.setLineWidth(.4);doc.rect(L,10,R-L,40);doc.line(105,10,105,50);doc.setFillColor(255,255,255);doc.rect(97,10,16,16,"FD");
+  doc.setFont("helvetica","bold");doc.setFontSize(26);doc.text("X",105,22,{align:"center"});doc.setFontSize(4.5);doc.text("NO VÁLIDO",105,23.7,{align:"center"});doc.text("COMO FACTURA",105,25.6,{align:"center"});
+  if(logo){try{const p=doc.getImageProperties(logo),h=14,w=h*(p.width/p.height);doc.addImage(logo,"PNG",L+3,13,Math.min(w,34),h);}catch(_){}}
+  doc.setFont("helvetica","bold");doc.setFontSize(12);doc.text(fiscal.razon_social||r.sociedad,L+3,logo?33:20,{maxWidth:80});
+  doc.setFont("helvetica","normal");doc.setFontSize(8.5);doc.text(`Domicilio: ${fiscal.domicilio||"—"}`,L+3,logo?38:28,{maxWidth:80});doc.text(`Condición frente al IVA: ${fiscal.condicion_iva||"Responsable Inscripto"}`,L+3,logo?43:33,{maxWidth:80});
+  doc.setFont("helvetica","bold");doc.setFontSize(17);doc.text("RECIBO",118,20);doc.setFontSize(10);doc.text(`Nº ${r.numero}`,118,28);
+  doc.setFont("helvetica","normal");doc.setFontSize(9);doc.text(`Fecha: ${feFechaAR(r.fecha)}`,118,35);doc.text(`CUIT: ${fiscal.cuit||"—"}`,118,41);
+  doc.rect(L,53,R-L,r.op_cliente?18:12);doc.setFontSize(9);doc.setFont("helvetica","bold");doc.text("Recibimos de:",L+3,59);doc.setFont("helvetica","normal");doc.text(`${r.cliente_nombre||""}  ·  CUIT ${r.cliente_cuit||""}`,L+30,59,{maxWidth:R-L-34});
+  if(r.op_cliente){doc.setFont("helvetica","bold");doc.text("Orden de pago del cliente:",L+3,66);doc.setFont("helvetica","normal");doc.text(String(r.op_cliente),L+50,66);}
+  let y=r.op_cliente?76:70;
+  const seccion=(titulo,cab,filas,anchos,totalTxt)=>{
+    doc.setFillColor(235,235,240);doc.rect(L,y,R-L,7,"F");doc.setFont("helvetica","bold");doc.setFontSize(8.5);doc.text(titulo,L+2,y+5);y+=7;
+    doc.setFont("helvetica","bold");doc.setFontSize(8);let x=L+2;cab.forEach((c,i)=>{doc.text(c,i===cab.length-1?R-2:x,y+4.5,{align:i===cab.length-1?"right":"left"});x+=anchos[i];});y+=6;
+    doc.setFont("helvetica","normal");doc.setFontSize(8.5);
+    filas.forEach(f=>{x=L+2;f.forEach((c,i)=>{const last=i===f.length-1;doc.text(String(c),last?R-2:x,y+4,{align:last?"right":"left",maxWidth:anchos[i]-3});x+=anchos[i];});y+=6;doc.setDrawColor(215);doc.line(L,y,R,y);});
+    if(totalTxt){doc.setFont("helvetica","bold");doc.text(totalTxt[0],R-40,y+5,{align:"right"});doc.text(totalTxt[1],R-2,y+5,{align:"right"});y+=8;}
+    y+=4;
+  };
+  seccion("FACTURAS QUE CANCELA",["Comprobante","Fecha","Total de la factura","Aplicado"],facts.map(x=>[`${FE_TIPOS[x.f.cbte_tipo]||"Comprobante"} ${x.f.pto_vta!==undefined?feNum(x.f):""}`,feFechaAR(x.f.fecha),feM(x.f.total),feM(x.importe)]),[78,28,48,30],["Total cancelado",feM(r.total)]);
+  const vals=Array.isArray(r.valores)?r.valores:[],rets=Array.isArray(r.retenciones)?r.retenciones:[];
+  if(vals.length)seccion("VALORES RECIBIDOS",["Medio","Detalle","Fecha de cobro","Importe"],vals.map(v=>[REC_VALORES[v.tipo]||v.tipo,v.detalle||"",v.fecha?feFechaAR(v.fecha):"",feM(v.importe)]),[48,70,38,28]);
+  if(rets.length)seccion("RETENCIONES PRACTICADAS POR EL CLIENTE",["Impuesto","N° de certificado","Importe"],rets.map(x=>[(REC_RET[x.tipo]||[x.tipo])[0],x.certificado||"",feM(x.importe)]),[78,76,30]);
+  if(r.observaciones){doc.setFont("helvetica","italic");doc.setFontSize(8.5);doc.text(`Observaciones: ${r.observaciones}`,L,y+2,{maxWidth:R-L});y+=8;}
+  doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(110);doc.text("Este recibo acredita el cobro de los comprobantes indicados. Documento interno, no válido como factura.",L,282);doc.setTextColor(0);
+  return doc;
+}
+async function recDescargarPDF(id,fila){
+  const r=fila||feRecibos.find(x=>x.id===id);if(!r)return;
+  try{const doc=await recGenerarPDF(r);doc.save(`Recibo_${r.numero}.pdf`);}
+  catch(e){toast("No se pudo generar el PDF: "+String(e.message||e).slice(0,100),"err");}
 }
 
 function feAgregarItem(){feItems.push({descripcion:"",neto:"",alicuota:21});feRenderItems();}
