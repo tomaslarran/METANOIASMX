@@ -31540,7 +31540,7 @@ async function enviarEmailFinnegans(){
 }
 
 // ── Importar comprobantes desde ARCA (ex AFIP) — "Mis Comprobantes Recibidos" ──
-const ARCA_TIPO_MAP={"1":"A","6":"B","11":"C","51":"M","3":"NC-A","8":"NC-B","13":"NC-C","53":"NC-M"};
+const ARCA_TIPO_MAP={"1":"A","6":"B","11":"C","51":"M","3":"NC-A","8":"NC-B","13":"NC-C","53":"NC-M","81":"A"}; // 81 = Tique Factura A: se carga como Factura A (igual que en el libro de María)
 function _arcaMapTipo(tipoStr){
   const m=String(tipoStr||"").match(/^(\d+)/);
   return m?(ARCA_TIPO_MAP[m[1]]||null):null;
