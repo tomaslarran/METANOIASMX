@@ -27113,7 +27113,8 @@ async function renderPaquete(){
     <input class="fi" type="month" value="${esc(st.mes)}" style="width:150px" onchange="_paqState.mes=this.value;renderPaquete()">
     <select class="fi mini-sel" style="width:210px" onchange="_paqState.quinc=this.value;renderPaquete()"><option value="mes"${st.quinc==="mes"?" selected":""}>Retenciones: mes completo</option><option value="q1"${st.quinc==="q1"?" selected":""}>Retenciones: 1ª quincena</option><option value="q2"${st.quinc==="q2"?" selected":""}>Retenciones: 2ª quincena</option></select>
     <button class="btn pri" onclick="descargarPaqueteAuren()">📥 Descargar Excel para Auren</button>
-    <button class="btn" onclick="descargarLibroIvaTxt()" title="Libro IVA Digital: ventas y compras (cabecera y alícuotas) para importar en ARCA">📑 TXT Libro IVA (ARCA)</button></div>
+    <button class="btn" onclick="descargarLibroIvaTxt()" title="Libro IVA Digital: ventas y compras (cabecera y alícuotas) para importar en ARCA">📑 TXT Libro IVA (ARCA)</button>
+    <button class="btn" onclick="descargarSicoreTxt()" title="Retenciones de Ganancias del período (mes o quincena elegido) en el formato de importación de SICORE">📑 TXT SICORE (Ganancias)</button></div>
     <div id="paq-body"><div style="color:var(--tx3);font-size:12px">Calculando...</div></div>`;
   let d;try{d=await _paqCargar();}catch(e){document.getElementById("paq-body").innerHTML=`<div style="color:var(--re);font-size:12px">No se pudo armar el paquete: ${esc(String(e.message||e).slice(0,160))}</div>`;return;}
   const k=d.kpi;
@@ -27188,10 +27189,13 @@ function buildLibroIvaTxt({soc,mes,facturas,compras}){
     const cuit=String(c.cuit||"").replace(/\D/g,"");
     if(cuit.length!==11){avisos.push(`${rotulo}: CUIT del proveedor inválido o vacío; no se incluyó.`);continue;}
     const conIva=["001","002","003","051"].includes(tipo);   // clase A/M: discrimina IVA y da crédito fiscal
-    const n21=N(c.neto_21),n105=N(c.neto_105),n27=N(c.neto_27),ex=N(c.neto_exento),iva=N(c.iva)||(n21*0.21+n105*0.105+n27*0.27);
-    const pIva=N(c.percepcion_iva)+N(c.percepcion_iva_15),pIibb=N(c.percepcion_iibb),interno=N(c.impuesto_interno),otros=N(c.otros_impuestos),total=N(c.total);
+    const n21=N(c.neto_21),n105=N(c.neto_105),n27=N(c.neto_27),iva=N(c.iva)||(n21*0.21+n105*0.105+n27*0.27);
+    const pIva=N(c.percepcion_iva)+N(c.percepcion_iva_15),pIibb=N(c.percepcion_iibb),total=N(c.total);
+    // Lo que no es neto gravado ni IVA ni percepciones (tasas, impuestos internos, conceptos no gravados) se informa como exento,
+    // igual que el Libro IVA que arma María con Finnegans.
+    const ex=_lvR(N(c.neto_exento)+N(c.impuesto_interno)+N(c.otros_impuestos));
     const gravado=n21+n105+n27;
-    const resto=_lvR(total-(gravado+(conIva?iva:0)+ex+pIva+pIibb+interno+otros));
+    const resto=_lvR(total-(gravado+(conIva?iva:0)+ex+pIva+pIibb));
     let noIntegra=0;
     if(resto>0.05)noIntegra=resto;else if(resto<-0.05)avisos.push(`${rotulo}: los importes superan el total en ${Math.abs(resto)}.`);
     let recs=[];
@@ -27199,12 +27203,13 @@ function buildLibroIvaTxt({soc,mes,facturas,compras}){
       let asign=[[21,n21],[10.5,n105],[27,n27]].filter(([,b])=>b>0).map(([p,b])=>({pct:p,base:b,iva:_lvR(b*p/100)}));
       if(asign.length){const dif=_lvR(iva-asign.reduce((x,a)=>x+a.iva,0));if(Math.abs(dif)>0.001){const mayor=asign.reduce((x,a)=>a.base>x.base?a:x,asign[0]);mayor.iva=_lvR(mayor.iva+dif);}}
       else asign=[{pct:0,base:0,iva:0}];
+      if(ex>0&&asign.some(a=>a.pct>0))asign.push({pct:0,base:0,iva:0});   // con parte exenta: segundo registro 0003 en cero (como Finnegans)
       recs=asign;
     }
-    const op=conIva&&recs.every(a=>a.pct===0)?(ex>0?"E":"N"):"0";
-    comprasC.push(_lvFecha(c.fecha_imputacion||c.fecha)+tipo+_lvInt(m[1],5)+_lvInt(m[2],20)+" ".repeat(16)+"80"+_lvInt(cuit,20)+_lvTxt(c.proveedor,30)
-      +_lvNum(total,15)+_lvNum(noIntegra,15)+_lvNum(ex,15)+_lvNum(pIva,15)+_lvNum(0,15)+_lvNum(pIibb,15)+_lvNum(0,15)+_lvNum(interno,15)+"PES"+"0001000000"+String(recs.length)+op
-      +_lvNum(conIva?iva:0,15)+_lvNum(otros,15)+_lvInt(0,11)+" ".repeat(30)+_lvNum(0,15));
+    const op=conIva&&ex>0?"E":(conIva&&recs.every(a=>a.pct===0)?"N":" ");
+    comprasC.push(_lvFecha(c.fecha||c.fecha_imputacion)+tipo+_lvInt(m[1],5)+_lvInt(m[2],20)+" ".repeat(16)+"80"+_lvInt(cuit,20)+_lvTxt(c.proveedor,30)
+      +_lvNum(total,15)+_lvNum(noIntegra,15)+_lvNum(ex,15)+_lvNum(pIva,15)+_lvNum(0,15)+_lvNum(pIibb,15)+_lvNum(0,15)+_lvNum(0,15)+"PES"+"0001000000"+String(recs.length)+op
+      +_lvNum(conIva?iva:0,15)+_lvNum(0,15)+_lvInt(0,11)+" ".repeat(30)+_lvNum(0,15));
     for(const a of recs)comprasA.push(tipo+_lvInt(m[1],5)+_lvInt(m[2],20)+"80"+_lvInt(cuit,20)+_lvNum(a.base,15)+LIVA_ALI[a.pct]+_lvNum(a.iva,15));
   }
   const fin=a=>a.length?a.join("\r\n")+"\r\n":"";
@@ -27229,6 +27234,41 @@ async function descargarLibroIvaTxt(){
     const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`libro_iva_digital_${st.soc}_${st.mes.replace("-","")}.zip`;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);
     toast(`✓ TXT generados: ${r.cant.ventas} ventas y ${r.cant.compras} compras${r.avisos.length?` · ${r.avisos.length} avisos`:""}`,"ok");
   }catch(e){toast("No se pudo generar el TXT: "+String(e.message||e).slice(0,140),"err");}
+}
+// ── SICORE: TXT de retenciones de Ganancias (formato «Estándar Retenciones v9.0», para importar en el aplicativo SICORE / SIAP) ──
+// Registro de 198 caracteres (igual al archivo Sicore_AAAA-MM-DD_AAAA-MM-DD.txt de María). Decimales con coma, números con ceros a la izquierda,
+// texto a la izquierda con espacios. Código de comprobante 06 = Orden de pago; impuesto 0217 (Ganancias); operación 1 (retención).
+const _scDec=(n,len)=>{const s=(Math.round((Math.abs(Number(n)||0)+Number.EPSILON)*100)/100).toFixed(2).replace(".",",");return s.padStart(len,"0").slice(-len);};
+const _scFecha=iso=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso||""));return m?`${m[3]}/${m[2]}/${m[1]}`:"          ";};
+function buildSicoreTxt({soc,mes,quinc,ops}){
+  const rango=paqRango(mes,quinc||"mes"),avisos=[],lineas=[];
+  const sel=(ops||[]).filter(o=>o.estado==="pagado"&&o.sociedad===soc&&_paqN(o.monto_retencion)>0&&String(o.fecha_pago||"")>=rango.desde&&String(o.fecha_pago||"")<=rango.hasta)
+    .sort((a,b)=>String(a.fecha_pago).localeCompare(String(b.fecha_pago))||String(a.numero).localeCompare(String(b.numero)));
+  for(const o of sel){
+    const cuit=String(o.cuit||"").replace(/\D/g,""),reg=String(o.codigo_sicore||"").replace(/\D/g,""),num=String(o.numero||"").replace(/\D/g,"");
+    const rot=`OP ${o.numero||"s/n"} (${o.proveedor||"s/proveedor"})`;
+    if(cuit.length!==11){avisos.push(`${rot}: CUIT del retenido inválido; no se incluyó.`);continue;}
+    if(!reg||reg.length>3){avisos.push(`${rot}: sin código de régimen de Ganancias; no se incluyó.`);continue;}
+    if(!num){avisos.push(`${rot}: sin número de orden de pago; no se incluyó.`);continue;}
+    const nro=num.slice(-14);
+    lineas.push("06"+_scFecha(o.fecha_pago)+num.slice(-16).padStart(16,"0")+_scDec(o.monto_bruto,16)+"0217"+reg.padStart(3,"0")+"1"+_scDec(o.base_retencion,14)+_scFecha(o.fecha_pago)
+      +"01"+"0"+_scDec(o.monto_retencion,14)+"000,00"+" ".repeat(10)+"80"+cuit.padEnd(20," ")+nro.padStart(14,"0")+" ".repeat(30)+"0"+" ".repeat(22));
+  }
+  if(sel.length&&!avisos.length)avisos.push("Código de condición informado: 01 (inscripto) para todas las retenciones; si algún proveedor es no inscripto, corregirlo en SICORE.");
+  else if(sel.length)avisos.push("Código de condición informado: 01 (inscripto) para todas las retenciones.");
+  return{texto:lineas.length?lineas.join("\r\n")+"\r\n":"",cant:lineas.length,total:_paqR2(sel.reduce((x,o)=>x+_paqN(o.monto_retencion),0)),avisos,rango};
+}
+async function descargarSicoreTxt(){
+  try{
+    await _paqCargar();
+    const st=_paqState,r=buildSicoreTxt({soc:st.soc,mes:st.mes,quinc:st.quinc,ops:ordenesGanancias});
+    if(!r.cant){toast("No hay retenciones de Ganancias pagadas en ese período","err");return;}
+    const informativos=r.avisos.filter(a=>!/^Código de condición/.test(a));
+    if(informativos.length&&!confirm(`Hay ${informativos.length} aviso${informativos.length===1?"":"s"}:\n\n- ${informativos.join("\n- ")}\n\n¿Descargar igual?`))return;
+    const blob=new Blob([_lvLatin1(r.texto)],{type:"text/plain"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`Sicore_${r.rango.desde}_${r.rango.hasta}.txt`;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);
+    toast(`✓ SICORE: ${r.cant} retenciones por ${fmtImp(r.total)}`,"ok");
+  }catch(e){toast("No se pudo generar el TXT de SICORE: "+String(e.message||e).slice(0,140),"err");}
 }
 // ── FIN PAQUETE PARA AUREN ──
 
