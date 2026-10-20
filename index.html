@@ -27233,9 +27233,11 @@ async function renderBalance(){
   const st=_balState;if(!st.hasta)st.hasta=today();if(!st.fecha)st.fecha=balEjercicioDesde(today());
   el.innerHTML=`<div class="fbar" style="margin-bottom:14px">
     <button class="fb${st.sub==="balance"?" on":""}" onclick="_balState.sub='balance';renderBalance()">Balance general</button>
-    <button class="fb${st.sub==="apertura"?" on":""}" onclick="_balState.sub='apertura';renderBalance()">🏁 Cargar apertura</button></div>
+    <button class="fb${st.sub==="apertura"?" on":""}" onclick="_balState.sub='apertura';renderBalance()">🏁 Cargar apertura</button>
+    <button class="fb${st.sub==="guardados"?" on":""}" onclick="_balState.sub='guardados';renderBalance()">📚 Balances guardados</button></div>
     <div id="bal-body"></div>`;
   if(st.sub==="apertura")return renderApertura();
+  if(st.sub==="guardados")return renderBalancesGuardados();
   const body=document.getElementById("bal-body");
   const desde=balEjercicioDesde(st.hasta);
   body.innerHTML=`<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
@@ -27368,6 +27370,25 @@ async function aperGenerar(){
     toast(`✓ Asiento de apertura generado con ${r.lineas.length} cuentas${nuevas.length?` (${nuevas.length} cuenta${nuevas.length===1?"":"s"} nueva${nuevas.length===1?"":"s"})`:""}`,"ok");
     st.sub="balance";renderBalance();
   }catch(e){toast("No se pudo cargar la apertura: "+String(e.message||e).slice(0,160),"err");btn.disabled=false;}
+}
+// Balances de cierre guardados (PDF auditado + cifras principales), uno por sociedad y ejercicio
+async function renderBalancesGuardados(){
+  const body=document.getElementById("bal-body");if(!body)return;
+  body.innerHTML='<div class="loading"><div class="loader"></div></div>';
+  let rows;
+  try{rows=await sb("balances_ejercicio?select=*&order=fecha_cierre.desc,sociedad.asc");}
+  catch(e){body.innerHTML='<div style="font-size:12px;color:var(--tx2);background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:12px 14px">Falta crear la tabla <b>balances_ejercicio</b>: corré <code>sql_balances_ejercicio.sql</code> en Supabase.</div>';return;}
+  if(!rows.length){body.innerHTML='<div style="font-size:12px;color:var(--tx3)">Todavía no hay balances guardados.</div>';return;}
+  const m=n=>n==null?"—":"$"+Number(n).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
+  body.innerHTML=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="border-bottom:2px solid var(--b);text-align:left"><th style="padding:6px 8px">Sociedad</th><th style="padding:6px 8px">Cierre</th><th style="padding:6px 8px;text-align:right">Activo</th><th style="padding:6px 8px;text-align:right">Pasivo</th><th style="padding:6px 8px;text-align:right">Patrimonio neto</th><th style="padding:6px 8px;text-align:right">Resultado</th><th style="padding:6px 8px">Detalle</th></tr></thead><tbody>${rows.map(r=>`<tr style="border-bottom:1px solid var(--b2)"><td style="padding:6px 8px;font-weight:600">${esc(r.sociedad)}</td><td style="padding:6px 8px">${esc(feFechaAR(r.fecha_cierre))}</td><td style="padding:6px 8px;text-align:right">${m(r.activo)}</td><td style="padding:6px 8px;text-align:right">${m(r.pasivo)}</td><td style="padding:6px 8px;text-align:right">${m(r.patrimonio_neto)}</td><td style="padding:6px 8px;text-align:right">${m(r.resultado_ejercicio)}</td><td style="padding:6px 8px;white-space:nowrap">${r.archivo_path?`<button class="btn" onclick="abrirPdfBalance('${esc(r.archivo_path)}')">📄 PDF</button>`:""}</td></tr>${r.notas?`<tr><td colspan="7" style="padding:2px 8px 8px;font-size:11px;color:var(--tx3)">${esc(r.notas)}</td></tr>`:""}`).join("")}</tbody></table></div>`;
+}
+async function abrirPdfBalance(path){
+  try{
+    const r=await fetch(`${SB}/storage/v1/object/sign/balances-ejercicio/${path}`,{method:"POST",headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":"application/json"},body:JSON.stringify({expiresIn:300})});
+    const j=await r.json();
+    if(!r.ok||!j.signedURL)throw new Error(j.message||j.error||"no se pudo firmar el enlace");
+    window.open(`${SB}/storage/v1${j.signedURL}`,"_blank");
+  }catch(e){toast("No se pudo abrir el PDF: "+e.message,"err");}
 }
 // ── FIN APERTURA Y BALANCE GENERAL ──
 
