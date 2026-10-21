@@ -2109,3 +2109,8 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 3. Pantalla «Control contra ARCA» para la demostración a los contadores.
 4. Conciliar remuneraciones con Sueldos, y mejorar el cruce de transferencias y pagos.
 5. Los de antes: enganche de la plataforma (`pago.aprobado` → factura y recibo automáticos), asientos de inversiones, cuenta en dólares, rol `contable`, Libro IVA con las liquidaciones del banco una vez definido el criterio.
+
+### ✓ Revisión masiva de pendientes de ARCA (21 Oct 2026, v111)
+- Comprobantes → **«✓ Revisar pendientes de ARCA»** (`revisarPendientesMasivo`, solo admin): toma los comprobantes `pendiente` importados de ARCA del ejercicio vigente y, tras una **vista previa con confirmación** (por sociedad y mes: cantidad, total e IVA crédito; excluidos por falta de CUIT o total en cero), los pasa a **revisado** y genera el **asiento de devengado** de cada uno (el mismo de «✓ OK»: gasto / IVA crédito fiscal / proveedores; no duplica si ya existe). No toca pagos ni cuenta corriente.
+- Simulado contra la base antes de publicar: 67 comprobantes (POINTERS 58 + SUDES 9), 0 excluidos, 0 asientos desbalanceados, IVA crédito que se suma ≈ $7,31M (incluye la factura de Delec de SUDES, $6,53M).
+- **Libro IVA TXT:** lo que ARCA no detalla (tasas, impuestos, conceptos no gravados) pasa a **exento** (igual que María) en vez de «no integra neto».

@@ -3347,6 +3347,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         Importar ARCA
       </button>
+      <button class="btn sec admin-only-el" onclick="revisarPendientesMasivo()" title="Marca como revisados todos los comprobantes importados de ARCA que están pendientes (genera el asiento de IVA crédito de cada uno), con vista previa">✓ Revisar pendientes de ARCA</button>
       <button class="btn sec admin-only-el" onclick="abrirAnticipo()" title="Pagar a un proveedor que después entrega un recibo (sin factura), por ejemplo la UNT">💸 Pago anticipado</button>
       <button class="btn sec admin-only-el" onclick="abrirAnticiposLista()" title="Pagos anticipados pendientes de recibo">📎 Anticipos<span id="ant-badge" style="margin-left:4px"></span></button>
       <button class="btn sec admin-only-el" onclick="abrirEstadoCuenta()" title="Estado de cuenta de cada proveedor en el ejercicio (con control contra los libros)">📒 Estado de cuenta</button>
@@ -27215,11 +27216,11 @@ function buildLibroIvaTxt({soc,mes,facturas,compras}){
     const pIva=N(c.percepcion_iva)+N(c.percepcion_iva_15),pIibb=N(c.percepcion_iibb),total=N(c.total);
     // Lo que no es neto gravado ni IVA ni percepciones (tasas, impuestos internos, conceptos no gravados) se informa como exento,
     // igual que el Libro IVA que arma María con Finnegans.
-    const ex=_lvR(N(c.neto_exento)+N(c.impuesto_interno)+N(c.otros_impuestos));
+    let ex=_lvR(N(c.neto_exento)+N(c.impuesto_interno)+N(c.otros_impuestos));
     const gravado=n21+n105+n27;
     const resto=_lvR(total-(gravado+(conIva?iva:0)+ex+pIva+pIibb));
     let noIntegra=0;
-    if(resto>0.05)noIntegra=resto;else if(resto<-0.05)avisos.push(`${rotulo}: los importes superan el total en ${Math.abs(resto)}.`);
+    if(resto>0.05)ex=_lvR(ex+resto);else if(resto<-0.05)avisos.push(`${rotulo}: los importes superan el total en ${Math.abs(resto)}.`);
     let recs=[];
     if(conIva){
       let asign=[[21,n21],[10.5,n105],[27,n27]].filter(([,b])=>b>0).map(([p,b])=>({pct:p,base:b,iva:_lvR(b*p/100)}));
@@ -28950,6 +28951,51 @@ async function marcarEstadoComp(id,estado){
       }
     }
   }catch(e){toast("Error","err")}
+}
+
+// ── Revisión masiva de comprobantes importados de ARCA ─────────────────────────────────────────────
+// Equivale a apretar «✓ OK» en cada comprobante pendiente importado de ARCA del ejercicio vigente: lo pasa a «revisado» y genera su asiento de
+// devengado (gasto / IVA crédito fiscal / proveedores, el mismo de marcarEstadoComp). No toca cuenta corriente ni pagos. Con vista previa y confirmación.
+async function revisarPendientesMasivo(){
+  try{
+    const inicio=balEjercicioDesde(today());
+    const pend=await sb(`comprobantes_compra?select=*&estado=eq.pendiente&importado_arca=eq.true&fecha=gte.${inicio}&order=fecha.asc&limit=5000`);
+    if(!pend.length){toast("No hay comprobantes importados de ARCA pendientes de revisar","inf");return;}
+    const N=v=>parseFloat(v)||0;
+    const excluidos=[],listos=[];
+    pend.forEach(c=>{
+      const cuit=String(c.cuit||"").replace(/\D/g,"");
+      if(cuit.length!==11)excluidos.push({c,motivo:"sin CUIT válido"});
+      else if(!(N(c.total)>0))excluidos.push({c,motivo:"total en cero"});
+      else listos.push(c);
+    });
+    const descuadre=listos.filter(c=>Math.abs(N(c.neto_21)+N(c.neto_105)+N(c.neto_27)+N(c.neto_exento)+N(c.iva)+N(c.otros_impuestos)+N(c.percepcion_iva)+N(c.percepcion_iibb)+N(c.impuesto_interno)-N(c.total))>0.05).length;
+    const grupos={};listos.forEach(c=>{const k=`${c.sociedad} ${String(c.fecha_imputacion||c.fecha).slice(0,7)}`;grupos[k]=grupos[k]||{n:0,t:0,iva:0};grupos[k].n++;grupos[k].t+=(c.tipo||"").startsWith("NC")?-N(c.total):N(c.total);grupos[k].iva+=(c.tipo||"").startsWith("NC")?-N(c.iva):N(c.iva);});
+    const resumen=Object.keys(grupos).sort().map(k=>`  ${k}: ${grupos[k].n} comprobantes · total $${Math.round(grupos[k].t).toLocaleString("es-AR")} · IVA crédito $${Math.round(grupos[k].iva).toLocaleString("es-AR")}`).join("\n");
+    const exTxt=excluidos.length?`\n\nQuedan pendientes (revisar a mano):\n${excluidos.slice(0,8).map(x=>`  ${x.c.sociedad} ${x.c.tipo} ${x.c.numero} ${x.c.proveedor||""}: ${x.motivo}`).join("\n")}${excluidos.length>8?"\n  …":""}`:"";
+    if(!confirm(`Se van a marcar como REVISADOS ${listos.length} comprobantes importados de ARCA y se generará el asiento de IVA crédito de cada uno:\n\n${resumen}${descuadre?`\n\n${descuadre} tienen neto + impuestos distinto del total (tasas o conceptos no gravados que ARCA no detalla): el asiento usa total e IVA, no cambia.`:""}${exTxt}\n\n¿Continuar?`))return;
+    const yaTienen=new Set((await sb("asientos_contables?select=origen_id&origen=eq.comprobante&anulado=eq.false&limit=20000")).map(a=>a.origen_id));
+    let ok=0,sinAsiento=0,faltantes=new Set(),errores=0;
+    for(const c of listos){
+      try{
+        await sb(`comprobantes_compra?id=eq.${c.id}`,{method:"PATCH",body:JSON.stringify({estado:"revisado",updated_at:new Date().toISOString()})});
+        if(!yaTienen.has(c.id)){
+          const lineas=_lineasDevengado(c);
+          if(lineas){
+            const desc=`Devengado: ${c.tipo?.startsWith("NC")?"NC":"Fact."} ${c.tipo?.replace("NC-","")||""}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||""}`;
+            const a=await generarAsiento({fecha:c.fecha||today(),sociedad:c.sociedad||"SUDES",tipo:"devengado_compra",origen:"comprobante",origen_id:c.id,descripcion:desc,lineas});
+            if(a&&a._faltantes)a._faltantes.forEach(x=>faltantes.add(x));
+            else if(!a||!a.id)sinAsiento++;
+          }else sinAsiento++;
+        }
+        ok++;
+      }catch(e){errores++;console.warn("revisión masiva:",c.numero,e);}
+    }
+    comprobantes=await sb("comprobantes_compra?select=*&order=fecha.desc,created_at.desc").catch(()=>comprobantes);
+    if(typeof buildCompMesSelect==="function")buildCompMesSelect();
+    renderComprobantes();updateCompStats();updateSideBadges();
+    toast(`✓ ${ok} comprobantes revisados${sinAsiento||errores||faltantes.size?` · ${sinAsiento} sin asiento · ${errores} con error${faltantes.size?" · faltan cuentas: "+[...faltantes].join(", "):""}`:" con su asiento de IVA crédito"}`,sinAsiento||errores||faltantes.size?"err":"ok");
+  }catch(e){toast("No se pudo completar la revisión masiva: "+String(e.message||e).slice(0,140),"err");}
 }
 
 async function marcarImportadoFinnegans(id){
