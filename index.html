@@ -14812,10 +14812,10 @@ function renderExtractoReview(){
   const ars=parsed.movs.filter(m=>m.moneda==="ARS");
   const usd=parsed.movs.filter(m=>m.moneda==="USD");
   const asiento=_extArmarAsiento(parsed.movs,parsed.cuentas,bancoCod,mipyme);
-  const nombreCta=cod=>planCuentas.find(c=>c.codigo===cod)?.nombre||"(cuenta inexistente)";
+  const nombreCta=cod=>getCuenta(cod,sociedad)?.nombre||"(cuenta inexistente)";
   const ok=v=>v===true?`<span style="color:var(--gr)">✓</span>`:v===false?`<span style="color:var(--re)">✗</span>`:`<span style="color:var(--tx3)">—</span>`;
   const bloqueado=parsed.errores.length>0||parsed.cuentas.some(c=>c.moneda==="ARS"&&c.saldoOk===false);
-  const faltan=asiento.lineas.filter(l=>!planCuentas.find(c=>c.codigo===l.codigo)).map(l=>l.codigo);
+  const faltan=asiento.lineas.filter(l=>!getCuenta(l.codigo,sociedad)).map(l=>l.codigo);
   const resumenCat={};
   ars.forEach(m=>{const r=resumenCat[m.categoria]=resumenCat[m.categoria]||{n:0,t:0};r.n++;r.t+=m.importe;});
   const th="padding:5px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--tx3)";
@@ -16044,28 +16044,29 @@ async function autoCrearCuentaContable(medio){
     };
     const cfg=CFG[medio.tipo]||{tipo:"activo",naturaleza:"deudora"};
 
+    const sociedad=medio.sociedad!=="Ambas"?medio.sociedad:null;
+    const delaSoc=c=>!sociedad||!c.sociedad||c.sociedad===sociedad;
     // Buscar cuenta padre: no imputable del mismo tipo con nivel más alto
     const padres=planCuentas
-      .filter(c=>c.tipo===cfg.tipo&&c.activa&&!c.imputable)
+      .filter(c=>c.tipo===cfg.tipo&&c.activa&&!c.imputable&&delaSoc(c))
       .sort((a,b)=>b.nivel-a.nivel);
     const padre=padres[0]||null;
 
     // Código siguiente bajo el padre (o raíz si no hay padre)
     let codigo;
     if(padre){
-      const hijos=planCuentas.filter(c=>c.cuenta_padre_id===padre.id);
+      const hijos=planCuentas.filter(c=>delaSoc(c)&&c.codigo.startsWith(padre.codigo+".")&&c.codigo.split(".").length===padre.codigo.split(".").length+1);
       const nums=hijos.map(c=>parseInt(c.codigo.split(".").pop())||0);
       const next=nums.length?Math.max(...nums)+1:1;
       codigo=`${padre.codigo}.${next}`;
     }else{
-      const raices=planCuentas.filter(c=>c.tipo===cfg.tipo&&!c.cuenta_padre_id);
+      const raices=planCuentas.filter(c=>c.tipo===cfg.tipo&&!c.cuenta_padre_id&&delaSoc(c));
       const nums=raices.map(c=>parseInt(c.codigo.split(".")[0])||0);
       const next=nums.length?Math.max(...nums)+1:(cfg.tipo==="activo"?1:2);
       codigo=`${next}`;
     }
 
     const nombre=[medio.banco,medio.nombre].filter(Boolean).join(" — ");
-    const sociedad=medio.sociedad!=="Ambas"?medio.sociedad:null;
     const data={
       codigo,nombre,
       tipo:cfg.tipo,naturaleza:cfg.naturaleza,
@@ -20389,18 +20390,18 @@ function _mcfNaturaleza(tipo){return["activo","egreso"].includes(tipo)?"deudora"
 // del padre inmediato -- antes se buscaba el padre directo y, si no existía (porque
 // ningún nivel intermedio se había creado todavía), la cuenta nueva quedaba con
 // cuenta_padre_id null: huérfana, rompe la jerarquía y los subtotales del plan.
-async function _mcfAsegurarPadres(parentCodigo,tipo){
+async function _mcfAsegurarPadres(parentCodigo,tipo,soc){
   if(!parentCodigo)return null;
   const partes=parentCodigo.split(".");
   let padreId=null;
   for(let i=1;i<=partes.length;i++){
     const codigoNivel=partes.slice(0,i).join(".");
-    let cuenta=planCuentas.find(c=>c.codigo===codigoNivel);
+    let cuenta=getCuenta(codigoNivel,soc);
     if(!cuenta){
       const naturaleza=_mcfNaturaleza(tipo);
       const[nueva]=await sb("plan_cuentas",{method:"POST",body:JSON.stringify({
         codigo:codigoNivel,nombre:`Grupo ${codigoNivel}`,tipo,nivel:i,
-        imputable:false,activa:true,naturaleza,cuenta_padre_id:padreId,
+        imputable:false,activa:true,naturaleza,cuenta_padre_id:padreId,sociedad:soc||null,
       })});
       if(!nueva)throw new Error(`no se pudo crear el nivel ${codigoNivel}`);
       planCuentas.push(nueva);
@@ -20413,7 +20414,7 @@ async function _mcfAsegurarPadres(parentCodigo,tipo){
 function mcfAbrir(faltantes,asientoData){
   _pendingAsientoData={...asientoData,_faltantes:faltantes};
   const lista=document.getElementById("mcf-lista");
-  const existentes=planCuentas.filter(c=>c.activa&&c.imputable).sort((a,b)=>a.codigo.localeCompare(b.codigo));
+  const existentes=planDeSociedad(asientoData?.sociedad).filter(c=>c.activa&&c.imputable).sort((a,b)=>a.codigo.localeCompare(b.codigo));
   lista.innerHTML=faltantes.map(codigo=>{
     const meta=_MCF_META[codigo]||{};
     const tipoSug=meta.tipo||_mcfTipoByCode(codigo);
@@ -20470,9 +20471,10 @@ async function mcfConfirmar(){
         const naturaleza=_mcfNaturaleza(tipo);
         const parentCodigo=codigo.split(".").slice(0,-1).join(".");
         let padreId=null;
-        try{ padreId=await _mcfAsegurarPadres(parentCodigo,tipo); }
+        const socAs=_pendingAsientoData.sociedad||null;
+        try{ padreId=await _mcfAsegurarPadres(parentCodigo,tipo,socAs); }
         catch(e){ toast(`Error creando jerarquía para ${codigo}: ${e.message}`,"err"); return; }
-        const[nueva]=await sb("plan_cuentas",{method:"POST",body:JSON.stringify({codigo,nombre,tipo,nivel,imputable:true,activa:true,naturaleza,cuenta_padre_id:padreId})});
+        const[nueva]=await sb("plan_cuentas",{method:"POST",body:JSON.stringify({codigo,nombre,tipo,nivel,imputable:true,activa:true,naturaleza,cuenta_padre_id:padreId,sociedad:socAs})});
         if(nueva){planCuentas.push(nueva);codigoMap[codigo]=codigo;}
         else{toast(`Error creando cuenta ${codigo}`,"err");return;}
       }
@@ -26470,7 +26472,8 @@ function renderPlanCuentas(){
   if(!el)return;
   const tipoColor={activo:"#3B82F6",pasivo:"#EF4444",patrimonio_neto:"#8B5CF6",ingreso:"#10B981",egreso:"#F59E0B"};
   const tipoLabel={activo:"Activo",pasivo:"Pasivo",patrimonio_neto:"PN",ingreso:"Ingreso",egreso:"Egreso"};
-  const sorted=[...planCuentas].sort((a,b)=>a.codigo.localeCompare(b.codigo,undefined,{numeric:true}));
+  const visibles=planDeSociedad(_planSoc);
+  const sorted=[...visibles].sort((a,b)=>a.codigo.localeCompare(b.codigo,undefined,{numeric:true}));
   const rows=sorted.map(c=>{
     const pad=(c.nivel-1)*16;
     const tc=tipoColor[c.tipo]||"#888";
@@ -26491,7 +26494,9 @@ function renderPlanCuentas(){
   }).join("");
   el.innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <div style="font-size:13px;color:var(--tx2)">📋 <strong>${planCuentas.length}</strong> cuentas — ${planCuentas.filter(c=>c.imputable&&c.activa).length} imputables activas</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)">
+        <select class="fi mini-sel" style="width:120px" onchange="_planSoc=this.value;renderPlanCuentas()"><option value="SUDES"${_planSoc==="SUDES"?" selected":""}>SUDES</option><option value="POINTERS"${_planSoc==="POINTERS"?" selected":""}>POINTERS</option></select>
+        <span>📋 <strong>${visibles.length}</strong> cuentas — ${visibles.filter(c=>c.imputable&&c.activa).length} imputables activas</span></div>
       <button class="btn sm ok" onclick="addPlanCuenta()">+ Nueva cuenta</button>
     </div>
     <div style="background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.2);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--tx2)">
@@ -26513,8 +26518,9 @@ function renderPlanCuentas(){
     </table></div>`}`;
 }
 
-function _buildPadreOptions(excludeId){
-  const sorted=[...planCuentas].sort((a,b)=>a.codigo.localeCompare(b.codigo,undefined,{numeric:true}));
+let _planSoc="SUDES";
+function _buildPadreOptions(excludeId,soc){
+  const sorted=[...planDeSociedad(soc||_planSoc)].sort((a,b)=>a.codigo.localeCompare(b.codigo,undefined,{numeric:true}));
   return `<option value="">— Sin padre (nivel raíz) —</option>`+
     sorted.filter(c=>!c.imputable&&c.id!==excludeId)
       .map(c=>`<option value="${c.id}">${c.codigo} — ${esc(c.nombre)}</option>`).join("");
@@ -26524,9 +26530,9 @@ function addPlanCuenta(){
   ["pc-id","pc-codigo","pc-nombre","pc-nivel"].forEach(id=>{const e=document.getElementById(id);if(e)e.value=""});
   document.getElementById("pc-tipo").value="activo";
   document.getElementById("pc-naturaleza").value="deudora";
-  document.getElementById("pc-sociedad").value="";
+  document.getElementById("pc-sociedad").value=_planSoc;
   document.getElementById("pc-imputable").checked=false;
-  document.getElementById("pc-padre").innerHTML=_buildPadreOptions(null);
+  document.getElementById("pc-padre").innerHTML=_buildPadreOptions(null,_planSoc);
   document.getElementById("modal-pc-title").textContent="Nueva cuenta";
   openModal("modal-plan-cuenta");
 }
@@ -26541,7 +26547,7 @@ function editPlanCuenta(id){
   document.getElementById("pc-naturaleza").value=c.naturaleza;
   document.getElementById("pc-sociedad").value=c.sociedad||"";
   document.getElementById("pc-imputable").checked=!!c.imputable;
-  document.getElementById("pc-padre").innerHTML=_buildPadreOptions(id);
+  document.getElementById("pc-padre").innerHTML=_buildPadreOptions(id,c.sociedad||_planSoc);
   if(c.cuenta_padre_id)document.getElementById("pc-padre").value=c.cuenta_padre_id;
   document.getElementById("modal-pc-title").textContent="Editar cuenta";
   openModal("modal-plan-cuenta");
@@ -26934,8 +26940,18 @@ async function _erCargar(){
 }
 
 // ── ASIENTOS CONTABLES — helpers ────────────────────────────────────
-function getCuentaId(codigo){
-  return planCuentas.find(x=>x.codigo===codigo&&x.activa)?.id||null;
+// Plan de cuentas propio por sociedad: la cuenta de la sociedad tiene prioridad; una cuenta sin sociedad (plan compartido de antes) sirve a las dos.
+function getCuenta(codigo,soc){
+  const lista=planCuentas.filter(x=>x.codigo===codigo&&x.activa);
+  return(soc&&lista.find(x=>x.sociedad===soc))||lista.find(x=>!x.sociedad)||null;
+}
+// Cuentas que ve una sociedad: las propias más las compartidas que no tengan una propia con el mismo código
+function planDeSociedad(soc){
+  const propias=planCuentas.filter(c=>c.sociedad===soc),cods=new Set(propias.map(c=>c.codigo));
+  return propias.concat(planCuentas.filter(c=>!c.sociedad&&!cods.has(c.codigo)));
+}
+function getCuentaId(codigo,soc){
+  return getCuenta(codigo,soc)?.id||null;
 }
 function getBancoCodigoPorMedio(medio,sociedad){
   if(mediosPago.find(m=>m.nombre===medio)?.tipo==="echeq")return ECHEQ_CUENTA_PEND;
@@ -26962,9 +26978,9 @@ async function generarAsiento({fecha,sociedad,tipo,origen,origen_id,descripcion,
   const totalD=Math.round(lineas.reduce((s,l)=>s+(l.debe||0),0)*100)/100;
   const totalH=Math.round(lineas.reduce((s,l)=>s+(l.haber||0),0)*100)/100;
   if(Math.abs(totalD-totalH)>0.02){console.warn("Asiento desbalanceado",totalD,totalH);return null;}
-  const faltantes=lineas.filter(l=>!getCuentaId(l.codigo)).map(l=>l.codigo);
+  const faltantes=lineas.filter(l=>!getCuentaId(l.codigo,sociedad)).map(l=>l.codigo);
   if(faltantes.length){console.warn("generarAsiento: cuentas no encontradas",faltantes);return{_faltantes:faltantes};}
-  const movs=lineas.map(l=>({cuenta_id:getCuentaId(l.codigo),debe:l.debe||0,haber:l.haber||0,descripcion:l.desc||null}));
+  const movs=lineas.map(l=>({cuenta_id:getCuentaId(l.codigo,sociedad),debe:l.debe||0,haber:l.haber||0,descripcion:l.desc||null}));
   if(movs.length<2)return null;
   const[asiento]=await sb("asientos_contables",{method:"POST",body:JSON.stringify({
     fecha,sociedad,tipo,origen,origen_id,descripcion,creado_por:loggedUser?.nombre||null
@@ -27463,8 +27479,9 @@ async function aperLeerArchivo(inp){
     if(typeof XLSX==="undefined"){await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
     const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:""});
-    const r=aperParsear(rows),plan=await _balCargarPlan();
-    _balState.apertura={filas:r.filas.map(f=>({...f,dest:aperSugerir(f,plan),nuevo:null})),modo:r.modo,archivo:file.name};
+    const r=aperParsear(rows);await _balCargarPlan();
+    const planSoc=planDeSociedad(_balState.soc);
+    _balState.apertura={filas:r.filas.map(f=>({...f,dest:aperSugerir(f,planSoc),nuevo:null})),modo:r.modo,archivo:file.name};
     _balState.invertir=false;
     aperRenderMapeo();
   }catch(e){prev.innerHTML=`<div style="color:var(--re);font-size:12px">✗ ${esc(String(e.message||e))}</div>`;}
@@ -27480,7 +27497,7 @@ function aperResumen(){
 }
 function aperRenderMapeo(){
   const ap=_balState.apertura,prev=document.getElementById("apr-prev");if(!ap||!prev)return;
-  const plan=_balState.plan,imp=plan.filter(c=>c.imputable&&c.activa!==false).sort((a,b)=>a.codigo.localeCompare(b.codigo,"es",{numeric:true}));
+  const plan=planDeSociedad(_balState.soc),imp=plan.filter(c=>c.imputable&&c.activa!==false).sort((a,b)=>a.codigo.localeCompare(b.codigo,"es",{numeric:true}));
   const opts=(sel)=>`<option value="">— elegir cuenta —</option><option value="__omitir"${sel==="__omitir"?" selected":""}>— omitir (no se carga) —</option><option value="__nueva"${sel==="__nueva"?" selected":""}>➕ Crear cuenta nueva…</option>`+["activo","pasivo","patrimonio_neto"].map(t=>`<optgroup label="${_balTipoNombre[t]}">${imp.filter(c=>c.tipo===t).map(c=>`<option value="${esc(c.codigo)}"${sel===c.codigo?" selected":""}>${esc(c.codigo)} — ${esc(c.nombre)}</option>`).join("")}</optgroup>`).join("");
   const sig=_balState.invertir?-1:1;
   const filasHTML=ap.filas.map((f,i)=>`<tr style="border-top:1px solid var(--b)"><td style="padding:6px 8px"><span style="font-family:monospace;color:var(--tx3)">${esc(f.cod)}</span> ${esc(f.nombre)}</td>
@@ -27500,7 +27517,7 @@ function aperTotalesHTML(r){
   return`Debe ${_balM(r.debe)} · Haber ${_balM(r.haber)} · <b style="color:${Math.abs(r.diferencia)<0.5?"var(--gr)":"var(--re)"}">diferencia ${_balM(r.diferencia)}</b>${r.sinMapear?` · <span style="color:var(--am,#F59E0B)">faltan elegir ${r.sinMapear} cuenta${r.sinMapear===1?"":"s"}</span>`:""}${r.omitidas?` · ${r.omitidas} omitida${r.omitidas===1?"":"s"}`:""}${ok?" · <span style=\"color:var(--gr)\">listo para generar</span>":""}`;
 }
 function aperNuevaHTML(i,f){
-  const plan=_balState.plan,n=f.nuevo||{nombre:f.nombre,tipo:f.saldo>0?"activo":"pasivo",grupo:""};
+  const plan=planDeSociedad(_balState.soc),n=f.nuevo||{nombre:f.nombre,tipo:f.saldo>0?"activo":"pasivo",grupo:""};
   const grupos=plan.filter(c=>!c.imputable&&c.nivel===3&&c.tipo===n.tipo&&c.activa!==false).sort((a,b)=>a.codigo.localeCompare(b.codigo,"es",{numeric:true}));
   if(!f.nuevo)f.nuevo={nombre:n.nombre,tipo:n.tipo,grupo:grupos[0]?grupos[0].codigo:"",codigo:""};
   if(!f.nuevo.grupo&&grupos[0])f.nuevo.grupo=grupos[0].codigo;
@@ -27527,9 +27544,9 @@ async function aperGenerar(){
     // cuentas nuevas
     const nuevas=ap.filas.filter(f=>f.dest==="__nueva"&&f.nuevo);
     for(const f of nuevas){
-      const n=f.nuevo,padre=st.plan.find(c=>c.codigo===n.grupo);
-      n.codigo=aperProximoCodigo(n.grupo,st.plan);
-      const [c]=await sb("plan_cuentas",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({codigo:n.codigo,nombre:n.nombre.trim(),tipo:n.tipo,naturaleza:n.tipo==="activo"?"deudora":"acreedora",cuenta_padre_id:padre?padre.id:null,nivel:4,imputable:true,activa:true})});
+      const n=f.nuevo,padre=getCuenta(n.grupo,st.soc);
+      n.codigo=aperProximoCodigo(n.grupo,planDeSociedad(st.soc));
+      const [c]=await sb("plan_cuentas",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({codigo:n.codigo,nombre:n.nombre.trim(),tipo:n.tipo,naturaleza:n.tipo==="activo"?"deudora":"acreedora",cuenta_padre_id:padre?padre.id:null,nivel:4,imputable:true,activa:true,sociedad:st.soc})});
       st.plan.push(c);if(typeof planCuentas!=="undefined")planCuentas=st.plan;
     }
     const rFinal=aperResumen();   // ahora las cuentas nuevas ya tienen su código real
@@ -30455,7 +30472,7 @@ async function abrirReciboAnticipo(id){
   document.getElementById("rec-ant-numero").value="";
   document.getElementById("rec-ant-fecha").value=today();
   document.getElementById("rec-ant-monto").value=saldo;
-  const gastos=planCuentas.filter(c=>c.imputable&&/^5\./.test(c.codigo));
+  const gastos=planDeSociedad(a.sociedad).filter(c=>c.imputable&&c.activa&&/^5\./.test(c.codigo)).sort((x,y)=>x.codigo.localeCompare(y.codigo));
   document.getElementById("rec-ant-cuenta").innerHTML=gastos.map(c=>`<option value="${c.codigo}"${c.codigo==="5.2.01.001"?" selected":""}>${c.codigo} — ${esc(c.nombre)}</option>`).join("");
   openModal("modal-recibo-ant");
 }
