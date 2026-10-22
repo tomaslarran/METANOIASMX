@@ -16677,6 +16677,7 @@ async function saveCajaMovimiento(){
       document.getElementById("caja-form-concepto").value="";
       document.getElementById("caja-form-obs").value="";
       toast("Transferencia registrada","ok");
+      invSyncAsientos(true);
       renderCaja();
     }catch(e){toast("Error: "+e.message,"err");}
     return;
@@ -19606,6 +19607,7 @@ async function confirmarAgregarCapital(){
     if(idx>=0)cfInversiones[idx]={...cfInversiones[idx],...patch};
 
     toast(reactiva?"Reinversión registrada: la inversión vuelve a estar activa ✓":"Capital agregado ✓","ok");
+    invSyncAsientos(true);
     closeModal("modal-agregar-capital");
     renderCFInversiones();
     if(curPage==="graficos")renderFinanciero();
@@ -19705,6 +19707,7 @@ async function saveRescate(){
     if(idx>=0)cfInversiones[idx]={...cfInversiones[idx],...patch};
 
     toast(tipo==="total"?"Inversión rescatada ✓":"Rescate parcial registrado ✓","ok");
+    invSyncAsientos(true);
     closeModal("modal-cf-rescate");
     renderCFInversiones();
     if(tipo==="total"&&reinvertir)openAgregarCapital(id,monto);
@@ -26825,6 +26828,43 @@ async function togglePlanCuenta(id,activa){
 }
 
 // ── BACKFILL ASIENTOS HISTÓRICOS ────────────────────────────────────
+// ── Asientos de inversiones (aportes y rescates) ──
+// Cada movimiento de cf_inversiones_movimientos desde INV_ASIENTOS_DESDE de una inversión de SUDES o POINTERS genera su asiento (origen «inversion_mov»):
+// aporte = Debe Inversiones / Haber banco o caja; rescate = Debe banco o caja / Haber Inversiones (por el importe movido; el rendimiento se reconoce aparte, al valuar la cartera).
+// No genera asiento para: cobros depositados en un fondo (los asienta el cobro), el rescate en Echeq que se entregó a Delec (asentado como préstamo) ni los rescates en eCheck (se revisan a mano). Es idempotente.
+// Los movimientos de julio a septiembre NO se asientan solos: tienen cheques depositados y aportes contados dos veces y se concilian contra el extracto del fondo (Rosario Valores). Desde esta fecha en adelante sí.
+const INV_ASIENTOS_DESDE="2026-10-01";
+let _invSyncT=0;
+async function invSyncAsientos(silencioso){
+  if(Date.now()-_invSyncT<3000)return{generados:0};_invSyncT=Date.now();
+  const INICIO=INV_ASIENTOS_DESDE,r2=n=>Math.round(n*100)/100;
+  try{
+    if(!planCuentas.length)planCuentas=await sb("plan_cuentas?select=*&order=codigo").catch(()=>[]);
+    const [invs,movs,ya]=await Promise.all([
+      sb("cf_inversiones?select=id,nombre,sociedad&limit=1000"),
+      sb(`cf_inversiones_movimientos?select=*&fecha=gte.${INICIO}&order=fecha.asc&limit=5000`),
+      sb("asientos_contables?select=origen_id&origen=eq.inversion_mov&anulado=eq.false&limit=20000")]);
+    const I={};invs.forEach(i=>I[i.id]=i);const hechos=new Set(ya.map(a=>a.origen_id));
+    let gen=0,revisar=0;const faltan=new Set();
+    for(const m of movs){
+      const inv=I[m.inversion_id];if(!inv||!["SUDES","POINTERS"].includes(inv.sociedad)||hechos.has(m.id))continue;
+      const notas=String(m.notas||"");
+      if(/^Cobro:/i.test(notas)||/delec/i.test(notas))continue;
+      if(m.medio_pago==="eCheck"){revisar++;continue;}
+      const monto=r2(Math.abs(parseFloat(m.monto)||0));if(!(monto>0))continue;
+      const soc=inv.sociedad,aporte=m.tipo==="Aporte de capital";
+      const contra=m.medio_pago==="Efectivo"?"1.1.01.001":getBancoCodigoPorMedio("CTA CTE MACRO "+soc,soc);
+      const lineas=aporte?[{codigo:"1.1.04.001",debe:monto,desc:"Aporte a inversión"},{codigo:contra,haber:monto,desc:"Fondos enviados a la inversión"}]
+                         :[{codigo:contra,debe:monto,desc:"Fondos recibidos del rescate"},{codigo:"1.1.04.001",haber:monto,desc:"Rescate de inversión"}];
+      const a=await generarAsiento({fecha:m.fecha,sociedad:soc,tipo:"ajuste",origen:"inversion_mov",origen_id:m.id,descripcion:`${m.tipo}: ${inv.nombre}`,lineas});
+      if(a&&a._faltantes)a._faltantes.forEach(x=>faltan.add(x));else if(a&&a.id)gen++;
+    }
+    if(!silencioso||gen)toast(gen?`✓ ${gen} movimiento${gen===1?"":"s"} de inversiones asentado${gen===1?"":"s"}${revisar?` · ${revisar} rescate${revisar===1?"":"s"} en eCheck para revisar a mano`:""}`:`Inversiones: nada para asentar${revisar?` (${revisar} rescate${revisar===1?"":"s"} en eCheck para revisar a mano)`:""}`,"ok");
+    if(faltan.size)toast("Inversiones: faltan cuentas en el plan: "+[...faltan].join(", "),"err");
+    return{generados:gen,revisar};
+  }catch(e){if(!silencioso)toast("No se pudieron asentar las inversiones: "+String(e.message||e).slice(0,120),"err");return{generados:0,error:e};}
+}
+
 async function backfillAsientos(){
   if(!confirm("Esto va a generar asientos contables para comprobantes, cuotas de préstamos y sueldos que no tengan asiento aún.\n¿Continuar?"))return;
   const btn=document.getElementById("ld-backfill-btn");
@@ -26927,6 +26967,7 @@ async function backfillAsientos(){
         <div style="font-size:12px;color:var(--tx3)">${gen} asiento${gen!==1?"s":""} generado${gen!==1?"s":""} correctamente.</div>`;
       toast(`${gen} generados · ${errores.length} con error — ver detalle abajo`,"err");
     }else{
+      await invSyncAsientos(true);
       toast(`✅ ${gen} asientos generados correctamente`,gen>0?"ok":"inf");
       renderLibroDiario();
     }
