@@ -21915,7 +21915,7 @@ function feRender(){
       <td style="padding:8px 10px;font-size:11px;font-family:monospace;color:var(--tx3)">${f.cae?esc(f.cae)+`<div>vto ${esc(feFechaAR(f.cae_vto))}</div>`:"—"}</td>
       <td style="padding:8px 10px"><span style="font-size:10px;font-weight:700;color:${col};border:1px solid ${col};border-radius:8px;padding:1px 7px">${esc(lbl)}</span></td>
       <td style="padding:8px 10px;font-size:11px;white-space:nowrap">${feCobroCelda(f)}</td>
-      <td style="padding:8px 10px;white-space:nowrap">${f.estado==="autorizada"?`<button class="btn sm" style="font-size:10px;padding:2px 7px" onclick="feDescargarPDF('${f.id}')">📄 PDF</button> `:""}${(feSaldoCobro(f)||0)>0.01?`<button class="btn sm" style="font-size:10px;padding:2px 7px" title="Contabilizar un cobro de esta factura" onclick="feCobroAbrir('${f.id}')">🧮 Cobro</button> `:""}<button class="btn sm" style="font-size:10px;padding:2px 7px" onclick="feVerDetalle('${f.id}')">ℹ️</button></td></tr>`;}).join("")}
+      <td style="padding:8px 10px;white-space:nowrap">${f.estado==="autorizada"?`<button class="btn sm" style="font-size:10px;padding:2px 7px" onclick="feDescargarPDF('${f.id}')">📄 PDF</button> <button class="btn sm" style="font-size:10px;padding:2px 7px" title="Enviar por mail al cliente (con copia interna)" onclick="feMail('${f.id}')">✉️</button> `:""}${(feSaldoCobro(f)||0)>0.01?`<button class="btn sm" style="font-size:10px;padding:2px 7px" title="Contabilizar un cobro de esta factura" onclick="feCobroAbrir('${f.id}')">🧮 Cobro</button> `:""}<button class="btn sm" style="font-size:10px;padding:2px 7px" onclick="feVerDetalle('${f.id}')">ℹ️</button></td></tr>`;}).join("")}
     </tbody></table></div>`;
 }
 
@@ -21965,6 +21965,10 @@ function feAbrirEmitir(){
         <div class="fg"><label class="fl">Razón social / nombre *</label><input class="fi" id="fe-nombre"></div>
         <div class="fg"><label class="fl">Condición frente al IVA *</label><select class="fi" id="fe-cond"></select></div>
       </div>
+      <div class="fgrid">
+        <div class="fg"><label class="fl">Email del cliente (para enviarle la factura)</label><input class="fi" id="fe-email" type="email" placeholder="cliente@empresa.com"></div>
+        <label style="font-size:12px;color:var(--tx2);align-self:end;padding-bottom:8px"><input type="checkbox" id="fe-enviar" checked> Enviar por mail al emitir (con copia interna)</label>
+      </div>
       <label id="fe-cf-wrap" style="display:none;font-size:12px;color:var(--tx2);margin:4px 0 8px"><input type="checkbox" id="fe-cf" onchange="feCFCambio()"> Consumidor final sin identificar (sin CUIT)</label>
       <div id="fe-asoc" style="display:none;margin:6px 0;padding:10px;border:1px dashed var(--b2);border-radius:8px">
         <div style="font-size:11px;font-weight:700;color:var(--tx3);margin-bottom:6px">COMPROBANTE QUE SE ANULA / MODIFICA *</div>
@@ -21982,7 +21986,8 @@ function feAbrirEmitir(){
     document.body.appendChild(d);
   }
   document.getElementById("fe-fecha").value=today();
-  ["fe-ref","fe-cuit","fe-nombre","fe-cli-q","fe-asoc-pv","fe-asoc-nro","fe-asoc-fecha"].forEach(id=>{document.getElementById(id).value="";});
+  ["fe-ref","fe-cuit","fe-nombre","fe-email","fe-cli-q","fe-asoc-pv","fe-asoc-nro","fe-asoc-fecha"].forEach(id=>{document.getElementById(id).value="";});
+  document.getElementById("fe-enviar").checked=true;
   document.getElementById("fe-tipo").value="1";document.getElementById("fe-concepto").value="2";
   const cf=document.getElementById("fe-cf");cf.checked=false;
   const act=feConfig.find(c=>c.activo);if(act)document.getElementById("fe-soc").value=act.sociedad;
@@ -22027,22 +22032,24 @@ async function feCargarListas(){
   feRenderListaProductos();
   if(feClientes.length&&Date.now()-_feClientesT<300000){feRenderListaClientes();return;}
   const m=new Map();
-  const add=(cuit,nombre,cond,origen)=>{
+  const add=(cuit,nombre,cond,origen,email)=>{
     const d=String(cuit||"").replace(/\D/g,"");nombre=String(nombre||"").trim();
     if(d.length!==11||!nombre)return;
     const x=m.get(d);
-    if(!x)m.set(d,{cuit:d,nombre,cond:cond||null,origen});else if(cond&&!x.cond)x.cond=cond;
+    if(!x)m.set(d,{cuit:d,nombre,cond:cond||null,origen,email:email||""});else{if(cond&&!x.cond)x.cond=cond;if(email&&!x.email)x.email=email;}
   };
   const q=p=>sb(p).catch(()=>[]);
-  const [fe,el,pr,al]=await Promise.all([
+  const [fe,el,pr,al,fm]=await Promise.all([
     q("facturas_emitidas?select=receptor_doc_nro,receptor_nombre,receptor_cond_iva_id&order=fecha.desc&limit=500"),
-    q("elearning_clientes?select=cuit,nombre_completo,razon_social,condicion_fiscal&limit=2000"),
-    q("proveedores?select=nombre,cuit,condicion_iva&limit=2000"),
-    q("alumnos?select=nombre,apellido,cuit&limit=3000")]);
-  (fe||[]).forEach(f=>add(f.receptor_doc_nro,f.receptor_nombre,f.receptor_cond_iva_id,"facturado antes"));
-  (el||[]).forEach(c=>add(c.cuit,c.razon_social||c.nombre_completo,feCondDeFiscal(c.condicion_fiscal),"plataforma"));
-  (pr||[]).forEach(p=>add(p.cuit,p.nombre,{responsable_inscripto:1,monotributo:6,exento:4}[p.condicion_iva]||null,"proveedor"));
-  (al||[]).forEach(a=>add(a.cuit,`${a.apellido||""} ${a.nombre||""}`,null,"alumno"));
+    q("elearning_clientes?select=cuit,nombre_completo,razon_social,condicion_fiscal,email&limit=2000"),
+    q("proveedores?select=nombre,cuit,condicion_iva,email&limit=2000"),
+    q("alumnos?select=nombre,apellido,cuit,email&limit=3000"),
+    q("facturas_emitidas?select=receptor_doc_nro,receptor_email&receptor_email=not.is.null&order=fecha.desc&limit=500")]);   // la columna receptor_email existe tras correr sql_factura_email.sql
+  const mailPrevio={};(fm||[]).forEach(f=>{const d=String(f.receptor_doc_nro||"").replace(/\D/g,"");if(d&&f.receptor_email&&!mailPrevio[d])mailPrevio[d]=f.receptor_email;});
+  (fe||[]).forEach(f=>add(f.receptor_doc_nro,f.receptor_nombre,f.receptor_cond_iva_id,"facturado antes",mailPrevio[String(f.receptor_doc_nro||"").replace(/\D/g,"")]));
+  (el||[]).forEach(c=>add(c.cuit,c.razon_social||c.nombre_completo,feCondDeFiscal(c.condicion_fiscal),"plataforma",mailPrevio[String(c.cuit||"").replace(/\D/g,"")]||c.email));
+  (pr||[]).forEach(p=>add(p.cuit,p.nombre,{responsable_inscripto:1,monotributo:6,exento:4}[p.condicion_iva]||null,"proveedor",mailPrevio[String(p.cuit||"").replace(/\D/g,"")]||p.email));
+  (al||[]).forEach(a=>add(a.cuit,`${a.apellido||""} ${a.nombre||""}`,null,"alumno",mailPrevio[String(a.cuit||"").replace(/\D/g,"")]||a.email));
   feClientes=[...m.values()].sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"));
   _feClientesT=Date.now();
   feRenderListaClientes();
@@ -22060,6 +22067,7 @@ function feRenderListaProductos(){
 function _feAplicarCliente(c){
   document.getElementById("fe-cuit").value=_feFmtCuit(c.cuit);
   document.getElementById("fe-nombre").value=c.nombre;
+  if(c.email)document.getElementById("fe-email").value=c.email;
   const sel=document.getElementById("fe-cond");
   if(c.cond&&[...sel.options].some(o=>Number(o.value)===Number(c.cond)))sel.value=String(c.cond);
   feAsocRefrescar();
@@ -22773,6 +22781,8 @@ async function feEmitir(){
     if(!pv||!nro){toast("Indicá el comprobante que se anula (punto de venta y número)","err");return;}
     body.comprobante_asociado={tipo:Number(v("fe-asoc-tipo")),pto_vta:pv,numero:nro,fecha:v("fe-asoc-fecha")||undefined};
   }
+  const emailCli=v("fe-email"),enviar=document.getElementById("fe-enviar").checked;
+  if(enviar&&emailCli&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailCli)){toast("El email del cliente no es válido","err");return;}
   const prod=cfg.ambiente==="produccion";
   if(!confirm(`¿Emitir ${FE_TIPOS[tipo]} por ${feM(t.total)} a ${v("fe-nombre")}?\n\n`+(prod?"ESTÁS EN PRODUCCIÓN: el comprobante tiene validez fiscal y no se puede borrar (solo se anula con una nota de crédito).":"Ambiente de PRUEBA: el comprobante no tiene validez fiscal.")))return;
   if(prod)body.confirmar_produccion=true;
@@ -22786,8 +22796,42 @@ async function feEmitir(){
     if(d.factura&&d.factura.ambiente==="produccion"){const r=await feAsientoVenta(d.factura).catch(()=>({ok:false}));if(r.faltantes)toast(`No se generó el asiento de la venta: faltan las cuentas ${r.faltantes.join(", ")}`,"err");}
     await loadFacturasEmitidas();
     feDescargarPDF(d.factura.id,d.factura);
+    if(emailCli)feGuardarEmail(d.factura.id,emailCli);
+    if(enviar&&emailCli)feEnviarMail(d.factura,emailCli);
+    else if(enviar)toast("ℹ️ No cargaste el email del cliente: la factura no se envió por mail (podés enviarla con ✉️ desde el listado)","inf");
   }catch(e){toast("No se pudo emitir: "+String(e.message||e).slice(0,200),"err");}
   finally{btn.disabled=false;btn.textContent="Emitir con ARCA";}
+}
+
+// ── Envío por mail (PDF adjunto, con copia interna) ──
+async function feGuardarEmail(id,email){
+  try{await sb(`facturas_emitidas?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({receptor_email:email})});const f=feFacturas.find(x=>x.id===id);if(f)f.receptor_email=email;}catch(_){/* falta correr sql_factura_email.sql: no es grave */}
+}
+async function feEnviarMail(f,email){
+  try{
+    if(f.estado!=="autorizada"){toast("Solo se pueden enviar comprobantes autorizados","err");return false;}
+    const doc=await feGenerarPDF(f);
+    const fiscal=(await getFiscalSociedad(f.sociedad))||{};
+    const res=await fetchEdge("enviar-factura",{email,sociedad:f.sociedad,razon_social:fiscal.razon_social||f.sociedad,tipo:FE_TIPOS[f.cbte_tipo]||"Comprobante",numero:feNum(f),
+      receptor:f.receptor_nombre,total:f.total,fecha:f.fecha,cae:f.cae,cae_vto:f.cae_vto,es_nc:FE_ES_NC(f.cbte_tipo),prueba:f.ambiente==="homologacion",pdf_base64:doc.output("datauristring")});
+    const d=await res.json().catch(()=>({}));
+    if(!res.ok||d.error)throw new Error(d.error||("HTTP "+res.status));
+    toast(`✉️ ${FE_TIPOS[f.cbte_tipo]||"Comprobante"} ${feNum(f)} enviada a ${email}${d.copia?" · copia a "+d.copia:""}`,"ok");
+    return true;
+  }catch(e){
+    const m=String(e.message||e);
+    toast("No se pudo enviar el mail: "+(/Failed to fetch|NetworkError/i.test(m)?"la función enviar-factura no responde (¿falta deployarla en Supabase?). La factura quedó emitida.":m.slice(0,160)),"err");
+    return false;
+  }
+}
+async function feMail(id){
+  const f=feFacturas.find(x=>x.id===id);if(!f)return;
+  const dig=String(f.receptor_doc_nro||"").replace(/\D/g,"");
+  const sug=f.receptor_email||(feClientes.find(c=>c.cuit===dig)?.email)||"";
+  const email=(prompt(`Enviar ${FE_TIPOS[f.cbte_tipo]||"el comprobante"} ${feNum(f)} a:\n(se manda con copia interna a Metanoia)`,sug)||"").trim();
+  if(!email)return;
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast("El email no es válido","err");return;}
+  if(await feEnviarMail(f,email))feGuardarEmail(id,email);
 }
 
 // ── Detalle (observaciones de ARCA) ──
