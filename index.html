@@ -1145,6 +1145,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
         Estado de resultados
       </div>
+      <div class="sitem" onclick="goPage('clientes',this)" id="nav-clientes">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Clientes
+      </div>
       <div class="sitem" onclick="goPage('facturas',this)" id="nav-facturas">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l3-2 3 2 3-2 3 2 3-2 1 .7V2z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
         Facturas emitidas
@@ -1584,6 +1588,19 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div id="pf-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px"></div>
     <div id="pf-tabla" style="overflow-x:auto"></div>
   </div>
+</div>
+
+<!-- ══ CLIENTES ══ -->
+<div id="pg-clientes" style="display:none">
+  <div class="pg-header">
+    <div><div class="pg-title">Clientes</div><div class="pg-title-sub">Maestro por CUIT · cada sociedad con su propia relación · los inscriptos de los cursos, aparte</div></div>
+    <button class="btn pri" onclick="cliNuevo()">+ Nuevo cliente</button>
+  </div>
+  <div style="display:flex;gap:4px;border-bottom:1px solid var(--b);margin-bottom:16px">
+    <button class="cd-tab on" id="cli-tab-clientes" onclick="setCliTab('clientes')">👥 Clientes</button>
+    <button class="cd-tab" id="cli-tab-inscriptos" onclick="setCliTab('inscriptos')">🎓 Inscriptos</button>
+  </div>
+  <div id="cli-body"></div>
 </div>
 
 <!-- ══ INSTRUCTORES ══ -->
@@ -6622,6 +6639,7 @@ function goPage(name,el){
   if(name==="inventario")loadInventario();
   if(name==="planes")loadPlanes();
   if(name==="facturas")loadFacturasEmitidas();
+  if(name==="clientes")loadClientes();
   if(name==="elearning")loadElearning();
   if(name==="comprobantes"){loadComprobantes();cargarProductosFinn();}
   if(name==="impuestos")loadImpuestos();
@@ -22039,6 +22057,8 @@ async function feCargarListas(){
     if(!x)m.set(d,{cuit:d,nombre,cond:cond||null,origen,email:email||""});else{if(cond&&!x.cond)x.cond=cond;if(email&&!x.email)x.email=email;}
   };
   const q=p=>sb(p).catch(()=>[]);
+  const cm=await q("clientes?select=cuit,razon_social,condicion_iva_id,email&activo=eq.true&limit=5000");
+  (cm||[]).forEach(c=>add(c.cuit,c.razon_social,c.condicion_iva_id,"cliente",c.email));
   const [fe,el,pr,al,fm]=await Promise.all([
     q("facturas_emitidas?select=receptor_doc_nro,receptor_nombre,receptor_cond_iva_id&order=fecha.desc&limit=500"),
     q("elearning_clientes?select=cuit,nombre_completo,razon_social,condicion_fiscal,email&limit=2000"),
@@ -22797,10 +22817,177 @@ async function feEmitir(){
     await loadFacturasEmitidas();
     feDescargarPDF(d.factura.id,d.factura);
     if(emailCli)feGuardarEmail(d.factura.id,emailCli);
+    cliDesdeFactura(d.factura,emailCli);
     if(enviar&&emailCli)feEnviarMail(d.factura,emailCli);
     else if(enviar)toast("ℹ️ No cargaste el email del cliente: la factura no se envió por mail (podés enviarla con ✉️ desde el listado)","inf");
   }catch(e){toast("No se pudo emitir: "+String(e.message||e).slice(0,200),"err");}
   finally{btn.disabled=false;btn.textContent="Emitir con ARCA";}
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// CLIENTES: maestro por CUIT. Cada sociedad (SUDES / POINTERS) mantiene su propia relación con el cliente (clientes_sociedad).
+// Los inscriptos (alumnos de los cursos) se ven aparte, aunque la misma persona también sea cliente.
+// Requiere sql_clientes.sql.
+// ══════════════════════════════════════════════════════════════════════
+let clientes=[],clientesSoc=[],cliTab="clientes",cliQ="",cliSocFiltro="",cliFalta=false,_cliInscr=null,_cliEditId=null;
+const _cuitDig=s=>String(s||"").replace(/\D/g,"");
+const _cliSocs=id=>clientesSoc.filter(x=>x.cliente_id===id&&x.activo!==false).map(x=>x.sociedad);
+function _cliSaldo(cuit,soc){
+  const d=_cuitDig(cuit);
+  return feFacturas.filter(f=>_cuitDig(f.receptor_doc_nro)===d&&(!soc||f.sociedad===soc)).reduce((s,f)=>s+(feSaldoCobro(f)||0),0);
+}
+async function loadClientes(){
+  const box=document.getElementById("cli-body");
+  if(box)box.innerHTML=`<div class="loading"><div class="loader"></div><div class="lt">Cargando clientes...</div></div>`;
+  try{[clientes,clientesSoc]=await Promise.all([sb("clientes?select=*&order=razon_social.asc&limit=5000"),sb("clientes_sociedad?select=*&limit=10000")]);cliFalta=false;}
+  catch(e){clientes=[];clientesSoc=[];cliFalta=true;}
+  try{await loadFacturasEmitidas();}catch(_){}
+  renderClientes();
+}
+function setCliTab(t){cliTab=t;renderClientes();}
+function renderClientes(){
+  const box=document.getElementById("cli-body");if(!box)return;
+  ["clientes","inscriptos"].forEach(t=>{const b=document.getElementById("cli-tab-"+t);if(b)b.classList.toggle("on",cliTab===t);});
+  if(cliFalta){box.innerHTML=`<div class="empty"><div class="ei">👥</div>Falta crear las tablas de clientes.<br><span style="font-size:12px;color:var(--tx3)">Corré <b>sql_clientes.sql</b> en Supabase → SQL Editor y volvé a entrar.</span></div>`;return;}
+  if(cliTab==="inscriptos")return renderInscriptos();
+  const q=_normProd(cliQ);
+  const lista=clientes.filter(c=>(!cliSocFiltro||_cliSocs(c.id).includes(cliSocFiltro))&&(!q||_normProd(c.razon_social+" "+(c.nombre_fantasia||"")+" "+c.cuit+" "+(c.email||"")).includes(q)));
+  const debenTotal=lista.reduce((s,c)=>s+_cliSaldo(c.cuit,cliSocFiltro),0);
+  const th=h=>`<th style="padding:8px 10px;text-align:left;color:var(--tx3);font-weight:600">${h}</th>`;
+  box.innerHTML=`
+    <div class="stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">
+      <div class="sc"><div class="sc-l">Clientes</div><div class="sc-v">${lista.length}</div></div>
+      <div class="sc"><div class="sc-l">Nos deben</div><div class="sc-v">${feM(debenTotal)}</div><div class="sc-s">facturas emitidas sin cobrar</div></div>
+      <div class="sc"><div class="sc-l">Sin email</div><div class="sc-v" style="color:${lista.some(c=>!c.email)?"var(--am,#F59E0B)":"var(--gr)"}">${lista.filter(c=>!c.email).length}</div><div class="sc-s">no se les puede enviar la factura</div></div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <input class="search" style="flex:1;min-width:200px;max-width:340px" placeholder="Buscar por nombre, CUIT o email..." value="${esc(cliQ)}" oninput="cliQ=this.value;renderClientes();document.querySelector('#cli-body .search')?.focus()">
+      <select class="fi mini-sel" style="width:150px" onchange="cliSocFiltro=this.value;renderClientes()"><option value="">Ambas sociedades</option><option value="SUDES"${cliSocFiltro==="SUDES"?" selected":""}>SUDES</option><option value="POINTERS"${cliSocFiltro==="POINTERS"?" selected":""}>POINTERS</option></select>
+    </div>
+    ${lista.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--surf2);border-bottom:1px solid var(--b)">${["Cliente","CUIT","Condición IVA","Email","Sociedades","Nos debe",""].map(th).join("")}</tr></thead><tbody>
+      ${lista.map(c=>{const socs=_cliSocs(c.id),deb=_cliSaldo(c.cuit,cliSocFiltro);return`<tr style="border-bottom:1px solid var(--b);cursor:pointer${c.activo===false?";opacity:.5":""}" onclick="cliAbrir('${c.id}')">
+        <td style="padding:8px 10px"><div style="font-weight:600;color:var(--tx)">${esc(c.razon_social)}</div>${c.nombre_fantasia?`<div style="font-size:11px;color:var(--tx3)">${esc(c.nombre_fantasia)}</div>`:""}</td>
+        <td style="padding:8px 10px;font-family:monospace;color:var(--tx2)">${esc(_feFmtCuit(c.cuit))}</td>
+        <td style="padding:8px 10px;color:var(--tx2)">${esc(FE_COND_IVA[c.condicion_iva_id]||"—")}</td>
+        <td style="padding:8px 10px;color:${c.email?"var(--tx2)":"var(--am,#F59E0B)"}">${esc(c.email||"falta")}</td>
+        <td style="padding:8px 10px">${socs.map(s=>`<span style="font-size:10px;font-weight:700;border:1px solid var(--b2);border-radius:8px;padding:1px 7px;margin-right:4px">${esc(s)}</span>`).join("")||"—"}</td>
+        <td style="padding:8px 10px;text-align:right;font-weight:700;color:${deb>0.01?"var(--re)":"var(--tx3)"}">${deb>0.01?feM(deb):"—"}</td>
+        <td style="padding:8px 10px;color:var(--tx3)">›</td></tr>`;}).join("")}</tbody></table></div>`
+      :`<div class="empty"><div class="ei">👥</div>${clientes.length?"Ningún cliente coincide con la búsqueda.":"Todavía no hay clientes cargados. Usá «+ Nuevo cliente» o corré la carga inicial."}</div>`}`;
+}
+// ── Ficha ──
+function cliNuevo(){_cliEditId=null;cliFicha({cuit:"",razon_social:"",condicion_iva_id:1,activo:true},[]);}
+function cliAbrir(id){const c=clientes.find(x=>x.id===id);if(c){_cliEditId=id;cliFicha(c,clientesSoc.filter(x=>x.cliente_id===id));}}
+function cliFicha(c,rels){
+  let d=document.getElementById("modal-cli");
+  if(!d){d=document.createElement("div");d.className="mov";d.id="modal-cli";d.onclick=e=>{if(e.target===d)closeM("modal-cli");};document.body.appendChild(d);}
+  const rel=s=>rels.find(r=>r.sociedad===s);
+  const fx=(id,l,v,ph="",tipo="text")=>`<div class="fg"><label class="fl">${l}</label><input class="fi" id="${id}" type="${tipo}" value="${esc(v||"")}" placeholder="${esc(ph)}"></div>`;
+  const socBloque=s=>{const r=rel(s);return`<div style="border:1px solid var(--b);border-radius:8px;padding:10px;margin-bottom:8px">
+    <label style="font-weight:700;font-size:12px"><input type="checkbox" id="cli-s-${s}" ${r&&r.activo!==false?"checked":""}> ${s}</label>
+    <div class="fgrid" style="margin-top:6px"><div class="fg"><label class="fl">Condición de pago</label><input class="fi" id="cli-cp-${s}" value="${esc(r?.condicion_pago||"")}" placeholder="Ej: 30 días, contado"></div>
+    <div class="fg"><label class="fl">Notas de la relación con ${s}</label><input class="fi" id="cli-n-${s}" value="${esc(r?.notas||"")}"></div></div></div>`;};
+  const facs=_cuitDig(c.cuit)?feFacturas.filter(f=>_cuitDig(f.receptor_doc_nro)===_cuitDig(c.cuit)&&f.estado==="autorizada"&&f.ambiente==="produccion"):[];
+  const cc=facs.length?`<div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px;margin:14px 0 6px">Cuenta corriente (facturas emitidas)</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px"><tbody>${facs.map(f=>{const s=feSaldoCobro(f);return`<tr style="border-bottom:1px solid var(--b)"><td style="padding:5px 6px;color:var(--tx3)">${esc(feFechaAR(f.fecha))}</td><td style="padding:5px 6px">${esc(FE_TIPOS[f.cbte_tipo]||"")} <span style="font-family:monospace;color:var(--tx3)">${esc(feNum(f))}</span> <span style="font-size:10px;color:var(--tx3)">${esc(f.sociedad)}</span></td><td style="padding:5px 6px;text-align:right">${FE_ES_NC(f.cbte_tipo)?"−":""}${feM(f.total)}</td><td style="padding:5px 6px;text-align:right;color:${s>0.01?"var(--re)":"var(--tx3)"}">${s===null?"":s>0.01?"debe "+feM(s):"cobrada"}</td></tr>`;}).join("")}</tbody></table>`:"";
+  d.innerHTML=`<div class="modal" style="max-width:640px;max-height:90vh;overflow:auto"><div class="mt"><span>${_cliEditId?esc(c.razon_social):"Nuevo cliente"}</span><button class="mt-close" onclick="closeM('modal-cli')">✕</button></div>
+    <div style="padding:0 20px 20px">
+      <div class="fgrid">${fx("cli-cuit","CUIT *",c.cuit?_feFmtCuit(c.cuit):"","30-12345678-9")}${fx("cli-rs","Razón social / nombre *",c.razon_social)}</div>
+      <div class="fgrid">${fx("cli-nf","Nombre de fantasía",c.nombre_fantasia)}
+        <div class="fg"><label class="fl">Condición frente al IVA</label><select class="fi" id="cli-cond">${Object.entries(FE_COND_IVA).map(([k,v])=>`<option value="${k}"${Number(c.condicion_iva_id)===Number(k)?" selected":""}>${esc(v)}</option>`).join("")}</select></div></div>
+      <div class="fgrid">${fx("cli-email","Email (donde se envían las facturas)",c.email,"cliente@empresa.com","email")}${fx("cli-email2","Email adicional",c.email_cc,"","email")}${fx("cli-tel","Teléfono",c.telefono)}</div>
+      <div class="fgrid">${fx("cli-dom","Domicilio",c.domicilio)}${fx("cli-loc","Localidad",c.localidad)}${fx("cli-prov","Provincia",c.provincia)}${fx("cli-cp","CP",c.cp)}</div>
+      <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px;margin:12px 0 6px">Con qué sociedad opera</div>
+      ${socBloque("SUDES")}${socBloque("POINTERS")}
+      <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px;margin:12px 0 6px">Nos retiene al pagar</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--tx2)">${[["ganancias","Ganancias"],["iva","IVA"],["iibb","Ingresos Brutos"],["suss","SUSS"]].map(([k,l])=>`<label><input type="checkbox" id="cli-r-${k}" ${c["retiene_"+k]?"checked":""}> ${l}</label>`).join("")}</div>
+      <div class="fg" style="margin-top:10px"><label class="fl">Observaciones</label><textarea class="fi" id="cli-notas" rows="2">${esc(c.notas||"")}</textarea></div>
+      <label style="font-size:12px;color:var(--tx2)"><input type="checkbox" id="cli-activo" ${c.activo===false?"":"checked"}> Cliente activo</label>
+      ${cc}
+      <div class="ma" style="margin-top:14px">${_cliEditId?`<button class="btn" onclick="cliFacturar()" title="Abre la factura con los datos de este cliente">🧾 Facturar</button>`:""}<button class="bc" onclick="closeM('modal-cli')">Cancelar</button><button class="bk" id="cli-btn" onclick="cliGuardar()">Guardar</button></div>
+    </div></div>`;
+  openM("modal-cli");
+}
+async function cliGuardar(){
+  const g=id=>document.getElementById(id);
+  const cuit=_cuitDig(g("cli-cuit").value),rs=g("cli-rs").value.trim();
+  if(cuit.length!==11){toast("El CUIT tiene que tener 11 dígitos","err");return;}
+  if(!rs){toast("Falta la razón social","err");return;}
+  const email=g("cli-email").value.trim(),email2=g("cli-email2").value.trim();
+  const mailOk=e=>!e||/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+  if(!mailOk(email)||!mailOk(email2)){toast("Revisá el email: no es válido","err");return;}
+  const data={cuit,razon_social:rs,nombre_fantasia:g("cli-nf").value.trim()||null,condicion_iva_id:Number(g("cli-cond").value),email:email||null,email_cc:email2||null,telefono:g("cli-tel").value.trim()||null,
+    domicilio:g("cli-dom").value.trim()||null,localidad:g("cli-loc").value.trim()||null,provincia:g("cli-prov").value.trim()||null,cp:g("cli-cp").value.trim()||null,
+    retiene_ganancias:g("cli-r-ganancias").checked,retiene_iva:g("cli-r-iva").checked,retiene_iibb:g("cli-r-iibb").checked,retiene_suss:g("cli-r-suss").checked,
+    notas:g("cli-notas").value.trim()||null,activo:g("cli-activo").checked,updated_at:new Date().toISOString()};
+  const btn=g("cli-btn");btn.disabled=true;btn.textContent="Guardando...";
+  try{
+    let id=_cliEditId;
+    if(id)await sb(`clientes?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(data)});
+    else{
+      const ya=clientes.find(c=>c.cuit===cuit);if(ya){toast(`Ya existe ese CUIT: ${ya.razon_social}`,"err");btn.disabled=false;btn.textContent="Guardar";return;}
+      const [n]=await sb("clientes",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({...data,origen:"manual"})});id=n.id;
+    }
+    for(const s of ["SUDES","POINTERS"]){
+      const on=g("cli-s-"+s).checked,ex=clientesSoc.find(x=>x.cliente_id===id&&x.sociedad===s);
+      const rel={activo:on,condicion_pago:g("cli-cp-"+s).value.trim()||null,notas:g("cli-n-"+s).value.trim()||null};
+      if(ex)await sb(`clientes_sociedad?id=eq.${ex.id}`,{method:"PATCH",body:JSON.stringify(rel)});
+      else if(on)await sb("clientes_sociedad",{method:"POST",body:JSON.stringify({cliente_id:id,sociedad:s,...rel})});
+    }
+    closeM("modal-cli");toast("Cliente guardado","ok");_cliInscr=null;await loadClientes();
+  }catch(e){toast("No se pudo guardar: "+String(e.message||e).slice(0,140),"err");btn.disabled=false;btn.textContent="Guardar";}
+}
+function cliFacturar(){
+  const c=clientes.find(x=>x.id===_cliEditId);if(!c)return;
+  closeM("modal-cli");
+  goPage("facturas",document.getElementById("nav-facturas"));
+  setTimeout(()=>{feAbrirEmitir();setTimeout(()=>{
+    const socs=_cliSocs(c.id);if(socs.length===1)document.getElementById("fe-soc").value=socs[0];
+    _feAplicarCliente({cuit:c.cuit,nombre:c.razon_social,cond:c.condicion_iva_id,email:c.email||""});feSocCambio?.();
+  },250);},350);
+}
+// Alta/actualización automática desde una factura emitida (sin pisar datos que ya estén cargados a mano)
+async function cliDesdeFactura(f,email){
+  try{
+    const cuit=_cuitDig(f.receptor_doc_nro);if(cuit.length!==11||!f.receptor_nombre)return;
+    let c=clientes.find(x=>x.cuit===cuit);
+    if(!c){
+      const [n]=await sb("clientes",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({cuit,razon_social:f.receptor_nombre,condicion_iva_id:f.receptor_cond_iva_id||null,email:email||null,origen:"factura"})});c=n;clientes.push(n);
+    }else if(email&&!c.email){await sb(`clientes?id=eq.${c.id}`,{method:"PATCH",body:JSON.stringify({email,updated_at:new Date().toISOString()})});c.email=email;}
+    if(!clientesSoc.some(x=>x.cliente_id===c.id&&x.sociedad===f.sociedad)){
+      const [r]=await sb("clientes_sociedad",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({cliente_id:c.id,sociedad:f.sociedad})});clientesSoc.push(r);
+    }
+  }catch(_){/* falta correr sql_clientes.sql: no bloquea la factura */}
+}
+// ── Inscriptos (alumnos de los cursos) ──
+async function renderInscriptos(){
+  const box=document.getElementById("cli-body");
+  if(!_cliInscr){
+    box.innerHTML=`<div class="loading"><div class="loader"></div><div class="lt">Cargando inscriptos...</div></div>`;
+    try{const [al,ins]=await Promise.all([sb("alumnos?select=*&order=apellido.asc&limit=5000"),sb("inscripciones?select=alumno_id,estado&limit=20000")]);
+      const cnt={};ins.forEach(i=>{if(i.estado!=="Cancelado")cnt[i.alumno_id]=(cnt[i.alumno_id]||0)+1;});
+      _cliInscr=al.map(a=>({...a,cursos:cnt[a.id]||0}));}
+    catch(e){box.innerHTML=`<div class="empty"><div class="ei">🎓</div>No se pudieron leer los inscriptos: ${esc(String(e.message||e).slice(0,120))}</div>`;return;}
+  }
+  const q=_normProd(cliQ);
+  const lista=_cliInscr.filter(a=>!q||_normProd(`${a.apellido} ${a.nombre} ${a.dni||""} ${a.cuit||""} ${a.email||""}`).includes(q));
+  const esCliente=a=>_cuitDig(a.cuit).length===11&&clientes.some(c=>c.cuit===_cuitDig(a.cuit));
+  const th=h=>`<th style="padding:8px 10px;text-align:left;color:var(--tx3);font-weight:600">${h}</th>`;
+  box.innerHTML=`<div style="font-size:12px;color:var(--tx2);margin-bottom:10px">Personas inscriptas en los cursos. Si además se les factura a ellas, se las pasa a <b>Clientes</b> (hace falta el CUIT).</div>
+    <input class="search" style="max-width:340px;margin-bottom:12px" placeholder="Buscar inscripto..." value="${esc(cliQ)}" oninput="cliQ=this.value;renderInscriptos();document.querySelector('#cli-body .search')?.focus()">
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--surf2);border-bottom:1px solid var(--b)">${["Inscripto","DNI / CUIT","Email","Institución","Cursos",""].map(th).join("")}</tr></thead><tbody>
+    ${lista.map(a=>`<tr style="border-bottom:1px solid var(--b)"><td style="padding:8px 10px;font-weight:600">${esc(`${a.apellido||""}, ${a.nombre||""}`)}</td>
+      <td style="padding:8px 10px;color:var(--tx2);font-family:monospace">${esc(a.dni||"—")}${a.cuit?`<div style="color:var(--tx3)">${esc(_feFmtCuit(_cuitDig(a.cuit)))}</div>`:""}</td>
+      <td style="padding:8px 10px;color:var(--tx2)">${esc(a.email||"—")}</td><td style="padding:8px 10px;color:var(--tx2)">${esc(a.institucion||"—")}</td>
+      <td style="padding:8px 10px;text-align:center">${a.cursos}</td>
+      <td style="padding:8px 10px;white-space:nowrap">${esCliente(a)?`<span style="font-size:10px;font-weight:700;color:var(--gr);border:1px solid var(--gr);border-radius:8px;padding:1px 7px">también es cliente</span>`:_cuitDig(a.cuit).length===11?`<button class="btn sm" style="font-size:10px;padding:2px 7px" onclick="cliDesdeAlumno('${a.id}')">Pasar a clientes</button>`:`<span style="font-size:10px;color:var(--tx3)">sin CUIT</span>`}</td></tr>`).join("")}
+    </tbody></table></div>${lista.length?"":`<div class="empty"><div class="ei">🎓</div>Sin resultados.</div>`}`;
+}
+async function cliDesdeAlumno(id){
+  const a=(_cliInscr||[]).find(x=>x.id===id);if(!a)return;
+  try{
+    const [n]=await sb("clientes",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({cuit:_cuitDig(a.cuit),razon_social:`${a.apellido||""} ${a.nombre||""}`.trim(),email:a.email||null,telefono:a.telefono||null,condicion_iva_id:5,tipo_persona:"fisica",origen:"alumno"})});
+    clientes.push(n);toast("Pasó a Clientes: completá su condición frente al IVA y la sociedad","ok");renderInscriptos();
+  }catch(e){toast("No se pudo: "+String(e.message||e).slice(0,120),"err");}
 }
 
 // ── Envío por mail (PDF adjunto, con copia interna) ──
