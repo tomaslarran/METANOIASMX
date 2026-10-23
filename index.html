@@ -5061,6 +5061,14 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <span id="mop-monto-ret" style="font-size:14px;font-weight:700;color:#f87171">$0</span>
     </div>
   </div>
+  <div id="mop-ant-wrap" style="display:none;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:10px 14px;margin-bottom:10px">
+    <div style="font-size:12px;color:var(--tx2);margin-bottom:6px">📎 <b>Anticipo abierto</b> con este proveedor: <span id="mop-ant-info"></span></div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <label style="font-size:12px"><input type="checkbox" id="mop-ant-usar" onchange="mopAntCambio()"> Descontarlo de esta orden</label>
+      <span style="font-size:12px;color:var(--tx3)">importe</span><input class="fi" id="mop-ant-monto" type="number" step="0.01" style="width:150px" oninput="mopRecalcular()" disabled>
+    </div>
+    <div style="font-size:11px;color:var(--tx3);margin-top:6px">Se cancela el anticipo contra esta factura (Debe Proveedores / Haber Anticipos a proveedores) cuando se paga la orden: lo que se transfiere es el neto.</div>
+  </div>
   <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:8px;padding:10px 14px;margin-bottom:14px">
     <span style="font-size:13px;font-weight:600">Neto a pagar</span>
     <span id="mop-neto" style="font-size:20px;font-weight:800;color:var(--gr)">$0</span>
@@ -28988,8 +28996,9 @@ async function registrarPagoMixto(c,{fecha,lineas,obs,op}){
   const antes=_r2(parseFloat(c.monto_pagado)||0);
   const suma=_r2(lineas.reduce((s,l)=>s+l.monto,0));
   const ret=op?_r2(op.ret):0;
+  const antAp=op?_r2(op.ant||0):0;
   const bruto=op?_r2(op.bruto):suma;
-  if(op&&Math.abs(suma+ret-bruto)>0.02)throw new Error(`Las líneas suman ${suma} y la orden pide ${_r2(bruto-ret)}`);
+  if(op&&Math.abs(suma+ret+antAp-bruto)>0.02)throw new Error(`Las líneas suman ${suma} y la orden pide ${_r2(bruto-ret-antAp)}`);
   await _validarPagoMixto(c,{lineas,bruto,op});
   const eventoId=_uuid();
   const descF=`Fact. ${c.tipo||""}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||"Proveedor"}`;
@@ -29004,6 +29013,7 @@ async function registrarPagoMixto(c,{fecha,lineas,obs,op}){
   const asLineas=[{codigo:"2.1.01.001",debe:bruto,desc:"Cancelación proveedor"}];
   for(const [cod,m] of porCuenta)asLineas.push({codigo:cod,haber:m,desc:`Pago ${nombres}`});
   if(ret>0)asLineas.push({codigo:"2.1.03.002",haber:ret,desc:`Ret. SICORE ${op?.cod||""}`});
+  if(antAp>0)asLineas.push({codigo:ANT_CUENTA,haber:antAp,desc:"Anticipo aplicado a la factura"});
   const ad={fecha,sociedad,tipo:"pago_compra",origen:op?"orden_pago":"comprobante_pago",origen_id:op?.id||c.id,
     descripcion:op?`Pago: ${c.proveedor||""} — ${op.numero}`:`Pago: ${c.proveedor||""} — ${descF.replace(/ — .*/,"")}`,lineas:asLineas};
   try{
@@ -29403,6 +29413,39 @@ function buildSicoreOptions(){
     Object.entries(cat).map(([cod,v])=>`<option value="${cod}|${v.pct}">${cod} — ${v.desc} (${v.pct}%)</option>`).join("");
 }
 
+// Anticipo abierto del proveedor (misma sociedad y CUIT) para descontarlo de la orden. Necesita sql_op_anticipo.sql.
+let _mopAnt=null,_mopAntCol=false;
+async function mopCargarAnticipo(c,opPrev){
+  _mopAnt=null;
+  const wrap=document.getElementById("mop-ant-wrap");if(!wrap)return;
+  wrap.style.display="none";document.getElementById("mop-ant-usar").checked=false;document.getElementById("mop-ant-monto").value="";document.getElementById("mop-ant-monto").disabled=true;
+  if(c.tipo?.startsWith("NC"))return;
+  try{await sb("ordenes_pago?select=anticipo_aplicado&limit=1");_mopAntCol=true;}catch(_){_mopAntCol=false;}
+  const cuit=String(c.cuit||"").replace(/\D/g,"");if(cuit.length!==11)return;
+  const lista=await sb(`anticipos_proveedores?estado=eq.abierto&sociedad=eq.${c.sociedad||"SUDES"}&select=*&order=fecha.asc`).catch(()=>[]);
+  const propios=lista.filter(a=>String(a.cuit||"").replace(/\D/g,"")===cuit).map(a=>({...a,saldo:_r2((parseFloat(a.monto)||0)-(parseFloat(a.monto_aplicado)||0))})).filter(a=>a.saldo>0.01);
+  if(!propios.length)return;
+  _mopAnt=propios[0];
+  wrap.style.display="";
+  document.getElementById("mop-ant-info").innerHTML=`<b>${_extM(_mopAnt.saldo)}</b> pagado el ${String(_mopAnt.fecha).split("-").reverse().join("/")}${_mopAnt.concepto?" · "+esc(String(_mopAnt.concepto).slice(0,70)):""}${propios.length>1?` · hay ${propios.length} anticipos: se usa el más antiguo`:""}${_mopAntCol?"":' · <span style="color:var(--re)">falta correr sql_op_anticipo.sql</span>'}`;
+  const previo=opPrev&&_mopAntCol?parseFloat(opPrev.anticipo_aplicado)||0:0;
+  if(previo>0){document.getElementById("mop-ant-usar").checked=true;document.getElementById("mop-ant-monto").disabled=false;document.getElementById("mop-ant-monto").value=previo;}
+  mopRecalcular();
+}
+function mopAntCambio(){
+  const on=document.getElementById("mop-ant-usar").checked,inp=document.getElementById("mop-ant-monto");
+  inp.disabled=!on;
+  if(on&&!_mopAntCol){document.getElementById("mop-ant-usar").checked=false;inp.disabled=true;toast("Falta correr sql_op_anticipo.sql en Supabase para descontar anticipos en la orden","err");return;}
+  if(on){
+    const bruto=parseFloat(document.getElementById("mop-monto-bruto").value)||0;
+    inp.value=Math.max(0,Math.min(_mopAnt.saldo,_r2(bruto-_mopRetActual())-0.01));
+  }else inp.value="";
+  mopRecalcular();
+}
+function _mopAntMonto(){
+  if(!_mopAnt||!document.getElementById("mop-ant-usar")?.checked)return 0;
+  return Math.max(0,_r2(parseFloat(document.getElementById("mop-ant-monto").value)||0));
+}
 async function abrirOrdenPago(compId,fromPendientes=false){
   const c=comprobantes.find(x=>x.id===compId);
   if(!c)return;
@@ -29461,6 +29504,7 @@ async function abrirOrdenPago(compId,fromPendientes=false){
     toggleSocioOP();
   }
   document.getElementById("mop-btn-solo-pdf").style.display="";
+  await mopCargarAnticipo(c,opPrev);
   openModal("modal-orden-pago");
 }
 
@@ -29497,6 +29541,11 @@ function mopBrutoCambio(){
   mopRecalcular();
 }
 
+function _mopRetActual(){
+  const esA=document.getElementById("mop-tipo").value==="A";if(!esA)return 0;
+  const base=parseFloat(document.getElementById("mop-base-ret").value)||0,calc=_mopCalcActual();
+  return calc?calc.aRet:Math.round(base*(parseFloat(document.getElementById("mop-pct-ret").value)||0)/100*100)/100;
+}
 function mopRecalcular(){
   const bruto=parseFloat(document.getElementById("mop-monto-bruto").value)||0;
   const esA=document.getElementById("mop-tipo").value==="A";
@@ -29516,7 +29565,8 @@ function mopRecalcular(){
       ret=Math.round(base*pct/100*100)/100;
     }
   }
-  const neto=Math.round((bruto-ret)*100)/100;
+  const ant=Math.min(_mopAntMonto(),Math.max(0,_r2(bruto-ret)));
+  const neto=Math.round((bruto-ret-ant)*100)/100;
   document.getElementById("mop-monto-ret").textContent="$"+ret.toLocaleString("es-AR");
   document.getElementById("mop-neto").textContent="$"+neto.toLocaleString("es-AR");
 }
@@ -29557,7 +29607,7 @@ async function abrirPagarOP(opId,opts={}){
     const c=comprobantes.find(x=>x.id===op.comprobante_id);
     document.getElementById("pop-numero").textContent=op.numero||"";
     document.getElementById("pop-proveedor").textContent=op.proveedor||"";
-    document.getElementById("pop-detalle").innerHTML=`Fact. ${esc(op.tipo_factura||"")} ${esc(c?.numero||"")} · Bruto <b>${_extM(op.monto_bruto)}</b>${parseFloat(op.monto_retencion)>0?` · Retención <b>${_extM(op.monto_retencion)}</b>`:""} · <b>A pagar ${_extM(op.neto_a_pagar)}</b>${op.cbu_destino?`<br>CBU / referencia: ${esc(op.cbu_destino)}`:""}`;
+    document.getElementById("pop-detalle").innerHTML=`Fact. ${esc(op.tipo_factura||"")} ${esc(c?.numero||"")} · Bruto <b>${_extM(op.monto_bruto)}</b>${parseFloat(op.monto_retencion)>0?` · Retención <b>${_extM(op.monto_retencion)}</b>`:""}${parseFloat(op.anticipo_aplicado)>0?` · Anticipo descontado <b>${_extM(op.anticipo_aplicado)}</b>`:""} · <b>A pagar ${_extM(op.neto_a_pagar)}</b>${op.cbu_destino?`<br>CBU / referencia: ${esc(op.cbu_destino)}`:""}`;
     document.getElementById("pop-fecha").value=today();
     document.getElementById("pop-obs").value="";document.getElementById("pop-nroop").value="";
     document.getElementById("pop-comprobante").value="";
@@ -29604,7 +29654,13 @@ async function confirmarPagarOP(){
     if(cf.estado==="pagado"){toast(_pagoYaPagadaMsg(cf)+" Si fue un error, anulá la orden de pago.","err");return;}
     const c=comprobantes.find(x=>x.id===cf.id)||cf;
     Object.assign(c,{monto_pagado:cf.monto_pagado,estado:cf.estado});
-    const opInfo={id:op.id,numero:op.numero,bruto:parseFloat(op.monto_bruto)||0,neto,ret:parseFloat(op.monto_retencion)||0,cod:op.codigo_sicore};
+    const opInfo={id:op.id,numero:op.numero,bruto:parseFloat(op.monto_bruto)||0,neto,ret:parseFloat(op.monto_retencion)||0,cod:op.codigo_sicore,ant:_r2(parseFloat(op.anticipo_aplicado)||0)};
+    let antFila=null;
+    if(opInfo.ant>0){   // el anticipo tiene que seguir abierto con saldo suficiente antes de registrar nada
+      [antFila]=op.anticipo_id?await sb(`anticipos_proveedores?id=eq.${op.anticipo_id}&select=*`).catch(()=>[]):[];
+      const saldoA=antFila?_r2((parseFloat(antFila.monto)||0)-(parseFloat(antFila.monto_aplicado)||0)):0;
+      if(!antFila||antFila.estado!=="abierto"||saldoA<opInfo.ant-0.01){toast("El anticipo de esta orden ya no tiene saldo suficiente: editá la orden (✎) y volvé a generarla","err");return;}
+    }
     let via,medios,completa=true,saldo=0;
     if(!(await _pagosMixtosDisponible())){
       if(lineas.length>1||opInfo.bruto<_r2(Math.abs(parseFloat(c.total)||0))-0.01){toast("Para pagar con varios medios o con saldo falta correr sql_pagos_mixtos.sql en Supabase","err");return;}
@@ -29614,6 +29670,14 @@ async function confirmarPagarOP(){
     }else{
       const r=await registrarPagoMixto(c,{fecha,lineas,obs,op:opInfo});
       via=r.vias.length===1?r.vias[0]:"mixto";medios=r.medios;completa=r.completa;saldo=r.saldo;
+    }
+    if(opInfo.ant>0&&antFila){   // se cancela el anticipo contra la factura (el asiento del pago ya acreditó Anticipos a proveedores)
+      try{
+        const [as]=await sb(`asientos_contables?origen=eq.orden_pago&origen_id=eq.${op.id}&anulado=eq.false&select=id`).catch(()=>[]);
+        const aplicado=_r2((parseFloat(antFila.monto_aplicado)||0)+opInfo.ant);
+        const recibos=[...(antFila.recibos||[]),{numero:`OP ${op.numero}`,fecha,monto:opInfo.ant,tipo:"factura",comprobante_id:op.comprobante_id,asiento_id:as?.id||null}];
+        await sb(`anticipos_proveedores?id=eq.${antFila.id}`,{method:"PATCH",body:JSON.stringify({monto_aplicado:aplicado,recibos,estado:aplicado>=_r2(parseFloat(antFila.monto)||0)-0.01?"cancelado":"abierto"})});
+      }catch(e){toast("⚠️ El pago quedó registrado pero no se actualizó el anticipo: "+String(e.message||e).slice(0,80),"err");}
     }
     const nroGlobal=(document.getElementById("pop-nroop")?.value||"").trim();
     const nroOp=[nroGlobal,...lineas.map(l=>l.nroOp).filter(Boolean)].filter(Boolean).join(" / ");
@@ -29678,7 +29742,10 @@ async function confirmarOrdenPago(){
   const calcRG=esA?_mopCalcActual():null;
   const ret=esA?(calcRG?calcRG.aRet:Math.round(base*(parseFloat(document.getElementById("mop-pct-ret").value)||0)/100*100)/100):0;
   const pct=esA?(calcRG?(base>0&&ret>0?Math.round(ret/base*10000)/100:0):(parseFloat(document.getElementById("mop-pct-ret").value)||0)):0;
-  const neto=Math.round((bruto-ret)*100)/100;
+  const ant=Math.min(_mopAntMonto(),Math.max(0,_r2(bruto-ret)));
+  if(ant>0&&ant>=_r2(bruto-ret)-0.005){toast("El anticipo cubre todo el neto: dejá al menos $0,01 a pagar o pagá la factura contra el recibo","err");return;}
+  if(ant>0&&_mopAnt&&ant>_mopAnt.saldo+0.01){toast("El anticipo a descontar supera el saldo abierto ("+_extM(_mopAnt.saldo)+")","err");return;}
+  const neto=Math.round((bruto-ret-ant)*100)/100;
   const fecha=document.getElementById("mop-fecha").value||today();
   const medio=document.getElementById("mop-medio").value;
   const cbu=document.getElementById("mop-cbu").value.trim();
@@ -29701,6 +29768,7 @@ async function confirmarOrdenPago(){
     nro_comprobante_retencion:document.getElementById("mop-nro-ret").value.trim()||null,
     creado_por:loggedUser?.nombre||null,
   };
+  if(_mopAntCol){opData.anticipo_aplicado=ant>0?ant:0;opData.anticipo_id=ant>0&&_mopAnt?_mopAnt.id:null;}
   try{
     const fresco=await _pagoFresco(compId);
     if(fresco?.estado==="pagado"){toast(_pagoYaPagadaMsg(fresco),"err");return;}
@@ -30943,6 +31011,7 @@ async function generarPDFOrdenPago(op,soloRetornar){
     doc.setFont("helvetica","normal");
     addRow("(-) Monto retención",-op.monto_retencion,false,[200,50,50]);
   }
+  if(parseFloat(op.anticipo_aplicado)>0)addRow("(-) Anticipo ya pagado al proveedor",-op.anticipo_aplicado,false,[200,120,30]);
   // Neto
   y+=3;
   doc.setFillColor(230,248,242);doc.roundedRect(M-2,y-5,W-2*M+4,14,2,2,"F");
