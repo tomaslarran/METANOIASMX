@@ -5079,11 +5079,12 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div class="form-grid" style="grid-template-columns:1fr 1fr">
     <div class="fg"><label class="fl">Fecha de pago *</label><input class="fi" id="mop-fecha" type="date"></div>
     <div class="fg"><label class="fl">Medio de pago *</label><select class="fs" id="mop-medio" onchange="toggleSocioOP()"></select></div>
+    <div id="mop-medio-info" style="display:none;grid-column:1/-1;font-size:12px;line-height:1.6;background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:8px 12px"></div>
     <div class="fg" id="mop-socio-wrap" style="display:none;grid-column:1/-1"><label class="fl">¿Qué socio puso la plata? *</label>
       <select class="fs" id="mop-socio"></select>
     </div>
-    <div class="fg" style="grid-column:1/-1"><label class="fl">CBU / Referencia</label>
-      <input class="fi" id="mop-cbu" type="text" placeholder="CBU, número de cuenta, cheque Nº...">
+    <div class="fg" style="grid-column:1/-1"><label class="fl">CBU / alias del proveedor (destino)</label>
+      <input class="fi" id="mop-cbu" type="text" placeholder="CBU o alias de la cuenta a la que se transfiere">
     </div>
     <div class="fg" style="grid-column:1/-1"><label class="fl">Observaciones</label>
       <input class="fi" id="mop-obs-op" type="text" placeholder="Opcional">
@@ -29523,12 +29524,37 @@ async function abrirOrdenPago(compId,fromPendientes=false){
       if(prev){const so=document.getElementById("mop-sicore");const opt=[...so.options].find(o=>o.value===String(prev.codigo_sicore)||o.value.startsWith(prev.codigo_sicore+"|"));if(opt){so.value=opt.value;await mopSelSicore();}}
     }catch(_){}
   }
+  if(!opPrev){
+    try{
+      const cu=String(c.cuit||"").replace(/\D/g,"");
+      const pv=(await sb("ordenes_pago?cbu_destino=not.is.null&select=cuit,cbu_destino&order=created_at.desc&limit=400")).find(o=>String(o.cuit||"").replace(/\D/g,"")===cu&&String(o.cbu_destino).trim());
+      if(pv)document.getElementById("mop-cbu").value=pv.cbu_destino;
+    }catch(_){}
+  }
   document.getElementById("mop-btn-solo-pdf").style.display="";
   await mopCargarAnticipo(c,opPrev);
   openModal("modal-orden-pago");
 }
 
+// Datos de la cuenta de origen según el medio elegido (banco, CBU, titular); los Echeq muestran la cuenta que los debita
+function mopMostrarCuentaOrigen(){
+  const el=document.getElementById("mop-medio-info");if(!el)return;
+  const medio=document.getElementById("mop-medio").value;
+  let m=mediosPago.find(x=>x.nombre===medio);
+  const soc=document.getElementById("mop-sociedad").textContent||"";
+  let nota="";
+  if(m&&m.tipo==="echeq"){const b=mediosPago.find(x=>x.id===m.cuenta_bancaria_id);if(b){nota="Echeq propio: se debita de esta cuenta";m=b;}}
+  if(!m||!["cuenta_bancaria","tarjeta","echeq"].includes(m.tipo)){el.style.display="none";el.innerHTML="";return;}
+  const det=String(m.detalle||"").trim(),dig=det.replace(/\D/g,"");
+  const fila=(r,v)=>v?`<div><span style="color:var(--tx3)">${r}:</span> <b>${esc(v)}</b></div>`:"";
+  el.innerHTML=(m.tipo==="tarjeta"
+    ?fila("Tarjeta",dig.length>=4?"terminada en "+dig.slice(-4):m.nombre)+fila("Banco",m.banco)
+    :fila("Cuenta de origen",m.nombre)+fila("Banco",m.banco)+fila("CBU",dig.length===22?dig:det)+fila("Titular",soc))
+    +(nota?`<div style="color:var(--tx3);font-size:11px">${esc(nota)}</div>`:"");
+  el.style.display="";
+}
 function toggleSocioOP(){
+  mopMostrarCuentaOrigen();
   const medio=document.getElementById("mop-medio").value;
   const medioObj=mediosPago.find(m=>m.nombre===medio);
   const wrap=document.getElementById("mop-socio-wrap");
