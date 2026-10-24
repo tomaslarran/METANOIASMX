@@ -29362,6 +29362,16 @@ function calcRetGanancias({cod,inscripto,persona,neto,prevBase,prevRet}){
   if(exceso||bajoMin)aRet=0;
   return{pct,noSuj,imponible,total,aRet,bajoMin,exceso,min,escala:pct===0,acum};
 }
+// Alícuota nominal y mínimo no imponible de una retención ya practicada (para mostrar «2% sobre lo que excede $224.000» en vez del % efectivo)
+function _opTasaNominal(op){
+  const base=parseFloat(op.base_retencion)||0,ret=parseFloat(op.monto_retencion)||0;
+  const r=(typeof rg830Conceptos!=="undefined"?rg830Conceptos:[]).find(x=>x.cod_regimen===(parseInt(op.codigo_sicore,10)||-1));
+  if(!r||!(ret>0))return null;
+  const pct=+r.pct_inscripto,noSuj=+r.monto_no_sujeto||0;
+  if(!(pct>0))return null;
+  const esperado=Math.round(Math.max(0,base-noSuj)*pct)/100;
+  return Math.abs(esperado-ret)<=1?{pct,noSuj}:null;
+}
 // Pagos y retenciones ya practicados en el mes al mismo proveedor (por CUIT) y régimen: la base y el no sujeto son acumulativos
 async function _mopCargarPrevios(cod){
   _mopPrev={base:0,ret:0};
@@ -29861,7 +29871,7 @@ async function generarPDFCertificadoRetencion(op,c,soloRetornar){
     ["Orden de pago",op.numero],
     ["Importe del comprobante (con IVA)",m(op.monto_bruto)],
     ["Base de cálculo (neto sin IVA)",m(op.base_retencion)],
-    ["Alícuota efectiva",`${Number(op.porcentaje_retencion||0).toLocaleString("es-AR")}%`],
+    ...(()=>{const t=_opTasaNominal(op);return t?[["Mínimo no imponible (mensual)",m(t.noSuj)],["Alícuota",`${String(t.pct).replace(".",",")}% sobre el excedente`]]:[["Alícuota efectiva",`${Number(op.porcentaje_retencion||0).toLocaleString("es-AR")}%`]];})(),
   ]);
   doc.setFillColor(255,244,244);doc.roundedRect(M-2,y-5,W-2*M+4,14,2,2,"F");
   doc.setFont("helvetica","bold");doc.setFontSize(12);doc.setTextColor(185,40,40);
@@ -31007,7 +31017,8 @@ async function generarPDFOrdenPago(op,soloRetornar){
     doc.setFontSize(8);doc.setFont("helvetica","italic");doc.setTextColor(120,80,190);
     const _dr=doc.splitTextToSize(`Retención Ganancias — SICORE ${op.codigo_sicore||""} · ${op.descripcion_sicore||""}`,W-2*M-8);
     doc.text(_dr,M+4,y);y+=_dr.length*4+1.5;
-    doc.text(`Base: $${Number(op.base_retencion).toLocaleString("es-AR",{minimumFractionDigits:2})}   ×   ${op.porcentaje_retencion}%`,M+4,y);y+=7;
+    const _m2=v=>"$"+Number(v).toLocaleString("es-AR",{minimumFractionDigits:2});const _tn=_opTasaNominal(op);
+    const _bl=doc.splitTextToSize(_tn?`Base: ${_m2(op.base_retencion)}  −  mínimo no imponible ${_m2(_tn.noSuj)}  =  ${_m2(Math.max(0,op.base_retencion-_tn.noSuj))}   ×   alícuota ${String(_tn.pct).replace(".",",")}%`:`Base: ${_m2(op.base_retencion)}   ×   ${op.porcentaje_retencion}%`,W-2*M-8);doc.text(_bl,M+4,y);y+=_bl.length*4+3;
     doc.setFont("helvetica","normal");
     addRow("(-) Monto retención",-op.monto_retencion,false,[200,50,50]);
   }
