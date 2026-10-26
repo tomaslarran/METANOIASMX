@@ -29496,6 +29496,33 @@ function calcRetGanancias({cod,inscripto,persona,neto,prevBase,prevRet}){
   if(exceso||bajoMin)aRet=0;
   return{pct,noSuj,imponible,total,aRet,bajoMin,exceso,min,escala:pct===0,acum};
 }
+// Detalle del cálculo de la retención, idéntico al de la pantalla de la OP: pagos anteriores del mes, base acumulada, mínimo, escala/alícuota y lo ya retenido.
+// Se reconstruye con las OP anteriores del mismo CUIT, sociedad y régimen en el mes; si no cuadra con el monto guardado devuelve null (el PDF usa el detalle simple).
+async function _opDetalleRet(op){
+  try{
+    if((typeof rg830Conceptos==="undefined"||!rg830Conceptos.length)&&typeof cargarRG830==="function")await cargarRG830();
+    const cod=parseInt(op.codigo_sicore,10)||-1;
+    if(!rg830Conceptos.find(x=>x.cod_regimen===cod))return null;
+    const cu=String(op.cuit||"").replace(/\D/g,""),mes=String(op.fecha_pago||"").slice(0,7);
+    let prevBase=0,prevRet=0;
+    if(mes&&cu.length===11){
+      const ops=await sb(`ordenes_pago?sociedad=eq.${op.sociedad||"SUDES"}&codigo_sicore=eq.${cod}&fecha_pago=gte.${mes}-01&fecha_pago=lte.${mes}-31&select=id,cuit,base_retencion,monto_retencion,created_at`);
+      ops.filter(o=>o.id!==op.id&&(!op.created_at||String(o.created_at)<String(op.created_at))&&String(o.cuit||"").replace(/\D/g,"")===cu)
+         .forEach(o=>{prevBase+=parseFloat(o.base_retencion)||0;prevRet+=parseFloat(o.monto_retencion)||0;});
+    }
+    const c=calcRetGanancias({cod,inscripto:true,persona:"H",neto:parseFloat(op.base_retencion)||0,prevBase,prevRet});
+    if(!c||!(Math.abs(c.aRet-(parseFloat(op.monto_retencion)||0))<=1))return null;
+    const m=v=>"$"+Number(v).toLocaleString("es-AR",{minimumFractionDigits:2});
+    const L=[];
+    if(prevBase>0)L.push(`Pagos anteriores del mes: ${m(prevBase)} (retenido ${m(prevRet)})`);
+    L.push(`Base de este pago: ${m(op.base_retencion)}`+(prevBase>0?`  |  Base acumulada del mes: ${m(c.acum)}`:""));
+    if(c.noSuj>0)L.push(`Mínimo no imponible mensual: ${m(c.noSuj)}  |  Imponible: ${m(c.imponible)}`);
+    L.push(c.escala?`Retención sobre el acumulado (escala RG 830): ${m(c.total)}`:`Alícuota ${String(c.pct).replace(".",",")}% sobre el imponible: ${m(c.total)}`);
+    if(prevRet>0)L.push(`Menos retenido antes en el mes: ${m(prevRet)}`);
+    L.push(`Retención de este pago: ${m(c.aRet)}`);
+    return L;
+  }catch(e){return null;}
+}
 // Alícuota nominal y mínimo no imponible de una retención ya practicada (para mostrar «2% sobre lo que excede $224.000» en vez del % efectivo)
 function _opTasaNominal(op){
   const base=parseFloat(op.base_retencion)||0,ret=parseFloat(op.monto_retencion)||0;
@@ -31214,9 +31241,10 @@ async function generarPDFOrdenPago(op,soloRetornar){
     const _dr=doc.splitTextToSize(`Retención Ganancias — SICORE ${op.codigo_sicore||""} · ${op.descripcion_sicore||""}`,W-2*M-8);
     doc.text(_dr,M+4,y);y+=_dr.length*4+1.5;
     const _m2=v=>"$"+Number(v).toLocaleString("es-AR",{minimumFractionDigits:2});const _tn=_opTasaNominal(op);
-    const _bl=_tn
+    const _det=await _opDetalleRet(op);
+    const _bl=(_det||(_tn
       ?[`Base de calculo: ${_m2(op.base_retencion)}`,`Minimo no imponible: ${_m2(_tn.noSuj)}  |  Excedente: ${_m2(Math.max(0,op.base_retencion-_tn.noSuj))}`,`Alicuota: ${String(_tn.pct).replace(".",",")}% sobre el excedente`]
-      :[`Base de calculo: ${_m2(op.base_retencion)}  |  Alicuota: ${op.porcentaje_retencion}%`];
+      :[`Base de calculo: ${_m2(op.base_retencion)}  |  Alicuota: ${op.porcentaje_retencion}%`])).flatMap(t=>doc.splitTextToSize(t,W-2*M-8));
     _bl.forEach(t=>{doc.text(t,M+4,y);y+=4.5;});y+=2;
     doc.setFont("helvetica","normal");
     addRow("(-) Monto retención",-op.monto_retencion,false,[200,50,50]);
