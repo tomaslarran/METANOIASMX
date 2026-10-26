@@ -5113,6 +5113,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     </div>
     <div class="fg" style="grid-column:1/-1"><label class="fl">CBU / alias del proveedor (destino)</label>
       <input class="fi" id="mop-cbu" type="text" placeholder="CBU o alias de la cuenta a la que se transfiere">
+      <div id="mop-cbu-info" style="font-size:10px;color:var(--tx3);margin-top:3px"></div>
     </div>
     <div class="fg" style="grid-column:1/-1"><label class="fl">Observaciones</label>
       <input class="fi" id="mop-obs-op" type="text" placeholder="Opcional">
@@ -5197,6 +5198,16 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;font-size:13px;color:var(--tx2)">
       <input type="checkbox" id="p-revisado"> Datos fiscales revisados ✅
     </label>
+  </div>
+  <div style="border-top:1px solid var(--b);margin:14px 0;padding-top:14px">
+    <div style="font-size:11px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Datos bancarios (para transferirle)</div>
+    <div class="form-grid-2">
+      <div class="fg form-full"><label class="fl">CBU</label><input class="fi" id="p-cbu" type="text" inputmode="numeric" maxlength="22" placeholder="22 dígitos"></div>
+      <div class="fg"><label class="fl">Alias</label><input class="fi" id="p-alias" type="text" placeholder="Ej: empresa.cobros"></div>
+      <div class="fg"><label class="fl">Banco</label><input class="fi" id="p-banco" type="text" placeholder="Ej: Banco Macro"></div>
+      <div class="fg form-full"><label class="fl">Titular de la cuenta</label><input class="fi" id="p-titular" type="text" placeholder="Si es distinto del proveedor"></div>
+    </div>
+    <div style="font-size:10px;color:var(--tx3);margin-top:3px">La orden de pago lo toma de acá. Si se lo escribís en una orden y el proveedor no lo tiene, queda guardado solo.</div>
   </div>
   <div class="ma"><button class="bc" onclick="closeModal('modal-proveedor')">Cancelar</button><button class="bk" id="pbtn" onclick="saveProveedor()">Guardar</button></div>
 </div>
@@ -6725,7 +6736,7 @@ function openNewModal(){
     openModal("modal-curso");
   }
   else if(curPage==="alumnos"){document.getElementById("alum-edit-id").value="";document.getElementById("modal-alum-title").textContent="Nuevo Alumno";["a-nombre","a-apellido","a-dni","a-cuit","a-matricula","a-esp","a-inst","a-email","a-tel","a-notas"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("alum-cursos-section").style.display="none";openModal("modal-alumno")}
-  else if(curPage==="proveedores"){document.getElementById("prov-edit-id").value="";document.getElementById("modal-prov-title").textContent="Nuevo Proveedor";["p-nombre","p-email","p-tel","p-esp","p-notas","p-cuit","p-domicilio","p-cp"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("p-tipo").value="Empresa";document.getElementById("p-condicion-iva").value="";document.getElementById("p-provincia").value="";document.getElementById("p-situacion-iibb").value="";document.getElementById("p-iibb-cert-hasta").value="";document.getElementById("p-revisado").checked=false;openModal("modal-proveedor")}
+  else if(curPage==="proveedores"){document.getElementById("prov-edit-id").value="";document.getElementById("modal-prov-title").textContent="Nuevo Proveedor";["p-nombre","p-email","p-tel","p-esp","p-notas","p-cuit","p-domicilio","p-cp","p-cbu","p-alias","p-banco","p-titular"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("p-tipo").value="Empresa";document.getElementById("p-condicion-iva").value="";document.getElementById("p-provincia").value="";document.getElementById("p-situacion-iibb").value="";document.getElementById("p-iibb-cert-hasta").value="";document.getElementById("p-revisado").checked=false;openModal("modal-proveedor")}
   else if(curPage==="instructores"){document.getElementById("inst-edit-id").value="";document.getElementById("modal-inst-title").textContent="Nuevo Instructor";["i-nombre","i-apellido","i-matricula","i-email","i-tel","i-inst","i-notas","i-genero"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});document.getElementById("i-activo").checked=true;document.getElementById("ibtn-del").style.display="none";_instEspSel=[];renderEspPills("i-esp-pills",_instEspSel);openModal("modal-instructor")}
   else if(curPage==="comunicaciones")openModalNuevoPost();
 }
@@ -11976,6 +11987,17 @@ function renderProveedores(){
 }
 
 function normCuit(c){return(c||"").replace(/[^0-9]/g,"")}
+// Datos bancarios del proveedor: se guardan aparte; si la columna no existe todavía avisa qué SQL correr
+async function _provGuardarBanco(id,d){
+  try{
+    await sb(`proveedores?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(d)});
+    const i=proveedores.findIndex(p=>p.id===id);if(i>=0)Object.assign(proveedores[i],d);
+    return true;
+  }catch(e){
+    if(/cbu|alias_cbu|banco_cuenta|titular_cuenta|PGRST204|42703/i.test(String(e.message||e)))toast("Falta correr sql_proveedores_cbu.sql en Supabase para guardar los datos bancarios","err");
+    return false;
+  }
+}
 
 function editProveedor(id){
   const p=proveedores.find(p=>p.id===id);if(!p)return;
@@ -11995,17 +12017,24 @@ function editProveedor(id){
   document.getElementById("p-situacion-iibb").value=p.situacion_iibb||"";
   document.getElementById("p-iibb-cert-hasta").value=p.iibb_cert_no_retencion_hasta||"";
   document.getElementById("p-revisado").checked=!!p.revisado;
+  document.getElementById("p-cbu").value=p.cbu||"";
+  document.getElementById("p-alias").value=p.alias_cbu||"";
+  document.getElementById("p-banco").value=p.banco_cuenta||"";
+  document.getElementById("p-titular").value=p.titular_cuenta||"";
   openModal("modal-proveedor");
 }
 
 async function saveProveedor(){
   const nombre=document.getElementById("p-nombre").value.trim();if(!nombre){toast("Escribí un nombre","err");return}
-  const id=document.getElementById("prov-edit-id").value;
+  const id=document.getElementById("prov-edit-id").value;let idFinal=id;
   const data={nombre,tipo:document.getElementById("p-tipo").value,especialidad:document.getElementById("p-esp").value||null,email:document.getElementById("p-email").value||null,telefono:document.getElementById("p-tel").value||null,notas:document.getElementById("p-notas").value||null,cuit:document.getElementById("p-cuit").value.trim()||null,condicion_iva:document.getElementById("p-condicion-iva").value||null,domicilio:document.getElementById("p-domicilio").value.trim()||null,provincia:document.getElementById("p-provincia").value||null,cp:document.getElementById("p-cp").value.trim()||null,situacion_iibb:document.getElementById("p-situacion-iibb").value||null,iibb_cert_no_retencion_hasta:document.getElementById("p-iibb-cert-hasta").value||null,revisado:document.getElementById("p-revisado").checked,updated_at:new Date().toISOString()};
   const pbtn=document.getElementById("pbtn");pbtn.disabled=true;pbtn.textContent="Guardando...";
   try{
     if(id){await sb(`proveedores?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(data)});const i=proveedores.findIndex(p=>p.id===id);if(i>=0)proveedores[i]={...proveedores[i],...data};}
-    else{const [created]=await sb("proveedores",{method:"POST",body:JSON.stringify(data)});proveedores.push(created);}
+    else{const [created]=await sb("proveedores",{method:"POST",body:JSON.stringify(data)});proveedores.push(created);idFinal=created.id;}
+    const cbuTxt=document.getElementById("p-cbu").value.replace(/\s/g,"");
+    if(cbuTxt&&!/^\d{22}$/.test(cbuTxt))toast("El CBU debe tener 22 dígitos: se guardó el proveedor sin los datos bancarios","err");
+    else await _provGuardarBanco(idFinal,{cbu:cbuTxt||null,alias_cbu:document.getElementById("p-alias").value.trim()||null,banco_cuenta:document.getElementById("p-banco").value.trim()||null,titular_cuenta:document.getElementById("p-titular").value.trim()||null});
     closeModal("modal-proveedor");renderProveedores();renderMaestroFiscal();updateSideBadges();
     const cps=document.getElementById("c-proveedor");if(cps){cps.innerHTML='<option value="">Sin proveedor</option>';proveedores.forEach(p=>{const o=document.createElement("option");o.value=p.id;o.textContent=`${p.nombre} (${p.tipo})`;cps.appendChild(o)})}
     toast("Proveedor guardado","ok");
@@ -29682,11 +29711,18 @@ async function abrirOrdenPago(compId,fromPendientes=false){
     }catch(_){}
   }
   if(!opPrev){
-    try{
-      const cu=String(c.cuit||"").replace(/\D/g,"");
-      const pv=(await sb("ordenes_pago?cbu_destino=not.is.null&select=cuit,cbu_destino&order=created_at.desc&limit=400")).find(o=>String(o.cuit||"").replace(/\D/g,"")===cu&&String(o.cbu_destino).trim());
-      if(pv)document.getElementById("mop-cbu").value=pv.cbu_destino;
-    }catch(_){}
+    const prov=_provDeComprobante(c);
+    const deFicha=prov?.cbu||prov?.alias_cbu||"";
+    if(deFicha)document.getElementById("mop-cbu").value=prov.cbu&&prov.alias_cbu?`${prov.cbu} (alias ${prov.alias_cbu})`:deFicha;
+    else{
+      try{
+        const cu=String(c.cuit||"").replace(/\D/g,"");
+        const pv=(await sb("ordenes_pago?cbu_destino=not.is.null&select=cuit,cbu_destino&order=created_at.desc&limit=400")).find(o=>String(o.cuit||"").replace(/\D/g,"")===cu&&String(o.cbu_destino).trim());
+        if(pv)document.getElementById("mop-cbu").value=pv.cbu_destino;
+      }catch(_){}
+    }
+    const info=document.getElementById("mop-cbu-info");
+    if(info)info.textContent=deFicha?`Tomado de la ficha de ${prov.nombre}${prov.banco_cuenta?` · ${prov.banco_cuenta}`:""}${prov.titular_cuenta?` · titular ${prov.titular_cuenta}`:""}`:(prov?"El proveedor no tiene datos bancarios: lo que escribas acá se guarda en su ficha.":"");
   }
   document.getElementById("mop-btn-solo-pdf").style.display="";
   await mopCargarAnticipo(c,opPrev);
@@ -29990,6 +30026,11 @@ async function confirmarOrdenPago(){
     const li=(ordenesGanancias||[]).findIndex(o=>o.id===opFull.id);
     if(li>=0)ordenesGanancias[li]={...ordenesGanancias[li],...opData};else ordenesGanancias.push(opFull);
     await generarPDFOrdenPago(opFull);
+    const _pv=_provDeComprobante(c);
+    if(_pv&&cbu&&!_pv.cbu&&!_pv.alias_cbu){
+      const dig=cbu.replace(/\s/g,"");
+      if(await _provGuardarBanco(_pv.id,/^\d{22}$/.test(dig)?{cbu:dig}:{alias_cbu:cbu}))toast("CBU/alias guardado en la ficha de "+_pv.nombre,"inf");
+    }
     closeModal("modal-orden-pago");
     renderComprobantes();
     if(cfTab==="pendientes")renderCFPendientes();
