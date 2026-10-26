@@ -22522,19 +22522,37 @@ async function feImpConfirmar(){
 // CRITERIO PROVISORIO (confirmar con la contadora): Debe Deudores por ventas / Haber Ingresos de la sociedad e IVA Débito Fiscal.
 // La nota de crédito es el asiento invertido. El cobro (cobro_venta) todavía no se asienta: llega con la conciliación de ventas.
 const FE_CTA_DEUDORES="1.1.02.002",FE_CTA_IVA_DEBITO="2.1.03.001",FE_CTA_INGRESOS={SUDES:"4.1.01.001",POINTERS:"4.2.01.001"};
+// IVA débito por alícuota: cuentas 2.1.03.012 (21%), .013 (10,5%) y .014 (27%); otras alícuotas, o si no cierra con el IVA del comprobante, a 2.1.03.001
+const FE_CTA_IVA_ALIC={"21":"2.1.03.012","10.5":"2.1.03.013","27":"2.1.03.014"};
+function feIvaPorAlicuota(f,iva){
+  if(!(iva>0)||!Array.isArray(f.alicuotas)||!f.alicuotas.length)return null;
+  const m=new Map();
+  for(const a of f.alicuotas){
+    const imp=feR2(Math.abs(parseFloat(a.Importe)||0));if(!(imp>0))continue;
+    const cod=FE_CTA_IVA_ALIC[String(parseFloat(a.pct))];if(!cod)return null;
+    m.set(cod,feR2((m.get(cod)||0)+imp));
+  }
+  if(!m.size)return null;
+  const suma=feR2([...m.values()].reduce((s,v)=>s+v,0));
+  if(Math.abs(suma-iva)>0.02)return null;
+  if(suma!==iva){const mayor=[...m.entries()].reduce((a,b)=>b[1]>a[1]?b:a);m.set(mayor[0],feR2(mayor[1]+feR2(iva-suma)));}
+  return m;
+}
 function feLineasVenta(f){
   const total=feR2(Math.abs(parseFloat(f.total)||0));if(!(total>0))return null;
   const iva=feR2(Math.abs(parseFloat(f.iva)||0)),ingreso=feR2(total-iva);
   const cta=FE_CTA_INGRESOS[f.sociedad];if(!cta)return null;
   const nc=FE_ES_NC(f.cbte_tipo),L=[];
+  const ivaAl=feIvaPorAlicuota(f,iva);
+  const ivaLineas=ivaAl?[...ivaAl.entries()].map(([codigo,v])=>({codigo,v,desc:"IVA Débito Fiscal "+({"2.1.03.012":"21%","2.1.03.013":"10,5%","2.1.03.014":"27%"})[codigo]})):(iva>0?[{codigo:FE_CTA_IVA_DEBITO,v:iva,desc:"IVA Débito Fiscal"}]:[]);
   if(nc){
     if(ingreso>0)L.push({codigo:cta,debe:ingreso,desc:"Ingresos (NC)"});
-    if(iva>0)L.push({codigo:FE_CTA_IVA_DEBITO,debe:iva,desc:"IVA Débito (NC)"});
+    ivaLineas.forEach(x=>L.push({codigo:x.codigo,debe:x.v,desc:x.desc+" (NC)"}));
     L.push({codigo:FE_CTA_DEUDORES,haber:total,desc:"Deudores por ventas (NC)"});
   }else{
     L.push({codigo:FE_CTA_DEUDORES,debe:total,desc:"Deudores por ventas"});
     if(ingreso>0)L.push({codigo:cta,haber:ingreso,desc:"Ingresos"});
-    if(iva>0)L.push({codigo:FE_CTA_IVA_DEBITO,haber:iva,desc:"IVA Débito Fiscal"});
+    ivaLineas.forEach(x=>L.push({codigo:x.codigo,haber:x.v,desc:x.desc}));
   }
   return L;
 }
@@ -27182,7 +27200,7 @@ async function renderLibroDiario(){
       </select>
       <label style="font-size:12px;color:var(--tx2);display:flex;align-items:center;gap:5px;cursor:pointer" title="Los asientos anulados no cuentan en los libros: quedan solo como constancia"><input type="checkbox" ${f.anulados?"checked":""} onchange="window._ldF.anulados=this.checked;_ldCargar()"> Ver anulados</label>
     </div>
-      ${loggedUser?.rol==="admin"?`<button class="bs admin-only-el" id="ld-backfill-btn" onclick="backfillAsientos()" style="margin-left:auto;font-size:11px;padding:5px 12px" title="Genera asientos para registros históricos sin asiento">🔄 Generar históricos</button><button class="bs admin-only-el" id="ld-regen-btn" onclick="regenerarDevengadosCompras()" style="font-size:11px;padding:5px 12px" title="Repasa los asientos de compras del ejercicio con el criterio por renglón (gasto por rubro, IVA por alícuota)">🔁 Regenerar devengados</button>`:""}
+      ${loggedUser?.rol==="admin"?`<button class="bs admin-only-el" id="ld-backfill-btn" onclick="backfillAsientos()" style="margin-left:auto;font-size:11px;padding:5px 12px" title="Genera asientos para registros históricos sin asiento">🔄 Generar históricos</button><button class="bs admin-only-el" id="ld-regen-btn" onclick="regenerarDevengadosCompras()" style="font-size:11px;padding:5px 12px" title="Repasa los asientos de compras y ventas del ejercicio con el criterio por renglón (gasto por rubro, IVA por alícuota)">🔁 Regenerar devengados</button>`:""}
     </div>
     <div id="ld-body"><div style="color:var(--tx3);font-size:12px">Cargando...</div></div>`;
   await _ldCargar();
@@ -29463,6 +29481,23 @@ async function regenerarDevengadosCompras(){
       if(Math.abs(suma(o,IVAC)-suma(n,IVAC))>0.02){excl.push({a,c,motivo:"cambiaría el IVA crédito total"});continue;}
       cambios.push({a,c,nuevo,o,n,cerrado:cerr.has(a.sociedad+"|"+String(a.fecha).slice(0,7))});
     }
+    // Ventas (facturas emitidas en producción): mismo criterio con el IVA débito por alícuota; Deudores y el IVA débito total no pueden variar
+    const IVAD=["2.1.03.001","2.1.03.012","2.1.03.013","2.1.03.014"];
+    const [fes,asV]=await Promise.all([
+      sb(`facturas_emitidas?select=*&ambiente=eq.produccion&estado=eq.autorizada&fecha=gte.${inicio}&limit=5000`).catch(()=>[]),
+      sb(`asientos_contables?select=id,fecha,sociedad,tipo,origen,origen_id,descripcion,asientos_movimientos(debe,haber,plan_cuentas(codigo,nombre))&origen=eq.factura_emitida&anulado=eq.false&fecha=gte.${inicio}&limit=20000`).catch(()=>[])]);
+    const fmap=new Map(fes.map(x=>[x.id,x]));
+    for(const a of asV){
+      const f=fmap.get(a.origen_id);if(!f)continue;
+      const c={sociedad:f.sociedad,tipo:"Venta",numero:feNum(f)};
+      const nuevo=feLineasVenta(f);if(!nuevo){excl.push({a,c,motivo:"sin importe o cuenta"});continue;}
+      const o=netOld(a),n=netNew(nuevo);
+      const cods=new Set([...Object.keys(o),...Object.keys(n)]);
+      if(![...cods].some(k=>Math.abs((o[k]||0)-(n[k]||0))>0.004)){iguales++;continue;}
+      if(Math.abs((o["1.1.02.002"]||0)-(n["1.1.02.002"]||0))>0.02){excl.push({a,c,motivo:"cambiaría Deudores"});continue;}
+      if(Math.abs(suma(o,IVAD)-suma(n,IVAD))>0.02){excl.push({a,c,motivo:"cambiaría el IVA débito total"});continue;}
+      cambios.push({a,c,nuevo,o,n,venta:f,cerrado:cerr.has(a.sociedad+"|"+String(a.fecha).slice(0,7))});
+    }
     if(btn){btn.disabled=false;btn.textContent="🔁 Regenerar devengados";}
     if(!cambios.length){toast(`Los ${iguales} asientos de devengado ya tienen el criterio por renglón${excl.length?` · ${excl.length} no se pueden regenerar solos`:""}`,"inf");return;}
     // vista previa: total por cuenta antes / después, por sociedad
@@ -29480,10 +29515,10 @@ async function regenerarDevengadosCompras(){
     const porMes={};cambios.forEach(x=>{const k=x.a.sociedad+" "+String(x.a.fecha).slice(0,7);porMes[k]=(porMes[k]||0)+1;});
     const cerrados=cambios.filter(x=>x.cerrado).length;
     const html=`<div class="mov on" id="modal-regen-dev" style="display:flex" onclick="if(event.target===this)this.remove()"><div class="modal" style="max-width:760px;max-height:90vh;overflow-y:auto">
-      <div class="mt">🔁 Regenerar devengados de compras <button class="mt-close" onclick="document.getElementById('modal-regen-dev').remove()">✕</button></div>
+      <div class="mt">🔁 Regenerar devengados (compras y ventas) <button class="mt-close" onclick="document.getElementById('modal-regen-dev').remove()">✕</button></div>
       <div style="font-size:13px;margin-bottom:10px"><b>${cambios.length}</b> asientos cambian de cuenta · ${iguales} ya están bien${excl.length?` · <span style="color:var(--am)">${excl.length} no se pueden regenerar solos</span>`:""}.<br>
       <span style="color:var(--tx3);font-size:12px">Por sociedad y mes: ${Object.keys(porMes).sort().map(k=>`${k}: ${porMes[k]}`).join(" · ")}</span></div>
-      <div style="font-size:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:8px;padding:8px 12px;margin-bottom:10px">✓ Control: en cada asiento el total a <b>Proveedores</b> y el <b>IVA crédito</b> (suma de todas sus cuentas) quedan igual. Solo cambia cómo se reparte el gasto y el IVA por alícuota. El asiento anterior queda anulado (se puede recuperar).</div>
+      <div style="font-size:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:8px;padding:8px 12px;margin-bottom:10px">✓ Control: en cada asiento el total a <b>Proveedores</b> y el <b>IVA crédito</b> (suma de todas sus cuentas) quedan igual. En ventas, los <b>Deudores</b> y el <b>IVA débito</b> total. Solo cambia cómo se reparte el gasto y el IVA por alícuota. El asiento anterior queda anulado (se puede recuperar).</div>
       ${cerrados?`<div style="font-size:12px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:8px 12px;margin-bottom:10px">⚠️ ${cerrados} de estos asientos están en meses ya cerrados: el cierre va a avisar «cambió después del cierre».</div>`:""}
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="color:var(--tx3);text-align:left"><th style="padding:4px 6px">Soc.</th><th>Cuenta</th><th style="text-align:right">Antes</th><th style="text-align:right">Después</th><th style="text-align:right">Diferencia</th></tr></thead><tbody>
       ${filas.map(e=>`<tr style="border-top:1px solid var(--b)"><td style="padding:4px 6px">${e.soc}</td><td>${esc(e.cod)} ${esc(e.nombre)}</td><td style="text-align:right">${f(e.antes)}</td><td style="text-align:right">${f(e.despues)}</td><td style="text-align:right;font-weight:600;color:${e.despues-e.antes>=0?"var(--gr)":"var(--re)"}">${f(r2(e.despues-e.antes))}</td></tr>`).join("")}
@@ -29506,9 +29541,10 @@ async function _regenAplicar(){
   for(const x of cambios){
     try{
       // primero el nuevo; solo si sale bien se anula el anterior (nunca queda un comprobante sin asiento)
-      const a=await generarAsiento({fecha:x.a.fecha,sociedad:x.a.sociedad,tipo:"devengado_compra",origen:"comprobante",origen_id:x.a.origen_id,descripcion:x.a.descripcion,lineas:x.nuevo});
+      const a=await generarAsiento({fecha:x.a.fecha,sociedad:x.a.sociedad,tipo:x.venta?"devengado_venta":"devengado_compra",origen:x.venta?"factura_emitida":"comprobante",origen_id:x.a.origen_id,descripcion:x.a.descripcion,lineas:x.nuevo});
       if(a?._faltantes){a._faltantes.forEach(c=>faltantes.add(c));fallo++;continue;}
       if(!a?.id){fallo++;continue;}
+      if(x.venta)await sb(`facturas_emitidas?id=eq.${x.venta.id}`,{method:"PATCH",body:JSON.stringify({asiento_id:a.id})});
       await sb(`asientos_contables?id=eq.${x.a.id}`,{method:"PATCH",body:JSON.stringify({anulado:true})});
       ok++;
     }catch(e){fallo++;console.warn("regenerar devengado:",x.c.numero,e);}
