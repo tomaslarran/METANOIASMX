@@ -3280,7 +3280,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 <div id="pg-sueldos" style="display:none">
   <div class="pgh">
     <div class="pgh-left"><div class="pgt">Sueldos</div><div class="pgs">Personal, honorarios y contratados</div></div>
-    <button class="bk" onclick="openAddEmpleado()">+ Empleado</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="bc" onclick="abrirAnticipoSueldo()">💸 Anticipo sueldos</button><button class="bk" onclick="openAddEmpleado()">+ Empleado</button></div>
   </div>
   <!-- Stats -->
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin-bottom:18px">
@@ -4204,13 +4204,41 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div id="mpe-resumen" style="background:var(--surf2);border-radius:var(--r);padding:12px 14px;font-size:13px;border:1px solid var(--b)"></div>
       <div class="fg" id="mpe-fact-wrap" style="display:none"><label class="fl">Factura de honorarios</label><select class="fi" id="mpe-fact" onchange="mpeElegirFactura()"></select><div id="mpe-fact-hint" style="font-size:11px;color:var(--tx3);margin-top:4px"></div></div>
       <div class="fg"><label class="fl">Fecha de pago</label><input type="date" id="mpe-fecha" class="fi"></div>
-      <div class="fg"><label class="fl">Monto abonado</label><input type="number" id="mpe-monto" class="fi" step="0.01" placeholder="0"></div>
+      <div class="fg"><label class="fl">Monto abonado</label><input type="number" id="mpe-monto" class="fi" step="0.01" placeholder="0" oninput="mpeAntCambio()"></div>
+      <div id="mpe-ant-wrap" style="display:none;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:10px 12px;font-size:12px">
+        <div style="margin-bottom:6px">📎 <b>Anticipo abierto:</b> <span id="mpe-ant-info"></span></div>
+        <label><input type="checkbox" id="mpe-ant-usar" checked onchange="mpeAntCambio()"> Descontarlo de este pago</label>
+        <div style="margin-top:6px;color:var(--tx3)">Se transfiere: <b id="mpe-ant-neto" style="color:var(--tx)"></b></div>
+      </div>
       <div class="fg"><label class="fl">Medio de pago</label><select class="fi" id="mpe-medio"></select></div>
       <div class="fg"><label class="fl">Notas (opcional)</label><input type="text" id="mpe-notas" class="fi" placeholder="Referencia, número de transferencia..."></div>
       <button id="mpe-op-btn" class="bc" style="display:none" onclick="_pagoEmpleadoGenerarOP()">📄 Necesita orden de pago (retenciones)</button>
       <div style="display:flex;gap:8px;padding-top:4px">
         <button class="bc" onclick="closeM('modal-pago-empleado')" style="flex:1">Cancelar</button>
         <button class="bk" id="mpe-save-btn" onclick="confirmarPagoEmpleado()" style="flex:1">✓ Confirmar pago</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL ANTICIPO DE SUELDO ══ -->
+<div class="mov" id="modal-anticipo-sueldo" onclick="if(event.target===this)closeM('modal-anticipo-sueldo')">
+  <div class="modal" style="max-width:420px">
+    <div class="mt"><span>💸 Anticipo de sueldo</span><button class="mt-close" onclick="closeM('modal-anticipo-sueldo')">✕</button></div>
+    <div style="padding:0 20px 20px;display:flex;flex-direction:column;gap:14px">
+      <div class="fg"><label class="fl">Persona *</label><select class="fi" id="asu-emp" onchange="asuCambioEmp()"></select></div>
+      <div class="g2">
+        <div class="fg"><label class="fl">Fecha *</label><input type="date" id="asu-fecha" class="fi"></div>
+        <div class="fg"><label class="fl">Importe *</label><input type="number" id="asu-monto" class="fi" step="0.01" placeholder="0"></div>
+      </div>
+      <div class="fg"><label class="fl">Sale de *</label><select class="fi" id="asu-medio"></select></div>
+      <div class="fg"><label class="fl">N° de operación / referencia</label><input type="text" id="asu-nro" class="fi" placeholder="Opcional"></div>
+      <div class="fg"><label class="fl">Concepto</label><input type="text" id="asu-concepto" class="fi" placeholder="Ej: adelanto del sueldo de noviembre"></div>
+      <div id="asu-abiertos" style="font-size:11px;color:var(--tx3)"></div>
+      <div style="font-size:11px;color:var(--tx3)">Asiento: Debe Anticipos de sueldos y honorarios / Haber la cuenta de donde sale. Se descuenta solo cuando pagás el sueldo de esa persona. Solo para quienes cobran sin factura: a quienes facturan se les carga como pago anticipado a proveedor.</div>
+      <div style="display:flex;gap:8px;padding-top:4px">
+        <button class="bc" onclick="closeM('modal-anticipo-sueldo')" style="flex:1">Cancelar</button>
+        <button class="bk" id="asu-btn" onclick="confirmarAnticipoSueldo()" style="flex:1">✓ Registrar anticipo</button>
       </div>
     </div>
   </div>
@@ -18227,6 +18255,7 @@ function navMesSueldos(dir){
 async function renderSueldos(){
   if(!cfSueldosMes){const n=new Date();cfSueldosMes=`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;}
   if(!cfEmpleados.length&&cfPrestamos.length===0)await loadCF().catch(()=>{});
+  await _antSueCargar();
 
   const mesLabel=`${MESES_CF[parseInt(cfSueldosMes.slice(5,7))-1]} ${cfSueldosMes.slice(0,4)}`;
   const el=document.getElementById("sue-mes-label");if(el)el.textContent=mesLabel;
@@ -18299,7 +18328,7 @@ async function renderSueldos(){
               <span class="badge" style="font-size:9px;background:${emp.tipo==="Variable"?"rgba(59,130,246,.15)":"rgba(16,185,129,.15)"};color:${emp.tipo==="Variable"?"#3B82F6":"var(--gr)"};border:1px solid ${emp.tipo==="Variable"?"rgba(59,130,246,.3)":"rgba(16,185,129,.3)"}">${emp.tipo||"Fijo"}</span>
             </div>
             <div style="font-size:11px;color:var(--tx3)">
-              ${fmtNum(emp.monto_mensual,true)}/mes${emp.dia_pago?` · Día ${emp.dia_pago}`:""}${emp.notas?` · ${esc(emp.notas)}`:""}
+              ${fmtNum(emp.monto_mensual,true)}/mes${emp.dia_pago?` · Día ${emp.dia_pago}`:""}${emp.notas?` · ${esc(emp.notas)}`:""}${_antSueSaldo(emp.id)>0?` · <span style="color:var(--am);font-weight:600" title="Se descuenta al pagar el sueldo">📎 anticipo abierto ${fmtNum(_antSueSaldo(emp.id),true)}</span>`:""}
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:6px">
@@ -18310,6 +18339,7 @@ async function renderSueldos(){
                  ${opPend?`<button class="btn sm" style="background:var(--gr);color:#fff;font-size:10px;padding:3px 10px" title="Esta persona tiene una orden de pago pendiente" onclick="abrirPagarOP('${opPend.id}')">💸 Pagar OP ${esc(opPend.numero)}</button>`:""}
                  <button class="btn sm" style="background:var(--pu);color:#fff;font-size:10px;padding:3px 10px" onclick="abrirPagoEmpleado('${emp.id}','${cfSueldosMes}')">Pagar</button>`
             }
+            ${cuitE.length!==11?`<button class="btn sm" title="Registrar un anticipo de sueldo" onclick="abrirAnticipoSueldo('${emp.id}')">💸</button>`:""}
             <button class="btn sm" onclick="openEditEmpleado('${emp.id}')">✎</button>
           </div>
         </div>
@@ -18422,6 +18452,7 @@ function abrirPagoEmpleado(empId,periodo){
   openM("modal-pago-empleado");
   setTimeout(()=>document.getElementById("mpe-fecha").focus(),80);
   _mpeCargarFacturas(emp,periodo);
+  _mpeCargarAnticipos(emp);
 }
 
 async function confirmarPagoEmpleado(){
@@ -18443,16 +18474,25 @@ async function confirmarPagoEmpleado(){
       cfPagosEmpleados.push(created);pagoId=created?.id;
     }
     const emp=cfEmpleados.find(e=>e.id===_mpeEmpId);
+    // Anticipo abierto que se descuenta de este pago (solo pago directo de sueldo)
+    const antApl=(emp&&monto>0&&_mpeAntSaldo>0&&document.getElementById("mpe-ant-usar")?.checked)?_r2(Math.min(_mpeAntSaldo,monto)):0;
     // Asiento pago sueldo
     if(emp&&monto>0&&pagoId){
       const soc=emp.sociedad||"SUDES";
       const bancoCod=getBancoCodigoPorMedio(medio||"",soc);
       const desc=`Sueldo: ${emp.nombre||""} — ${_mpePeriodo||""}`;
-      const _adS={fecha,sociedad:soc,tipo:"sueldo",origen:"pago_empleado",origen_id:pagoId,descripcion:desc,lineas:[
-        {codigo:"5.1.01.001",debe:monto,desc:`Sueldo ${emp.nombre||""}`},
-        {codigo:bancoCod,haber:monto,desc:`Pago ${medio||"sueldo"}`},
-      ]};
-      generarAsiento(_adS).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adS);else if(!a)toast("⚠️ Asiento sueldo no generado","err");}).catch(()=>{});
+      const lineasS=[{codigo:"5.1.01.001",debe:monto,desc:`Sueldo ${emp.nombre||""}`}];
+      if(_r2(monto-antApl)>0)lineasS.push({codigo:bancoCod,haber:_r2(monto-antApl),desc:`Pago ${medio||"sueldo"}`});
+      if(antApl>0)lineasS.push({codigo:ANT_SUE_CUENTA,haber:antApl,desc:"Anticipo descontado del sueldo"});
+      const _adS={fecha,sociedad:soc,tipo:"sueldo",origen:"pago_empleado",origen_id:pagoId,descripcion:desc,lineas:lineasS};
+      if(antApl>0){
+        const a=await generarAsiento(_adS).catch(()=>null);
+        if(a?.id){
+          await _antSueAplicar(antApl,pagoId,_mpePeriodo,fecha);
+          const nt=[notas,`Anticipo descontado ${_extM(antApl)}`].filter(Boolean).join(" · ");
+          await sb(`cf_pagos_empleados?id=eq.${pagoId}`,{method:"PATCH",body:JSON.stringify({notas:nt})}).catch(()=>{});
+        }else{toast("⚠️ No se pudo asentar el descuento del anticipo: revisá las cuentas y el Libro Diario","err");if(a?._faltantes)mcfAbrir(a._faltantes,_adS);}
+      }else generarAsiento(_adS).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adS);else if(!a)toast("⚠️ Asiento sueldo no generado","err");}).catch(()=>{});
     }
     closeM("modal-pago-empleado");
     toast(`✓ ${emp?.nombre||"Empleado"} — pago registrado`,"ok");
@@ -18460,6 +18500,95 @@ async function confirmarPagoEmpleado(){
     if(curPage==="alertas")renderAlertas();
   }catch(e){toast("Error: "+e.message,"err")}
   finally{btn.disabled=false;_mpeEmpId=null;_mpePeriodo=null;}
+}
+
+// ── Anticipos de sueldo (quienes cobran sin factura) ───────────────────
+// Se registra el anticipo (Debe 1.1.05.002 / Haber banco o caja) y se descuenta solo al pagar el sueldo del mes.
+const ANT_SUE_CUENTA="1.1.05.002";
+let _antSue=[],_antSueOk=null,_mpeAnt=[],_mpeAntSaldo=0;
+async function _antSueCargar(){
+  try{_antSue=await sb("anticipos_sueldos?select=*&order=fecha.asc&limit=2000");_antSueOk=true;}
+  catch(e){_antSue=[];_antSueOk=false;}
+}
+const _antSueSaldo=empId=>_r2(_antSue.filter(a=>a.empleado_id===empId&&a.estado==="abierto").reduce((s,a)=>s+(parseFloat(a.monto)||0)-(parseFloat(a.monto_aplicado)||0),0));
+async function abrirAnticipoSueldo(empId){
+  if(!mediosPago.length){try{mediosPago=await sb("medios_pago?select=*&order=orden.asc,nombre.asc")||[];}catch(_){}}
+  await _antSueCargar();
+  if(_antSueOk===false){toast("Falta correr sql_anticipos_sueldos.sql en Supabase","err");return;}
+  const lista=cfEmpleados.filter(e=>e.activo&&(String(e.cuit||"").replace(/\D/g,"").length!==11||e.id===empId));
+  if(!lista.length){toast("Todas las personas facturan: usá Comprobantes → Pago anticipado","inf");return;}
+  document.getElementById("asu-emp").innerHTML=lista.map(e=>`<option value="${e.id}">${esc(e.nombre)} — ${esc(e.sociedad)}</option>`).join("");
+  if(empId&&lista.some(e=>e.id===empId))document.getElementById("asu-emp").value=empId;
+  document.getElementById("asu-fecha").value=today();
+  ["asu-monto","asu-nro","asu-concepto"].forEach(i=>document.getElementById(i).value="");
+  asuCambioEmp();
+  openM("modal-anticipo-sueldo");
+  setTimeout(()=>document.getElementById("asu-monto").focus(),80);
+}
+function asuCambioEmp(){
+  const emp=cfEmpleados.find(e=>e.id===document.getElementById("asu-emp").value);if(!emp)return;
+  const ms=mediosPago.filter(m=>m.activo&&(m.sociedad==="Ambas"||m.sociedad===emp.sociedad)&&["cuenta_bancaria","efectivo"].includes(m.tipo));
+  document.getElementById("asu-medio").innerHTML=ms.map(m=>`<option value="${esc(m.nombre)}">${esc(m.nombre)}${m.banco?` — ${esc(m.banco)}`:""}</option>`).join("");
+  const s=_antSueSaldo(emp.id);
+  document.getElementById("asu-abiertos").innerHTML=s>0?`Ya tiene <b>${fmtNum(s,true)}</b> de anticipos abiertos.`:"";
+}
+async function confirmarAnticipoSueldo(){
+  const g=i=>document.getElementById(i);
+  const emp=cfEmpleados.find(e=>e.id===g("asu-emp").value);
+  const fecha=g("asu-fecha").value,monto=_r2(parseFloat(g("asu-monto").value)||0),medio=g("asu-medio").value;
+  if(!emp||!fecha||!(monto>0)||!medio){toast("Completá persona, fecha, importe y de dónde sale","err");return;}
+  const btn=g("asu-btn");btn.disabled=true;
+  let row=null;
+  try{
+    [row]=await sb("anticipos_sueldos",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({empleado_id:emp.id,empleado:emp.nombre,sociedad:emp.sociedad,fecha,monto,medio,nro_operacion:g("asu-nro").value.trim()||null,concepto:g("asu-concepto").value.trim()||null,creado_por:loggedUser?.nombre||null})});
+    const ad={fecha,sociedad:emp.sociedad,tipo:"sueldo",origen:"anticipo_sueldo",origen_id:row.id,descripcion:`Anticipo de sueldo: ${emp.nombre}`,lineas:[
+      {codigo:ANT_SUE_CUENTA,debe:monto,desc:`Anticipo ${emp.nombre}`},
+      {codigo:getBancoCodigoPorMedio(medio,emp.sociedad),haber:monto,desc:`Pago ${medio}`}]};
+    const a=await generarAsiento(ad);
+    if(!a?.id||a._faltantes)throw new Error("No se pudo generar el asiento (falta la cuenta "+ANT_SUE_CUENTA+" en "+emp.sociedad+")");
+    await sb(`anticipos_sueldos?id=eq.${row.id}`,{method:"PATCH",body:JSON.stringify({asiento_id:a.id})});
+    closeM("modal-anticipo-sueldo");
+    toast(`✓ Anticipo de ${fmtNum(monto,true)} a ${emp.nombre} registrado`,"ok");
+    await renderSueldos();
+  }catch(e){
+    if(row?.id)await sb(`anticipos_sueldos?id=eq.${row.id}`,{method:"DELETE"}).catch(()=>{});
+    toast("Error: "+(e.message||e),"err");
+  }finally{btn.disabled=false;}
+}
+async function _mpeCargarAnticipos(emp){
+  _mpeAnt=[];_mpeAntSaldo=0;
+  await _antSueCargar();
+  _mpeAnt=_antSue.filter(a=>a.empleado_id===emp.id&&a.estado==="abierto");
+  _mpeAntSaldo=_antSueSaldo(emp.id);
+  document.getElementById("mpe-ant-info").textContent=_mpeAntSaldo>0?`${fmtNum(_mpeAntSaldo,true)}${_mpeAnt.length>1?` (${_mpeAnt.length} anticipos)`:` del ${String(_mpeAnt[0].fecha).split("-").reverse().join("/")}`}`:"";
+  document.getElementById("mpe-ant-usar").checked=true;
+  _mpeAntVisible();
+}
+function _mpeAntVisible(){
+  const wrap=document.getElementById("mpe-ant-wrap");if(!wrap)return;
+  const conFactura=!!document.getElementById("mpe-fact")?.value;
+  wrap.style.display=(_mpeAntSaldo>0&&!conFactura)?"":"none";
+  mpeAntCambio();
+}
+function mpeAntCambio(){
+  const el=document.getElementById("mpe-ant-neto");if(!el)return;
+  const monto=parseFloat(document.getElementById("mpe-monto").value)||0;
+  const ant=document.getElementById("mpe-ant-usar").checked?Math.min(_mpeAntSaldo,monto):0;
+  el.textContent=fmtNum(_r2(monto-ant),true)+(ant>0?` (${fmtNum(monto,true)} − anticipo ${fmtNum(ant,true)})`:"");
+}
+// Aplica el descuento a los anticipos abiertos de la persona, del más antiguo al más nuevo
+async function _antSueAplicar(total,pagoId,periodo,fecha){
+  let resto=total;
+  for(const a of [..._mpeAnt].sort((x,y)=>String(x.fecha).localeCompare(String(y.fecha)))){
+    if(resto<=0.004)break;
+    const saldo=_r2((parseFloat(a.monto)||0)-(parseFloat(a.monto_aplicado)||0)),toma=_r2(Math.min(saldo,resto));
+    if(toma<=0)continue;
+    const aplicado=_r2((parseFloat(a.monto_aplicado)||0)+toma);
+    const aplicaciones=[...(a.aplicaciones||[]),{periodo,fecha,monto:toma,pago_id:pagoId}];
+    await sb(`anticipos_sueldos?id=eq.${a.id}`,{method:"PATCH",body:JSON.stringify({monto_aplicado:aplicado,aplicaciones,estado:aplicado>=_r2(parseFloat(a.monto)||0)-0.01?"cancelado":"abierto"})});
+    resto=_r2(resto-toma);
+  }
+  await _antSueCargar();
 }
 
 // ── Sueldos / honorarios con factura ───────────────────────────────────
@@ -18516,6 +18645,7 @@ function mpeElegirFactura(){
     if(emp)monto.value=emp.monto_mensual!=null?parseFloat(emp.monto_mensual).toFixed(2):"";
     if(btnOP)btnOP.style.display="none";
   }
+  _mpeAntVisible();
 }
 
 // Asegura que la factura esté en la lista global (abrirOrdenPago y compañía la buscan ahí)
