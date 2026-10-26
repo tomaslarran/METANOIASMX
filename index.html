@@ -15354,8 +15354,8 @@ function _cierreResumen(d){
       k.debe+=debe;k.haber+=haber;debeTot+=debe;haberTot+=haber;
       if(c.tipo==="ingreso")ingresos+=haber-debe;
       if(c.tipo==="egreso")egresos+=debe-haber;
-      if(c.codigo==="1.1.03.001")ivaCredito+=debe-haber;
-      if(c.codigo==="2.1.03.001")ivaDebito+=haber-debe;
+      if(["1.1.03.001","1.1.03.011","1.1.03.012","1.1.03.013"].includes(c.codigo))ivaCredito+=debe-haber;
+      if(["2.1.03.001","2.1.03.012","2.1.03.013","2.1.03.014"].includes(c.codigo))ivaDebito+=haber-debe;
       if(a.tipo==="gastos_bancarios"&&debe>0)gastosBanc+=debe;
       if(a.tipo==="devengado_compra"&&c.codigo==="2.1.01.001")devengadoProv+=haber-debe;
     });
@@ -15635,7 +15635,7 @@ async function _cierreAnualCargar(soc,ej){
       const c=m.plan_cuentas;if(!c)return;
       const dh=(parseFloat(m.debe)||0)-(parseFloat(m.haber)||0);
       if(c.tipo==="ingreso")ing-=dh;if(c.tipo==="egreso")egr+=dh;
-      if(c.codigo==="2.1.03.001")iva-=dh;if(c.codigo==="1.1.03.001")iva-=dh;
+      if(["2.1.03.001","2.1.03.012","2.1.03.013","2.1.03.014","1.1.03.001","1.1.03.011","1.1.03.012","1.1.03.013"].includes(c.codigo))iva-=dh;
     }));
     const cz=cierres.find(c=>c.periodo===per);
     filas.push({per,label:_cierreFmtMes(per),extracto:extr.some(e=>e.periodo_hasta.slice(0,7)===per),contab:extr.some(e=>e.periodo_hasta.slice(0,7)===per&&e.asiento_id),
@@ -27054,6 +27054,7 @@ async function backfillAsientos(){
     const hacer=async(opts,label)=>{try{const a=await generarAsiento(opts);if(a)gen++;else errores.push(`⚠️ ${label} — código de cuenta no encontrado en Plan de Cuentas`);}catch(e){errores.push(`❌ ${label} — ${e.message?.slice(0,60)||"error"}`);}};
 
     // 1. Comprobantes → devengado_compra
+    if(!productosFinn.length)await cargarProductosFinn();
     for(const c of(comprobantes||[]).filter(c=>
       (c.estado==="revisado"||c.estado==="pagado")&&c.estado!=="cerrado"
       &&Math.abs(parseFloat(c.total)||0)>0
@@ -27181,7 +27182,7 @@ async function renderLibroDiario(){
       </select>
       <label style="font-size:12px;color:var(--tx2);display:flex;align-items:center;gap:5px;cursor:pointer" title="Los asientos anulados no cuentan en los libros: quedan solo como constancia"><input type="checkbox" ${f.anulados?"checked":""} onchange="window._ldF.anulados=this.checked;_ldCargar()"> Ver anulados</label>
     </div>
-      ${loggedUser?.rol==="admin"?`<button class="bs admin-only-el" id="ld-backfill-btn" onclick="backfillAsientos()" style="margin-left:auto;font-size:11px;padding:5px 12px" title="Genera asientos para registros históricos sin asiento">🔄 Generar históricos</button>`:""}
+      ${loggedUser?.rol==="admin"?`<button class="bs admin-only-el" id="ld-backfill-btn" onclick="backfillAsientos()" style="margin-left:auto;font-size:11px;padding:5px 12px" title="Genera asientos para registros históricos sin asiento">🔄 Generar históricos</button><button class="bs admin-only-el" id="ld-regen-btn" onclick="regenerarDevengadosCompras()" style="font-size:11px;padding:5px 12px" title="Repasa los asientos de compras del ejercicio con el criterio por renglón (gasto por rubro, IVA por alícuota)">🔁 Regenerar devengados</button>`:""}
     </div>
     <div id="ld-body"><div style="color:var(--tx3);font-size:12px">Cargando...</div></div>`;
   await _ldCargar();
@@ -29354,24 +29355,168 @@ async function confirmarPagoComp(){
   }catch(e){toast("Error: "+e.message,"err");}
 }
 
-// Asiento de devengado de una factura (gasto + IVA a Proveedores) o de una nota de crédito (el mismo asiento invertido)
+// Asiento de devengado de una factura o de una nota de crédito (el mismo asiento invertido), POR RENGLÓN:
+//  · cada tramo de neto (21 / 10,5 / 27 / exento) va a la cuenta de gasto del rubro de su producto (productos_finnegans.cuenta_gasto; sin producto, 5.2.01.001)
+//  · el IVA va a la cuenta de su alícuota (1.1.03.011 / .012 / .013); si no se puede apartar por alícuota, a 1.1.03.001
+//  · percepciones de IVA → 1.1.03.003 · percepciones de IIBB → 1.1.03.014 · impuestos internos y otros cargos → rubro «no gravado» (5.4.01.004)
+//  · Proveedores (2.1.01.001) por el total. Lo que no cierre por redondeo o conceptos que ARCA no detalla se suma al tramo más grande.
+// Sin desglose de neto en el comprobante usa el asiento simple de siempre (todo el neto a 5.2.01.001, todo el IVA a 1.1.03.001).
+const _CTA_GASTO_DEF="5.2.01.001",_CTA_NOGRAV_DEF="5.4.01.004",_CTA_PERC_IVA="1.1.03.003",_CTA_PERC_IIBB="1.1.03.014";
+const _CTA_IVA_ALIC={"21":"1.1.03.011","10.5":"1.1.03.012","27":"1.1.03.013"};
+function _ctaGastoProducto(nombre,def){
+  if(!nombre||typeof productosFinn==="undefined"||!productosFinn.length)return def;
+  const k=_normProd(nombre);
+  const p=productosFinn.find(x=>_normProd(x.codigo)===k)||productosFinn.find(x=>_normProd(x.nombre)===k);
+  return p?.cuenta_gasto||def;
+}
 function _lineasDevengado(c){
+  const r2=n=>Math.round(n*100)/100,N=v=>Math.abs(parseFloat(v)||0);
   const esNC=!!c.tipo?.startsWith("NC");
-  const total=Math.round(Math.abs(parseFloat(c.total)||0)*100)/100;
+  const total=r2(N(c.total));
   if(!(total>0))return null;
-  const iva=Math.round(Math.abs(parseFloat(c.iva)||0)*100)/100;
-  const gastos=iva>0?Math.round((total-iva)*100)/100:total;
-  const lineas=[];
-  if(esNC){
-    lineas.push({codigo:"2.1.01.001",debe:total,desc:"Proveedores (NC)"});
-    if(gastos>0)lineas.push({codigo:"5.2.01.001",haber:gastos,desc:"Gasto (NC)"});
-    if(iva>0)lineas.push({codigo:"1.1.03.001",haber:iva,desc:"IVA CF (NC)"});
-  }else{
-    if(gastos>0)lineas.push({codigo:"5.2.01.001",debe:gastos,desc:"Gasto"});
-    if(iva>0)lineas.push({codigo:"1.1.03.001",debe:iva,desc:"IVA CF"});
-    lineas.push({codigo:"2.1.01.001",haber:total,desc:"Proveedores"});
+  const iva=r2(N(c.iva));
+  const legacy=()=>{
+    const gastos=iva>0?r2(total-iva):total;
+    const ls=[];
+    if(esNC){
+      ls.push({codigo:"2.1.01.001",debe:total,desc:"Proveedores (NC)"});
+      if(gastos>0)ls.push({codigo:_CTA_GASTO_DEF,haber:gastos,desc:"Gasto (NC)"});
+      if(iva>0)ls.push({codigo:"1.1.03.001",haber:iva,desc:"IVA CF (NC)"});
+    }else{
+      if(gastos>0)ls.push({codigo:_CTA_GASTO_DEF,debe:gastos,desc:"Gasto"});
+      if(iva>0)ls.push({codigo:"1.1.03.001",debe:iva,desc:"IVA CF"});
+      ls.push({codigo:"2.1.01.001",haber:total,desc:"Proveedores"});
+    }
+    return ls;
+  };
+  const tr=[
+    {monto:r2(N(c.neto_21)),prod:c.producto_neto21,alic:21},
+    {monto:r2(N(c.neto_105)),prod:c.producto_neto105,alic:10.5},
+    {monto:r2(N(c.neto_27)),prod:c.producto_neto27,alic:27},
+    {monto:r2(N(c.neto_exento)),prod:c.producto_exento,alic:0},
+  ].filter(t=>t.monto>0);
+  if(!tr.length)return legacy();
+  const noGrav=r2(N(c.impuesto_interno)+N(c.otros_impuestos));
+  const percIva=r2(N(c.percepcion_iva)+N(c.percepcion_iva_15));
+  const percIibb=r2(N(c.percepcion_iibb));
+  const L=new Map();
+  const add=(cod,monto,desc)=>{if(!(monto>0))return;const x=L.get(cod);if(x)x.monto=r2(x.monto+monto);else L.set(cod,{monto,desc});};
+  tr.forEach(t=>{t.cta=_ctaGastoProducto(t.prod,_CTA_GASTO_DEF);add(t.cta,t.monto,"Gasto");});
+  // IVA por alícuota (cada tramo gravado × su tasa); si la suma no coincide con el IVA del comprobante, todo a la cuenta general
+  let ivaTr=null;
+  if(iva>0){
+    const calc=tr.filter(t=>t.alic>0).map(t=>({t,v:r2(t.monto*t.alic/100)}));
+    const suma=r2(calc.reduce((s,x)=>s+x.v,0));
+    if(calc.length&&Math.abs(suma-iva)<=Math.max(1,iva*0.01)){
+      const mayor=calc.reduce((a,b)=>b.v>a.v?b:a);mayor.v=r2(mayor.v+r2(iva-suma));
+      ivaTr=calc;
+    }
   }
-  return lineas;
+  if(ivaTr)ivaTr.forEach(x=>add(_CTA_IVA_ALIC[String(x.t.alic)],x.v,"IVA CF "+String(x.t.alic).replace(".",",")+"%"));
+  else if(iva>0)add("1.1.03.001",iva,"IVA CF");
+  add(_ctaGastoProducto(c.producto_nograv,_CTA_NOGRAV_DEF),noGrav,"Impuestos internos y otros cargos");
+  add(_CTA_PERC_IVA,percIva,"Percepciones IVA");
+  add(_CTA_PERC_IIBB,percIibb,"Percepciones IIBB");
+  // diferencia contra el total (redondeos, tasas que ARCA no detalla): al tramo de neto más grande
+  const resto=r2(total-r2([...L.values()].reduce((s,x)=>s+x.monto,0)));
+  if(Math.abs(resto)>0.005){
+    const mayor=tr.reduce((a,b)=>b.monto>a.monto?b:a);
+    const x=L.get(mayor.cta);
+    if(!x||r2(x.monto+resto)<=0)return legacy();
+    x.monto=r2(x.monto+resto);
+  }
+  const ls=[];
+  for(const [codigo,x] of L)ls.push(esNC?{codigo,haber:x.monto,desc:x.desc+" (NC)"}:{codigo,debe:x.monto,desc:x.desc});
+  ls.push(esNC?{codigo:"2.1.01.001",debe:total,desc:"Proveedores (NC)"}:{codigo:"2.1.01.001",haber:total,desc:"Proveedores"});
+  return ls;
+}
+
+// Regeneración de los devengados de compras con el criterio por renglón (Libro Diario → «🔁 Regenerar devengados»).
+// Compara cada asiento de devengado del ejercicio contra el que saldría hoy; solo toca los que cambian de cuenta y controla que Proveedores y el IVA crédito total NO varíen.
+// Con vista previa. El asiento anterior queda ANULADO (reversible), no se borra.
+async function regenerarDevengadosCompras(){
+  const btn=document.getElementById("ld-regen-btn");
+  const r2=n=>Math.round(n*100)/100;
+  try{
+    if(btn){btn.disabled=true;btn.textContent="Analizando…";}
+    if(!planCuentas.length)planCuentas=await sb("plan_cuentas?select=*&order=codigo").catch(()=>[]);
+    await cargarProductosFinn();
+    const inicio=balEjercicioDesde(today());
+    const [comps,asientos,cierres]=await Promise.all([
+      sb(`comprobantes_compra?select=*&fecha=gte.${inicio}&limit=5000`),
+      sb(`asientos_contables?select=id,fecha,sociedad,tipo,origen,origen_id,descripcion,asientos_movimientos(debe,haber,plan_cuentas(codigo,nombre))&origen=eq.comprobante&anulado=eq.false&fecha=gte.${inicio}&limit=20000`),
+      sb("cierres_mensuales?estado=eq.cerrado&select=sociedad,periodo").catch(()=>[])]);
+    const cerr=new Set(cierres.map(x=>x.sociedad+"|"+x.periodo));
+    const cmap=new Map(comps.map(c=>[c.id,c]));
+    const IVAC=["1.1.03.001","1.1.03.011","1.1.03.012","1.1.03.013"];
+    const netOld=a=>{const m={};(a.asientos_movimientos||[]).forEach(x=>{const k=x.plan_cuentas?.codigo;m[k]=r2((m[k]||0)+(+x.debe||0)-(+x.haber||0));});return m;};
+    const netNew=ls=>{const m={};ls.forEach(l=>{m[l.codigo]=r2((m[l.codigo]||0)+(l.debe||0)-(l.haber||0));});return m;};
+    const suma=(m,ks)=>r2(ks.reduce((s,k)=>s+(m[k]||0),0));
+    const cambios=[],excl=[];let iguales=0;
+    for(const a of asientos){
+      const c=cmap.get(a.origen_id);if(!c)continue;
+      const nuevo=_lineasDevengado(c);if(!nuevo){excl.push({a,c,motivo:"sin total"});continue;}
+      const o=netOld(a),n=netNew(nuevo);
+      const cods=new Set([...Object.keys(o),...Object.keys(n)]);
+      if(![...cods].some(k=>Math.abs((o[k]||0)-(n[k]||0))>0.004)){iguales++;continue;}
+      if(Math.abs((o["2.1.01.001"]||0)-(n["2.1.01.001"]||0))>0.02){excl.push({a,c,motivo:"cambiaría Proveedores"});continue;}
+      if(Math.abs(suma(o,IVAC)-suma(n,IVAC))>0.02){excl.push({a,c,motivo:"cambiaría el IVA crédito total"});continue;}
+      cambios.push({a,c,nuevo,o,n,cerrado:cerr.has(a.sociedad+"|"+String(a.fecha).slice(0,7))});
+    }
+    if(btn){btn.disabled=false;btn.textContent="🔁 Regenerar devengados";}
+    if(!cambios.length){toast(`Los ${iguales} asientos de devengado ya tienen el criterio por renglón${excl.length?` · ${excl.length} no se pueden regenerar solos`:""}`,"inf");return;}
+    // vista previa: total por cuenta antes / después, por sociedad
+    const porCta={};
+    cambios.forEach(x=>{
+      const nom={};(x.a.asientos_movimientos||[]).forEach(m=>{if(m.plan_cuentas)nom[m.plan_cuentas.codigo]=m.plan_cuentas.nombre;});
+      new Set([...Object.keys(x.o),...Object.keys(x.n)]).forEach(k=>{
+        if(Math.abs((x.o[k]||0)-(x.n[k]||0))<=0.004)return;
+        const key=x.a.sociedad+"|"+k;const e=porCta[key]=porCta[key]||{soc:x.a.sociedad,cod:k,nombre:nom[k]||(getCuenta(k,x.a.sociedad)?.nombre)||"",antes:0,despues:0};
+        e.antes=r2(e.antes+(x.o[k]||0));e.despues=r2(e.despues+(x.n[k]||0));
+      });
+    });
+    const f=v=>(v<0?"-":"")+"$"+Math.abs(v).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
+    const filas=Object.values(porCta).sort((p,q)=>p.soc.localeCompare(q.soc)||p.cod.localeCompare(q.cod));
+    const porMes={};cambios.forEach(x=>{const k=x.a.sociedad+" "+String(x.a.fecha).slice(0,7);porMes[k]=(porMes[k]||0)+1;});
+    const cerrados=cambios.filter(x=>x.cerrado).length;
+    const html=`<div class="mov on" id="modal-regen-dev" style="display:flex" onclick="if(event.target===this)this.remove()"><div class="modal" style="max-width:760px;max-height:90vh;overflow-y:auto">
+      <div class="mt">🔁 Regenerar devengados de compras <button class="mt-close" onclick="document.getElementById('modal-regen-dev').remove()">✕</button></div>
+      <div style="font-size:13px;margin-bottom:10px"><b>${cambios.length}</b> asientos cambian de cuenta · ${iguales} ya están bien${excl.length?` · <span style="color:var(--am)">${excl.length} no se pueden regenerar solos</span>`:""}.<br>
+      <span style="color:var(--tx3);font-size:12px">Por sociedad y mes: ${Object.keys(porMes).sort().map(k=>`${k}: ${porMes[k]}`).join(" · ")}</span></div>
+      <div style="font-size:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:8px;padding:8px 12px;margin-bottom:10px">✓ Control: en cada asiento el total a <b>Proveedores</b> y el <b>IVA crédito</b> (suma de todas sus cuentas) quedan igual. Solo cambia cómo se reparte el gasto y el IVA por alícuota. El asiento anterior queda anulado (se puede recuperar).</div>
+      ${cerrados?`<div style="font-size:12px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:8px 12px;margin-bottom:10px">⚠️ ${cerrados} de estos asientos están en meses ya cerrados: el cierre va a avisar «cambió después del cierre».</div>`:""}
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="color:var(--tx3);text-align:left"><th style="padding:4px 6px">Soc.</th><th>Cuenta</th><th style="text-align:right">Antes</th><th style="text-align:right">Después</th><th style="text-align:right">Diferencia</th></tr></thead><tbody>
+      ${filas.map(e=>`<tr style="border-top:1px solid var(--b)"><td style="padding:4px 6px">${e.soc}</td><td>${esc(e.cod)} ${esc(e.nombre)}</td><td style="text-align:right">${f(e.antes)}</td><td style="text-align:right">${f(e.despues)}</td><td style="text-align:right;font-weight:600;color:${e.despues-e.antes>=0?"var(--gr)":"var(--re)"}">${f(r2(e.despues-e.antes))}</td></tr>`).join("")}
+      </tbody></table></div>
+      ${excl.length?`<div style="font-size:11px;color:var(--tx3);margin-top:10px">No se tocan: ${excl.slice(0,6).map(x=>`${x.c.sociedad} ${x.c.tipo} ${x.c.numero} (${x.motivo})`).join(" · ")}${excl.length>6?" …":""}</div>`:""}
+      <div class="ma"><button class="bc" onclick="document.getElementById('modal-regen-dev').remove()">Cancelar</button><button class="bk" id="regen-ok" onclick="_regenAplicar()">✓ Regenerar ${cambios.length} asientos</button></div>
+    </div></div>`;
+    document.getElementById("modal-regen-dev")?.remove();
+    document.body.insertAdjacentHTML("beforeend",html);
+    window._regenCambios=cambios;
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent="🔁 Regenerar devengados";}
+    toast("No se pudo analizar: "+String(e.message||e).slice(0,140),"err");
+  }
+}
+async function _regenAplicar(){
+  const cambios=window._regenCambios||[];if(!cambios.length)return;
+  const b=document.getElementById("regen-ok");if(b){b.disabled=true;b.textContent="Regenerando…";}
+  let ok=0,fallo=0;const faltantes=new Set();
+  for(const x of cambios){
+    try{
+      // primero el nuevo; solo si sale bien se anula el anterior (nunca queda un comprobante sin asiento)
+      const a=await generarAsiento({fecha:x.a.fecha,sociedad:x.a.sociedad,tipo:"devengado_compra",origen:"comprobante",origen_id:x.a.origen_id,descripcion:x.a.descripcion,lineas:x.nuevo});
+      if(a?._faltantes){a._faltantes.forEach(c=>faltantes.add(c));fallo++;continue;}
+      if(!a?.id){fallo++;continue;}
+      await sb(`asientos_contables?id=eq.${x.a.id}`,{method:"PATCH",body:JSON.stringify({anulado:true})});
+      ok++;
+    }catch(e){fallo++;console.warn("regenerar devengado:",x.c.numero,e);}
+  }
+  document.getElementById("modal-regen-dev")?.remove();
+  window._regenCambios=null;
+  toast(`✓ ${ok} asientos regenerados${fallo?` · ${fallo} con error${faltantes.size?" (faltan cuentas: "+[...faltantes].join(", ")+")":""}`:""}`,fallo?"err":"ok");
+  if(typeof setImpTab==="function"&&curPage==="impuestos")setImpTab(impTab);
 }
 
 async function marcarEstadoComp(id,estado){
@@ -29405,6 +29550,7 @@ async function marcarEstadoComp(id,estado){
     }
     // Asiento devengado compra
     if(estado==="revisado"&&c){
+      if(!productosFinn.length)await cargarProductosFinn();
       const lineas=_lineasDevengado(c);
       if(lineas){
         const desc=`Devengado: ${c.tipo?.startsWith("NC")?"NC":"Fact."} ${c.tipo?.replace("NC-","")||""}${c.numero?` N°${c.numero}`:""} — ${c.proveedor||""}`;
@@ -29436,6 +29582,7 @@ async function revisarPendientesMasivo(){
     const resumen=Object.keys(grupos).sort().map(k=>`  ${k}: ${grupos[k].n} comprobantes · total $${Math.round(grupos[k].t).toLocaleString("es-AR")} · IVA crédito $${Math.round(grupos[k].iva).toLocaleString("es-AR")}`).join("\n");
     const exTxt=excluidos.length?`\n\nQuedan pendientes (revisar a mano):\n${excluidos.slice(0,8).map(x=>`  ${x.c.sociedad} ${x.c.tipo} ${x.c.numero} ${x.c.proveedor||""}: ${x.motivo}`).join("\n")}${excluidos.length>8?"\n  …":""}`:"";
     if(!confirm(`Se van a marcar como REVISADOS ${listos.length} comprobantes importados de ARCA y se generará el asiento de IVA crédito de cada uno:\n\n${resumen}${descuadre?`\n\n${descuadre} tienen neto + impuestos distinto del total (tasas o conceptos no gravados que ARCA no detalla): el asiento usa total e IVA, no cambia.`:""}${exTxt}\n\n¿Continuar?`))return;
+    if(!productosFinn.length)await cargarProductosFinn();
     const yaTienen=new Set((await sb("asientos_contables?select=origen_id&origen=eq.comprobante&anulado=eq.false&limit=20000")).map(a=>a.origen_id));
     let ok=0,sinAsiento=0,faltantes=new Set(),errores=0;
     for(const c of listos){
