@@ -20740,12 +20740,54 @@ function _esPlanImpuesto(p){const e=((p&&p.entidad)||"")+" "+((p&&p.nombre)||"")
 // Pasivo del plan: 2.1.03.010 (ARCA) / 2.1.03.011 (Rentas); el resto de los préstamos va a 2.1.02.001
 function _ctaDeudaPrestamo(p){const e=((p&&p.entidad)||"")+" "+((p&&p.nombre)||"");if(/arca|afip/i.test(e))return"2.1.03.010";if(/dgr|rentas/i.test(e))return"2.1.03.011";return"2.1.02.001";}
 function _oplCapital(p){const s=cfPrestCuotas.filter(c=>c.prestamo_id===p.id).reduce((t,c)=>t+(parseFloat(c.capital)||0),0);return Math.round((s>0?s:(parseFloat(p.capital)||parseFloat(p.saldo_actual)||0))*100)/100;}
+// ── Lector del detalle de obligaciones del plan (sin IA): ARCA «Mis Facilidades» y Rentas F951A ──
+const _facilNum=s=>parseFloat(String(s).replace(/\./g,"").replace(",","."))||0;      // 60.831,33 → 60831.33
+const _facilNumUS=s=>parseFloat(String(s).replace(/,/g,""))||0;                       // 11,999.25 → 11999.25
+function _facilTipoImp(t){t=String(t).toLowerCase();if(/ganancia/.test(t))return"Ganancias";if(/\biva\b/.test(t))return"IVA";if(/seguridad social|contribuciones|sicoss/.test(t))return"Cargas sociales";if(/aut[oó]nomo/.test(t))return"Autonomos";if(/bienes personales|ingresos brutos|iibb/.test(t))return/ingresos brutos|iibb/.test(t)?"IIBB":"Otro";return"Otro";}
+// Devuelve {formato,consolidacion,plan,cuit,rows:[{tipo,periodo,monto}],accesorios,totalSaldo} o null si no reconoce el formato
+function _facilParsear(texto,esRentas){
+  const t=String(texto||"").replace(/\u00a0/g," "),porPer=new Map();let acc=0,formato=null;
+  const consol=(t.match(/Consolidaci.{1,2}n:?\s*(\d{2}\/\d{2}\/\d{4})/i)||[])[1]||null;
+  const plan=(t.match(/N.{1,2}mero de Plan:?\s*([A-Z0-9]+)/i)||[])[1]||null;
+  const cuit=(t.match(/CUIT:?\s*(\d{11})/i)||[])[1]||null;
+  const add=(tipo,per,m,esAcc)=>{if(!(m>0))return;if(esAcc){acc+=m;return}const k=tipo+"|"+per;porPer.set(k,Math.round(((porPer.get(k)||0)+m)*100)/100);};
+  // ARCA: Año [Mes] 0 Impuesto Concepto Subconcepto vto Si/No monto pagos saldo (los intereses vencen el día de la consolidación)
+  const reA=/(\d{4})\s+(?:(\d{1,2})\s+)?0\s+([^\d]*?)\s*(\d{2}\/\d{2}\/\d{4})\s+(?:Si|No)\s+([\d.]+,\d{2})\s+([\d.]+,\d{2})\s+([\d.]+,\d{2})/g;
+  let m;while((m=reA.exec(t))){
+    formato="arca";const per=(m[2]?String(m[2]).padStart(2,"0")+"/":"")+m[1];
+    const esInt=/resarcitor|punitor|inter[eé]s/i.test(m[3])||(consol&&m[4]===consol);
+    add(_facilTipoImp(m[3]),per,_facilNum(m[7]),esInt);
+  }
+  // Rentas F951A: ... Mes Año $ saldo impuesto $ pagos $ saldo a pagar $ accesorios $ total
+  const reR=/(\d{1,2})\s+(\d{4})\s+\$\s*([\d,]+\.\d{2})\s+\$\s*([\d,]+\.\d{2})\s+\$\s*([\d,]+\.\d{2})\s+\$\s*([\d,]+\.\d{2})\s+\$\s*([\d,]+\.\d{2})/g;
+  while((m=reR.exec(t))){formato="rentas";const per=String(m[1]).padStart(2,"0")+"/"+m[2];add(esRentas?"TISH":"Otro",per,_facilNumUS(m[5]),false);acc+=_facilNumUS(m[6]);}
+  if(!formato||!porPer.size)return null;
+  const rows=[...porPer.entries()].map(([k,v])=>{const [tipo,periodo]=k.split("|");return{tipo,periodo,monto:v};}).sort((a,b)=>a.tipo.localeCompare(b.tipo)||(a.periodo.slice(-4)+a.periodo.slice(0,2)).localeCompare(b.periodo.slice(-4)+b.periodo.slice(0,2)));
+  return{formato,consolidacion:consol,plan,cuit,rows,accesorios:Math.round(acc*100)/100,totalSaldo:Math.round(rows.reduce((s,r)=>s+r.monto,0)*100)/100};
+}
+async function _oplLeerArchivo(input){
+  const file=input.files&&input.files[0];if(!file)return;
+  const st=document.getElementById("opl-lectura");if(st)st.textContent="Leyendo el PDF…";
+  try{
+    const lineas=await _extPdfALineas(file);
+    const esRentas=/dgr|rentas/i.test((_opl.p.entidad||"")+" "+(_opl.p.nombre||""));
+    const d=_facilParsear(lineas.join("\n"),esRentas);
+    if(!d){if(st)st.innerHTML='<span style="color:#EF4444">No reconocí el formato (se espera «Mis Facilidades» de ARCA o «Obligaciones incluidas» F951A de Rentas). Cargalas a mano.</span>';return}
+    _opl.rows=d.rows.map(r=>({tipo:r.tipo,periodo:r.periodo,monto:r.monto,ya:false}));
+    const iso=d.consolidacion&&_extISO(d.consolidacion);if(iso&&!_opl.p.fecha_inicio)_opl.fecha=iso;
+    _oplRender();
+    const cap=_oplCapital(_opl.p),dif=Math.round((cap-d.totalSaldo)*100)/100;
+    const el=document.getElementById("opl-lectura");
+    if(el)el.innerHTML=`✓ Leídas ${d.rows.length} obligaciones (${d.formato==="arca"?"ARCA Mis Facilidades":"Rentas F951A"}${d.plan?" · plan "+esc(d.plan):""}). Accesorios del PDF: <b>${fmtNum(d.accesorios,true)}</b>.`+(Math.abs(dif-d.accesorios)>1?` <span style="color:#D97706">⚠️ Revisá: capital del plan menos obligaciones da ${fmtNum(dif,true)} y los accesorios del PDF suman ${fmtNum(d.accesorios,true)}.</span>`:" Coincide con el capital del plan.");
+  }catch(e){if(st)st.innerHTML='<span style="color:#EF4444">'+esc((e.message||"Error al leer el PDF").slice(0,100))+"</span>";}
+  finally{try{input.value="";}catch(_){}}
+}
 let _opl=null;
 function abrirObligacionesPlan(prestId){
   const p=cfPrestamos.find(x=>x.id===prestId);if(!p)return;
   _opl={p,fecha:p.fecha_inicio||today(),rows:[{tipo:"IVA",periodo:"",monto:"",ya:false}]};
   if(!document.getElementById("modal-plan-oblig"))document.body.insertAdjacentHTML("beforeend",`<div class="mov" id="modal-plan-oblig" onclick="if(event.target===this)closeM('modal-plan-oblig')">
-  <div class="modal" style="max-width:640px">
+  <div class="modal" style="max-width:680px;max-height:92vh;overflow:auto">
     <div class="mt"><span>📋 Obligaciones que cancela el plan</span><button class="mt-close" onclick="closeM('modal-plan-oblig')">✕</button></div>
     <div id="opl-body" style="padding:0 20px 20px;display:flex;flex-direction:column;gap:12px"></div>
   </div></div>`);
@@ -20756,6 +20798,7 @@ function _oplRender(){
   document.getElementById("opl-body").innerHTML=`
     <div style="font-size:12px;color:var(--tx3)"><b>${esc(p.nombre)}</b> · ${esc(p.sociedad||"")} · el plan queda como deuda en <b>${_ctaDeudaPrestamo(p)}</b>. Indicá qué impuestos cancela: se genera la deuda de cada uno y se cancela con el plan. Si el impuesto ya figuraba como deuda (en la apertura o en un VEP cargado), marcá «ya devengada».</div>
     <div class="fg"><label class="fl">Fecha del plan (consolidación)</label><input type="date" class="fi" value="${esc(fecha)}" onchange="_opl.fecha=this.value"></div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><label class="btn sm" style="cursor:pointer">📄 Leer detalle de obligaciones (PDF)<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="_oplLeerArchivo(this)"></label><span id="opl-lectura" style="font-size:11px;color:var(--tx3)">«Mis Facilidades» de ARCA o «Obligaciones incluidas» (F951A) de Rentas — se lee sin IA.</span></div>
     <div style="display:flex;flex-direction:column;gap:6px">${rows.map((r,i)=>`
       <div style="display:grid;grid-template-columns:140px 1fr 130px auto 28px;gap:6px;align-items:center">
         <select class="fi sel" onchange="_opl.rows[${i}].tipo=this.value">${_PLAN_TIPOS.map(t=>`<option${t===r.tipo?" selected":""}>${t}</option>`).join("")}</select>
