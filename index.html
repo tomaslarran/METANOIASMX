@@ -27115,8 +27115,8 @@ async function backfillAsientos(){
       }
     }
 
-    // 3. Cuotas pagadas → pago_cuota_prestamo
-    for(const c of _cuotas.filter(c=>!yaExiste.has(`prestamo_cuota:${c.id}`)&&(c.fecha_pago||c.fecha||"")>=INICIO_CONTABLE)){
+    // 3. Cuotas pagadas → pago_cuota_prestamo (solo las que VENCEN dentro del ejercicio: las anteriores ya están netas en la apertura, aunque se hayan marcado pagadas después)
+    for(const c of _cuotas.filter(c=>!yaExiste.has(`prestamo_cuota:${c.id}`)&&(c.fecha_pago||c.fecha||"")>=INICIO_CONTABLE&&(c.fecha||c.fecha_pago||"")>=INICIO_CONTABLE)){
       const prest=_prestamos.find(p=>p.id===c.prestamo_id);
       if(!prest)continue;
       const capital=Math.round((parseFloat(c.capital)||0)*100)/100;
