@@ -20735,7 +20735,7 @@ function abrirModalPago(cuotaId,prestId){
 }
 
 // ── Planes de pago de impuestos (ARCA / Rentas): cada plan cancela obligaciones y queda como deuda propia ──
-const _PLAN_TIPOS=["IVA","IIBB","Ganancias","Autonomos","Cargas sociales","Otro"];
+const _PLAN_TIPOS=["IVA","IIBB","Ganancias","Autonomos","Cargas sociales","TISH","Otro"];
 function _esPlanImpuesto(p){const e=((p&&p.entidad)||"")+" "+((p&&p.nombre)||"");return /arca|afip|dgr|rentas/i.test(e);}
 // Pasivo del plan: 2.1.03.010 (ARCA) / 2.1.03.011 (Rentas); el resto de los préstamos va a 2.1.02.001
 function _ctaDeudaPrestamo(p){const e=((p&&p.entidad)||"")+" "+((p&&p.nombre)||"");if(/arca|afip/i.test(e))return"2.1.03.010";if(/dgr|rentas/i.test(e))return"2.1.03.011";return"2.1.02.001";}
@@ -26512,6 +26512,7 @@ const VEP_CUENTAS={
   "Autonomos":{deuda:"2.1.03.007",gasto:"5.4.01.003"},
   "Cargas sociales":{deuda:"2.1.04.002",gasto:"5.1.01.001"},
   "SICORE":{deuda:"2.1.03.002",gasto:null},
+  "TISH":{deuda:"2.1.03.015",gasto:"5.4.01.005"},
   "Otro":{deuda:"2.1.03.008",gasto:"5.4.01.004"}
 };
 function _vepCuentas(tipo){return VEP_CUENTAS[tipo]||VEP_CUENTAS["Otro"];}
