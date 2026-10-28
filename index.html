@@ -1149,6 +1149,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Clientes
       </div>
+      <div class="sitem" onclick="goPage('productos',this)" id="nav-productos">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        Productos
+      </div>
       <div class="sitem" onclick="goPage('facturas',this)" id="nav-facturas">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l3-2 3 2 3-2 3 2 3-2 1 .7V2z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
         Facturas emitidas
@@ -3018,6 +3022,13 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- ══ NOMENCLADOR ══ -->
+<div id="pg-productos" style="display:none">
+  <div class="pg-header">
+    <div><div class="pg-title">Productos</div><div class="pg-title-sub">Catálogo de Finnegans: código, IVA y cuenta contable de cada producto</div></div>
+  </div>
+  <div id="prod-body"></div>
+</div>
+
 <div id="pg-nomenclador" style="display:none">
   <div class="pg-header">
     <div><div class="pg-title">Nomenclador</div><div class="pg-title-sub">Parámetros de precios y catálogo de actividades</div></div>
@@ -6691,6 +6702,7 @@ function goPage(name,el){
   if(name==="planes")loadPlanes();
   if(name==="facturas")loadFacturasEmitidas();
   if(name==="clientes")loadClientes();
+  if(name==="productos")loadProductosPage();
   if(name==="elearning")loadElearning();
   if(name==="comprobantes"){loadComprobantes();cargarProductosFinn();}
   if(name==="impuestos")loadImpuestos();
@@ -32103,6 +32115,87 @@ document.addEventListener("click",e=>{
 // las que falten ("Otros productos de Finnegans"). Se actualiza importando el export de Finnegans (PDF/Excel).
 // ══════════════════════════════════════════════════════════════════════
 let productosFinn=[],_pfDiff=null;
+// ── Página «Productos»: ver y editar el catálogo (código, uso, IVA, cuenta de gasto, activo) ──
+let _prodQ="",_prodUso="",_prodFiltro="",_prodCuentas=[];
+async function loadProductosPage(){
+  const el=document.getElementById("prod-body");if(!el)return;
+  el.innerHTML='<div class="empty">Cargando…</div>';
+  await Promise.all([cargarProductosFinn(),_prodCargarCuentas()]);
+  renderProductosPage();
+}
+async function _prodCargarCuentas(){
+  if(_prodCuentas.length)return;
+  let pc=(typeof planCuentas!=="undefined"&&planCuentas||[]).filter(c=>c.sociedad==="SUDES");
+  if(!pc.length)pc=await sb("plan_cuentas?sociedad=eq.SUDES&select=codigo,nombre&order=codigo&limit=1000").catch(()=>[]);
+  _prodCuentas=pc.filter(c=>/^\d\.\d\.\d{2}\.\d{3}$/.test(c.codigo)).map(c=>({codigo:c.codigo,nombre:c.nombre})).sort((a,b)=>a.codigo.localeCompare(b.codigo));
+}
+const _PROD_IVA=[["","—"],["21","21%"],["10.5","10,5%"],["27","27%"],["exento","Exento"],["nograv","No gravado"]];
+function _prodNombreCuenta(cod){const c=_prodCuentas.find(x=>x.codigo===cod);return c?c.nombre:"";}
+function renderProductosPage(){
+  const el=document.getElementById("prod-body");if(!el)return;
+  const q=_normProd(_prodQ);
+  let list=productosFinn.filter(p=>(!q||_normProd(p.codigo+" "+(p.nombre||"")).includes(q))&&(!_prodUso||p.uso===_prodUso)&&(
+    _prodFiltro===""?p.activo:_prodFiltro==="todos"?true:_prodFiltro==="inactivos"?!p.activo:_prodFiltro==="sincuenta"?(p.activo&&p.uso!=="venta"&&!p.cuenta_gasto):_prodFiltro==="siniva"?(p.activo&&!p.iva):true));
+  const act=productosFinn.filter(p=>p.activo),sinCta=act.filter(p=>p.uso!=="venta"&&!p.cuenta_gasto).length,sinIva=act.filter(p=>!p.iva).length;
+  const kpi=(t,v,c)=>`<div class="card" style="padding:10px 14px;min-width:150px"><div style="font-size:11px;color:var(--tx3)">${t}</div><div style="font-size:20px;font-weight:700;${c?"color:"+c:""}">${v}</div></div>`;
+  const opt=(arr,sel)=>arr.map(([v,t])=>`<option value="${v}"${String(sel??"")===v?" selected":""}>${t}</option>`).join("");
+  el.innerHTML=`
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">${kpi("Productos activos",act.length)}${kpi("Sin cuenta de gasto",sinCta,sinCta?"var(--am)":"")}${kpi("Sin IVA definido",sinIva,sinIva?"var(--am)":"")}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <input class="fi" style="max-width:240px" placeholder="Buscar por código o nombre…" value="${esc(_prodQ)}" oninput="_prodQ=this.value;renderProductosPage();setTimeout(()=>{const i=document.querySelector('#prod-body input.fi');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},0)">
+      <select class="fi sel" style="max-width:150px" onchange="_prodUso=this.value;renderProductosPage()">${opt([["","Todos los usos"],["compra","Compra"],["venta","Venta"],["interno","Interno"]],_prodUso)}</select>
+      <select class="fi sel" style="max-width:190px" onchange="_prodFiltro=this.value;renderProductosPage()">${opt([["","Solo activos"],["sincuenta","Sin cuenta de gasto"],["siniva","Sin IVA definido"],["inactivos","Inactivos"],["todos","Todos"]],_prodFiltro)}</select>
+      <span style="font-size:12px;color:var(--tx3)">${list.length} producto${list.length===1?"":"s"}</span>
+    </div>
+    <div class="card" style="padding:10px 12px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--tx3);margin-bottom:8px">＋ Nuevo producto</div>
+      <div style="display:grid;grid-template-columns:150px 1fr 110px 120px 130px auto;gap:6px;align-items:center">
+        <input class="fi" id="np-cod" placeholder="Código (como en Finnegans)">
+        <input class="fi" id="np-nom" placeholder="Nombre">
+        <select class="fi sel" id="np-uso"><option value="compra">Compra</option><option value="venta">Venta</option><option value="interno">Interno</option></select>
+        <select class="fi sel" id="np-iva">${opt(_PROD_IVA,"")}</select>
+        <input class="fi" id="np-cta" list="prod-cuentas" placeholder="Cuenta gasto">
+        <button class="btn pr" onclick="_prodAlta()">Agregar</button>
+      </div>
+    </div>
+    <datalist id="prod-cuentas">${_prodCuentas.map(c=>`<option value="${c.codigo}">${esc(c.nombre)}</option>`).join("")}</datalist>
+    <div style="overflow-x:auto"><table class="tbl" style="width:100%;font-size:12px;min-width:880px"><thead><tr><th>Código</th><th>Nombre</th><th>Uso</th><th>IVA</th><th>Cuenta de gasto</th><th style="text-align:center">Stock</th><th style="text-align:center">Activo</th></tr></thead><tbody>${list.map(p=>`
+      <tr style="${p.activo?"":"opacity:.55"}">
+        <td style="font-weight:600;white-space:nowrap">${esc(p.codigo)}</td>
+        <td><input class="fi" style="min-width:200px" value="${esc(p.nombre||"")}" onchange="_prodSet('${p.id}','nombre',this.value)"></td>
+        <td><select class="fi sel" onchange="_prodSet('${p.id}','uso',this.value)">${opt([["compra","Compra"],["venta","Venta"],["interno","Interno"]],p.uso)}</select></td>
+        <td><select class="fi sel" onchange="_prodSet('${p.id}','iva',this.value)">${opt(_PROD_IVA,p.iva)}</select></td>
+        <td><input class="fi" style="width:110px" list="prod-cuentas" value="${esc(p.cuenta_gasto||"")}" placeholder="${p.uso==="venta"?"(venta)":"sin cuenta"}" onchange="_prodSet('${p.id}','cuenta_gasto',this.value)"><span style="font-size:11px;color:var(--tx3);margin-left:6px">${esc(_prodNombreCuenta(p.cuenta_gasto)||"")}</span></td>
+        <td style="text-align:center"><input type="checkbox" ${p.stockeable?"checked":""} onchange="_prodSet('${p.id}','stockeable',this.checked)"></td>
+        <td style="text-align:center"><input type="checkbox" ${p.activo?"checked":""} onchange="_prodSet('${p.id}','activo',this.checked)"></td>
+      </tr>`).join("")||'<tr><td colspan="7" style="text-align:center;color:var(--tx3);padding:20px">Sin resultados</td></tr>'}</tbody></table></div>
+    <div style="font-size:11px;color:var(--tx3);margin-top:10px">El <b>código</b> es el que va en la columna PRODUCTO del Excel de Finnegans, por eso no se edita. La <b>cuenta de gasto</b> se usa al devengar las compras: un cambio vale para las facturas nuevas; para las ya asentadas usá «🔁 Regenerar devengados» en Contabilidad → Libro Diario. El IVA define en qué desplegable del formulario de facturas aparece el producto.</div>`;
+}
+async function _prodSet(id,campo,valor){
+  const p=productosFinn.find(x=>x.id===id);if(!p)return;
+  let v=valor;
+  if(campo==="iva"&&v==="")v=null;
+  if(campo==="nombre")v=String(v||"").trim();
+  if(campo==="cuenta_gasto"){v=String(v||"").trim()||null;if(v&&!_prodCuentas.some(c=>c.codigo===v)){toast("La cuenta "+v+" no existe en el plan de cuentas","err");renderProductosPage();return}}
+  try{
+    await sb(`productos_finnegans?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({[campo]:v,actualizado_en:new Date().toISOString()})});
+    p[campo]=v;toast("✓ Guardado","ok");
+    try{_poblarProductosFinn();}catch(_){}
+    renderProductosPage();
+  }catch(e){toast("Error al guardar: "+(e.message||"").slice(0,80),"err");renderProductosPage();}
+}
+async function _prodAlta(){
+  const cod=document.getElementById("np-cod").value.trim(),nom=document.getElementById("np-nom").value.trim();
+  const uso=document.getElementById("np-uso").value,iva=document.getElementById("np-iva").value||null;
+  const cta=document.getElementById("np-cta").value.trim()||null;
+  if(!cod){toast("Poné el código del producto","err");return}
+  if(productosFinn.some(p=>_normProd(p.codigo)===_normProd(cod))){toast("Ya existe un producto con ese código","err");return}
+  if(cta&&!_prodCuentas.some(c=>c.codigo===cta)){toast("La cuenta "+cta+" no existe en el plan","err");return}
+  try{
+    await sb("productos_finnegans",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({codigo:cod,nombre:nom||cod,stockeable:false,uso,iva,cuenta_gasto:cta,activo:true,actualizado_en:new Date().toISOString()})});
+    toast("✓ Producto agregado","ok");await cargarProductosFinn();renderProductosPage();
+  }catch(e){toast("Error: "+(e.message||"").slice(0,80),"err")}
+}
 const _normProd=s=>String(s??"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").trim();
 
 async function cargarProductosFinn(){
