@@ -2699,6 +2699,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
           <button class="fb" onclick="setPendFiltro('tipo','facturas',this)">🧾 Facturas</button>
           <button class="fb" onclick="setPendFiltro('tipo','cuotas',this)">🏦 Cuotas</button>
           <button class="fb" onclick="setPendFiltro('tipo','sueldos',this)">👤 Sueldos</button>
+          <button class="fb" onclick="setPendFiltro('tipo','veps',this)">🧾 Impuestos (VEP)</button>
         </div>
         <div class="fbar">
           <button class="fb on" onclick="setPendFiltro('sociedad','all',this)">Ambas</button>
@@ -13802,12 +13803,20 @@ async function renderCFPendientes(){
   });
   sueldosPend.sort((a,b)=>a.periodo.localeCompare(b.periodo));
 
+  // ── 4. IMPUESTOS (VEP) PENDIENTES ──────────────────────
+  if(!vepData.length)vepData=await sb("impuestos_vep?select=*&order=fecha_vencimiento.asc").catch(()=>[]);
+  let vepsPend=vepData.filter(v=>v.estado!=="pagado"&&v.fecha_vencimiento);
+  if(sociedad!=="all")vepsPend=vepsPend.filter(v=>v.sociedad===sociedad);
+  vepsPend=vepsPend.filter(v=>pasaUrgencia(v.fecha_vencimiento)&&pasaPeriodo(v.fecha_vencimiento));
+  vepsPend.sort((a,b)=>a.fecha_vencimiento.localeCompare(b.fecha_vencimiento));
+
   // ── Poblar selector de períodos ─────────────────────────
   const sel=document.getElementById("pend-periodo-sel");
   if(sel){
     const periodoSet=new Set();
     comprobantes.filter(c=>c.estado!=="pagado"&&c.estado!=="cerrado").forEach(c=>{const f=(c.fecha_vencimiento||c.fecha||"").slice(0,7);if(f)periodoSet.add(f);});
     cfPrestCuotas.filter(c=>!c.pagada&&c.fecha).forEach(c=>periodoSet.add(c.fecha.slice(0,7)));
+    vepData.filter(v=>v.estado!=="pagado"&&v.fecha_vencimiento).forEach(v=>periodoSet.add(v.fecha_vencimiento.slice(0,7)));
     const opts=[`<option value="all">Todos los períodos</option>`];
     [...periodoSet].sort().reverse().forEach(p=>{
       const[y,m]=p.split("-");
@@ -13821,7 +13830,8 @@ async function renderCFPendientes(){
   const totalFact=facturas.reduce((s,c)=>s+(_pagoParcial(c)?saldoComp(c):(parseFloat(c.total)||0)),0);
   const totalCuot=cuotas.reduce((s,c)=>s+(parseFloat(c.monto_total)||0),0);
   const totalSuel=sueldosPend.reduce((s,x)=>s+(parseFloat(x.emp.monto_mensual)||0),0);
-  const totalGral=totalFact+totalCuot+totalSuel;
+  const totalVep=vepsPend.reduce((s,v)=>s+(parseFloat(v.monto)||0),0);
+  const totalGral=totalFact+totalCuot+totalSuel+totalVep;
 
   // ── HELPERS ─────────────────────────────────────────────
   const urgDot=(fechaStr)=>{
@@ -13870,6 +13880,10 @@ async function renderCFPendientes(){
     <div style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px">
       <div style="font-size:10px;color:var(--tx4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Sueldos (${sueldosPend.length})</div>
       <div style="font-size:16px;font-weight:700;color:var(--tx)">$${Math.round(totalSuel).toLocaleString("es-AR")}</div>
+    </div>
+    <div style="background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:14px 16px">
+      <div style="font-size:10px;color:var(--tx4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Impuestos VEP (${vepsPend.length})</div>
+      <div style="font-size:16px;font-weight:700;color:var(--tx)">$${Math.round(totalVep).toLocaleString("es-AR")}</div>
     </div>
   </div>
 
@@ -13958,6 +13972,40 @@ async function renderCFPendientes(){
         </tbody>
       </table>
     </div></div>`:`<div style="color:var(--tx3);font-size:12px;padding:20px;text-align:center;border:1px solid var(--b);border-radius:var(--r)">Sin cuotas pendientes ✓</div>`}
+  </div>`:""}
+
+  ${tipo==="all"||tipo==="veps"?`<!-- IMPUESTOS (VEP) -->
+  <div style="margin-bottom:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700;color:var(--tx)">🧾 Impuestos (VEP)</div>
+      <span style="font-size:11px;color:var(--tx3)">${vepsPend.length} VEP${vepsPend.length!==1?"s":""} · próximos primero</span>
+    </div>
+    ${vepsPend.length?`
+    <div style="border:1px solid var(--b);border-radius:var(--r);overflow:hidden"><div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="background:var(--surf2);border-bottom:1px solid var(--b)">
+            <th style="padding:8px 12px;text-align:left;color:var(--tx3);font-weight:600">Impuesto</th>
+            <th style="padding:8px 12px;text-align:left;color:var(--tx3);font-weight:600">Sociedad</th>
+            <th style="padding:8px 12px;text-align:right;color:var(--tx3);font-weight:600">Monto</th>
+            <th style="padding:8px 12px;text-align:center;color:var(--tx3);font-weight:600">Vencimiento</th>
+            <th style="padding:8px 4px;text-align:center;color:var(--tx3);font-weight:600"></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${vepsPend.map(v=>`<tr style="border-bottom:1px solid var(--b);${urgBg(v.fecha_vencimiento)}">
+            <td style="padding:8px 12px"><div style="display:flex;align-items:center">${urgDot(v.fecha_vencimiento)}<span style="font-weight:500">${esc(v.tipo_impuesto||"—")}${v.periodo?" "+esc(v.periodo.replace(/(\d{4})-(\d{2})/,"$2/$1")):""}</span></div>${v.numero_vep?`<div style="font-size:10px;color:var(--tx4);margin-left:14px">VEP ${esc(v.numero_vep)}</div>`:""}</td>
+            <td style="padding:8px 12px;color:var(--tx3)">${esc(v.sociedad||"—")}</td>
+            <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--tx)">$${Math.round(parseFloat(v.monto)||0).toLocaleString("es-AR")}</td>
+            <td style="padding:8px 12px;text-align:center;color:${days(v.fecha_vencimiento)<0?"var(--re)":days(v.fecha_vencimiento)<=7?"#F97316":"var(--tx3)"}">${fmt(v.fecha_vencimiento)}</td>
+            <td style="padding:8px 6px;text-align:center"><div style="display:flex;gap:4px;justify-content:center">
+              <button class="btn sm" style="font-size:10px;padding:2px 7px" onclick="editarVencimientoVEP('${v.id}')" title="Cambiar la fecha de vencimiento">📅</button>
+              <button class="btn sm" style="font-size:10px;padding:2px 7px;color:var(--gr)" onclick="marcarVEPPagado('${v.id}').then(()=>{try{renderCFPendientes()}catch(_){}})">✓ Pagado</button>
+            </div></td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+    </div></div>`:`<div style="color:var(--tx3);font-size:12px;padding:20px;text-align:center;border:1px solid var(--b);border-radius:var(--r)">Sin impuestos pendientes ✓</div>`}
   </div>`:""}
 
   ${tipo==="all"||tipo==="sueldos"?`<!-- SUELDOS -->
@@ -16440,8 +16488,17 @@ function renderCajaProyeccion(){
     return{fecha:c.fecha,concepto:`Cuota ${p?.nombre||"Préstamo"}`,monto:parseFloat(c.monto_total||c.capital)||0,tipo:"egreso"};
   });
 
-  const eventos=[...cobrPend,...cuotasPend]
-    .filter(e=>e.fecha>=new Date().toISOString().split("T")[0])
+  const hoyP=new Date().toISOString().split("T")[0];
+  if(!window._vepProyCargado){window._vepProyCargado=true;sb("impuestos_vep?select=*&order=fecha_vencimiento.asc").then(d=>{vepData=d||[];renderCajaProyeccion();}).catch(()=>{});}
+  // Impuestos (VEP) pendientes: los ya vencidos se muestran como pago inmediato
+  const vepsProy=(vepData||[]).filter(v=>v.estado!=="pagado"&&v.fecha_vencimiento).map(v=>({
+    fecha:v.fecha_vencimiento<hoyP?hoyP:v.fecha_vencimiento,
+    concepto:`VEP ${v.tipo_impuesto||""}${v.periodo?" "+v.periodo.replace(/(\d{4})-(\d{2})/,"$2/$1"):""} · ${v.sociedad||""}${v.fecha_vencimiento<hoyP?" (vencido)":""}`,
+    monto:parseFloat(v.monto)||0,
+    tipo:"egreso"
+  }));
+  const eventos=[...cobrPend,...cuotasPend,...vepsProy]
+    .filter(e=>e.fecha>=hoyP)
     .sort((a,b)=>a.fecha.localeCompare(b.fecha))
     .slice(0,8);
 
@@ -26638,6 +26695,18 @@ async function _vepAnularAsientos(id){
 /* ══ VEPs ══ */
 let vepData=[], vepArchivoUrl=null, vepArchivoPath=null;
 
+// Cambia la fecha de vencimiento de un VEP pendiente (ej. régimen de plazo especial) y refresca las vistas que lo muestran
+async function editarVencimientoVEP(id){
+  const v=vepData.find(x=>x.id===id);if(!v)return;
+  const nueva=prompt("Nueva fecha de vencimiento del VEP (AAAA-MM-DD):",v.fecha_vencimiento||"");
+  if(nueva===null)return;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(nueva.trim())||isNaN(new Date(nueva.trim()).getTime())){toast("Fecha inválida: usá AAAA-MM-DD","err");return}
+  try{
+    await sb(`impuestos_vep?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({fecha_vencimiento:nueva.trim()})});
+    v.fecha_vencimiento=nueva.trim();toast("✓ Vencimiento actualizado","ok");
+    try{renderVEPs();}catch(_){}try{renderCFPendientes();}catch(_){}try{renderCajaProyeccion();}catch(_){}try{if(typeof renderCalendario==="function")renderCalendario();}catch(_){}
+  }catch(e){toast("Error: "+(e.message||"").slice(0,80),"err")}
+}
 async function loadVEPs(){
   try{ vepData=await sb("impuestos_vep?select=*&order=fecha_vencimiento.asc"); }catch(e){ vepData=[]; }
 }
@@ -26695,6 +26764,7 @@ function renderVEPs(){
         <td style="padding:8px 8px;text-align:center">
           <div style="display:flex;gap:6px;justify-content:center">
             ${v.estado!=="pagado"?`<button onclick="generarOPdesdeVEP('${v.id}')" style="font-size:11px;padding:3px 8px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.3);color:#3B82F6;border-radius:6px;cursor:pointer;white-space:nowrap">💳 OP</button>`:""}
+            ${v.estado!=="pagado"?`<button onclick="editarVencimientoVEP('${v.id}')" title="Cambiar el vencimiento" style="font-size:11px;padding:3px 8px;background:var(--surf2);border:1px solid var(--b);color:var(--tx3);border-radius:6px;cursor:pointer">📅</button>`:""}
             ${v.estado!=="pagado"?`<button onclick="marcarVEPPagado('${v.id}')" style="font-size:11px;padding:3px 8px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:var(--gr);border-radius:6px;cursor:pointer;white-space:nowrap">✓ Pagado</button>`:""}
             ${v.storage_path?`<a href="${v.storage_path}" target="_blank" style="font-size:11px;padding:3px 8px;background:var(--surf2);border:1px solid var(--b);color:var(--tx3);border-radius:6px;cursor:pointer;text-decoration:none;white-space:nowrap">📄 PDF</a>`:""}
             <button onclick="deleteVEP('${v.id}')" style="font-size:11px;padding:3px 8px;background:none;border:none;color:var(--re);cursor:pointer">🗑</button>
