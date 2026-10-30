@@ -1495,6 +1495,44 @@ ALTER TABLE cf_pagos_empleados ADD COLUMN IF NOT EXISTS comprobante_id uuid REFE
 
 ---
 
+## 📌 Avance del 26 al 29 Oct 2026 — cierre de septiembre (corte contable 30/09)
+
+**Estado general:** el cierre piloto de septiembre va bien encaminado. Se asentaron ajustes de apertura, préstamos, inversiones, impuestos y VEP; queda la conciliación del banco (pagos a proveedores, transferencias a socios) y definir con María los ajustes de apertura. Todo lo asentado con script tiene backup en `backups/` (ids para deshacer: marcar `anulado=true`).
+
+### Panel (publicado, sw.js v125 → v131)
+- **Devengados por renglón** (v124–125): gasto por rubro de producto, IVA por alícuota (créditos 1.1.03.011/.012/.013, débitos 2.1.03.012/.013/.014), percepciones a su cuenta; herramienta «🔁 Regenerar devengados» (compras y ventas) con vista previa.
+- **Planes de pago de ARCA/Rentas** (v127–129): las cuotas descuentan del pasivo del plan (2.1.03.010 ARCA / 2.1.03.011 Rentas) y no de Préstamos a pagar; al cargar un plan (o con el botón «📋 Obligaciones») se indica qué impuestos cancela y se asienta devengado + cancelación contra el plan; **lector sin IA** del PDF «Mis Facilidades» de ARCA y «Obligaciones incluidas» F951A de Rentas (probado con los PDF reales). Tipo de impuesto **TISH** con cuentas 2.1.03.015 / 5.4.01.005. Las cuotas anteriores al inicio del ejercicio ya no se asientan en «Generar históricos».
+- **Productos** (v130): página nueva en Contabilidad para ver y editar el catálogo (uso, IVA, cuenta de gasto, stock, activo). Pendiente: asignar cuenta a `TESTDELETE`, `iibb salta`, percepciones y `prestamos`, y a las 10 facturas sin producto.
+- **VEP en Cash Flow** (v131): sección «Impuestos (VEP)» en Pendientes de pago y en la proyección de caja (los vencidos aparecen como pago inmediato); botón 📅 para editar el vencimiento de un VEP.
+
+### Ajustes de apertura y préstamos (asientos con fecha 01/07, tipo ajuste)
+- **POINTERS:** préstamos Macro 1301273246 ($32.800.000) y 1301272230 ($1.250.000) no estaban en el balance al 30/06: asiento de ingreso (neto $32.953.360 + gastos $1.096.640 contra Préstamos a pagar $34.050.000), extracción a caja y $22.500.000 a Avantia. Cargado además el préstamo de $7M (cuotas 7–9) que cierra la apertura de préstamos (9.459.503,71 = préstamo viejo 6.901.961,69 + 2.557.542,02).
+- **SUDES:** préstamos Macro 1301273258 ($14.800.000, neto $14.312.060 el 29/06) y $1.250.000 (neto $1.236.200 el 26/06) igual criterio (bruto $16.050.000); préstamo **CFI Línea Mujeres** $41.000.000 (08/07, neto $40.503.900, comisión $496.100 descontada en el origen = factura 00003-00000203, ya no figura pagada en efectivo).
+- **Criterio de la contadora:** ingreso del préstamo al banco + «extracción» a caja para que el banco siga coincidiendo con el extracto; deja un **excedente de caja** (≈ $10,4M POINTERS y ≈ $15,5M SUDES) que hay que reclasificar contra la cuenta donde se registró el gasto en junio → **a definir con María**.
+- Se anularon todos los asientos anteriores al 01/07/2026 (169, ejercicio cerrado; backup en `backups/asientos_pre_apertura_anulados_20261027.json`) y las cuotas #1–#16 del préstamo viejo de POINTERS.
+
+### Inversiones
+- Asentados jul–sep desde el banco (suscripciones y rescates de Avantia/Macro/Criteria, un asiento por movimiento, origen `inversion_banco`); **pendiente**: valuación al 30/09 de cada fondo (rendimiento) y la letra **S14G6 de Criteria** (≈ $5,34M, vence 14/08, no está en la apertura de SUDES) → **María**.
+- Cheques de FENIX en el fondo: 3 de $20M por sociedad, ya asentados; corregir fechas (02/07, 22/07, 24/08). En el panel hay un aporte duplicado de $10M (traspaso interno MM→AXIS del 25/08).
+
+### Impuestos
+- **IVA:** pago de IVA 05/2026 asentado el 13/07 (SUDES $1.926.295,61 por DDJJ; POINTERS $1.464.920,72, VEP 1642018912). **IVA 06/2026 SIN PAGAR** en las dos sociedades (SUDES $1.338.369,98 / POINTERS $2.735.016,09, con intereses resarcitorios que siguen corriendo; Cuenta Corriente ARCA 29/10). IVA 09/2026 SUDES $3.060.711,20 cargado como VEP pendiente con vencimiento 24/12/2026 (régimen de 90 días, confirmado por María).
+- **Ganancias 2026:** la deuda de la apertura (provisión bruta) coincide con la DDJJ de ARCA una vez compensados los créditos (retenciones, anticipos, ley 25.413): SUDES $6.398.725,09 (vence 18/11), POINTERS $2.172.542,18 (vence 16/11). **Falta el asiento que compensa los créditos contra la deuda** (necesita fecha de presentación de la DDJJ). Anticipos 2027 (cuotas 2–9) aún no exigibles.
+- Se corrigieron los VEP de Ganancias y SICORE que contaban el gasto dos veces (la deuda ya estaba en la apertura) y las fechas de pago de 10 VEP conciliados con el banco. Intereses resarcitorios de períodos anteriores ya pagados (POINTERS $578.736,32 / SUDES $388.414,69) → **María**.
+- **Retención de Oscar Farah:** OP-202610-0254 pasó a 30/09 (ya presentada en SICORE 2ª quincena de septiembre); OP-202610-3811 (29/10) retiene $59.310.
+
+### OSDE
+Pago del 13/08 ($1.358.192,50) = factura 0080-00364280 ($1.326.135,00) + ND A 0071-00374037 del 07/07 ($32.057,50, cargada en julio). ND A 0071-00379008 del 14/08 ($2.686,53) cargada en agosto y pendiente de pago.
+
+### Conciliación bancaria (Excel `banco_*_actualizado_29oct.xlsx` en la raíz)
+- Conciliados hoy: movimientos de fondos, cuotas de préstamos, 10 VEP, sueldos (Mario/Valentina/Tomás/Amparo), cobros de FENIX ($300.000 y 2 cheques de $20M), OSDE, Agustín Cima (sueldo asentado contra caja → corregido a banco).
+- **Pendiente (último paso):** transferencias propias de SUDES (≈ $49M, «TRF MO CCDO DIST T»: retiros de socios / anticipos / caja — Tomás consulta con cada socio; CUIT 20182296342 = Mario, 27405158693 = Valentina, 20420180552 = Tomás, 27234701628 = Amparo), pagos a proveedores sin vincular, tarjeta Visa, seguros, y 4 débitos de impuestos sin VEP (SUDES 139.171,47 / 25.167,90 / 222.060,76; POINTERS 182.390,56). Los de 13/07 (139.171,47 y 182.390,56) podrían ser cargas sociales de junio (**la apertura no trae deuda de cargas sociales; verificar**).
+
+### Hallazgos para María (agregar a la lista de la reunión)
+1. **Proveedores (2.1.01.001) = 0 en la apertura de ambas sociedades:** los comprobantes ≤30/06 están «cerrados» y los pagos de julio de facturas de junio o anteriores no tienen contra qué cancelarse (ej. pago de mayo de OSDE del 06/07). Hace falta el listado de deuda con proveedores al 30/06.
+2. «Sueldos y honorarios a pagar» (2.1.04.001) figura con **el mismo importe ($7.325.268,82) en SUDES y POINTERS**: verificar si es un duplicado.
+3. Excedente de caja por los ajustes de préstamos; retenciones de SICORE de junio ausentes en la apertura de SUDES (2.1.03.002 queda con saldo acreedor de $41.950,66); IVA de las cuotas de préstamos (12% sobre intereses) que hoy no se asienta como crédito fiscal.
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:
