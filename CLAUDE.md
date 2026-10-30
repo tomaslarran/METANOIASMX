@@ -1533,6 +1533,32 @@ Pago del 13/08 ($1.358.192,50) = factura 0080-00364280 ($1.326.135,00) + ND A 00
 2. «Sueldos y honorarios a pagar» (2.1.04.001) figura con **el mismo importe ($7.325.268,82) en SUDES y POINTERS**: verificar si es un duplicado.
 3. Excedente de caja por los ajustes de préstamos; retenciones de SICORE de junio ausentes en la apertura de SUDES (2.1.03.002 queda con saldo acreedor de $41.950,66); IVA de las cuotas de préstamos (12% sobre intereses) que hoy no se asienta como crédito fiscal.
 
+## 📌 Cierre de jornada — viernes 30 Oct 2026 (retomar la semana del 2 Nov): qué falta
+
+**Hecho el 30/10:** resúmenes de la **Visa Business del Macro** (PDF en imagen, sin texto; el OCR gratuito falla) asentados a mano: SUDES 23/07 y 20/08 y POINTERS 06/08 — facturas pagadas con tarjeta (Q Seguridad, Telecom ×2, OSDE agosto + ND 14/08 el 25/08, IPS/Ataco de POINTERS), cargos del resumen, consumos sin comprobante en la cuenta nueva **1.1.05.003 «Consumos con tarjeta sin comprobante (a regularizar)»** y pago desde el banco conciliado (backup `backups/resumenes_tarjeta_20261030.json`). Visa SUDES queda con $1.564.529,56 de deuda (apertura 172.513,03 + Signal 38.000 + OSDE 1.354.016,53 pendiente del resumen 24/09); Visa POINTERS en 0. **Diseño acordado del lector de resúmenes:** subir el PDF → pantalla de control con tabla editable (consumos, cargos, saldo anterior, pagos, saldo actual) + control aritmético contra el saldo impreso → asentar; lectura con IA como botón manual cuando haya más volumen (por ahora se transcriben a mano).
+
+**A. Tomás**
+1. **Transferencias propias de SUDES** (11 filas, ≈ $49M «TRF MO CCDO DIST T»: 13/07 3,5M+3M+3M, 22/07 8M, 24/07 15,05M, 13/08 4,8M+3,81M+0,5M+0,67M, 04/09 3M, 23/09 0,1M; más el depósito de $6M del 23/07 y una de $1,35M en POINTERS el 13/08): preguntar a cada socio si fue retiro, anticipo de socio o caja (CUIT 20182296342 Mario, 27405158693 Valentina, 20420180552 Tomás, 27234701628 Amparo).
+2. **Completar el Excel** `banco_*_actualizado_29oct.xlsx` (columna G): pagos a proveedores sin vincular, seguros, y los 4 débitos de impuestos sin VEP (SUDES 139.171,47 / 25.167,90 [Rentas, no es cuota de plan]; POINTERS 182.390,56; SUDES 222.060,76 del 16/09 es la cuota mensual de V690923 pero las fechas de pago de esas cuotas están corridas).
+3. **IVA 06/2026 SIN PAGAR** (SUDES $1.338.369,98, POINTERS $2.735.016,09, con intereses resarcitorios corriendo): generar VEP con intereses y pagar, o regularizar. IVA 09/2026 SUDES: cargar el N° de VEP (vence 24/12). Ganancias 2026: SUDES $6.398.725,09 vence 18/11, POINTERS $2.172.542,18 vence 16/11.
+4. **Certificado MiPyME de SUDES vence el 31/10/2026** — renovar y subir en Cash Flow → Resúmenes.
+5. Resúmenes de tarjeta: pasar **SUDES 24/09 y 22/10** y **POINTERS 08/07 y 08/10** (ya están en `D:SOCIEDADES TOMI`), y aclarar: Signal Seguridad $38.000 (figura pagada con Visa el 16/07 y no aparece en ningún resumen), Telecom $278.584,22 (resumen muestra 178.584,02 + 10.000: faltan ≈ $100.000), qué son **Edesa** (≈ $270.000/mes, sin facturas cargadas) y **Mercado Pago ARSA** ($705.663,18 en POINTERS). Anthropic USD se paga de la cuenta en dólares (no asentado).
+6. Pasar a **Cierre de mes** de julio, agosto y septiembre cuando el banco esté conciliado; cargar a mano Recibos C de Hellberg; categoría de IIBB de los proveedores; asignar **cuenta de gasto** a los 5 productos sin cuenta y a las 10 facturas sin producto (pantalla Productos).
+
+**B. Con María (agenda de la reunión)**
+1. **Proveedores (2.1.01.001) = 0 en la apertura** de las dos sociedades → necesitamos el listado de deuda con proveedores al 30/06 (ej. pago de mayo de OSDE del 06/07; consumos de junio de la Visa).
+2. **Excedente de caja** por los ajustes de préstamos (≈ $10,4M POINTERS, ≈ $15,5M SUDES) y la **cuenta 1.1.05.003** (≈ $2,4M de consumos de junio pagados con la Visa).
+3. **Asiento que compensa los créditos de Ganancias contra la deuda** (retenciones, anticipos, ley 25.413) — falta la fecha de presentación de la DDJJ.
+4. **Inversiones:** valuación al 30/09 de cada fondo y la **letra S14G6 de Criteria** (≈ $5,34M, no está en la apertura de SUDES).
+5. «Sueldos y honorarios a pagar» (2.1.04.001) con el mismo importe ($7.325.268,82) en SUDES y POINTERS; **deuda de cargas sociales ausente en la apertura** (¿los débitos AFIP del 13/07 de 139.171,47 y 182.390,56 son el F931 de junio?); retenciones de SICORE de junio ausentes en SUDES (2.1.03.002 con saldo acreedor $41.950,66); **intereses resarcitorios** de períodos ya pagados (POINTERS $578.736,32 / SUDES $388.414,69); IVA de las cuotas de préstamos (12% sobre intereses) que no se asienta como crédito fiscal; percepción RG 5617 de la Visa (hoy a Anticipos de Ganancias); apertura de la Visa SUDES; IVA de los cursos (21% o exento); importar los TXT de Libro IVA y SICORE de septiembre.
+
+**C. Claude (desarrollo / asientos)**
+1. Asentar los resúmenes de tarjeta restantes y **construir el lector con pantalla de control** (ver diseño arriba).
+2. Reacomodar las fechas de pago de las cuotas del plan V690923 y conciliar el débito del 16/09; ND y facturas de OSDE de septiembre.
+3. Con las respuestas de Tomás: asentar las transferencias (retiro de socio: Debe cuenta particular 2.2.01.00x; caja; anticipo), pagos y seguros.
+4. Control de **Cierre de mes** de septiembre (verificar todo en verde), valuación de inversiones y los asientos que defina María.
+5. Después: facturación real (IVA de los cursos, corte de Finnegans, enganche de la plataforma a SUDES), Libro IVA Ventas, rol `contable`, cuenta en dólares, cambio de dominio.
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:
