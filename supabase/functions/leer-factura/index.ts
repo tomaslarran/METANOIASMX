@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
     const { url, tipo, archivo_base64, content_type } = await req.json();
     if (!url && !archivo_base64) throw new Error("url o archivo requerido");
 
-    const apiKey = Deno.env.get("anthropic_api_key") || Deno.env.get("ANTHROPIC_API_KEY");
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY") || Deno.env.get("anthropic_api_key");
     if (!apiKey) throw new Error("Sin API key");
     const h = { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" };
 
