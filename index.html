@@ -29340,7 +29340,7 @@ function plCambioMedio(base,k,preCheque){
   delete _echeqForm[p];
   if(tipo==="cuenta_socio"){
     extra.innerHTML=`<label class="fl">¿Qué socio puso la plata? *</label><select class="fs" id="${p}-socio"></select>`;
-    _poblarSelectSocios(document.getElementById(p+"-socio"));
+    _poblarSelectSocios(document.getElementById(p+"-socio"),medio);
   }else if(tipo==="echeq"){
     extra.innerHTML=`<div id="${p}-echeq-wrap"></div>`;
     _echeqMontar(p);echeqControlar(p);
@@ -29426,10 +29426,14 @@ async function abrirPagarComp(id,opts={}){
   await plIniciar("pagar-comp",{sociedad:c.sociedad||"",total:saldo,exacto:false,unaLinea:esNC,preCheque:opts.preCheque});
   openModal("modal-pagar-comp");
 }
-function _poblarSelectSocios(sel){
+// Si el medio es «Caja Socio <nombre>», el socio queda elegido y fijo; con «Aporte Socios» se elige a mano
+function _poblarSelectSocios(sel,medioNombre){
   if(!sel)return;
-  const socios=users.filter(u=>u.rol==="admin"&&u.estado!=="inactivo");
-  sel.innerHTML=socios.map(u=>`<option value="${u.id}">${esc(u.nombre)}</option>`).join("");
+  const socios=users.filter(u=>u.rol==="admin"&&u.estado!=="inactivo"&&u.nombre!=="Maria");
+  const nm=s=>String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+  const fijo=/^caja socio/i.test(medioNombre||"")?socios.find(u=>nm(medioNombre).includes(nm(u.nombre).split(" ")[0])):null;
+  const lista=fijo?[fijo]:socios;
+  sel.innerHTML=lista.map(u=>`<option value="${u.id}">${esc(u.nombre)}</option>`).join("");
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -30290,7 +30294,7 @@ function toggleSocioOP(){
   const wrap=document.getElementById("mop-socio-wrap");
   const esSocio=medioObj?.tipo==="cuenta_socio";
   wrap.style.display=esSocio?"":"none";
-  if(esSocio)_poblarSelectSocios(document.getElementById("mop-socio"));
+  if(esSocio)_poblarSelectSocios(document.getElementById("mop-socio"),medio);
 }
 
 function mopActualizarTipo(){
