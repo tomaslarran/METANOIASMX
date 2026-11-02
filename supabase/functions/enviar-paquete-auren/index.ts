@@ -78,7 +78,7 @@ serve(async (req) => {
       from: `"${String(emisor).replace(/"/g, "")}" <${Deno.env.get("SMTP_USER")}>`,
       to: destinos.join(", "),
       cc: copias.length ? copias.join(", ") : undefined,
-      replyTo: copias[0] || undefined,
+      replyTo: copias.length ? copias.join(", ") : undefined,   // si Auren responde, les llega a los dos
       subject: `📦 ${sociedad} — Información para el cierre de ${periodo}`,
       html,
       attachments,
