@@ -27904,14 +27904,18 @@ function buildLibroIvaTxt({soc,mes,facturas,compras}){
     if(cuit.length!==11){avisos.push(`${rotulo}: CUIT del proveedor inválido o vacío; no se incluyó.`);continue;}
     const conIva=["001","002","003","051"].includes(tipo);   // clase A/M: discrimina IVA y da crédito fiscal
     const n21=N(c.neto_21),n105=N(c.neto_105),n27=N(c.neto_27),iva=N(c.iva)||(n21*0.21+n105*0.105+n27*0.27);
-    const pIva=N(c.percepcion_iva)+N(c.percepcion_iva_15),pIibb=N(c.percepcion_iibb),total=N(c.total);
+    let pIva=N(c.percepcion_iva)+N(c.percepcion_iva_15),pIibb=N(c.percepcion_iibb);const total=N(c.total);
+    // Clase C (factura, ND y NC de monotributistas): solo el importe total, cantidad de alícuotas 0, código de operación "A" y todo lo
+    // demás en cero, sin exento (corrección de María, 2/11/2026, contra el libro de octubre de SUDES que acepta ARCA).
+    const esC=["011","012","013"].includes(tipo);
     // Lo que no es neto gravado ni IVA ni percepciones (tasas, impuestos internos, conceptos no gravados) se informa como exento,
     // igual que el Libro IVA que arma María con Finnegans.
     let ex=_lvR(N(c.neto_exento)+N(c.impuesto_interno)+N(c.otros_impuestos));
     const gravado=n21+n105+n27;
     const resto=_lvR(total-(gravado+(conIva?iva:0)+ex+pIva+pIibb));
     let noIntegra=0;
-    if(resto>0.05)ex=_lvR(ex+resto);else if(resto<-0.05)avisos.push(`${rotulo}: los importes superan el total en ${Math.abs(resto)}.`);
+    if(esC){ex=0;pIva=0;pIibb=0;}
+    else if(resto>0.05)ex=_lvR(ex+resto);else if(resto<-0.05)avisos.push(`${rotulo}: los importes superan el total en ${Math.abs(resto)}.`);
     let recs=[];
     if(conIva){
       let asign=[[21,n21],[10.5,n105],[27,n27]].filter(([,b])=>b>0).map(([p,b])=>({pct:p,base:b,iva:_lvR(b*p/100)}));
@@ -27920,7 +27924,7 @@ function buildLibroIvaTxt({soc,mes,facturas,compras}){
       if(ex>0&&asign.some(a=>a.pct>0))asign.push({pct:0,base:0,iva:0});   // con parte exenta: segundo registro 0003 en cero (como Finnegans)
       recs=asign;
     }
-    const op=conIva&&ex>0?"E":(conIva&&recs.every(a=>a.pct===0)?"N":" ");
+    const op=esC?"A":(conIva&&ex>0?"E":(conIva&&recs.every(a=>a.pct===0)?"N":" "));
     comprasC.push(_lvFecha(c.fecha||c.fecha_imputacion)+tipo+_lvInt(m[1],5)+_lvInt(m[2],20)+" ".repeat(16)+"80"+_lvInt(cuit,20)+_lvTxt(c.proveedor,30)
       +_lvNum(total,15)+_lvNum(noIntegra,15)+_lvNum(ex,15)+_lvNum(pIva,15)+_lvNum(0,15)+_lvNum(pIibb,15)+_lvNum(0,15)+_lvNum(0,15)+"PES"+"0001000000"+String(recs.length)+op
       +_lvNum(conIva?iva:0,15)+_lvNum(0,15)+_lvInt(0,11)+" ".repeat(30)+_lvNum(0,15));
