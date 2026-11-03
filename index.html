@@ -20811,7 +20811,10 @@ function abrirModalPago(cuotaId,prestId){
 
 // ── Planes de pago de impuestos (ARCA / Rentas): cada plan cancela obligaciones y queda como deuda propia ──
 const _PLAN_TIPOS=["IVA","IIBB","Ganancias","Autonomos","Cargas sociales","TISH","Otro"];
-function _esPlanImpuesto(p){const e=((p&&p.entidad)||"")+" "+((p&&p.nombre)||"");return /arca|afip|dgr|rentas/i.test(e);}
+// Planes de pagos de ARCA a nombre de un socio (autónomos personales) que paga la sociedad: no son deuda de la sociedad,
+// cada cuota se asienta en 1.1.05.004 «Impuestos de socios pagados por la sociedad»
+function _esPlanSocio(p){return /larran|virasoro/i.test((p&&p.nombre)||"")&&/arca|afip|plan de pagos/i.test(((p&&p.entidad)||"")+" "+((p&&p.nombre)||""));}
+function _esPlanImpuesto(p){if(_esPlanSocio(p))return false;const e=((p&&p.entidad)||"")+" "+((p&&p.nombre)||"");return /arca|afip|dgr|rentas/i.test(e);}
 // Pasivo del plan: 2.1.03.010 (ARCA) / 2.1.03.011 (Rentas); el resto de los préstamos va a 2.1.02.001
 function _ctaDeudaPrestamo(p){const e=((p&&p.entidad)||"")+" "+((p&&p.nombre)||"");if(/arca|afip/i.test(e))return"2.1.03.010";if(/dgr|rentas/i.test(e))return"2.1.03.011";return"2.1.02.001";}
 function _oplCapital(p){const s=cfPrestCuotas.filter(c=>c.prestamo_id===p.id).reduce((t,c)=>t+(parseFloat(c.capital)||0),0);return Math.round((s>0?s:(parseFloat(p.capital)||parseFloat(p.saldo_actual)||0))*100)/100;}
@@ -20949,8 +20952,11 @@ async function confirmarPagoCuota(){
         // Capital fijo del cronograma; intereses = total - capital (absorbe cualquier diferencia por demora)
         const cap=capital>0?capital:0;
         const intereses=Math.max(0,Math.round((total-cap)*100)/100);
+        if(_esPlanSocio(prest))lineas.push({codigo:"1.1.05.004",debe:total,desc:"Autónomos de socio pagados por la sociedad"});
+        else{
         if(cap>0)lineas.push({codigo:_ctaDeudaPrestamo(prest),debe:cap,desc:"Capital cuota"});
         if(intereses>0)lineas.push({codigo:"5.3.01.001",debe:intereses,desc:cap>0&&Math.abs(total-(cap+(parseFloat(c.intereses)||0)))>1?"Intereses (ajustado por demora)":"Intereses"});
+        }
         lineas.push({codigo:getBancoCodigoPorMedio(medio,soc),haber:total,desc:`Pago ${medio||"cuota"}`});
         const desc=`Cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${prest.nombre||"Préstamo"}`;
         const _adC={fecha,sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:cuotaId,descripcion:desc,lineas};
@@ -27328,8 +27334,11 @@ async function backfillAsientos(){
       const soc=prest.sociedad||"SUDES";
       const cap=capital>0?capital:total-intereses;
       const lineas=[];
+      if(_esPlanSocio(prest))lineas.push({codigo:"1.1.05.004",debe:total,desc:"Autónomos de socio pagados por la sociedad"});
+      else{
       if(cap>0)lineas.push({codigo:_ctaDeudaPrestamo(prest),debe:cap,desc:"Capital cuota"});
       if(intereses>0)lineas.push({codigo:"5.3.01.001",debe:intereses,desc:"Intereses"});
+      }
       lineas.push({codigo:getBancoCodigoPorMedio("Macro",soc),haber:total,desc:"Pago cuota"});
       await hacer({fecha:c.fecha_pago||c.fecha||today(),sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:c.id,descripcion:`Cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${prest.nombre||"Préstamo"}`,lineas},`Cuota #${c.nro_cuota||"?"} — ${prest.nombre||"Préstamo"}`);
     }
