@@ -2247,3 +2247,27 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 - **Libro IVA Compras — facturas C (2 Nov 2026, v134, corrección de María):** comparó el libro de octubre de SUDES contra Finnegans (17 comprobantes, mismo neto e IVA). Las clase C (factura/ND/NC de monotributistas: 011/012/013) ahora salen con **solo el importe total, cantidad de alícuotas 0, código de operación «A» y todo lo demás en cero** (antes: código en blanco y el total como exento). Sin registros de alícuotas, como antes. Probado contra jul–oct de las dos sociedades: 22 comprobantes C cambian solo en eso y los otros 189 quedan idénticos (482 controles). No hay compras clase B cargadas: si aparecen, confirmar con María si llevan la misma regla.
 - `enviar-paquete-auren` deployada el 2/11/2026 (responde 401 sin sesión).
 - **Lector de facturas con IA sin crédito (2 Nov 2026, resuelto):** `leer-factura` buscaba primero el secret en minúscula `anthropic_api_key` (clave vieja de la organización, sin crédito) y recién después `ANTHROPIC_API_KEY` (la clave con crédito que usan todos los demás agentes). Tomás borró el secret en minúscula y volvió a andar. El código ahora prefiere `ANTHROPIC_API_KEY` (commit 7c78a4e); redeployar `leer-factura` cuando se pueda. De paso se restauró desde git el `index.ts` local de `leer-factura`, que había quedado vacío por un tipeo accidental.
+
+
+---
+
+## 📌 Avance del 2 Nov 2026 — cierre de septiembre: conciliación de transferencias y pagos (SUDES / POINTERS)
+
+**Hecho (todo con respaldo en `backups/`, para deshacer: `anulado=true` en los asientos y borrar lo creado):**
+- **Facturas anteriores al 01/07** que figuraban pendientes en Dashboard / Centro de Control: 27 (26 POINTERS, 1 SUDES, ≈ $5,3M) pasadas a `cerrado` (`facturas_pre_julio_a_cerrado_20261102.json`).
+- **SICORE:** a pedido de María las fechas del TXT/Excel son las de Finnegans: Auren (POINTERS) 05/10 y Farah (SUDES) 27/10; se corrigió `ordenes_pago.fecha_pago` y la fecha del asiento (`fechas_sicore_20261102.json`).
+- **Caja Socio:** se probó un medio por socio y se dejó el original «Aporte Socios» con selector de socio (los 8 «Caja Socio …» quedan desactivados). `_poblarSelectSocios(sel,medioNombre)` fija el socio si el medio es «Caja Socio <nombre>» (panel v135).
+- **Argenpymes SGR** (comisión de garantía, préstamo CFI Mujeres): factura A 00004-00024012 (26/06, $1.122.164,36, sin IVA = exenta) cargada a mano, imputada a 08/07, pagada con cheque 68030266 el 03/08; línea del banco conciliada. Gasto en 5.3.01.002 (criterio provisorio).
+- **Bocana Valores** (15/07, $1.114.156,45): OP P-0000-00000004 de Finnegans cargada (PAGO-8, régimen 94, retención $17.359,34, base $935.137,02, `fecha_pago` 14/07); el asiento de pago se corrigió para separar la retención (2.1.03.002).
+- **Retiros de socios 13/07 (SUDES):** Mario $3,5M (2.2.01.001), Tomás $3M (2.2.01.003), Amparo $3M (2.2.01.002); Debe cuenta particular / Haber Banco. Hay otra transferencia de $3.000.121 a CUIT de Tomás (13/07) que no se asentó.
+- **Banco ↔ Caja (SUDES, 22/07 -8M, 23/07 +6M, 24/07 -15,05M):** estaban conciliados con el movimiento del panel pero sin asiento; ahora Debe/Haber Caja ↔ Banco. El cambio de $15,05M a USD sigue sin asiento (falta cuenta en dólares).
+- **OSDE 06/07 ($1.265.948,01)** = factura de mayo 0079-00356725 (cerrada, no estaba en el balance). Asiento de ajuste al 01/07 (Debe 3.1.03.001 Resultados no asignados / Haber Proveedores) que cancela el pago ya asentado. La ND de $32.057,50 se pagó el 13/08 con la factura de julio.
+- **UNT 10/08:** dos transferencias de $3.600.000 asentadas como **anticipos abiertos** (sin factura ni recibo todavía; Tomás los busca): 2 OP sin factura + asiento Debe 1.1.05.001 / Haber Banco + 2 filas en `anticipos_proveedores`.
+- **13/08 SUDES:** Farah $666.690 (Fact. A 0004-00001619, OP-202608-1486, retención $59.310, régimen 119) y Auren $3.809.343,40 (Fact. A 00001-00001000, OP-202608-4122, retención $62.656,60, régimen 94). Los N° de OP los generó el panel, no son los de Finnegans; `fecha_pago` = fecha del banco.
+- **Excel de conciliación:** `banco_sudes_actualizado_2nov_noche.xlsx` (17 filas sin asiento) y `banco_pointers_actualizado_2nov_noche.xlsx` (11). Se generan con un script que lee `banco_movimientos` (las filas con `asiento_id` ya no figuran).
+- **Roles de base para colaboradores:** `sql_roles_colaboradores.sql` preparado (lector / datos / facturas, con auditoría en `auditoria_colaboradores`). **NO se corrió**: el equipo decidió dejarlo para más adelante. Sin correrlo no cambia nada.
+
+**Pendiente (sigue en la lista del 30 Oct; retomar mañana):**
+- SUDES sin asiento: transferencias a socios por CUIT (Mario 14/08 $3M, 21/08 $2M, 25/09 $1,35M; Valentina 27/08 $760.000, 31/08 $175.000, 01/09 $480.000; Tomás 28/09 $202.169,22), 13/08 $4,8M y $0,5M, 04/09 $3M y 23/09 $0,1M (entre cuentas propias), seguros OPCION, débitos AFIP/Rentas sin VEP (13/07 $139.171,47, 18/08 $25.167,90, 16/09 $222.060,76) y los de POINTERS (préstamos, Finnegans, transferencias a Amparo/Tomás, AFIP $182.390,56).
+- Con María: criterio de Argenpymes (cuenta de gasto, IVA), ajuste OSDE contra Resultados no asignados, retención a Farah en julio (factura de $726.000 pagada sin retención), Proveedores = 0 en la apertura, cargas sociales en los débitos AFIP del 13/07.
+- Recibo / factura de la UNT para cancelar los dos anticipos de $3,6M.
