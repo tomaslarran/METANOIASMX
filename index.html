@@ -18578,6 +18578,7 @@ async function confirmarPagoEmpleado(){
       const[created]=await sb("cf_pagos_empleados",{method:"POST",body:JSON.stringify(data)});
       cfPagosEmpleados.push(created);pagoId=created?.id;
     }
+    if(existe&&pagoId)await _anularAsientosPagoEmpleado(pagoId);   // editar = reemplazar, no sumar un segundo asiento
     const emp=cfEmpleados.find(e=>e.id===_mpeEmpId);
     // Anticipo abierto que se descuenta de este pago (solo pago directo de sueldo)
     const antApl=(emp&&monto>0&&_mpeAntSaldo>0&&document.getElementById("mpe-ant-usar")?.checked)?_r2(Math.min(_mpeAntSaldo,monto)):0;
@@ -18837,13 +18838,21 @@ async function _sueldoSincronizarPago(c,{fecha,medio}){
   if(nombre)toast(`👤 Sueldo de ${nombre} (${row.periodo}) marcado como pagado`,"inf");
 }
 
+// Anula los asientos activos de un pago de sueldo (un movimiento = un solo asiento): se usa al desmarcar y al volver a registrar el mismo pago
+async function _anularAsientosPagoEmpleado(pagoId){
+  const as=await sb(`asientos_contables?anulado=eq.false&origen=eq.pago_empleado&origen_id=eq.${pagoId}&select=id`).catch(()=>[]);
+  for(const a of as)await sb(`asientos_contables?id=eq.${a.id}`,{method:"PATCH",body:JSON.stringify({anulado:true})});
+  return as.length;
+}
 async function desmarcarPagoEmpleado(empId,periodo){
   const pago=cfPagosEmpleados.find(p=>p.empleado_id===empId&&p.periodo===periodo);
   if(!pago)return;
   if(pago.comprobante_id&&!confirm("Este mes está vinculado a una factura. Desmarcar solo quita la marca en Sueldos: el pago de la factura NO se revierte. ¿Continuar?"))return;
   try{
+    const _nAs=await _anularAsientosPagoEmpleado(pago.id);
     await sb(`cf_pagos_empleados?id=eq.${pago.id}`,{method:"DELETE"});
     cfPagosEmpleados=cfPagosEmpleados.filter(p=>p.id!==pago.id);
+    if(_nAs)toast(`Se anuló el asiento del pago (${_nAs})`,"inf");
     renderSueldos();renderCFResumen();
     if(curPage==="alertas")renderAlertas();
     toast("Pago desmarcado — queda pendiente","inf");
