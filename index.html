@@ -30528,6 +30528,13 @@ async function verPDFOP(opId){
 }
 
 // Genera (o actualiza) la orden de pago de una factura. NO paga la factura: queda pendiente de pago.
+// Número de orden de pago correlativo por mes (OP-AAAAMM-0001, 0002…): antes se armaba con los últimos 4 dígitos de la hora y podía repetirse
+async function _nuevoNumeroOP(fecha){
+  const pref="OP-"+String(fecha||today()).slice(0,7).replace("-","")+"-";
+  const ex=await sb(`ordenes_pago?numero=like.${pref}*&select=numero`).catch(()=>[]);
+  let max=0;(ex||[]).forEach(o=>{const n=parseInt(String(o.numero).slice(pref.length),10);if(n>max)max=n;});
+  return pref+String(max+1).padStart(4,"0");
+}
 async function confirmarOrdenPago(){
   const compId=document.getElementById("mop-comp-id").value;
   const c=comprobantes.find(x=>x.id===compId);
@@ -30555,7 +30562,7 @@ async function confirmarOrdenPago(){
   if(_pagoMedioTipo(medio)==="tarjeta"){toast("Con tarjeta no corresponde orden de pago (se paga antes de recibir la factura): usá 💳 Pagar.","err");return;}
   const [cod]=(sicoreVal?sicoreVal.split("|"):["",""]);
   const sicoreDesc=cod?(rg830Conceptos.length?_rg830DescCompleta(cod):getSicoreCat()[cod]?.desc)||"":"";
-  let numero=`OP-${fecha.slice(0,7).replace("-","")}-${String(Date.now()).slice(-4)}`;
+  let numero=await _nuevoNumeroOP(fecha);
   const opData={
     comprobante_id:compId,numero,proveedor:c.proveedor||"",cuit:c.cuit||"",
     tipo_factura:tipo,sociedad:c.sociedad||"SUDES",monto_bruto:bruto,
@@ -31040,7 +31047,7 @@ async function etEndosarACuenta(c,prov){
     const sociedad=c.sociedad,fecha=today(),monto=_r2(c.monto),cuit=prov.cuit||null;
     const nroCh=c.numero_cheque||"s/n";
     const concepto=`Endoso Echeq N° ${nroCh} (${c.librador||c.remitente||"cliente"})`;
-    const numero=`OP-${fecha.slice(0,7).replace("-","")}-${String(Date.now()).slice(-4)}`;
+    const numero=await _nuevoNumeroOP(fecha);
     const [op]=await sb("ordenes_pago",{method:"POST",body:JSON.stringify({comprobante_id:null,numero,proveedor:prov.nombre,cuit,tipo_factura:null,sociedad,
       monto_bruto:monto,base_retencion:0,porcentaje_retencion:0,monto_retencion:0,neto_a_pagar:monto,medio_pago:ET_ENDOSO_MEDIO,
       observaciones:`Pago a cuenta (sin factura) con ${concepto}. Vence el ${etF(c.fecha_vencimiento)}. Se cancela con el recibo del proveedor.`,fecha_pago:fecha,estado:"pagado",creado_por:loggedUser?.nombre||null,nro_operacion:c.numero_cheque||null})});
@@ -31510,7 +31517,7 @@ async function confirmarAnticipo(){
   if(f){try{comp=await _leerComprobantePago(f);}catch(e){toast(e.message,"err");return;}}
   const btn=g("ant-btn");btn.disabled=true;btn.textContent="Registrando…";
   try{
-    const numero=`OP-${fecha.slice(0,7).replace("-","")}-${String(Date.now()).slice(-4)}`;
+    const numero=await _nuevoNumeroOP(fecha);
     const cuit=prov.cuit||null;
     // 1) Orden de pago (sin factura)
     const [op]=await sb("ordenes_pago",{method:"POST",body:JSON.stringify({comprobante_id:null,numero,proveedor:prov.nombre,cuit,tipo_factura:null,sociedad,
