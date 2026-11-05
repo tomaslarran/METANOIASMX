@@ -2271,3 +2271,28 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 - SUDES sin asiento: transferencias a socios por CUIT (Mario 14/08 $3M, 21/08 $2M, 25/09 $1,35M; Valentina 27/08 $760.000, 31/08 $175.000, 01/09 $480.000; Tomás 28/09 $202.169,22), 13/08 $4,8M y $0,5M, 04/09 $3M y 23/09 $0,1M (entre cuentas propias), seguros OPCION, débitos AFIP/Rentas sin VEP (13/07 $139.171,47, 18/08 $25.167,90, 16/09 $222.060,76) y los de POINTERS (préstamos, Finnegans, transferencias a Amparo/Tomás, AFIP $182.390,56).
 - Con María: criterio de Argenpymes (cuenta de gasto, IVA), ajuste OSDE contra Resultados no asignados, retención a Farah en julio (factura de $726.000 pagada sin retención), Proveedores = 0 en la apertura, cargas sociales en los débitos AFIP del 13/07.
 - Recibo / factura de la UNT para cancelar los dos anticipos de $3,6M.
+
+
+---
+
+## 📌 Avance del 3 al 5 Nov 2026 — caja, honorarios, tarjetas, dólares
+
+**Panel publicado (sw.js v137–v138):** desmarcar o re-registrar un pago de sueldo anula su asiento (antes quedaban asientos huérfanos); números de orden de pago correlativos por mes (`_nuevoNumeroOP`: los viejos `OP-AAAAMM-<ms>` podían repetirse); planes de ARCA a nombre de socios (autónomos) se asientan en `1.1.05.004` (v136).
+
+**Datos (todo con respaldo en `backups/`):**
+- **Caja:** limpiados los egresos erróneos del panel (Bocana ×2, Signal, Ataco, IPS, Corralón, retiro socios, Cima); saldo inicial del balance cargado (SUDES $56.300, POINTERS $480.029,70); 11 retiros banco→caja (SUDES $14,75M, POINTERS $5,85M); compra de U$S 10.000 (24/07) asentada con `1.1.01.007 Caja USD`. La extracción de préstamos **sigue pasando por caja** (préstamo → caja → inversiones).
+- **Cheques Fenix:** son dos por sociedad: el de junio (vto 30/06) se depositó en Avantia el **02/07**; el de julio (vto 20/07) el 21/07. SUDES: el aporte de $20M del 13/07 y el depósito del cheque del 21/07 no cierran contra Inversiones (pendiente, ver extracto del fondo).
+- **Honorarios (Cima, Daniela, Florencia, Oscar Farah):** un devengado + un pago por factura; anulados 15 asientos de sueldo duplicados y registrados 6 pagos de facturas. Factura Cima 0004-00000209 corregida a $550.000. Quedan sueldos solo de Mario y Valentina (Valentina nov: $2,5M banco + $0,5M anticipo, 30/10).
+- **Banco ↔ préstamos:** todas las líneas «PRESTAMOS REC» y cuotas de SUDES/POINTERS enlazadas con su asiento; cuotas corregidas de fecha; asientos de las cuotas del préstamo de $1,25M balanceados.
+- **Tarjetas:** resúmenes de SUDES (jul–oct) y POINTERS (jul–oct) cargados. **Pago doble de la Visa el 01/09** (dos débitos de $694.280,16): el segundo se asentó como saldo a favor con la tarjeta. 7 facturas pagadas con la Visa regularizadas ($382.909,01). Duplicado pendiente de borrar: factura Productos Químicos 0053-00003796 cargada dos veces.
+- **Dólares:** tabla `banco_usd_movimientos` (SQL `sql_banco_usd_movimientos.sql`), columnas `moneda/tc/importe_ars` en `banco_movimientos`, tabla `cotizaciones_usd` (BNA/BCRA, jun–nov); extracto USD de SUDES jul–sep importado (U$S 64,27 al 30/09); cuenta puente `1.1.01.008 Compra de dólares en tránsito`; cuenta `5.3.03.001 Diferencias de cambio`. Criterio (opción B, a confirmar con María): consumos y salidas en dólares al **BNA vendedor del día hábil anterior**, diferencia a Diferencias de cambio; el IVA de Anthropic **no se registra** (María: «solo el gasto»); la compra de dólares **no debe pasar por socios** (María).
+- **Ajustes de apertura a consultar con María:** U$S 145 de la tarjeta de junio (contra resultados anteriores, $217.500) y valuación de la cuenta en dólares (de $149,82 a $224.730).
+- **Reporte de deuda para Bocana Valores:** `Reporte_deuda_SUDES_03nov2026.xlsx` y `Reporte_deuda_POINTERS_03nov2026.xlsx` (préstamos y planes, sin vehículos, socios, vinculadas ni impuestos).
+- **Roles de base para colaboradores:** `sql_roles_colaboradores.sql` preparado, **no corrido**.
+
+**Pendiente (retomar mañana):**
+- Importar los extractos de **octubre** (SUDES y POINTERS): pagos de tarjeta de octubre (SUDES $1.447.421,94 + U$S 20; POINTERS $83.388,16), cuotas de préstamos de octubre, Echeq que vencen en octubre.
+- **U$S 300 del 03/08:** la cuenta puente tiene $453.000 a favor; Tomás verifica si la transferencia de $500.000 del 13/08 (hoy retiro a caja) fue la compra; si es así, sacar $453.000 de caja hacia la puente.
+- Lector sin IA de invoice/recibo de Anthropic (hay muestras: `Invoice-KORDNRE5-0009.pdf`, `Receipt-2162-1975-6599.pdf`) y botón de importación de la cuenta en dólares desde el panel (hoy lo hizo un script).
+- Respuestas de María: diferencia de cambio (A o B), percepción RG 5617, ajustes de apertura en dólares, impuestos AFIP/Rentas sin VEP (SUDES $139.171,47 y $25.167,90; POINTERS $182.390,56).
+- Consumos sin comprobante de la Visa (EDESA, Viumi, cuotas Personal): regularizar con facturas.
