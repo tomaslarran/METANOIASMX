@@ -4914,6 +4914,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 <div class="modal" style="max-width:480px">
   <div class="mt">🧾 Cargar recibo del proveedor <button class="mt-close" onclick="closeModal('modal-recibo-ant')">✕</button></div>
   <div id="rec-ant-info" style="font-size:12px;margin-bottom:10px"></div>
+  <div id="rec-ant-hermanos" style="display:none;margin-bottom:10px;padding:8px 10px;border:1px dashed var(--bd);border-radius:8px;font-size:12px"></div>
   <div class="g2">
     <div class="fg"><label class="fl">N° de recibo *</label><input class="fi" id="rec-ant-numero" placeholder="0001-00000123"></div>
     <div class="fg"><label class="fl">Fecha del recibo *</label><input class="fi" type="date" id="rec-ant-fecha"></div>
@@ -27277,8 +27278,12 @@ async function backfillAsientos(){
   if(btn){btn.disabled=true;btn.textContent="Procesando...";}
   try{
     // Cargar asientos existentes para dedup
-    const existentes=await sb("asientos_contables?select=origen,origen_id");
+    // Se pagina: PostgREST devuelve como máximo 1000 filas y con más asientos el control de duplicados quedaba incompleto
+    const existentes=[];
+    for(let off=0;;off+=1000){const pg=await sb(`asientos_contables?select=origen,origen_id&order=created_at.asc&limit=1000&offset=${off}`);existentes.push(...pg);if(pg.length<1000)break;}
     const yaExiste=new Set(existentes.map(a=>`${a.origen}:${a.origen_id}`));
+    // Un comprobante con pago ya asentado por cualquier camino (pago directo u orden de pago) no se vuelve a pagar
+    const _pagoYaAsentado=(c,op)=>yaExiste.has(`comprobante_pago:${c.id}`)||(op?.id&&yaExiste.has(`orden_pago:${op.id}`))||(ordenesGanancias||[]).some(o=>o.comprobante_id===c.id&&yaExiste.has(`orden_pago:${o.id}`));
     // Datos propios: antes dependía de listas que solo se cargan al visitar Cash Flow y, corrido desde Impuestos, no encontraba cuotas ni sueldos
     const [_cuotas,_prestamos,_pagosEmp,_empleados]=await Promise.all([
       sb("cf_prestamos_cuotas?select=*&pagada=eq.true"),sb("cf_prestamos?select=*"),
@@ -27286,12 +27291,14 @@ async function backfillAsientos(){
     ]);
     const INICIO_CONTABLE="2026-07-01";
     let gen=0;const errores=[];
-    const hacer=async(opts,label)=>{try{const a=await generarAsiento(opts);if(a)gen++;else errores.push(`⚠️ ${label} — código de cuenta no encontrado en Plan de Cuentas`);}catch(e){errores.push(`❌ ${label} — ${e.message?.slice(0,60)||"error"}`);}};
+    const pend=[];
+    const hacer=async(opts,label)=>{pend.push({opts,label});};
 
     // 1. Comprobantes → devengado_compra
     if(!productosFinn.length)await cargarProductosFinn();
     for(const c of(comprobantes||[]).filter(c=>
       (c.estado==="revisado"||c.estado==="pagado")&&c.estado!=="cerrado"
+      &&c.tipo!=="X"&&(c.moneda||"ARS")==="ARS"
       &&Math.abs(parseFloat(c.total)||0)>0
       &&!yaExiste.has(`comprobante:${c.id}`)
     )){
@@ -27300,10 +27307,10 @@ async function backfillAsientos(){
     }
 
     // 2. Comprobantes pagados con OP → pago_compra
-    for(const c of(comprobantes||[]).filter(c=>c.estado==="pagado"&&c.estado!=="cerrado"&&!c.tipo?.startsWith("NC"))){
+    for(const c of(comprobantes||[]).filter(c=>c.estado==="pagado"&&c.estado!=="cerrado"&&c.tipo!=="X"&&(c.moneda||"ARS")==="ARS"&&!c.tipo?.startsWith("NC"))){
       const op=(ordenesGanancias||[]).find(o=>o.comprobante_id===c.id);
+      if(_pagoYaAsentado(c,op))continue;
       if(op?.id){
-        if(yaExiste.has(`orden_pago:${op.id}`))continue;
         const bruto=Math.round((parseFloat(c.total)||0)*100)/100;
         const ret=Math.round((parseFloat(op.monto_retencion)||0)*100)/100;
         const neto=Math.round((parseFloat(op.neto_a_pagar)||bruto-ret)*100)/100;
@@ -27353,7 +27360,7 @@ async function backfillAsientos(){
     }
 
     // 4. Sueldos pagados → sueldo
-    for(const pago of _pagosEmp.filter(p=>(p.monto||0)>0&&!yaExiste.has(`pago_empleado:${p.id}`))){
+    for(const pago of _pagosEmp.filter(p=>(p.monto||0)>0&&!p.comprobante_id&&!yaExiste.has(`pago_empleado:${p.id}`))){
       const emp=_empleados.find(e=>e.id===pago.empleado_id);
       if(!emp)continue;
       const soc=emp.sociedad||"SUDES";
@@ -27364,6 +27371,20 @@ async function backfillAsientos(){
         {codigo:bancoCod,haber:monto,desc:`Pago ${pago.medio_pago||"sueldo"}`},
       ]},`Sueldo ${emp.nombre||""} — ${pago.periodo||""}`);
     }
+
+    // Antes de escribir nada se muestra qué se va a generar
+    if(!pend.length){toast("No hay nada para generar: todo tiene su asiento","inf");return;}
+    const _porTipo={};pend.forEach(p=>{const k=p.opts.tipo+" · "+p.opts.sociedad;_porTipo[k]=(_porTipo[k]||0)+1;});
+    const _res=Object.entries(_porTipo).map(([k,n])=>` • ${k}: ${n}`).join("\n");
+    const _ej=pend.slice(0,12).map(p=>`   ${p.opts.fecha} ${p.opts.descripcion}`).join("\n");
+    if(!confirm(`Se van a generar ${pend.length} asiento${pend.length!==1?"s":""}:
+${_res}
+
+Ejemplos:
+${_ej}${pend.length>12?"\n   …":""}
+
+¿Generarlos?`)){toast("Cancelado: no se generó nada","inf");return;}
+    for(const p of pend){try{const a=await generarAsiento(p.opts);if(a)gen++;else errores.push(`⚠️ ${p.label} — código de cuenta no encontrado en Plan de Cuentas`);}catch(e){errores.push(`❌ ${p.label} — ${e.message?.slice(0,60)||"error"}`);}}
 
     // Reporte final
     if(errores.length){
@@ -31471,7 +31492,7 @@ async function offAplicar(){
    Se paga primero (orden de pago + tesorería + asiento Debe Anticipos / Haber banco) y el proveedor entrega un recibo
    después, que cancela el anticipo (Debe gasto / Haber Anticipos). */
 const ANT_CUENTA="1.1.05.001";
-let _antLista=[],_antRec=null;
+let _antLista=[],_antRec=null,_antHermanos=[];
 async function _antDisponible(){
   try{await sb("anticipos_proveedores?select=id&limit=1");return true;}
   catch(e){toast("Falta correr sql_anticipos_proveedores.sql en Supabase","err");return false;}
@@ -31622,11 +31643,29 @@ async function abrirReciboAnticipo(id){
   document.getElementById("rec-ant-numero").value="";
   document.getElementById("rec-ant-fecha").value=today();
   document.getElementById("rec-ant-monto").value=saldo;
+  // Un mismo recibo puede cancelar varios anticipos del mismo proveedor
+  const _nc=x=>String(x.cuit||x.proveedor||"").replace(/D/g,"")||String(x.proveedor||"").toLowerCase();
+  _antHermanos=_antLista.filter(x=>x.id!==a.id&&x.estado==="abierto"&&x.sociedad===a.sociedad&&_nc(x)===_nc(a));
+  const _hd=document.getElementById("rec-ant-hermanos");
+  if(_antHermanos.length){
+    _hd.style.display="";
+    _hd.innerHTML='<b>El mismo recibo también cancela estos anticipos de '+esc(a.proveedor)+':</b>'+_antHermanos.map(x=>{const sl=_r2((parseFloat(x.monto)||0)-(parseFloat(x.monto_aplicado)||0));return '<label style="display:flex;gap:8px;align-items:center;margin-top:4px;cursor:pointer"><input type="checkbox" class="rec-ant-h" value="'+x.id+'" onchange="recAntRecalcular()"> '+String(x.fecha).split("-").reverse().join("/")+' · pagado '+_extM(x.monto)+' · saldo <b>'+_extM(sl)+'</b></label>';}).join("")+'<div style="color:var(--tx3);margin-top:6px">El importe se reparte entre los anticipos tildados, del más antiguo al más nuevo, y se genera un asiento por cada uno.</div>';
+  }else{_hd.style.display="none";_hd.innerHTML="";}
   const gastos=planDeSociedad(a.sociedad).filter(c=>c.imputable&&c.activa&&/^5\./.test(c.codigo)).sort((x,y)=>x.codigo.localeCompare(y.codigo));
   const _ctaDef=gastos.some(c=>c.codigo==="5.2.08.001")&&/univers|capacit|curso|posgrado/i.test(a.proveedor+" "+(a.concepto||""))?"5.2.08.001":"5.2.01.001";
   document.getElementById("rec-ant-cuenta").innerHTML=gastos.map(c=>`<option value="${c.codigo}"${c.codigo===_ctaDef?" selected":""}>${c.codigo} — ${esc(c.nombre)}</option>`).join("");
   document.getElementById("rec-ant-file").value="";document.getElementById("rec-ant-ia").style.display="none";document.getElementById("rec-ant-msg").textContent="";
   openModal("modal-recibo-ant");
+}
+function _recAntTargets(){
+  const a=_antRec;if(!a)return[];
+  const ids=[...document.querySelectorAll(".rec-ant-h:checked")].map(x=>x.value);
+  return [a,..._antHermanos.filter(x=>ids.includes(x.id))].sort((x,y)=>String(x.fecha).localeCompare(String(y.fecha)));
+}
+const _recAntSaldo=x=>_r2((parseFloat(x.monto)||0)-(parseFloat(x.monto_aplicado)||0));
+function recAntRecalcular(){
+  const t=_recAntTargets();
+  document.getElementById("rec-ant-monto").value=_r2(t.reduce((s,x)=>s+_recAntSaldo(x),0));
 }
 function recAntArchivoElegido(){
   const f=document.getElementById("rec-ant-file").files[0];
@@ -31658,25 +31697,35 @@ async function confirmarReciboAnticipo(){
   const g=i=>document.getElementById(i);
   const numero=g("rec-ant-numero").value.trim(),fecha=g("rec-ant-fecha").value,cuenta=g("rec-ant-cuenta").value;
   const monto=_r2(parseFloat(g("rec-ant-monto").value)||0);
-  const saldo=_r2((parseFloat(a.monto)||0)-(parseFloat(a.monto_aplicado)||0));
+  const targets=_recAntTargets();
+  const saldoTotal=_r2(targets.reduce((s,x)=>s+_recAntSaldo(x),0));
   if(!numero||!fecha||!cuenta||!(monto>0)){toast("Completá número, fecha, importe y cuenta de gasto","err");return;}
-  if(monto>saldo+0.01){toast(`El recibo (${_extM(monto)}) supera el saldo del anticipo (${_extM(saldo)})`,"err");return;}
-  if((a.recibos||[]).some(r=>r.numero===numero)){toast("Ese número de recibo ya está cargado en este anticipo","err");return;}
+  if(monto>saldoTotal+0.01){toast(`El recibo (${_extM(monto)}) supera el saldo de los anticipos elegidos (${_extM(saldoTotal)})`,"err");return;}
+  if(targets.some(t=>(t.recibos||[]).some(r=>r.numero===numero))){toast("Ese número de recibo ya está cargado en uno de los anticipos","err");return;}
   const btn=g("rec-ant-btn");btn.disabled=true;
   try{
-    const ad={fecha,sociedad:a.sociedad,tipo:"devengado_compra",origen:"anticipo_recibo",origen_id:a.id,descripcion:`Recibo ${numero} — ${a.proveedor} (cancela anticipo)`,
-      lineas:[{codigo:cuenta,debe:monto,desc:a.concepto||"Gasto"},{codigo:ANT_CUENTA,haber:monto,desc:"Cancelación anticipo"}]};
-    const as=await generarAsiento(ad);
-    if(as?._faltantes){mcfAbrir(as._faltantes,ad);return;}
-    if(!as?.id)throw new Error("No se pudo generar el asiento");
-    const aplicado=_r2((parseFloat(a.monto_aplicado)||0)+monto);
+    // archivo: se sube una sola vez
     let archivo_path=null;const _rf=g("rec-ant-file").files[0];
     if(_rf){const ext=(_rf.name.split(".").pop()||"pdf").toLowerCase().replace(/[^a-z0-9]/g,"");const pth=`recibos-proveedores/${String(a.cuit||a.proveedor).replace(/[^A-Za-z0-9]/g,"")}_${numero.replace(/[^A-Za-z0-9-]/g,"")}.${ext}`;
-      const up=await _subirStorage("extractos-bancarios",pth,_rf,_rf.type);if(up.ok)archivo_path=pth;else toast("El recibo se cargó pero no se pudo guardar el archivo","inf");}
-    const recibos=[...(a.recibos||[]),{numero,fecha,monto,cuenta,asiento_id:as.id,...(archivo_path?{archivo_path}:{})}];
-    await sb(`anticipos_proveedores?id=eq.${a.id}`,{method:"PATCH",body:JSON.stringify({monto_aplicado:aplicado,recibos,estado:aplicado>=_r2(parseFloat(a.monto)||0)-0.01?"cancelado":"abierto"})});
+      const up=await _subirStorage("extractos-bancarios",pth,_rf,_rf.type);if(up.ok)archivo_path=pth;else toast("El recibo se cargará pero no se pudo guardar el archivo","inf");}
+    // reparto del importe: del anticipo más antiguo al más nuevo
+    let resto=monto;const partes=[];
+    for(const t of targets){if(resto<=0.004)break;const sl=_recAntSaldo(t);const m=_r2(Math.min(sl,resto));if(m>0){partes.push({t,m});resto=_r2(resto-m);}}
+    // primero se validan todas las cuentas del plan (si falta alguna se abre el alta y no queda nada a medias)
+    for(const p of partes){
+      const ad={fecha,sociedad:p.t.sociedad,tipo:"devengado_compra",origen:"anticipo_recibo",origen_id:p.t.id,
+        descripcion:`Recibo ${numero} — ${p.t.proveedor} (cancela anticipo${partes.length>1?" "+(partes.indexOf(p)+1)+"/"+partes.length+", recibo por "+_extM(monto):""})`,
+        lineas:[{codigo:cuenta,debe:p.m,desc:p.t.concepto||"Gasto"},{codigo:ANT_CUENTA,haber:p.m,desc:"Cancelación anticipo"}]};
+      const as=await generarAsiento(ad);
+      if(as?._faltantes){mcfAbrir(as._faltantes,ad);return;}
+      if(!as?.id)throw new Error("No se pudo generar el asiento");
+      const t=p.t;const aplicado=_r2((parseFloat(t.monto_aplicado)||0)+p.m);
+      const recibos=[...(t.recibos||[]),{numero,fecha,monto:p.m,cuenta,asiento_id:as.id,...(partes.length>1?{recibo_total:monto}:{}),...(archivo_path?{archivo_path}:{})}];
+      await sb(`anticipos_proveedores?id=eq.${t.id}`,{method:"PATCH",body:JSON.stringify({monto_aplicado:aplicado,recibos,estado:aplicado>=_r2(parseFloat(t.monto)||0)-0.01?"cancelado":"abierto"})});
+    }
     closeModal("modal-recibo-ant");
-    toast(aplicado>=_r2(parseFloat(a.monto)||0)-0.01?"✅ Anticipo cancelado con el recibo":"✅ Recibo cargado · el anticipo sigue abierto por el resto","ok");
+    const cerrados=partes.filter(p=>_r2((parseFloat(p.t.monto_aplicado)||0)+p.m)>=_r2(parseFloat(p.t.monto)||0)-0.01).length;
+    toast(partes.length>1?`✅ Recibo cargado en ${partes.length} anticipos (${cerrados} cancelado${cerrados!==1?"s":""})`:(cerrados?"✅ Anticipo cancelado con el recibo":"✅ Recibo cargado · el anticipo sigue abierto por el resto"),"ok");
     await renderAnticiposLista();antActualizarBadge();
   }catch(e){toast("Error: "+(e.message||e),"err");}
   finally{btn.disabled=false;}
