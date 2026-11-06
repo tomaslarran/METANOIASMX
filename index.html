@@ -15532,7 +15532,7 @@ function _cierreChecks(d){
   // 6. Sueldos
   const empIds=new Set(d.emps.map(e=>e.id));
   const pagados=d.pagosEmp.filter(p=>p.pagado&&empIds.has(p.empleado_id));
-  const sinAsSueldo=pagados.filter(p=>!sEmp.has(p.id));
+  const sinAsSueldo=pagados.filter(p=>!sEmp.has(p.id)&&!p.comprobante_id); // un pago vinculado a una factura se asienta con la factura
   const sinPagar=d.emps.filter(e=>e.activo&&!pagados.some(p=>p.empleado_id===e.id));
   const subS=[...lista(sinAsSueldo,p=>`Pago sin asiento: ${d.emps.find(e=>e.id===p.empleado_id)?.nombre||"?"}`),...lista(sinPagar,e=>`Sin pago en el mes: ${e.nombre}`)];
   add("Sueldos y honorarios","👥",(sinAsSueldo.length||sinPagar.length)?"alerta":"ok",
