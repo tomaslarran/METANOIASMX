@@ -2296,3 +2296,26 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 - Lector sin IA de invoice/recibo de Anthropic (hay muestras: `Invoice-KORDNRE5-0009.pdf`, `Receipt-2162-1975-6599.pdf`) y botón de importación de la cuenta en dólares desde el panel (hoy lo hizo un script).
 - Respuestas de María: diferencia de cambio (A o B), percepción RG 5617, ajustes de apertura en dólares, impuestos AFIP/Rentas sin VEP (SUDES $139.171,47 y $25.167,90; POINTERS $182.390,56).
 - Consumos sin comprobante de la Visa (EDESA, Viumi, cuotas Personal): regularizar con facturas.
+
+
+---
+
+## 📌 Avance del 6 Nov 2026 — caja cerrada, préstamos reclasificados, dólares
+
+**Decisiones de Tomás (consultadas con María):** diferencia de cambio = **opción B** (BNA vendedor del día hábil anterior; la diferencia a 5.3.03.001); IVA de Anthropic: solo gasto; Proveedores = 0 en la apertura (el balance dice eso); Argenpymes contra Proveedores; OSDE y OPCION contra Resultados no asignados (ya asentados al 01/07: $1.265.948,01 y $78.820,28); retención a Farah de julio: sin acción; **IVA de los cursos: 21%, salvo contrato con el Ministerio (MSP) que sale exento** (hoy `sync-elearning` factura al 21%; el convenio exento se emite a mano desde Facturas emitidas); retenciones de IIBB de proveedores: para futuras.
+
+**Hecho (todo con backup en `backups/`):**
+- **Dólares:** los U$S 300 del 03/08 eran sobrante de la compra de U$S 10.000 del 24/07 (no una compra nueva): se canceló la cuenta puente (queda en 0) contra Caja USD, con $1.500 a Diferencias de cambio. **Codimg** (Delec Científica Uruguaya, e-Ticket A 755, U$S 7.900, exento) pagado en efectivo el 24/07: gasto en 5.2.06.001 a $1.510 (BNA 23/07), Caja USD a $1.505 de costo y $39.500 a Diferencias de cambio. Caja USD SUDES: U$S 1.800 ($2.709.000). Ajustes de apertura en dólares (Visa U$S 145, cuenta USD) ya estaban contra Resultados no asignados.
+- **Caja en pesos cerrada (libros = panel):** la diferencia era la «extracción a caja» de los préstamos Macro del asiento de apertura. Reclasificada el 01/07: SUDES $15.548.260 = $6.000.000 Inversiones (Avantia 30/06) + $7.325.268,82 cancela Sueldos y honorarios a pagar + $2.222.991,18 Resultados no asignados; POINTERS $10.453.360 = $7.325.268,82 sueldos a pagar + $3.128.091,18 Resultados no asignados (los $22,5M de Avantia ya estaban). Las remuneraciones del 26–30/06 fueron $8M en cada sociedad, pagadas con fondos de los préstamos; el resto fue descubierto previo y comisiones. Se borraron del panel 3 egresos de caja de SUDES que en realidad salieron del banco (Florencia, Daniela, Farah) y el depósito de U$S 300 se pasó a caja USD. Corralón (POINTERS): pagado en efectivo, cargado el egreso.
+- **Pago de facturas chicas con caja (06/11):** SUDES 25 facturas $5.342.761,93 (caja queda $10.941.282,18); POINTERS 83 facturas $5.679.380,03 (caja queda $149.249,30). Excluidas: Banco Macro (comisiones ya debitadas), vinculadas (SUDES SAS), órdenes de pago pendientes (Delec $12,94M) y la duplicada de Productos Químicos (ya eliminada por Tomás).
+- **Nueva Estación Bolívar 0001-00123777:** tenía fecha 11/04 con día y mes invertidos (es del 04/11); corregida, con su devengado al 05/11. La 0011-00123210 ($115.058,90) está bien devengada y se puede pagar con la caja de POINTERS ($149.249,30). Detalle: los $959,78 de «otros impuestos» parecen percepción de IIBB (queda en Otros impuestos y tasas); Valentina atenta al cargar.
+
+**Pendiente (retomar):**
+1. **Control de cierre** (🔒 Cierre de mes) de julio, agosto y septiembre en las dos sociedades; débitos AFIP/Rentas sin VEP (SUDES $139.171,47 del 13/07 y $25.167,90 del 18/08; POINTERS $182.390,56): Tomás los mira en ARCA (Cuentas Tributarias) y Rentas.
+2. **Inversiones:** asientos de jul–sep contra el extracto del fondo, cheque de Fenix de julio de SUDES contra los aportes ($20M del 13/07, $10M del 23/07), valuación al 30/09 y letra S14G6 de Criteria (≈$5,34M).
+3. **Ventas:** cobros por cheques/transferencias, control de ingresos del cierre; Deudores por ventas SUDES $21,1M y POINTERS $0,7M.
+4. **Tarjetas:** consumos sin comprobante (1.1.05.003, ≈$3,43M SUDES; Mercado Pago ARSA $705.663 en POINTERS), deuda vieja Visa SUDES $210.513,03.
+5. **Dólares:** importar la cuenta en dólares desde el panel (hoy por script) y lector sin IA de invoice/recibo de Anthropic.
+6. **Seis facturas del Banco Macro de SUDES** sin pagar (ya debitadas en el extracto): marcarlas pagadas contra el banco. **Certificado MiPyME de SUDES venció el 31/10**: renovar.
+7. Con María: percepción RG 5617, certificado de retención de Ganancias, Liquidaciones A del Banco Macro, cuentas de ingresos por tipo.
+8. Octubre: extractos de ambas sociedades, pagos de tarjeta, cuotas y Echeq (cierre de octubre).
