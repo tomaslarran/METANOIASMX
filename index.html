@@ -27921,8 +27921,8 @@ function buildLibroIvaTxt({soc,mes,facturas,compras}){
     const suma=_lvR(al.reduce((x,a)=>x+a.base+a.iva,0)+exento+nog);
     if(Math.abs(suma-Number(f.total))>0.05)avisos.push(`Venta ${nro}: los importes (${suma}) no suman el total (${Number(f.total)}).`);
     const soloCero=al.every(a=>a.pct===0);
-    const op=soloCero?(nog>0&&exento===0?"N":"E"):"0";
-    if(soloCero&&exento===0&&nog===0)avisos.push(`Venta ${nro}: alícuota 0% sin exento ni no gravado; se informó como exenta (código E). Revisar.`);
+    // Pedido de María (10 Nov 2026): el código de operación va en blanco en todas las ventas (como Finnegans)
+    const op=" ";
     const doc=Number(f.receptor_doc_tipo)||99,docNro=String(f.receptor_doc_nro||"").replace(/\D/g,"");
     const nombre=f.receptor_nombre||(doc===99?"-CONSUMIDOR FINAL-":"");
     if(!nombre)avisos.push(`Venta ${nro}: sin razón social del comprador.`);
