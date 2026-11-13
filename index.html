@@ -3979,7 +3979,13 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <option value="Transferencia">Transferencia bancaria</option>
         <option value="eCheck">eCheck (echeque diferido)</option>
         <option value="Efectivo">Efectivo</option>
+        <option value="Traspaso">Traspaso a otra inversión (queda en el mismo broker)</option>
       </select>
+    </div>
+    <div id="cfr-traspaso-wrap" style="display:none;background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:12px;margin-top:-4px;margin-bottom:8px">
+      <div style="font-size:11px;color:var(--ac);font-weight:600;margin-bottom:8px">↔ Traspaso entre inversiones</div>
+      <div class="fg"><label class="fl">Pasa a *</label><select class="fi" id="cfr-traspaso-dest"></select></div>
+      <div style="font-size:11px;color:var(--tx3)">El monto sale de esta inversión y entra como aporte en la elegida, el mismo día. No mueve el banco ni genera asiento (la plata sigue en la cuenta del broker): el próximo rescate de la inversión de destino es el que se concilia con el banco.</div>
     </div>
     <div id="cfr-echeck-wrap" style="display:none;background:var(--surf2);border:1px solid var(--b);border-radius:var(--r);padding:12px;margin-top:-4px;margin-bottom:8px">
       <div style="font-size:11px;color:var(--ac);font-weight:600;margin-bottom:8px">📋 Datos del eCheck</div>
@@ -14274,7 +14280,7 @@ async function _concCruzarModulos(sociedad,extractos){
     prest.length?sb(`cf_prestamos_cuotas?prestamo_id=in.(${prest.map(p=>p.id).join(",")})&pagada=eq.true&select=id,prestamo_id,nro_cuota,fecha,fecha_pago,monto_total`).catch(()=>[]):[],
     sb(`ordenes_pago?sociedad=eq.${sociedad}&estado=eq.pagado&select=id,numero,proveedor,neto_a_pagar,fecha_pago,medio_pago`).catch(()=>[]),
     sb(`comprobantes_compra?sociedad=eq.${sociedad}&estado=eq.pagado&select=id,proveedor,numero,total,fecha_pago,medio_pago`).catch(()=>[]),
-    invs.length?sb(`cf_inversiones_movimientos?inversion_id=in.(${invs.map(i=>i.id).join(",")})&select=id,inversion_id,tipo,fecha,monto`).catch(()=>[]):[],
+    invs.length?sb(`cf_inversiones_movimientos?inversion_id=in.(${invs.map(i=>i.id).join(",")})&select=id,inversion_id,tipo,fecha,monto,medio_pago`).catch(()=>[]):[],
     sb(`banco_movimientos?sociedad=eq.${sociedad}&match_tipo=in.(cuota_prestamo,orden_pago,comprobante,inversion,vep,echeq)&select=match_tipo,match_id`).catch(()=>[]),
     sb(`impuestos_vep?sociedad=eq.${sociedad}&select=id,tipo_impuesto,periodo,monto,fecha_vencimiento,fecha_pago,estado,banco_movimiento_id,asiento_devengado_id,asiento_pago_id,numero_vep,sociedad`).catch(()=>[]),
     sb(`echeqs_propios?sociedad=eq.${sociedad}&estado=eq.emitido&select=*`).catch(()=>[]),
@@ -14313,8 +14319,8 @@ async function _concCruzarModulos(sociedad,extractos){
   const nomInv=id=>invs.find(i=>i.id===id)?.nombre||"Inversión";
   // candidatos de inversiones: suscripción inicial (capital en fecha_inicio) y aportes (salen del banco); rescates (entran al banco)
   const invSalidas=[...invs.map(i=>({id:i.id,monto:parseFloat(i.capital)||0,fecha:i.fecha_inicio,desc:`Suscripción — ${i.nombre}`})),
-    ...movInv.filter(m=>/aporte/i.test(m.tipo||"")).map(m=>({id:m.id,monto:parseFloat(m.monto)||0,fecha:m.fecha,desc:`Aporte — ${nomInv(m.inversion_id)}`}))];
-  const invEntradas=movInv.filter(m=>/rescate/i.test(m.tipo||"")).map(m=>({id:m.id,monto:parseFloat(m.monto)||0,fecha:m.fecha,desc:`Rescate — ${nomInv(m.inversion_id)}`}));
+    ...movInv.filter(m=>/aporte/i.test(m.tipo||"")&&m.medio_pago!=="Traspaso").map(m=>({id:m.id,monto:parseFloat(m.monto)||0,fecha:m.fecha,desc:`Aporte — ${nomInv(m.inversion_id)}`}))];
+  const invEntradas=movInv.filter(m=>/rescate/i.test(m.tipo||"")&&m.medio_pago!=="Traspaso").map(m=>({id:m.id,monto:parseFloat(m.monto)||0,fecha:m.fecha,desc:`Rescate — ${nomInv(m.inversion_id)}`}));
   const mejor=(lista,monto,fFecha,tipo,tol,fAmt=x=>x.monto)=>{
     let best=null,bd=1e9;
     for(const x of lista){
@@ -19892,6 +19898,7 @@ function openRescateModal(id){
   document.getElementById("cfr-eck-nro").value="";
   document.getElementById("cfr-eck-cobranza").checked=true;
   document.getElementById("cfr-echeck-wrap").style.display="none";
+  const _tw=document.getElementById("cfr-traspaso-wrap");if(_tw)_tw.style.display="none";
   document.getElementById("cfr-reinvertir").checked=false;
   document.getElementById("cfr-resumen").style.display="none";
   document.getElementById("cfr-save-btn").disabled=false;
@@ -19900,8 +19907,15 @@ function openRescateModal(id){
 }
 
 function toggleCfrEcheck(){
-  const esEck=document.getElementById("cfr-medio")?.value==="eCheck";
+  const medio=document.getElementById("cfr-medio")?.value;
+  const esEck=medio==="eCheck",esTr=medio==="Traspaso";
   document.getElementById("cfr-echeck-wrap").style.display=esEck?"":"none";
+  const tw=document.getElementById("cfr-traspaso-wrap");if(tw)tw.style.display=esTr?"":"none";
+  if(esTr){
+    const id=document.getElementById("cfr-inv-id").value;const org=cfInversiones.find(i=>i.id===id);
+    const dest=cfInversiones.filter(i=>i.id!==id&&org&&i.sociedad===org.sociedad).sort((a,b)=>(a.estado==="Activa"?0:1)-(b.estado==="Activa"?0:1));
+    document.getElementById("cfr-traspaso-dest").innerHTML=dest.length?dest.map(i=>`<option value="${i.id}">${esc(i.nombre)} · ${esc(i.entidad||"")} · ${i.estado}${i.estado!=="Activa"?" (se reactiva)":""}</option>`).join(""):'<option value="">No hay otra inversión de esta sociedad</option>';
+  }
 }
 
 async function saveRescate(){
@@ -19912,6 +19926,8 @@ async function saveRescate(){
   const tipo=document.getElementById("cfr-tipo").value;
   const medio=document.getElementById("cfr-medio").value||"Transferencia";
   const esEck=medio==="eCheck";
+  const esTraspaso=medio==="Traspaso";
+  const destId=esTraspaso?document.getElementById("cfr-traspaso-dest").value:"";
   const eckFecha=document.getElementById("cfr-eck-fecha").value;
   const eckNro=document.getElementById("cfr-eck-nro").value.trim();
   const eckCobranza=document.getElementById("cfr-eck-cobranza").checked;
@@ -19919,12 +19935,15 @@ async function saveRescate(){
   if(!fecha){toast("Elegí una fecha de rescate","err");return}
   if(!monto){toast("Ingresá el monto rescatado","err");return}
   if(esEck&&!eckFecha){toast("Ingresá la fecha de acreditación del eCheck","err");return}
+  if(esTraspaso&&!destId){toast("Elegí a qué inversión se traspasa","err");return}
   const btn=document.getElementById("cfr-save-btn");btn.disabled=true;
   try{
     const inv=cfInversiones.find(i=>i.id===id);
 
     // 1. Guardar movimiento
-    const notasCompletas=[notas,esEck?`eCheck${eckNro?" N°"+eckNro:""} — acredita ${eckFecha}`:null].filter(Boolean).join(" · ")||null;
+    const invDest=esTraspaso?cfInversiones.find(i=>i.id===destId):null;
+    if(esTraspaso&&!invDest)throw new Error("Inversión de destino no encontrada");
+    const notasCompletas=[notas,esEck?`eCheck${eckNro?" N°"+eckNro:""} — acredita ${eckFecha}`:null,esTraspaso?`Traspaso a ${invDest.nombre}`:null].filter(Boolean).join(" · ")||null;
     const [mov]=await sb("cf_inversiones_movimientos",{method:"POST",body:JSON.stringify({
       inversion_id:id,
       tipo:tipo==="parcial"?"Rescate Parcial":"Rescate Total",
@@ -19946,6 +19965,15 @@ async function saveRescate(){
       toast("📋 Cobranza eCheck creada hasta "+eckFecha,"inf");
     }
 
+    // 1c. Traspaso: el mismo monto entra como aporte en la inversión de destino (sin tocar el banco)
+    if(esTraspaso){
+      const [movD]=await sb("cf_inversiones_movimientos",{method:"POST",body:JSON.stringify({inversion_id:destId,tipo:"Aporte de capital",fecha,monto,notas:`Traspaso desde ${inv.nombre}`,medio_pago:"Traspaso"})});
+      cfInvMovs.unshift(movD);
+      const pD=_invPatchAporte(invDest,monto);
+      await sb(`cf_inversiones?id=eq.${destId}`,{method:"PATCH",body:JSON.stringify(pD)});
+      const iD=cfInversiones.findIndex(i=>i.id===destId);if(iD>=0)cfInversiones[iD]={...cfInversiones[iD],...pD};
+    }
+
     // 2. Actualizar inversión
     const patch={updated_at:new Date().toISOString()};
     if(tipo==="total"){
@@ -19963,11 +19991,11 @@ async function saveRescate(){
     const idx=cfInversiones.findIndex(i=>i.id===id);
     if(idx>=0)cfInversiones[idx]={...cfInversiones[idx],...patch};
 
-    toast(tipo==="total"?"Inversión rescatada ✓":"Rescate parcial registrado ✓","ok");
+    toast(esTraspaso?`↔ Traspaso registrado: ${inv.nombre} → ${invDest.nombre}`:(tipo==="total"?"Inversión rescatada ✓":"Rescate parcial registrado ✓"),"ok");
     invSyncAsientos(true);
     closeModal("modal-cf-rescate");
     renderCFInversiones();
-    if(tipo==="total"&&reinvertir)openAgregarCapital(id,monto);
+    if(tipo==="total"&&reinvertir&&!esTraspaso)openAgregarCapital(id,monto);
   }catch(e){toast("Error: "+e.message,"err")}
   finally{btn.disabled=false}
 }
@@ -27257,6 +27285,7 @@ async function invSyncAsientos(silencioso){
       const inv=I[m.inversion_id];if(!inv||!["SUDES","POINTERS"].includes(inv.sociedad)||hechos.has(m.id))continue;
       const notas=String(m.notas||"");
       if(/^Cobro:/i.test(notas)||/delec/i.test(notas))continue;
+      if(m.medio_pago==="Traspaso")continue;   // traspaso entre inversiones del mismo broker: no mueve banco ni cuenta contable
       if(m.medio_pago==="eCheck"){revisar++;continue;}
       const monto=r2(Math.abs(parseFloat(m.monto)||0));if(!(monto>0))continue;
       const soc=inv.sociedad,aporte=m.tipo==="Aporte de capital";
