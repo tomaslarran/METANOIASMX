@@ -2573,6 +2573,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
                 <option value="egreso">🔴 Egreso</option>
                 <option value="transferencia">↔️ Transferencia</option>
                 <option value="cambiomoneda">💱 Cambio de moneda</option>
+                <option value="retiro_socio">🤝 Retiro de socio</option>
               </select>
             </div>
             <div>
@@ -2584,8 +2585,13 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
             <label class="fl">Concepto</label>
             <input class="fi" type="text" id="caja-form-concepto" placeholder="Ej: Pago inscripción curso...">
           </div>
-          <!-- Campos normales (ingreso/egreso) -->
+          <!-- Campos normales (ingreso/egreso/retiro de socio) -->
           <div id="caja-fields-normal">
+            <div id="caja-socio-wrap" style="display:none;margin-bottom:8px">
+              <label class="fl">Socio que retira *</label>
+              <select class="fi" id="caja-form-socio"></select>
+              <div style="font-size:11px;color:var(--tx3);margin-top:4px">Elegí abajo desde qué cuenta o caja sale la plata. Asiento: Debe cuenta particular del socio / Haber banco o caja.</div>
+            </div>
             <div style="margin-bottom:8px">
               <label class="fl">Medio de pago</label>
               <select class="fi" id="caja-form-medio">
@@ -16548,6 +16554,9 @@ function cajaToggleTipo(tipo){
   const conc=document.getElementById("caja-form-concepto");
   if(conc)conc.placeholder=isTransfer?"Ej: Retiro banco para gastos operativos...":isCM?"Ej: Compra de dólares...":"Ej: Pago inscripción curso...";
   if(isCM)cajaPopularCMOpts();
+  const esRet=tipo==="retiro_socio";
+  const sw=document.getElementById("caja-socio-wrap");if(sw)sw.style.display=esRet?"":"none";
+  if(esRet){_poblarSelectSocios(document.getElementById("caja-form-socio"),null);if(conc)conc.placeholder="Ej: Retiro del mes, adelanto de utilidades...";}
 }
 
 function cajaPopularTransferOpts(){
@@ -16881,6 +16890,44 @@ async function saveCajaMovimiento(){
       toast("Cambio de moneda registrado","ok");
       renderCaja();
     }catch(e){toast("Error: "+e.message,"err");}
+    return;
+  }
+
+  // ── RETIRO DE SOCIO ────────────────────────────────────────────────────────
+  if(tipo==="retiro_socio"){
+    const socioId=document.getElementById("caja-form-socio")?.value;
+    const fechaR=document.getElementById("caja-form-fecha")?.value||new Date().toISOString().split("T")[0];
+    const medioR=document.getElementById("caja-form-medio")?.value||"";
+    const socio=users.find(u=>u.id===socioId);
+    if(!socio){toast("Elegí el socio que retira","err");return;}
+    if(!medioR){toast("Elegí desde qué cuenta o caja sale la plata","err");return;}
+    if(cajaMoneda!=="ARS"){toast("El retiro de socio se registra en pesos","err");return;}
+    const tM=_pagoMedioTipo(medioR);
+    if(!["cuenta_bancaria","efectivo"].includes(tM)){toast("El retiro tiene que salir de una cuenta bancaria o de caja en efectivo","err");return;}
+    if(!confirm(`Retiro de ${socio.nombre}: ${_extM(monto)} desde ${medioR} el ${fechaR.split("-").reverse().join("/")}.
+
+Se registra el egreso y el asiento (Debe cuenta particular del socio / Haber ${tM==="efectivo"?"caja":"banco"}). ¿Continuar?`))return;
+    try{
+      if(!planCuentas.length)planCuentas=await sb("plan_cuentas?select=*&order=codigo").catch(()=>[]);
+      const ctaSocio=await _cuentaParticularSocio(socio.nombre,cajaSociedad);
+      const desc=`Retiro de socio — ${socio.nombre}: ${concepto}`;
+      if(tM==="cuenta_bancaria"){
+        await sb("banco_movimientos",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify({sociedad:cajaSociedad,fecha:fechaR,concepto:desc,importe:-monto,saldo:null,conciliado:false,referencia:"RETIRO"})});
+      }else{
+        await sb("caja_movimientos",{method:"POST",body:JSON.stringify({sociedad:cajaSociedad,fecha:fechaR,tipo:"egreso",concepto:desc,categoria:"Retiro de socio",monto,moneda:"ARS",medio_pago:medioR,observaciones:obs,creado_por:loggedUser?.nombre||null})});
+      }
+      const ad={fecha:fechaR,sociedad:cajaSociedad,tipo:"ajuste",origen:"retiro_socio",origen_id:_uuid(),descripcion:desc,
+        lineas:[{codigo:ctaSocio,debe:monto,desc:`Retiro de ${socio.nombre}`},{codigo:getBancoCodigoPorMedio(medioR,cajaSociedad),haber:monto,desc:`Salida ${medioR}`}]};
+      const as=await generarAsiento(ad);
+      if(as?._faltantes){mcfAbrir(as._faltantes,ad);toast("Faltan cuentas del plan: se abrió el alta. El egreso ya quedó registrado","inf");}
+      else if(!as)toast("⚠️ El egreso quedó registrado pero el asiento no se generó","err");
+      document.getElementById("caja-form-monto").value="";
+      document.getElementById("caja-form-concepto").value="";
+      document.getElementById("caja-form-obs").value="";
+      document.getElementById("caja-form-medio").value="";
+      toast(`🤝 Retiro de ${socio.nombre} registrado`,"ok");
+      renderCaja();
+    }catch(e){toast("Error: "+(e.message||e),"err");}
     return;
   }
 
@@ -29493,6 +29540,22 @@ async function abrirPagarComp(id,opts={}){
   document.getElementById("pagar-comp-aviso-wrap").style.display=esNC?"none":"";
   await plIniciar("pagar-comp",{sociedad:c.sociedad||"",total:saldo,exacto:false,unaLinea:esNC,preCheque:opts.preCheque});
   openModal("modal-pagar-comp");
+}
+// Cuenta particular del socio en la sociedad (2.2.01.00x); si todavía no tiene, se crea la siguiente
+async function _cuentaParticularSocio(nombre,soc){
+  const nm=t=>String(t||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+  const primero=nm(nombre).split(" ")[0];
+  const part=planDeSociedad(soc).filter(c=>/^2.2.01.d{3}$/.test(c.codigo));
+  const hay=part.find(c=>nm(c.nombre).includes(primero));
+  if(hay)return hay.codigo;
+  const sig=String(Math.max(0,...part.map(c=>parseInt(c.codigo.slice(-3),10)))+1).padStart(3,"0");
+  const base=part[0],padre=planDeSociedad(soc).find(c=>c.codigo==="2.2.01");
+  if(!base)throw new Error("No existe el rubro 2.2.01 (cuentas particulares) en el plan de "+soc);
+  const nueva={...base,codigo:"2.2.01."+sig,nombre:`Socio ${nombre} - Cuenta particular`,cuenta_padre_id:padre?.id||base.cuenta_padre_id};
+  delete nueva.id;delete nueva.created_at;delete nueva.updated_at;
+  const [c]=await sb("plan_cuentas",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify(nueva)});
+  planCuentas.push(c);toast(`Se creó la cuenta ${c.codigo} para ${nombre}`,"inf");
+  return c.codigo;
 }
 // Si el medio es «Caja Socio <nombre>», el socio queda elegido y fijo; con «Aporte Socios» se elige a mano
 function _poblarSelectSocios(sel,medioNombre){
