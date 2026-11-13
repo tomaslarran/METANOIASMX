@@ -31736,7 +31736,7 @@ async function abrirReciboAnticipo(id){
   document.getElementById("rec-ant-fecha").value=today();
   document.getElementById("rec-ant-monto").value=saldo;
   // Un mismo recibo puede cancelar varios anticipos del mismo proveedor
-  const _nc=x=>String(x.cuit||x.proveedor||"").replace(/D/g,"")||String(x.proveedor||"").toLowerCase();
+  const _nc=x=>String(x.cuit||x.proveedor||"").replace(/\D/g,"")||String(x.proveedor||"").toLowerCase();
   _antHermanos=_antLista.filter(x=>x.id!==a.id&&x.estado==="abierto"&&x.sociedad===a.sociedad&&_nc(x)===_nc(a));
   const _hd=document.getElementById("rec-ant-hermanos");
   if(_antHermanos.length){
