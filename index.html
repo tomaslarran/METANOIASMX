@@ -29545,7 +29545,7 @@ async function abrirPagarComp(id,opts={}){
 async function _cuentaParticularSocio(nombre,soc){
   const nm=t=>String(t||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
   const primero=nm(nombre).split(" ")[0];
-  const part=planDeSociedad(soc).filter(c=>/^2.2.01.d{3}$/.test(c.codigo));
+  const part=planDeSociedad(soc).filter(c=>/^2\.2\.01\.\d{3}$/.test(c.codigo));
   const hay=part.find(c=>nm(c.nombre).includes(primero));
   if(hay)return hay.codigo;
   const sig=String(Math.max(0,...part.map(c=>parseInt(c.codigo.slice(-3),10)))+1).padStart(3,"0");
