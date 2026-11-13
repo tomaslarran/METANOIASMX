@@ -2324,3 +2324,27 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 - **Incidente:** «🔄 Generar históricos» corrido a las 18:26 duplicó asientos (84 pagos de POINTERS, 38 de SUDES, 15 devengados, más el pago de Codimg, la ND de OSDE y el sueldo de Farah de octubre). Causa: el control de duplicados leía los asientos sin paginar (PostgREST corta en 1000 filas) y no reconocía pagos ya asentados por otro camino. Se anularon los repetidos (backups `pagos_duplicados_anulados_20261106.json`, `backfill_duplicados_20261106.json`, `backfill_duplicados2_20261106.json`); las cajas quedaron iguales al panel. Pago doble real de Norteña (POINTERS, $50.339,96, doble clic del 02/11): se dejó un solo pago.
 - **Fix (v140):** `backfillAsientos` ahora pagina los existentes, no repite un pago ya asentado (directo u orden de pago), salta comprobantes tipo X o en moneda extranjera y pagos de sueldo vinculados a factura, y **muestra qué va a generar y pide confirmación antes de escribir**.
 - **Recibo único por varios anticipos:** en Anticipos → Cargar recibo, si el proveedor tiene otros anticipos abiertos se pueden tildar; el importe se reparte del más antiguo al más nuevo y se genera un asiento por anticipo. UNT: recibo 0087-00087323 ($7.200.000, 10/08/2026) cargado a mano contra los dos anticipos de $3.600.000 (cancelados).
+
+---
+
+## 🗓️ Agenda de la reunión con los contadores (12 Nov 2026) — para ver entre Tomás y Claude
+
+**Reunión de demostración (53 min) con María, Marcos, Mario, Valentina y Amparo.** El resumen automático trae los **nombres cambiados** (dice «Claudio» por Claude, asigna casi todo a «Maria» y pone fechas 2024): **las ideas están bien y todas las tareas las vemos Tomás y Claude entre los dos**. Seguimiento: reunión presencial a mediados de diciembre (15/12/2026) con análisis de rubros de mayor movimiento.
+
+**Decisiones**
+- Los certificados de retención **válidos ante un reclamo de un proveedor son los de ARCA**; el del panel queda como respaldo interno. A fin de mes se cargan los números de retención y se mandan los certificados de ARCA a los proveedores.
+- Se avanza para que el TXT de retenciones salga directo desde ARCA.
+- Exportar el **libro diario en formato importable para Tango** (u otro sistema homologado).
+- Documentación de respaldo en **carpetas digitales por rubro** (caja y banco, inversiones, impuestos, proveedores…) para auditoría.
+- El código de la plataforma lo revisa **Agustín** (seguridad) una vez aprobado por el equipo.
+
+**Tareas (por orden propuesto)**
+1. Agregar el **concepto/detalle de lo facturado** en los archivos de IVA Ventas (para Rocío, la contadora).
+2. **Rol `contable` de solo lectura** (usuario de consulta para Tomás y Marcos, el equipo auditor).
+3. **Exportar el libro diario a Tango**: pedirles la plantilla de importación o un ejemplo del formato.
+4. **Activar los muñecos de simulación** (declarados como compra pero no activados como bien de uso): identificar las facturas (¿Delec: Echeq $37,6M y factura $12,9M?), definir vida útil y **amortización** para el cierre de ejercicio.
+5. **Bienes de cambio:** inventario con impacto contable automático al leer facturas de compra.
+6. **TXT de retenciones directo desde ARCA** (servicio web); hoy el TXT de SICORE sale del panel y está validado.
+7. **Carpetas por rubro** con los respaldos ya guardados.
+8. **Conciliar los saldos contables con la realidad económica, rubro por rubro** (para el 15/12/2026).
+9. Revisión de seguridad por Agustín; coordinar con Marcos la reunión presencial de diciembre.
