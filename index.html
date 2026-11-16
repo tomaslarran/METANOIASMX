@@ -4102,17 +4102,17 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
     <!-- Upload de audio -->
     <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--b)">
-      <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Audio de la reunión *</div>
+      <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Audios de la reunión *</div>
       <div id="mr-drop-zone" onclick="document.getElementById('mr-audio-input').click()"
         style="border:2px dashed var(--b);border-radius:10px;padding:28px;text-align:center;cursor:pointer;transition:border-color .2s"
         ondragover="event.preventDefault();this.style.borderColor='var(--ac)'"
         ondragleave="this.style.borderColor='var(--b)'"
         ondrop="mrHandleDrop(event)">
         <div style="font-size:28px;margin-bottom:8px">🎵</div>
-        <div style="font-size:13px;color:var(--tx2)">Arrastrá el archivo o hacé click para seleccionar</div>
-        <div style="font-size:11px;color:var(--tx3);margin-top:4px">MP3, M4A, WAV, OGG, WEBM · máx 500MB</div>
+        <div style="font-size:13px;color:var(--tx2)">Arrastrá los archivos o hacé click · podés elegir varios a la vez</div>
+        <div style="font-size:11px;color:var(--tx3);margin-top:4px">MP3, M4A, WAV, OGG, WEBM</div>
       </div>
-      <input type="file" id="mr-audio-input" accept="audio/*,video/webm,video/mp4" style="display:none" onchange="mrAudioSeleccionado(this)">
+      <input type="file" id="mr-audio-input" accept="audio/*,video/webm,video/mp4" multiple style="display:none" onchange="mrAudioSeleccionado(this)">
       <div id="mr-audio-info" style="display:none;margin-top:10px;padding:10px 14px;background:var(--surf2);border-radius:8px;font-size:13px;display:none">
         <span id="mr-audio-nombre" style="color:var(--tx)"></span>
         <span id="mr-audio-size" style="color:var(--tx3);margin-left:8px"></span>
@@ -4153,10 +4153,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       ondragleave="this.style.borderColor='var(--b)'"
       ondrop="mraHandleDrop(event)">
       <div style="font-size:28px;margin-bottom:8px">🎵</div>
-      <div style="font-size:13px;color:var(--tx2)">Arrastrá el archivo o hacé click para seleccionar</div>
-      <div style="font-size:11px;color:var(--tx3);margin-top:4px">MP3, M4A, WAV, OGG, WEBM · máx 500MB</div>
+      <div style="font-size:13px;color:var(--tx2)">Arrastrá los archivos o hacé click · podés elegir varios a la vez</div>
+      <div style="font-size:11px;color:var(--tx3);margin-top:4px">MP3, M4A, WAV, OGG, WEBM</div>
     </div>
-    <input type="file" id="mra-audio-input" accept="audio/*,video/webm,video/mp4" style="display:none" onchange="mraAudioSeleccionado(this)">
+    <input type="file" id="mra-audio-input" accept="audio/*,video/webm,video/mp4" multiple style="display:none" onchange="mraAudioSeleccionado(this)">
     <div id="mra-audio-info" style="display:none;margin-top:10px;padding:10px 14px;background:var(--surf2);border-radius:8px;font-size:13px">
       <span id="mra-audio-nombre" style="color:var(--tx)"></span>
       <span id="mra-audio-size" style="color:var(--tx3);margin-left:8px"></span>
@@ -21454,14 +21454,15 @@ let reunChatHistorial=[];
 /* ── COMUNICACIONES ── */
 let publicaciones=[];
 let videosIA=[];
-let mrAudioFile=null;
+
 let mrPollingInterval=null;
-let mrAudioAdicional=null,mrReunionIdAdicional=null;
+let mrReunionIdAdicional=null;
 
 async function loadReuniones(){
   const data=await sb("reuniones?order=created_at.desc&limit=50");
   reuniones=data||[];
   renderReuniones();
+  if(reuniones.some(r=>r.estado==="procesando"))mrAsegurarPolling();
 }
 
 function renderReuniones(){
@@ -21506,15 +21507,37 @@ function renderReuniones(){
   }).join("");
 }
 
+let mrArchivos=[],mraArchivos=[];
+
+function _mrFmtMB(f){return (f.size/1024/1024).toFixed(1)+" MB";}
+function _mrListaHTML(arr,quitFn){
+  return arr.map((f,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="flex:1;word-break:break-all;color:var(--tx)">🎵 ${esc(f.name)}</span><span style="color:var(--tx3);white-space:nowrap">${_mrFmtMB(f)}</span><button onclick="${quitFn}(${i})" style="background:none;border:none;color:var(--re);cursor:pointer;font-size:16px;line-height:1">✕</button></div>`).join("");
+}
+function _mrRenderArchivos(infoId,arr,quitFn){
+  const info=document.getElementById(infoId);
+  info.style.display=arr.length?"":"none";
+  info.innerHTML=_mrListaHTML(arr,quitFn);
+}
+function _mrAgregar(arr,files){
+  let rechazados=0;
+  Array.from(files||[]).forEach(f=>{
+    const valido=(f.type||"").startsWith("audio/")||(f.type||"").startsWith("video/");
+    if(!valido){rechazados++;return;}
+    if(arr.some(x=>x.name===f.name&&x.size===f.size))return; // ya está en la lista
+    arr.push(f);
+  });
+  if(rechazados)toast(rechazados+" archivo(s) no son audio y se omitieron","err");
+}
+
 function openAddReunion(){
-  mrAudioFile=null;
+  mrArchivos=[];
   document.getElementById("mr-titulo").value="";
   document.getElementById("mr-fecha").value=new Date().toISOString().split("T")[0];
   document.getElementById("mr-participantes").value="";
   document.getElementById("mr-notas").value="";
   document.getElementById("mr-soc").value="SUDES";
-  document.getElementById("mr-audio-info").style.display="none";
-  document.getElementById("mr-drop-zone").style.display="";
+  document.getElementById("mr-audio-input").value="";
+  _mrRenderArchivos("mr-audio-info",mrArchivos,"mrQuitarAudio");
   document.getElementById("mr-progreso").style.display="none";
   document.getElementById("mr-btn-procesar").disabled=false;
   document.getElementById("mr-btn-procesar").textContent="🎙️ Procesar reunión";
@@ -21522,37 +21545,27 @@ function openAddReunion(){
 }
 
 function mrAudioSeleccionado(input){
-  const file=input.files[0];if(!file)return;
-  mrAudioFile=file;
-  document.getElementById("mr-audio-nombre").textContent=file.name;
-  document.getElementById("mr-audio-size").textContent=`(${(file.size/1024/1024).toFixed(1)} MB)`;
-  document.getElementById("mr-audio-info").style.display="";
-  document.getElementById("mr-drop-zone").style.display="none";
+  _mrAgregar(mrArchivos,input.files);
+  input.value="";
+  _mrRenderArchivos("mr-audio-info",mrArchivos,"mrQuitarAudio");
 }
 
 function mrHandleDrop(e){
   e.preventDefault();
   document.getElementById("mr-drop-zone").style.borderColor="var(--b)";
-  const file=e.dataTransfer.files[0];
-  if(!file|!file.type.startsWith("audio/")&&!file.type.includes("video/")){toast("Formato no válido","err");return;}
-  const dt=new DataTransfer();dt.items.add(file);
-  document.getElementById("mr-audio-input").files=dt.files;
-  mrAudioSeleccionado(document.getElementById("mr-audio-input"));
+  _mrAgregar(mrArchivos,e.dataTransfer.files);
+  _mrRenderArchivos("mr-audio-info",mrArchivos,"mrQuitarAudio");
 }
 
-function mrQuitarAudio(){
-  mrAudioFile=null;
-  document.getElementById("mr-audio-input").value="";
-  document.getElementById("mr-audio-info").style.display="none";
-  document.getElementById("mr-drop-zone").style.display="";
+function mrQuitarAudio(i){
+  mrArchivos.splice(i,1);
+  _mrRenderArchivos("mr-audio-info",mrArchivos,"mrQuitarAudio");
 }
 
 function mrAbrirAgregarAudio(reunionId){
   mrReunionIdAdicional=reunionId;
-  mrAudioAdicional=null;
-  document.getElementById("mra-audio-info").style.display="none";
-  document.getElementById("mra-audio-nombre").textContent="";
-  document.getElementById("mra-audio-size").textContent="";
+  mraArchivos=[];
+  _mrRenderArchivos("mra-audio-info",mraArchivos,"mraQuitarAudio");
   document.getElementById("mra-progreso").style.display="none";
   document.getElementById("mra-progreso-bar").style.width="0%";
   const btn=document.getElementById("mra-btn-procesar");
@@ -21564,91 +21577,75 @@ function mrAbrirAgregarAudio(reunionId){
 function mraHandleDrop(e){
   e.preventDefault();
   document.getElementById("mra-drop-zone").style.borderColor="var(--b)";
-  const f=e.dataTransfer.files[0];
-  if(f)mraSetAudio(f);
+  _mrAgregar(mraArchivos,e.dataTransfer.files);
+  _mrRenderArchivos("mra-audio-info",mraArchivos,"mraQuitarAudio");
 }
 
 function mraAudioSeleccionado(input){
-  if(input.files[0])mraSetAudio(input.files[0]);
+  _mrAgregar(mraArchivos,input.files);
+  input.value="";
+  _mrRenderArchivos("mra-audio-info",mraArchivos,"mraQuitarAudio");
 }
 
-function mraSetAudio(f){
-  mrAudioAdicional=f;
-  const info=document.getElementById("mra-audio-info");
-  info.style.display="";
-  document.getElementById("mra-audio-nombre").textContent=f.name;
-  document.getElementById("mra-audio-size").textContent=(f.size/1024/1024).toFixed(1)+" MB";
+function mraQuitarAudio(i){
+  mraArchivos.splice(i,1);
+  _mrRenderArchivos("mra-audio-info",mraArchivos,"mraQuitarAudio");
 }
 
-function mraQuitarAudio(){
-  mrAudioAdicional=null;
-  document.getElementById("mra-audio-info").style.display="none";
-  document.getElementById("mra-audio-input").value="";
+// Huella SHA-256 para detectar el mismo audio subido dos veces (se omite si el archivo es muy grande)
+async function _mrHash(file){
+  if(file.size>300*1024*1024)return "";
+  try{
+    const h=await crypto.subtle.digest("SHA-256",await file.arrayBuffer());
+    return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,"0")).join("");
+  }catch(e){return "";}
+}
+
+// Sube UN audio al servidor (la función reunion-audio lo manda a AssemblyAI con la clave guardada en Supabase)
+async function _mrSubirAudio(reunionId,file){
+  const hash=await _mrHash(file);
+  const res=await fetch(`${SB}/functions/v1/reunion-audio`,{
+    method:"POST",
+    headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":"application/octet-stream",
+      "x-action":"subir","x-reunion-id":reunionId,"x-nombre":encodeURIComponent(file.name),"x-hash":hash},
+    body:file,
+  });
+  let data={};try{data=await res.json();}catch(e){}
+  if(!res.ok||data.error)throw new Error(data.error||("HTTP "+res.status));
+  return data;
+}
+
+async function _mrSubirTodos(reunionId,files,txtId,barId){
+  let ok=0,dup=0;const fallos=[];
+  for(let i=0;i<files.length;i++){
+    document.getElementById(txtId).textContent=`Subiendo audio ${i+1} de ${files.length}: ${files[i].name}`;
+    document.getElementById(barId).style.width=Math.round(10+80*i/files.length)+"%";
+    try{const d=await _mrSubirAudio(reunionId,files[i]);if(d.duplicado)dup++;else ok++;}
+    catch(e){fallos.push(files[i].name+": "+e.message);}
+  }
+  document.getElementById(barId).style.width="100%";
+  return {ok,dup,fallos};
+}
+
+function _mrAvisoSubida(r){
+  if(r.dup)toast(r.dup+" audio(s) ya estaban cargados y se omitieron","inf");
+  if(r.fallos.length)toast("No se pudo subir: "+r.fallos.join(" | "),"err");
 }
 
 async function mrTranscribirAdicional(){
   if(!mrReunionIdAdicional){toast("Error: reunión no identificada","err");return;}
-  if(!mrAudioAdicional){toast("Seleccioná un archivo de audio","err");return;}
+  if(!mraArchivos.length){toast("Seleccioná al menos un archivo de audio","err");return;}
   const btn=document.getElementById("mra-btn-procesar");
   btn.disabled=true;btn.textContent="Subiendo...";
   document.getElementById("mra-progreso").style.display="";
-  document.getElementById("mra-progreso-txt").textContent="Subiendo audio a AssemblyAI...";
-  document.getElementById("mra-progreso-bar").style.width="10%";
   try{
-    const uploadRes=await fetch("https://api.assemblyai.com/v2/upload",{
-      method:"POST",
-      headers:{"Authorization":AAI_KEY,"Content-Type":"application/octet-stream"},
-      body:mrAudioAdicional,
-    });
-    if(!uploadRes.ok)throw new Error("Error al subir audio: "+uploadRes.status);
-    const {upload_url}=await uploadRes.json();
-    document.getElementById("mra-progreso-bar").style.width="35%";
-    document.getElementById("mra-progreso-txt").textContent="Iniciando transcripción...";
-    const transcRes=await fetch("https://api.assemblyai.com/v2/transcript",{
-      method:"POST",
-      headers:{"Authorization":AAI_KEY,"Content-Type":"application/json"},
-      body:JSON.stringify({audio_url:upload_url,speaker_labels:true,language_code:"es"}),
-    });
-    if(!transcRes.ok)throw new Error("Error iniciando transcripción: "+transcRes.status);
-    const {id:jobId}=await transcRes.json();
-    document.getElementById("mra-progreso-bar").style.width="50%";
-    document.getElementById("mra-progreso-txt").textContent="Procesando… (puede tardar unos minutos)";
-    btn.textContent="Procesando...";
-    let aaiData=null;
-    for(let i=0;i<60;i++){
-      await new Promise(r=>setTimeout(r,10000));
-      const pollRes=await fetch(`https://api.assemblyai.com/v2/transcript/${jobId}`,{headers:{"Authorization":AAI_KEY}});
-      aaiData=await pollRes.json();
-      if(aaiData.status==="completed"||aaiData.status==="error")break;
-      document.getElementById("mra-progreso-bar").style.width=Math.min(50+i*0.7,85)+"%";
+    const r=await _mrSubirTodos(mrReunionIdAdicional,mraArchivos,"mra-progreso-txt","mra-progreso-bar");
+    _mrAvisoSubida(r);
+    if(r.ok){
+      toast(r.ok+" audio(s) enviados · se transcriben en segundo plano y la reunión se vuelve a analizar sola","ok");
     }
-    if(!aaiData||aaiData.status==="error")throw new Error("Error en AssemblyAI: "+(aaiData?.error||"timeout"));
-    document.getElementById("mra-progreso-bar").style.width="90%";
-    document.getElementById("mra-progreso-txt").textContent="Guardando transcripción...";
-    const r=reuniones.find(r=>r.id===mrReunionIdAdicional);
-    const letras=["A","B","C","D","E","F","G","H","I","J"];
-    const participantes=r?.participantes||[];
-    const speakerMap={};
-    const utterances=aaiData.utterances||[];
-    utterances.forEach(u=>{
-      if(!speakerMap[u.speaker]){
-        const idx=letras.indexOf(u.speaker);
-        speakerMap[u.speaker]=participantes[idx]??`Hablante ${u.speaker}`;
-      }
-    });
-    const nuevoTexto=utterances.length
-      ?utterances.map(u=>`${speakerMap[u.speaker]||`Hablante ${u.speaker}`}: ${u.text}`).join("\n")
-      :(aaiData.text||"");
-    const fechaHoy=new Date().toLocaleDateString("es-AR");
-    const textoFinal=(r?.transcripcion||"")+`\n\n--- Audio adicional (${fechaHoy}) ---\n`+nuevoTexto;
-    await sb(`reuniones?id=eq.${mrReunionIdAdicional}`,{method:"PATCH",body:JSON.stringify({transcripcion:textoFinal})});
-    const idx=reuniones.findIndex(r=>r.id===mrReunionIdAdicional);
-    if(idx>=0)reuniones[idx].transcripcion=textoFinal;
-    document.getElementById("mra-progreso-bar").style.width="100%";
-    document.getElementById("mra-progreso-txt").textContent="¡Listo!";
     closeModal("modal-agregar-audio");
-    toast("Audio transcripto y agregado ✓","ok");
-    renderReuniones();
+    await loadReuniones();
     verDetalleReunion(mrReunionIdAdicional);
   }catch(e){
     toast("Error: "+e.message,"err");
@@ -21657,64 +21654,48 @@ async function mrTranscribirAdicional(){
   }
 }
 
-const AAI_KEY="2b19a842b7664f8ba1dd4eb9f4824db0";
-
 async function mrProcesar(){
   const titulo=document.getElementById("mr-titulo").value.trim();
   if(!titulo){toast("Escribí un título","err");return;}
-  if(!mrAudioFile){toast("Seleccioná un archivo de audio","err");return;}
+  if(!mrArchivos.length){toast("Seleccioná al menos un archivo de audio","err");return;}
 
   const btn=document.getElementById("mr-btn-procesar");
   btn.disabled=true;btn.textContent="Subiendo...";
   document.getElementById("mr-progreso").style.display="";
-  document.getElementById("mr-progreso-txt").textContent="Subiendo audio a AssemblyAI...";
-  document.getElementById("mr-progreso-bar").style.width="10%";
+  document.getElementById("mr-progreso-txt").textContent="Creando la reunión...";
+  document.getElementById("mr-progreso-bar").style.width="5%";
 
   try{
-    // 1. Subir directamente a AssemblyAI (sin límite de tamaño)
-    const uploadRes=await fetch("https://api.assemblyai.com/v2/upload",{
-      method:"POST",
-      headers:{"Authorization":AAI_KEY,"Content-Type":"application/octet-stream"},
-      body:mrAudioFile,
-    });
-    if(!uploadRes.ok)throw new Error("Error al subir audio: "+uploadRes.status);
-    const {upload_url}=await uploadRes.json();
-
-    document.getElementById("mr-progreso-bar").style.width="60%";
-    document.getElementById("mr-progreso-txt").textContent="Iniciando transcripción...";
-
-    const audioUrl=upload_url;
-
     const participantes=document.getElementById("mr-participantes").value.split(",").map(s=>s.trim()).filter(Boolean);
-
-    // 2. Llamar a iniciar-reunion
-    const res=await fetch(`${SB}/functions/v1/iniciar-reunion`,{
+    // 1. Crear la reunión vacía
+    const res=await fetch(`${SB}/functions/v1/reunion-audio`,{
       method:"POST",
-      headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":"application/json"},
+      headers:{"Authorization":`Bearer ${authToken||KEY}`,"apikey":KEY,"Content-Type":"application/json","x-action":"crear"},
       body:JSON.stringify({
         titulo,
         fecha:document.getElementById("mr-fecha").value||null,
         participantes,
         sociedad:document.getElementById("mr-soc").value,
-        audio_url:audioUrl,
         notas:document.getElementById("mr-notas").value.trim()||null,
         creado_por:"Panel",
       }),
     });
     const data=await res.json();
-    if(data.error)throw new Error(data.error);
+    if(data.error||!data.reunion_id)throw new Error(data.error||"No se pudo crear la reunión");
 
-    document.getElementById("mr-progreso-bar").style.width="100%";
-    document.getElementById("mr-progreso-txt").textContent="¡Enviado! Procesando transcripción...";
+    // 2. Subir cada audio (uno por vez)
+    const r=await _mrSubirTodos(data.reunion_id,mrArchivos,"mr-progreso-txt","mr-progreso-bar");
+    _mrAvisoSubida(r);
+    if(!r.ok&&!r.dup){
+      // Ningún audio subió: no dejar una reunión vacía
+      try{await sb(`reuniones?id=eq.${data.reunion_id}`,{method:"DELETE"});}catch(e){}
+      throw new Error("No se pudo subir ningún audio");
+    }
 
-    // 3. Recargar lista y cerrar modal
     await loadReuniones();
     closeModal("modal-reunion");
-    toast("Reunión enviada a procesar · AssemblyAI está transcribiendo...","ok");
-
-    // 4. Iniciar polling automático
-    if(data.reunion_id)mrIniciarPolling(data.reunion_id);
-
+    toast(`Reunión enviada · ${r.ok} audio(s) transcribiéndose en segundo plano`,"ok");
+    mrAsegurarPolling();
   }catch(e){
     toast("Error: "+e.message,"err");
     btn.disabled=false;btn.textContent="🎙️ Procesar reunión";
@@ -21722,16 +21703,18 @@ async function mrProcesar(){
   }
 }
 
-function mrIniciarPolling(reunionId){
-  if(mrPollingInterval)clearInterval(mrPollingInterval);
+// Un solo temporizador revisa todas las reuniones "procesando" (también las que quedaron de antes de recargar la página)
+function mrAsegurarPolling(){
+  if(mrPollingInterval)return;
   let intentos=0;
   mrPollingInterval=setInterval(async()=>{
     intentos++;
-    if(intentos>60){clearInterval(mrPollingInterval);return;} // max 10 min
-    const ok=await mrActualizar(reunionId,true);
-    if(ok)clearInterval(mrPollingInterval);
+    const pend=reuniones.filter(r=>r.estado==="procesando");
+    if(!pend.length||intentos>360){clearInterval(mrPollingInterval);mrPollingInterval=null;return;} // máx 1 hora
+    for(const r of pend)await mrActualizar(r.id,true);
   },10000);
 }
+function mrIniciarPolling(){mrAsegurarPolling();}
 
 async function mrActualizar(reunionId,silencioso=false){
   try{
@@ -21782,11 +21765,15 @@ function verDetalleReunion(id){
     </div>
   </div>`;
 
+  const _audErr=(r.audios||[]).filter(a=>a.estado==="error");
+  if(_audErr.length)html+=`<div style="margin-bottom:12px;padding:10px 12px;background:var(--surf2);border-left:3px solid var(--re);border-radius:6px;font-size:12px;color:var(--tx2)">⚠️ ${_audErr.length} audio(s) no se pudieron transcribir: ${_audErr.map(a=>esc(a.nombre||"audio")+(a.error?" ("+esc(a.error)+")":"")).join(", ")}</div>`;
+
   if(r.estado==="procesando"){
     html+=`<div style="text-align:center;padding:32px;color:var(--tx2)">
       <div style="font-size:32px;margin-bottom:12px">⏳</div>
       <div style="font-weight:600">Transcripción en proceso</div>
       <div style="font-size:12px;color:var(--tx3);margin-top:6px">AssemblyAI está analizando el audio · puede tardar unos minutos</div>
+      ${(r.audios||[]).length?`<div style="margin-top:14px;text-align:left;display:inline-block;font-size:12px">${(r.audios||[]).map(a=>`<div>${a.estado==="completed"?"✅":a.estado==="error"?"❌":"⏳"} ${esc(a.nombre||"audio")}${a.error?` — ${esc(a.error)}`:""}</div>`).join("")}</div>`:""}
       <button class="bk" style="margin-top:16px" onclick="mrActualizar('${r.id}').then(()=>verDetalleReunion('${r.id}'))">🔄 Verificar ahora</button>
     </div>`;
   } else if(r.estado==="listo"){
