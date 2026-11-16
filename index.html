@@ -15474,7 +15474,7 @@ async function _cierreCargar(soc,mes){
     sb(`comprobantes_compra?sociedad=eq.${soc}&estado=eq.pagado&fecha_pago=gte.${D1}&fecha_pago=lte.${D2}&select=id,proveedor,numero,tipo,total,fecha_pago,medio_pago`).catch(vacio),
     sb(`ordenes_pago?sociedad=eq.${soc}&select=id,comprobante_id`).catch(vacio),
     sb(`cf_empleados?sociedad=eq.${soc}&select=id,nombre,activo`).catch(vacio),
-    sb(`cf_pagos_empleados?periodo=eq.${mes}&select=id,empleado_id,pagado,monto,fecha_pago`).catch(vacio),
+    sb(`cf_pagos_empleados?periodo=eq.${mes}&select=id,empleado_id,pagado,monto,fecha_pago,comprobante_id`).catch(vacio),
     sb(`cf_prestamos?sociedad=eq.${soc}&select=id,nombre`).catch(vacio),
     sb(`extractos_bancarios?sociedad=eq.${soc}&periodo_hasta=gte.${D1}&periodo_hasta=lte.${D2}&select=*`).catch(vacio),
     sb(`banco_movimientos?sociedad=eq.${soc}&fecha=gte.${D1}&fecha=lte.${D2}&select=id,fecha,concepto,importe,saldo,conciliado,extracto_id,categoria,asiento_id,match_tipo`).catch(vacio),
@@ -15616,7 +15616,7 @@ function _cierreChecks(d){
   // 6. Sueldos
   const empIds=new Set(d.emps.map(e=>e.id));
   const pagados=d.pagosEmp.filter(p=>p.pagado&&empIds.has(p.empleado_id));
-  const sinAsSueldo=pagados.filter(p=>!sEmp.has(p.id)&&!p.comprobante_id); // un pago vinculado a una factura se asienta con la factura
+  const sinAsSueldo=pagados.filter(p=>!sEmp.has(p.id)&&!p.comprobante_id&&(!p.fecha_pago||p.fecha_pago>=d.D1)); // pagos anteriores al mes (ej. 30/06) son del ejercicio anterior // un pago vinculado a una factura se asienta con la factura
   const sinPagar=d.emps.filter(e=>e.activo&&!pagados.some(p=>p.empleado_id===e.id));
   const subS=[...lista(sinAsSueldo,p=>`Pago sin asiento: ${d.emps.find(e=>e.id===p.empleado_id)?.nombre||"?"}`),...lista(sinPagar,e=>`Sin pago en el mes: ${e.nombre}`)];
   add("Sueldos y honorarios","👥",(sinAsSueldo.length||sinPagar.length)?"alerta":"ok",
