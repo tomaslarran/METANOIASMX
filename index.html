@@ -4652,7 +4652,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 </div>
 
-<div class="mov" id="modal-curso-ia" onclick="if(event.target===this&&_movDown===this)closeModal('modal-curso-ia')">
+<div class="mov" id="modal-curso-ia" onclick="if(event.target===this&&_movDown===this)cerrarCursoIA()">
   <div class="modal" style="max-width:920px;height:85vh;display:flex;flex-direction:column">
     <div class="mt" style="display:flex;justify-content:space-between;align-items:center">
       <span>🎓 Proyecto de curso — Asistente IA</span>
@@ -4663,7 +4663,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <button onclick="vincularCursoChatIA()" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:3px 8px;cursor:pointer" title="Vincular este chat a un curso existente — para que los documentos generados se guarden ahí">🔗 Vincular curso</button>
         <button id="btn-invitar-chat" onclick="invitarColaboradorChat()" style="background:none;border:1px solid var(--pu);border-radius:6px;color:var(--pu);font-size:11px;padding:3px 8px;cursor:pointer;display:none" title="Invitar colaborador a este chat">👥 Invitar</button>
         <button onclick="resetCursoIA()" style="background:none;border:1px solid var(--b);border-radius:6px;color:var(--tx3);font-size:11px;padding:3px 8px;cursor:pointer" title="Nueva conversación">🗑 Nueva</button>
-        <button onclick="closeModal('modal-curso-ia')" style="background:none;border:none;color:var(--tx3);font-size:18px;cursor:pointer">✕</button>
+        <button onclick="cerrarCursoIA()" style="background:none;border:none;color:var(--tx3);font-size:18px;cursor:pointer">✕</button>
       </div>
     </div>
     <div style="font-size:12px;color:var(--tx3);margin-bottom:8px;padding:0 2px">
@@ -10182,6 +10182,7 @@ async function deleteCursoArchivo(id,storagePath,cursoId){
 
 // ── GENERAR ARCHIVOS CURSO IA ─────────────────────────────────────────────────
 async function crearCursoDesdeIA(){
+  try{if(cursoIAChatId)await _autoguardarChatCurso();else await _guardarChatSilencioso();}catch(e){}
   if(!cursoIAHistorial.length){toast("Primero charlá con el agente sobre el curso","inf");return;}
   const btn=document.getElementById("btn-crear-desde-ia");
   if(btn){btn.disabled=true;btn.textContent="Extrayendo datos...";}
@@ -11023,6 +11024,7 @@ function resetCursoIA(){
   cursoIAArchivos=[];
   cursoIAChatId=null;
   cursoIAChatNombre=null;
+  _cursoIAAvisoCompletos=0;
   cursoIAProgreso=null;
   _cursoEscenarios=[];
   _cursoDocumentos=[];
@@ -11099,6 +11101,73 @@ function _desvincularCursoChatIA(){
   _updateChatLabel();
   if(cursoIAChatId)sb(`agente_cursos_chats?id=eq.${cursoIAChatId}`,{method:"PATCH",body:JSON.stringify({curso_id:null})}).catch(()=>{});
   toast("Vínculo quitado","inf");
+}
+
+// ── Guardado automático del proyecto cuando ya hay avance real ──
+let _cursoIAAvisoCompletos=0;
+function _avanceChatCurso(){
+  const bloques=Object.values(cursoIAProgreso||{});
+  const completos=bloques.filter(b=>b&&b.estado==="completo").length;
+  const enCurso=bloques.filter(b=>b&&b.estado==="en_curso").length;
+  const docs=cursoIAHistorial.filter(m=>m.doc).length;
+  const turnos=cursoIAHistorial.filter(m=>m.role==="user").length;
+  // "avance real" = al menos 2 bloques cerrados, o un documento generado, o una charla larga (no preguntas sueltas)
+  const significativo=completos>=2||docs>0||turnos>=6;
+  return {completos,enCurso,docs,turnos,significativo};
+}
+function _avisoEnChatCurso(html){
+  const msgs=document.getElementById("curso-ia-msgs");
+  if(!msgs)return;
+  const d=document.createElement("div");
+  d.style.cssText="background:var(--surf2);border-left:3px solid var(--gr,#10B981);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--tx2);max-width:90%";
+  d.innerHTML=html;
+  msgs.appendChild(d);
+  msgs.scrollTop=msgs.scrollHeight;
+}
+// Crea el chat guardado sin preguntar (nombre por defecto) para que el avance nunca se pierda
+async function _guardarChatSilencioso(){
+  if(cursoIAChatId||!cursoIAHistorial.length)return false;
+  const hoy=new Date().toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+  const nombre=cursoIAChatNombre||("Proyecto de curso "+hoy);
+  try{
+    const _sess=JSON.parse(sessionStorage.getItem("smx_session")||"{}");
+    const [row]=await sb("agente_cursos_chats",{method:"POST",body:JSON.stringify({nombre,historial:cursoIAHistorial,archivos_meta:cursoIAArchivos.map(a=>({nombre:a.nombre,tipo:a.tipo})),usuario:_sess.email||"",user_id:loggedUser?.id||null,organizacion_id:loggedUser?.organizacion_id||null,curso_id:_cursoIACursoVinculado})});
+    cursoIAChatId=row?.id||null;
+    if(!cursoIAChatId)return false;
+    cursoIAChatNombre=nombre;
+    _updateChatLabel();
+    return nombre;
+  }catch(e){return false;}
+}
+// Se llama después de cada respuesta del agente
+async function _recordatorioGuardarAvance(){
+  const av=_avanceChatCurso();
+  if(!av.significativo)return;
+  if(!cursoIAChatId){
+    const nombre=await _guardarChatSilencioso();
+    if(nombre){
+      _cursoIAAvisoCompletos=av.completos;
+      _avisoEnChatCurso("💾 <strong>Ya hay avance real en el proyecto</strong> y lo guardé automáticamente como «"+esc(nombre)+"». Cada respuesta nueva se sigue guardando sola. Podés cambiarle el nombre con <strong>💾 Guardar</strong> y retomarlo cuando quieras con <strong>📂 Retomar</strong>.");
+    }else{
+      _avisoEnChatCurso("⚠️ Hay avance en el proyecto pero <strong>no pude guardarlo automáticamente</strong>. Tocá <strong>💾 Guardar</strong> para no perderlo.");
+    }
+    return;
+  }
+  if(av.completos-_cursoIAAvisoCompletos>=3){
+    _cursoIAAvisoCompletos=av.completos;
+    _avisoEnChatCurso("💾 Avance guardado: "+av.completos+" bloques del proyecto completos. Podés seguir más adelante desde <strong>📂 Retomar</strong>.");
+  }
+}
+// Cerrar el asistente sin perder el avance
+async function cerrarCursoIA(){
+  try{
+    if(cursoIAChatId)await _autoguardarChatCurso();
+    else if(_avanceChatCurso().significativo){
+      const n=await _guardarChatSilencioso();
+      if(n)toast("💾 Proyecto guardado como «"+n+"» — retomalo con 📂 Retomar","ok");
+    }
+  }catch(e){}
+  closeModal("modal-curso-ia");
 }
 
 async function guardarChatCurso(){
@@ -11299,7 +11368,8 @@ async function _descargarDocumentoIA(idx,cursoIdOverride){
   const {tipo,datos,titulo}=doc;
   const cId=cursoIdOverride||_cursoIACursoVinculado||_cursoDetalleId;
   if(!cId){
-    toast("Este chat no está vinculado a ningún curso — clickeá \"🔗 Vincular curso\" arriba para poder guardar los documentos generados","err");
+    try{if(!cursoIAChatId)await _guardarChatSilencioso();}catch(e){}
+    toast("Este chat no está vinculado a ningún curso — clickeá \"🔗 Vincular curso\" arriba para poder guardar los documentos generados (la charla ya quedó guardada)","err");
     return;
   }
   if(tipo==='presentacion'){
@@ -11963,6 +12033,7 @@ async function sendCursoIA(){
       cursoIAHistorial.push({role:"assistant",content:textoDisplay,...(escJson?{escenario:escJson}:{}),...(docJson?{doc:docJson}:{}),...(progJson?{progreso:progJson}:{})});
       if(progJson){cursoIAProgreso=progJson;renderProgresoCursoIA();}
       _autoguardarChatCurso();
+      setTimeout(()=>{_recordatorioGuardarAvance();},50);
       if(cursoIAHistorial.length>=2&&!_cursoIACursoVinculado){
         const actions=document.getElementById("curso-ia-actions");
         if(actions)actions.style.display="flex";
