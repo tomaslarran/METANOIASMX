@@ -27575,7 +27575,8 @@ async function renderLibroDiario(){
       </select>
       <label style="font-size:12px;color:var(--tx2);display:flex;align-items:center;gap:5px;cursor:pointer" title="Los asientos anulados no cuentan en los libros: quedan solo como constancia"><input type="checkbox" ${f.anulados?"checked":""} onchange="window._ldF.anulados=this.checked;_ldCargar()"> Ver anulados</label>
     </div>
-      ${loggedUser?.rol==="admin"?`<button class="bs admin-only-el" id="ld-backfill-btn" onclick="backfillAsientos()" style="margin-left:auto;font-size:11px;padding:5px 12px" title="Genera asientos para registros históricos sin asiento">🔄 Generar históricos</button><button class="bs admin-only-el" id="ld-regen-btn" onclick="regenerarDevengadosCompras()" style="font-size:11px;padding:5px 12px" title="Repasa los asientos de compras y ventas del ejercicio con el criterio por renglón (gasto por rubro, IVA por alícuota)">🔁 Regenerar devengados</button>`:""}
+      <button class="bs" id="ld-export-btn" onclick="exportarLibroDiarioExcel()" style="margin-left:auto;font-size:11px;padding:5px 12px" title="Descarga todos los asientos del período (no solo los 200 que se ven) con folio, cuentas, documento, plan de cuentas, sumas y saldos y control">📥 Exportar Excel (completo)</button>
+      ${loggedUser?.rol==="admin"?`<button class="bs admin-only-el" id="ld-backfill-btn" onclick="backfillAsientos()" style="font-size:11px;padding:5px 12px" title="Genera asientos para registros históricos sin asiento">🔄 Generar históricos</button><button class="bs admin-only-el" id="ld-regen-btn" onclick="regenerarDevengadosCompras()" style="font-size:11px;padding:5px 12px" title="Repasa los asientos de compras y ventas del ejercicio con el criterio por renglón (gasto por rubro, IVA por alícuota)">🔁 Regenerar devengados</button>`:""}
     </div>
     <div id="ld-body"><div style="color:var(--tx3);font-size:12px">Cargando...</div></div>`;
   await _ldCargar();
@@ -27653,6 +27654,104 @@ async function _ldToggle(id,header){
       </table>`;
     det.dataset.loaded="1";
   }catch(e){det.innerHTML=`<div style="color:var(--re);font-size:11px;padding-top:8px">Error: ${esc(e.message)}</div>`;}
+}
+
+// ── EXPORTAR EL LIBRO DIARIO COMPLETO A EXCEL (sin atarlo a ningún sistema contable) ──
+// Hojas: Libro Diario (una fila por línea de asiento, con N° de folio, cuenta, documento y CUIT de la contraparte), Plan de cuentas,
+// Sumas y saldos del período y Control (cuadre debe = haber). Usa el sociedad / fecha / anulados elegidos arriba; ignora el filtro de tipo.
+async function exportarLibroDiarioExcel(){
+  const f=window._ldF||_ldFiltros();
+  const btn=document.getElementById("ld-export-btn");
+  if(btn){btn.disabled=true;btn.textContent="⏳ Armando…";}
+  try{
+    await _paqLib("xlsx");
+    const R2=v=>Math.round((parseFloat(v)||0)*100)/100;
+    // 1) Todos los asientos de la sociedad (sin filtrar por fecha) para numerar el folio de forma estable: solo cuentan los vigentes
+    let q="asientos_contables?select=id,fecha,sociedad,tipo,origen,origen_id,descripcion,anulado,creado_por,created_at&order=fecha.asc,created_at.asc,id.asc";
+    if(f.soc)q+=`&sociedad=eq.${f.soc}`;
+    const todos=await _sbAll(q);
+    const folio={},cont={};
+    todos.forEach(a=>{if(a.anulado)return;cont[a.sociedad]=(cont[a.sociedad]||0)+1;folio[a.id]=cont[a.sociedad];});
+    const sel=todos.filter(a=>(!f.desde||a.fecha>=f.desde)&&(!f.hasta||a.fecha<=f.hasta)&&(f.anulados||!a.anulado));
+    if(!sel.length){toast("No hay asientos en ese período","err");return;}
+    // 2) Líneas de cada asiento, por tandas
+    const movs={};
+    for(let i=0;i<sel.length;i+=60){
+      const ids=sel.slice(i,i+60).map(a=>a.id);
+      const rows=await _sbAll(`asientos_movimientos?asiento_id=in.(${ids.join(",")})&select=id,asiento_id,debe,haber,descripcion,plan_cuentas(codigo,nombre,tipo)&order=id.asc`);
+      rows.forEach(m=>(movs[m.asiento_id]=movs[m.asiento_id]||[]).push(m));
+    }
+    // 3) Documentos de respaldo (comprobante, orden de pago, factura emitida) para completar documento y CUIT de la contraparte
+    const [comps,ops,facs,plan]=await Promise.all([
+      _sbAll("comprobantes_compra?select=id,tipo,numero,proveedor,cuit").catch(()=>[]),
+      _sbAll("ordenes_pago?select=id,numero,proveedor,cuit,comprobante_id").catch(()=>[]),
+      _sbAll("facturas_emitidas?select=id,cbte_tipo,pto_vta,cbte_numero,receptor_nombre,receptor_doc_nro").catch(()=>[]),
+      _sbAll("plan_cuentas?select=id,sociedad,codigo,nombre,tipo,naturaleza,nivel,imputable,cuenta_padre_id&order=sociedad.asc,codigo.asc").catch(()=>[])]);
+    const mc=new Map(comps.map(c=>[c.id,c])),mo=new Map(ops.map(o=>[o.id,o])),mf=new Map(facs.map(x=>[x.id,x]));
+    const tFac={1:"Fact. A",3:"NC A",6:"Fact. B",8:"NC B",2:"ND A",7:"ND B"};
+    const doc=a=>{
+      let c=null,o=null,x=null;
+      if(a.origen==="comprobante"||a.origen==="comprobante_pago")c=mc.get(a.origen_id);
+      else if(a.origen==="orden_pago"){o=mo.get(a.origen_id);if(o)c=mc.get(o.comprobante_id);}
+      else if(a.origen==="factura_emitida"||a.origen==="factura_emitida_cobro")x=mf.get(a.origen_id);
+      if(c)return[`${c.tipo||""} ${c.numero||""} — ${c.proveedor||""}`.trim(),c.cuit||""];
+      if(o)return[`Orden de pago ${o.numero||""} — ${o.proveedor||""}`.trim(),o.cuit||""];
+      if(x)return[`${tFac[x.cbte_tipo]||"Cbte "+x.cbte_tipo} ${String(x.pto_vta).padStart(4,"0")}-${String(x.cbte_numero).padStart(8,"0")} — ${x.receptor_nombre||""}`.trim(),x.receptor_doc_nro||""];
+      return["",""];
+    };
+    const tipoLbl={devengado_compra:"Devengado compra",pago_compra:"Pago compra",devengado_venta:"Devengado venta",cobro_venta:"Cobro venta",sueldo:"Sueldo",ajuste:"Ajuste",apertura:"Apertura",pago_cuota_prestamo:"Cuota préstamo",ajuste_manual:"Ajuste manual",gastos_bancarios:"Gastos bancarios",liquidacion_tarjeta:"Pago de tarjeta",devengado_impuesto:"Impuesto devengado",pago_impuesto:"Pago de impuesto",debito_echeq:"Débito de Echeq"};
+    // 4) Hoja Libro Diario
+    const hdr=["Sociedad","Folio","Fecha","Tipo","Descripción del asiento","Código cuenta","Cuenta","Rubro","Debe","Haber","Detalle de la línea","Documento","CUIT contraparte","Origen","Estado","Creado por","Cargado el","ID asiento"];
+    const filas=[hdr];
+    const por={};          // sumas y saldos: sociedad|codigo
+    const ctl={};          // control por sociedad
+    sel.forEach(a=>{
+      const [dc,cuit]=doc(a),ms=movs[a.id]||[];
+      const c=ctl[a.sociedad]=ctl[a.sociedad]||{asientos:0,anulados:0,debe:0,haber:0,desc:0};
+      if(a.anulado)c.anulados++;else c.asientos++;
+      let dd=0,hh=0;
+      ms.slice().sort((x,y)=>(parseFloat(y.debe)||0)-(parseFloat(x.debe)||0)).forEach(m=>{
+        const pc=m.plan_cuentas||{},de=R2(m.debe),ha=R2(m.haber);
+        filas.push([a.sociedad,a.anulado?"ANULADO":folio[a.id],a.fecha,tipoLbl[a.tipo]||a.tipo,a.descripcion||"",pc.codigo||"",pc.nombre||"",pc.tipo||"",de,ha,m.descripcion||"",dc,cuit,a.origen||"",a.anulado?"Anulado":"Vigente",a.creado_por||"",(a.created_at||"").slice(0,10),a.id]);
+        if(!a.anulado){
+          dd+=de;hh+=ha;c.debe+=de;c.haber+=ha;
+          const k=a.sociedad+"|"+(pc.codigo||"?"),s=por[k]=por[k]||{soc:a.sociedad,cod:pc.codigo||"?",nom:pc.nombre||"",tip:pc.tipo||"",de:0,ha:0};
+          s.de+=de;s.ha+=ha;
+        }
+      });
+      if(!a.anulado&&Math.abs(dd-hh)>0.005)c.desc++;
+    });
+    const wb=XLSX.utils.book_new();
+    const hoja=(rows,nombre,anchos,fmtCols)=>{
+      const ws=XLSX.utils.aoa_to_sheet(rows);ws["!cols"]=anchos.map(w=>({wch:w}));
+      (fmtCols||[]).forEach(ci=>{for(let r=1;r<rows.length;r++){const c=ws[XLSX.utils.encode_cell({r,c:ci})];if(c&&typeof c.v==="number")c.z="#,##0.00";}});
+      ws["!freeze"]={xSplit:0,ySplit:1};XLSX.utils.book_append_sheet(wb,ws,nombre);return ws;
+    };
+    hoja(filas,"Libro Diario",[10,8,11,20,48,12,38,10,16,16,36,44,14,20,10,16,12,38],[8,9]);
+    // 5) Plan de cuentas (de las sociedades incluidas)
+    const idCod=new Map(plan.map(p=>[p.id,p.codigo]));
+    const planF=[["Sociedad","Código","Cuenta","Rubro","Naturaleza","Nivel","Imputable","Cuenta padre"]];
+    plan.filter(p=>!f.soc||p.sociedad===f.soc).forEach(p=>planF.push([p.sociedad||"",p.codigo,p.nombre,p.tipo||"",p.naturaleza||"",p.nivel==null?"":p.nivel,p.imputable?"Sí":"No",idCod.get(p.cuenta_padre_id)||""]));
+    hoja(planF,"Plan de cuentas",[10,14,52,10,12,7,10,14]);
+    // 6) Sumas y saldos del período (solo asientos vigentes)
+    const ss=[["Sociedad","Código","Cuenta","Rubro","Debe","Haber","Saldo deudor","Saldo acreedor"]];
+    Object.values(por).sort((a,b)=>a.soc.localeCompare(b.soc)||a.cod.localeCompare(b.cod)).forEach(s=>{
+      const sd=R2(s.de-s.ha);ss.push([s.soc,s.cod,s.nom,s.tip,R2(s.de),R2(s.ha),sd>0?sd:0,sd<0?-sd:0]);
+    });
+    hoja(ss,"Sumas y saldos",[10,14,52,10,16,16,16,16],[4,5,6,7]);
+    // 7) Control
+    const ctlF=[["Sociedad","Período","Asientos vigentes","Anulados "+(f.anulados?"(incluidos, no suman)":"(excluidos)"),"Total debe","Total haber","Diferencia","Asientos descuadrados","Resultado"]];
+    Object.keys(ctl).sort().forEach(soc=>{const c=ctl[soc],dif=R2(c.debe-c.haber);ctlF.push([soc,`${f.desde||"inicio"} a ${f.hasta||"hoy"}`,c.asientos,c.anulados,R2(c.debe),R2(c.haber),dif,c.desc,(Math.abs(dif)<0.01&&!c.desc)?"OK: cuadra":"REVISAR"]);});
+    ctlF.push([]);
+    ctlF.push(["Exportado el",new Date().toLocaleString("es-AR")]);
+    ctlF.push(["Exportado por",loggedUser?.nombre||loggedUser?.email||""]);
+    ctlF.push(["Nota","El folio es correlativo por sociedad sobre todos los asientos vigentes desde el inicio, de modo que no cambia al cambiar el período. Los asientos anulados no tienen folio ni suman."]);
+    hoja(ctlF,"Control",[16,26,16,28,18,18,14,20,14],[4,5,6]);
+    const nom=`Libro Diario ${f.soc||"Ambas"} ${f.desde||"inicio"} a ${f.hasta||today()}.xlsx`;
+    XLSX.writeFile(wb,nom);
+    toast(`✓ Libro Diario exportado: ${filas.length-1} líneas de ${Object.values(ctl).reduce((s,c)=>s+c.asientos,0)} asientos`,"ok");
+  }catch(e){toast("No se pudo exportar el Libro Diario: "+String(e.message||e).slice(0,160),"err");}
+  finally{if(btn){btn.disabled=false;btn.textContent="📥 Exportar Excel (completo)";}}
 }
 
 // ── ESTADO DE RESULTADOS ─────────────────────────────────────────────
