@@ -1624,6 +1624,11 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <option value="true">Activos</option>
       <option value="false">Inactivos</option>
     </select>
+    <select class="mini-sel" id="inst-unt-filter" onchange="instSetUNT(this.value)" style="min-width:170px">
+      <option value="">Todos los instructores</option>
+      <option value="si">🎓 Capacitados UNT</option>
+      <option value="no">Sin capacitación UNT</option>
+    </select>
     <button class="btn sm" onclick="instClearFilters()">Limpiar</button>
   </div>
   <div id="instructores-container"><div class="loading"><div class="loader"></div><div class="lt">Cargando instructores...</div></div></div>
@@ -5555,7 +5560,7 @@ let _misCursoIdsInstructor=null;  // Set de curso_id donde el instructor loguead
 let _cursoDetalleId=null;
 let oportFilter='all', oportSearch="", oportArchivosTemp=[], oportChatHistorial=[];
 let inventario=[],invFilter="all",invSearch="",editInvId=null;
-let instSearch="",instActivo="",provSearch="";
+let instSearch="",instActivo="",instUNT="",provSearch="";
 let especialidades=[],instructorEsps=[],_instEspSel=[],_pfEspSel=[];
 let curUser="",curF="all",curCat="",q="",aq="",cursoFilter="all",cursoSort="fecha",cursoLinea="",cursoSearch="";
 let charts={};
@@ -12241,15 +12246,19 @@ function _getInstEspTags(instructorId){
 }
 
 // ── INSTRUCTORES ──
+const _instEsUNT=p=>/Instructor capacitado UNT/i.test((p&&p.notas)||"");
 function instGetVisible(){
   let list=instructores;
   if(instSearch)list=list.filter(i=>`${i.nombre} ${i.apellido} ${i.especialidad||""} ${i.institucion||""}`.toLowerCase().includes(instSearch.toLowerCase()));
   if(instActivo!=="")list=list.filter(i=>String(i.activo===true||i.activo===null||i.activo===undefined?true:i.activo)===instActivo);
+  if(instUNT==="si")list=list.filter(_instEsUNT);
+  else if(instUNT==="no")list=list.filter(i=>!_instEsUNT(i));
   return list;
 }
 function instOnSearch(v){instSearch=v;renderInstructores()}
 function instSetActivo(v){instActivo=v;renderInstructores()}
-function instClearFilters(){instSearch="";instActivo="";document.getElementById("inst-sq").value="";document.getElementById("inst-activo-filter").value="";renderInstructores()}
+function instSetUNT(v){instUNT=v;renderInstructores()}
+function instClearFilters(){instSearch="";instActivo="";instUNT="";document.getElementById("inst-sq").value="";document.getElementById("inst-activo-filter").value="";const u=document.getElementById("inst-unt-filter");if(u)u.value="";renderInstructores()}
 
 function renderInstructores(){
   const c=document.getElementById("instructores-container");if(!c)return;
@@ -12261,12 +12270,13 @@ function renderInstructores(){
       <div class="entity-avatar" style="background:${colores[i%colores.length]}22;color:${colores[i%colores.length]}">${initials((p.nombre||"")+" "+(p.apellido||""))}</div>
       ${!p.activo?`<span style="position:absolute;top:10px;right:10px;font-size:10px;background:#33333380;color:var(--tx3);border-radius:4px;padding:2px 6px">Inactivo</span>`:""}
       <div class="entity-name">${esc(p.apellido)}, ${esc(p.nombre)}</div>
+      ${_instEsUNT(p)?`<div style="margin:2px 0 4px"><span title="Capacitado por Metanoia en el programa de instructores (UNT)" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;color:#7C3AED;background:#7C3AED18;border:1px solid #7C3AED50;border-radius:10px;padding:2px 8px">🎓 Instructor capacitado UNT</span></div>`:""}
       <div class="entity-sub" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-height:20px">${_getInstEspTags(p.id)||`<span style="color:var(--tx3);font-size:11px">Sin especialidad</span>`}${p.matricula?`<span style="color:var(--tx3);font-size:11px">· Mat. ${esc(p.matricula)}</span>`:""}</div>
       <div class="entity-meta">
         ${p.institucion?`<div class="entity-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>${esc(p.institucion)}</div>`:""}
         ${p.email?`<div class="entity-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>${esc(p.email)}</div>`:""}
         ${p.telefono?`<div class="entity-row"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.62 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>${esc(p.telefono)}</div>`:""}
-        ${p.notas?`<div class="entity-row" style="color:var(--tx3);font-style:italic">${esc(p.notas.slice(0,60))}${p.notas.length>60?"...":""}</div>`:""}
+        ${(()=>{const nt=(p.notas||"").replace(/^🎓 Instructor capacitado UNT\s*·?\s*/,"");return nt?`<div class="entity-row" style="color:var(--tx3);font-style:italic">${esc(nt.slice(0,60))}${nt.length>60?"...":""}</div>`:"";})()}
       </div>
     </div>`).join("")}</div>`;
 }
