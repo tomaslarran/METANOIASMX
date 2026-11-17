@@ -28041,7 +28041,7 @@ const _lvInt=(v,n)=>String(Math.max(0,parseInt(v,10)||0)).padStart(n,"0").slice(
 const _lvFecha=f=>String(f||"").slice(0,10).replace(/-/g,"");
 const _lvR=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
 function buildLibroIvaTxt({soc,mes,facturas,compras}){
-  const avisos=[],ventasC=[],ventasA=[],comprasC=[],comprasA=[];
+  const avisos=[],ventasC=[],ventasA=[],comprasC=[],comprasA=[],conceptosV=[];
   // ── Ventas: facturas emitidas en producción del mes ──
   const ventas=(facturas||[]).filter(f=>f.sociedad===soc&&f.ambiente!=="homologacion"&&f.estado==="autorizada"&&String(f.fecha||"").startsWith(mes))
     .sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha))||(a.cbte_tipo-b.cbte_tipo)||(a.pto_vta-b.pto_vta)||(a.cbte_numero-b.cbte_numero));
@@ -28060,6 +28060,8 @@ function buildLibroIvaTxt({soc,mes,facturas,compras}){
     const doc=Number(f.receptor_doc_tipo)||99,docNro=String(f.receptor_doc_nro||"").replace(/\D/g,"");
     const nombre=f.receptor_nombre||(doc===99?"-CONSUMIDOR FINAL-":"");
     if(!nombre)avisos.push(`Venta ${nro}: sin razón social del comprador.`);
+    {const its=(Array.isArray(f.items)?f.items:[]).map(i=>String(i.descripcion||"").trim()).filter(t=>t&&!/^Importado de ARCA/i.test(t));
+     conceptosV.push(its.length?its.join(" · "):"(sin detalle: importada de ARCA)");}
     ventasC.push(_lvFecha(f.fecha)+String(f.cbte_tipo).padStart(3,"0")+_lvInt(f.pto_vta,5)+_lvInt(f.cbte_numero,20)+_lvInt(f.cbte_numero,20)+_lvInt(doc,2)+_lvInt(docNro,20)+_lvTxt(nombre,30)
       +_lvNum(f.total,15)+_lvNum(nog,15)+_lvNum(0,15)+_lvNum(exento,15)+_lvNum(0,15)+_lvNum(0,15)+_lvNum(0,15)+_lvNum(0,15)+"PES"+"0001000000"+String(al.length)+op+_lvNum(0,15)+_lvFecha(f.fecha));
     for(const a of al)ventasA.push(String(f.cbte_tipo).padStart(3,"0")+_lvInt(f.pto_vta,5)+_lvInt(f.cbte_numero,20)+_lvNum(a.base,15)+LIVA_ALI[a.pct]+_lvNum(a.iva,15));
@@ -28106,7 +28108,7 @@ function buildLibroIvaTxt({soc,mes,facturas,compras}){
   const fin=a=>a.length?a.join("\r\n")+"\r\n":"";
   return{
     archivos:{"LIBRO_IVA_DIGITAL_VENTAS_CBTE.txt":fin(ventasC),"LIBRO_IVA_DIGITAL_VENTAS_ALICUOTAS.txt":fin(ventasA),"LIBRO_IVA_DIGITAL_COMPRAS_CBTE.txt":fin(comprasC),"LIBRO_IVA_DIGITAL_COMPRAS_ALICUOTAS.txt":fin(comprasA)},
-    cant:{ventas:ventasC.length,ventasAli:ventasA.length,compras:comprasC.length,comprasAli:comprasA.length},avisos
+    cant:{ventas:ventasC.length,ventasAli:ventasA.length,compras:comprasC.length,comprasAli:comprasA.length},avisos,conceptosVentas:conceptosV
   };
 }
 function _lvLatin1(s){const b=new Uint8Array(s.length);for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);b[i]=c<256?c:63;}return b;}
@@ -28123,6 +28125,10 @@ function lvTxtAFilas(texto,clave){
   const def=LIVA_CAMPOS[clave],filas=[[def.primera,...def.campos.map(c=>c[0])]];
   String(texto||"").split("\r\n").filter(l=>l.length).forEach(l=>{let p=0;filas.push(["",...def.campos.map(([,n])=>{const v=l.slice(p,p+n);p+=n;return v;})]);});
   return filas;
+}
+// Agrega al final de la hoja de comprobantes de ventas una columna con el concepto de cada factura (solo en el Excel; el TXT de ARCA no la admite)
+function lvConceptoCol(filas,conceptos){
+  return filas.map((f,i)=>[...f,i===0?"Concepto (solo Excel, no va en el TXT)":((conceptos||[])[i-1]||"")]);
 }
 async function _paqLib(nombre){
   if(nombre==="xlsx"&&typeof XLSX==="undefined")await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";s.onload=res;s.onerror=()=>rej(new Error("no se pudo cargar la librería de Excel"));document.head.appendChild(s);});
@@ -28151,7 +28157,7 @@ async function descargarLibroIva(lado,formato){
     }else{
       await _paqLib("xlsx");
       const wb=XLSX.utils.book_new(),hoja=(filas,nombre)=>{const ws=XLSX.utils.aoa_to_sheet(filas);ws["!cols"]=filas[0].map((h,i)=>({wch:i===0?6:Math.max(12,Math.min(32,String(h).length))}));XLSX.utils.book_append_sheet(wb,ws,nombre);};
-      hoja(lvTxtAFilas(cbte,lado+"_cbte"),`Libro IVA ${lado}`);
+      {const fc=lvTxtAFilas(cbte,lado+"_cbte");hoja(lado==="ventas"?lvConceptoCol(fc,r.conceptosVentas):fc,`Libro IVA ${lado}`);}
       hoja(lvTxtAFilas(ali,lado+"_ali"),`Alicuotas ${lado}`);
       if(avisos.length)hoja([["Avisos"],...avisos.map(a=>[a])],"Avisos");
       XLSX.writeFile(wb,`LIBRO IVA ${LADO} ${base}.xlsx`);
@@ -28222,8 +28228,8 @@ function paqDocumentos({soc,mes,quinc,d,libro,sicore}){
     const c=libro.cant[lado];
     if(!c){avisos.push(`No hay ${nom} en ${mes}: no se adjunta el Libro IVA ${nom[0].toUpperCase()+nom.slice(1)}.`);continue;}
     const cb=libro.archivos[`LIBRO_IVA_DIGITAL_${L}_CBTE.txt`],al=libro.archivos[`LIBRO_IVA_DIGITAL_${L}_ALICUOTAS.txt`],ca=libro.cant[lado+"Ali"];
-    docs.push({archivo:`LIBRO IVA ${L} ${b}.xlsx`,formato:"xlsx",clave:"libro_"+lado,cbte:cb,ali:al,lado,
-      descripcion:`Libro IVA ${nom[0].toUpperCase()+nom.slice(1)} en Excel, con las mismas columnas que el de Finnegans: ${n(c,"comprobante","comprobantes")} y ${n(ca,"alícuota","alícuotas")} (una hoja cada uno). Dice lo mismo que los TXT.`});
+    docs.push({archivo:`LIBRO IVA ${L} ${b}.xlsx`,formato:"xlsx",clave:"libro_"+lado,cbte:cb,ali:al,lado,conceptos:lado==="ventas"?libro.conceptosVentas:null,
+      descripcion:`Libro IVA ${nom[0].toUpperCase()+nom.slice(1)} en Excel, con las mismas columnas que el de Finnegans: ${n(c,"comprobante","comprobantes")} y ${n(ca,"alícuota","alícuotas")} (una hoja cada uno). Dice lo mismo que los TXT${lado==="ventas"?", más una columna final «Concepto» con el detalle de lo facturado (el TXT oficial no la admite)":""}.`});
     docs.push({archivo:`LIBRO IVA ${L} ${b}.txt`,formato:"txt",texto:cb,descripcion:`Libro IVA Digital — ${nom}, comprobantes (cabecera), para importar en ARCA.`});
     docs.push({archivo:`LIBRO ALICUOTAS ${L} ${b}.txt`,formato:"txt",texto:al,descripcion:`Libro IVA Digital — ${nom}, alícuotas, para importar en ARCA.`});
   }
@@ -28249,7 +28255,7 @@ function _paqDocBase64(doc,d){
     if(d.regSheet.length>1){const w2=XLSX.utils.aoa_to_sheet(d.regSheet);w2["!cols"]=[16,40,10,16,16].map(w=>({wch:w}));XLSX.utils.book_append_sheet(wb,w2,"Por régimen");}
   }else{
     wb=XLSX.utils.book_new();
-    [[lvTxtAFilas(doc.cbte,doc.lado+"_cbte"),`Libro IVA ${doc.lado}`],[lvTxtAFilas(doc.ali,doc.lado+"_ali"),`Alicuotas ${doc.lado}`]].forEach(([f,nom])=>{const ws=XLSX.utils.aoa_to_sheet(f);ws["!cols"]=f[0].map((h,i)=>({wch:i===0?6:Math.max(12,Math.min(32,String(h).length))}));XLSX.utils.book_append_sheet(wb,ws,nom);});
+    [[doc.lado==="ventas"?lvConceptoCol(lvTxtAFilas(doc.cbte,doc.lado+"_cbte"),doc.conceptos):lvTxtAFilas(doc.cbte,doc.lado+"_cbte"),`Libro IVA ${doc.lado}`],[lvTxtAFilas(doc.ali,doc.lado+"_ali"),`Alicuotas ${doc.lado}`]].forEach(([f,nom])=>{const ws=XLSX.utils.aoa_to_sheet(f);ws["!cols"]=f[0].map((h,i)=>({wch:i===0?6:Math.max(12,Math.min(32,String(h).length))}));XLSX.utils.book_append_sheet(wb,ws,nom);});
   }
   return XLSX.write(wb,{type:"base64",bookType:"xlsx"});
 }
