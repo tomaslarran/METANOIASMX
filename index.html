@@ -4292,7 +4292,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 
 <!-- ══ MODAL CONFIRMAR PAGO CUOTA ══ -->
 <div class="mov" id="modal-pago-cuota" onclick="if(event.target===this)closeM('modal-pago-cuota')">
-  <div class="modal" style="max-width:380px">
+  <div class="modal" style="max-width:470px">
     <div class="mt"><span id="mpc-title">Confirmar pago</span><button class="mt-close" onclick="closeM('modal-pago-cuota')">✕</button></div>
     <div style="padding:0 20px 20px;display:flex;flex-direction:column;gap:14px">
       <div id="mpc-resumen" style="background:var(--surf2);border-radius:var(--r);padding:12px 14px;font-size:13px;border:1px solid var(--b)"></div>
@@ -4300,6 +4300,12 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
       <div class="fg"><label class="fl">Monto abonado</label><input type="number" id="mpc-monto" class="fi" placeholder="0" step="0.01" oninput="mpcMostrarDif()"></div>
       <div id="mpc-dif-note" style="display:none;font-size:11px;padding:6px 10px;border-radius:6px;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.3);color:#D97706"></div>
       <div class="fg"><label class="fl">Medio de pago</label><select id="mpc-medio" class="fi sel"></select></div>
+      <label style="font-size:12px;display:flex;gap:6px;align-items:center;cursor:pointer;color:var(--tx2)"><input type="checkbox" id="mpc-multi" onchange="mpcToggleMulti()" style="accent-color:var(--ac)"> Se pagó en varios débitos (ej. por falta de saldo), cada uno con su fecha</label>
+      <div id="mpc-multi-box" style="display:none;flex-direction:column;gap:8px">
+        <div id="mpc-multi-rows" style="display:flex;flex-direction:column;gap:6px"></div>
+        <button type="button" class="bs" onclick="mpcAgregarDebito()" style="align-self:flex-start;font-size:11px;padding:4px 10px">＋ Agregar otro débito</button>
+        <div id="mpc-multi-tot" style="font-size:11px;color:var(--tx3)"></div>
+      </div>
       <div style="display:flex;gap:8px;padding-top:4px">
         <button class="bc" onclick="closeM('modal-pago-cuota')" style="flex:1">Cancelar</button>
         <button class="bk" id="mpc-save-btn" onclick="confirmarPagoCuota()" style="flex:1">✓ Confirmar pago</button>
@@ -14373,6 +14379,21 @@ async function _concCruzarModulos(sociedad,extractos){
     sb(`echeqs_propios?sociedad=eq.${sociedad}&estado=eq.emitido&select=*`).catch(()=>[]),
   ]);
   const usado=new Set(yaUsados.map(u=>`${u.match_tipo}:${u.match_id}`));
+  // Cuotas pagadas con varios débitos: cada salida de banco del asiento lleva su fecha («Débito AAAA-MM-DD · medio»)
+  const debCuotas=[],usadoDeb=new Set();
+  if(cuotas.length){
+    const cids=new Set(cuotas.map(q=>q.id));
+    const asC=await sb(`asientos_contables?sociedad=eq.${sociedad}&origen=eq.prestamo_cuota&anulado=eq.false&select=origen_id,fecha,asientos_movimientos(haber,descripcion)`).catch(()=>[]);
+    asC.filter(a=>cids.has(a.origen_id)).forEach(a=>{
+      const ls=(a.asientos_movimientos||[]).filter(m=>(parseFloat(m.haber)||0)>0&&/Débito [0-9]{4}-/.test(m.descripcion||""));
+      if(ls.length<2)return;
+      ls.forEach(m=>debCuotas.push({cuotaId:a.origen_id,monto:Math.round((parseFloat(m.haber)||0)*100)/100,fecha:((m.descripcion||"").match(/([0-9]{4}-[0-9]{2}-[0-9]{2})/)||[])[1]||a.fecha}));
+    });
+    if(debCuotas.length){
+      const yaC=await sb(`banco_movimientos?sociedad=eq.${sociedad}&match_tipo=eq.cuota_prestamo&select=match_id,importe`).catch(()=>[]);
+      yaC.forEach(u=>usadoDeb.add(`${u.match_id}|${Math.round(Math.abs(parseFloat(u.importe)||0)*100)/100}`));
+    }
+  }
   // VEP: un pendiente puede pagarse antes o poco después del vencimiento; uno ya pagado a mano se busca cerca de su fecha de pago.
   const vepsLibres=vepsTodos.filter(v=>!v.banco_movimiento_id);
   // Echeq propio: el banco lo debita en su fecha de pago (o el hábil siguiente, de ahí la ventana de -2 a +7 días).
@@ -14430,6 +14451,8 @@ async function _concCruzarModulos(sociedad,extractos){
       const mejorCuota=(tol)=>{let best=null,bd=1e9;for(const x of cuotas){if(usado.has(`cuota_prestamo:${x.id}`))continue;if(Math.abs((parseFloat(x.monto_total)||0)-monto)>tol)continue;const ds=[x.fecha_pago,x.fecha].filter(Boolean).map(f=>dias(f,fecha));if(!ds.length)continue;const d=Math.min(...ds);if(d>6)continue;if(d<bd){bd=d;best=x;}}return best;};
       for(const tol of [0.01,1]){
         if(imp<0){
+          const dl=debCuotas.find(x=>!usadoDeb.has(`${x.cuotaId}|${x.monto}`)&&Math.abs(x.monto-monto)<=tol&&dias(x.fecha,fecha)<=6);
+          if(dl){const cc=cuotas.find(q=>q.id===dl.cuotaId);hallado={tipo:"cuota_prestamo",id:dl.cuotaId,desc:`Cuota ${cc?.nro_cuota??""} — ${prest.find(p=>p.id===cc?.prestamo_id)?.nombre||"Préstamo"} (débito parcial)`.replace("Cuota  —","Cuota —"),k:"cuotas",linea:`${dl.cuotaId}|${dl.monto}`};break;}
           const c=mejorCuota(tol);
           if(c){hallado={tipo:"cuota_prestamo",id:c.id,desc:`Cuota ${c.nro_cuota??""} — ${prest.find(p=>p.id===c.prestamo_id)?.nombre||"Préstamo"}`.replace("Cuota  —","Cuota —"),k:"cuotas"};break;}
           const vp=vepCand(monto,fecha,tol);
@@ -14453,6 +14476,7 @@ async function _concCruzarModulos(sociedad,extractos){
       }
       if(hallado){
         usado.add(`${hallado.tipo}:${hallado.id}`);
+        if(hallado.linea)usadoDeb.add(hallado.linea);
         await sb(`banco_movimientos?id=eq.${b.id}`,{method:"PATCH",body:JSON.stringify({conciliado:true,match_tipo:hallado.tipo,match_id:hallado.id,match_descripcion:hallado.desc})});
         if(hallado.tipo==="vep")await _vepRegistrarPago(hallado.vep,{fecha:b.fecha,bancoMovId:b.id}).catch(e=>console.warn("VEP: pago conciliado sin asiento",e));
         if(hallado.tipo==="echeq")await _echeqRegistrarDebito(hallado.echeq,{fecha:b.fecha,bancoMovId:b.id}).catch(e=>console.warn("Echeq: débito conciliado sin asiento",e));
@@ -20941,13 +20965,45 @@ function mpcMostrarDif(){
       :`⚠️ Diferencia ${fmtNum(dif,true)} — pago parcial`;
   }else{note.style.display="none";}
 }
+// ── Cuota pagada en varios débitos (cada uno con su fecha, monto y medio). La estructura de la deuda se respeta: lo que alcance va a capital
+// (hasta el capital del cronograma) y el resto a intereses; cada débito queda como una salida de banco propia en el asiento. ──
+function mpcResetMulti(){
+  const c=document.getElementById("mpc-multi");if(!c)return;
+  c.checked=false;document.getElementById("mpc-multi-box").style.display="none";document.getElementById("mpc-multi-rows").innerHTML="";
+  document.getElementById("mpc-monto").readOnly=false;document.getElementById("mpc-fecha").disabled=false;document.getElementById("mpc-medio").disabled=false;
+}
+function mpcToggleMulti(){
+  const on=document.getElementById("mpc-multi").checked;
+  document.getElementById("mpc-multi-box").style.display=on?"flex":"none";
+  const monto=document.getElementById("mpc-monto"),fecha=document.getElementById("mpc-fecha"),medio=document.getElementById("mpc-medio");
+  monto.readOnly=on;fecha.disabled=on;medio.disabled=on;   // con varios débitos, el total, la fecha final y el medio salen de cada línea
+  if(on){const rows=document.getElementById("mpc-multi-rows");if(!rows.children.length){mpcAgregarDebito(fecha.value,"");mpcAgregarDebito("","");}mpcSumarDebitos();}
+}
+function mpcAgregarDebito(f,m,med){
+  const rows=document.getElementById("mpc-multi-rows"),opts=document.getElementById("mpc-medio").innerHTML;
+  const d=document.createElement("div");d.style.cssText="display:grid;grid-template-columns:128px 1fr 1fr 24px;gap:6px;align-items:center";
+  d.innerHTML='<input type="date" class="fi mpc-d-fecha" value="'+(f||"")+'" oninput="mpcSumarDebitos()"><input type="number" step="0.01" class="fi mpc-d-monto" placeholder="Monto" value="'+(m||"")+'" oninput="mpcSumarDebitos()"><select class="fi sel mpc-d-medio">'+opts+'</select><button type="button" onclick="this.parentNode.remove();mpcSumarDebitos()" style="background:none;border:none;color:var(--re);cursor:pointer;font-size:15px">✕</button>';
+  rows.appendChild(d);
+  d.querySelector(".mpc-d-medio").value=med||document.getElementById("mpc-medio").value;
+}
+function mpcLeerDebitos(){
+  return [...document.querySelectorAll("#mpc-multi-rows > div")].map(r=>({fecha:r.querySelector(".mpc-d-fecha").value,monto:Math.round((parseFloat(r.querySelector(".mpc-d-monto").value)||0)*100)/100,medio:r.querySelector(".mpc-d-medio").value})).filter(d=>d.monto>0);
+}
+function mpcSumarDebitos(){
+  const ds=mpcLeerDebitos(),tot=Math.round(ds.reduce((s,d)=>s+d.monto,0)*100)/100;
+  document.getElementById("mpc-monto").value=tot?tot.toFixed(2):"";
+  const fs=ds.map(d=>d.fecha).filter(Boolean).sort();
+  if(fs.length)document.getElementById("mpc-fecha").value=fs[fs.length-1];
+  document.getElementById("mpc-multi-tot").textContent=ds.length?(ds.length+" débito"+(ds.length>1?"s":"")+" · total "+fmtNum(tot,true)+(fs.length?" · la cuota figura pagada el "+fmt(fs[fs.length-1]):"")):"";
+  mpcMostrarDif();
+}
 function marcarCuotaPagada(cuotaId,prestId){abrirModalPago(cuotaId,prestId)}
 
 function abrirModalPago(cuotaId,prestId){
   const c=cfPrestCuotas.find(x=>x.id===cuotaId);
   const p=cfPrestamos.find(x=>x.id===prestId);
   if(!c||!p)return;
-  _mpcEdit=false;{const sb0=document.getElementById("mpc-save-btn");if(sb0)sb0.textContent="✓ Confirmar pago";}
+  _mpcEdit=false;mpcResetMulti();{const sb0=document.getElementById("mpc-save-btn");if(sb0)sb0.textContent="✓ Confirmar pago";}
   _mpcCuotaId=cuotaId;_mpcPrestId=prestId;
   document.getElementById("mpc-title").textContent=`Pagar cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${p.nombre}`;
   const mpcSel=document.getElementById("mpc-medio");
@@ -21094,15 +21150,22 @@ async function confirmarPagoCuota(){
   const cuotaId=_mpcCuotaId;
   const prestId=_mpcPrestId;
   if(!cuotaId){toast("Error: cuota no identificada — cerrá y volvé a abrir el modal","err");return;}
-  const fecha=document.getElementById("mpc-fecha").value||today();
   const btn=document.getElementById("mpc-save-btn");btn.disabled=true;
+  const _multi=!!document.getElementById("mpc-multi")?.checked;
+  const debitos=_multi?mpcLeerDebitos():null;
+  if(_multi){
+    if(!debitos.length){toast("Cargá al menos un débito con su monto","err");btn.disabled=false;return;}
+    if(debitos.some(d=>!d.fecha)){toast("Cada débito necesita su fecha","err");btn.disabled=false;return;}
+  }
+  const fecha=_multi?debitos.map(d=>d.fecha).sort().slice(-1)[0]:(document.getElementById("mpc-fecha").value||today());
   try{
     await sb(`cf_prestamos_cuotas?id=eq.${cuotaId}`,{method:"PATCH",body:JSON.stringify({pagada:true,fecha_pago:fecha,updated_at:new Date().toISOString()})});
     const c=cfPrestCuotas.find(x=>x.id===cuotaId);
     if(c){c.pagada=true;c.fecha_pago=fecha;}
     const prest=cfPrestamos.find(p=>p.id===prestId);
     if(prest&&c&&!edit){
-      const nuevoSaldo=Math.max(0,(prest.saldo_actual||0)-(c.capital||c.monto_total||0));
+      const _tp=parseFloat(document.getElementById("mpc-monto").value)||0,_cp=c.capital||c.monto_total||0;
+      const nuevoSaldo=Math.max(0,(prest.saldo_actual||0)-(_tp>0?Math.min(_cp,_tp):_cp));   // lo que no alcanza para el capital del cronograma no lo reduce más de lo pagado
       const cuotasPend=cfPrestCuotas.filter(x=>x.prestamo_id===prestId&&!x.pagada).length;
       await sb(`cf_prestamos?id=eq.${prestId}`,{method:"PATCH",body:JSON.stringify({saldo_actual:nuevoSaldo,cuotas_pendientes:cuotasPend,updated_at:new Date().toISOString()})});
       prest.saldo_actual=nuevoSaldo;prest.cuotas_pendientes=cuotasPend;
@@ -21116,15 +21179,16 @@ async function confirmarPagoCuota(){
       if(total>0){
         const lineas=[];
         // Capital fijo del cronograma; intereses = total - capital (absorbe cualquier diferencia por demora)
-        const cap=capital>0?capital:0;
+        const cap=capital>0?Math.min(capital,total):0;   // primero capital (hasta el del cronograma); el resto, intereses
         const intereses=Math.max(0,Math.round((total-cap)*100)/100);
         if(_esPlanSocio(prest))lineas.push({codigo:"1.1.05.004",debe:total,desc:"Autónomos de socio pagados por la sociedad"});
         else{
         if(cap>0)lineas.push({codigo:_ctaDeudaPrestamo(prest),debe:cap,desc:"Capital cuota"});
         if(intereses>0)lineas.push({codigo:"5.3.01.001",debe:intereses,desc:cap>0&&Math.abs(total-(cap+(parseFloat(c.intereses)||0)))>1?"Intereses (ajustado por demora)":"Intereses"});
         }
-        lineas.push({codigo:getBancoCodigoPorMedio(medio,soc),haber:total,desc:`Pago ${medio||"cuota"}`});
-        const desc=`Cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${prest.nombre||"Préstamo"}`;
+        if(debitos)debitos.forEach(d=>lineas.push({codigo:getBancoCodigoPorMedio(d.medio,soc),haber:d.monto,desc:`Débito ${d.fecha} · ${d.medio}`}));
+        else lineas.push({codigo:getBancoCodigoPorMedio(medio,soc),haber:total,desc:`Pago ${medio||"cuota"}`});
+        const desc=`Cuota${c.nro_cuota?` #${c.nro_cuota}`:""} — ${prest.nombre||"Préstamo"}${debitos&&debitos.length>1?` (pagada en ${debitos.length} débitos)`:""}`;
         const _adC={fecha,sociedad:soc,tipo:"pago_cuota_prestamo",origen:"prestamo_cuota",origen_id:cuotaId,descripcion:desc,lineas};
         if(edit)await _anularAsientosCuota(cuotaId);   // editar = reemplazar el asiento anterior
         generarAsiento(_adC).then(a=>{if(a?._faltantes)mcfAbrir(a._faltantes,_adC);else if(!a)toast("⚠️ Asiento no generado","err");}).catch(e=>toast("⚠️ Error al generar el asiento de la cuota: "+(e.message||"").slice(0,70),"err"));
@@ -21145,7 +21209,7 @@ async function confirmarPagoCuota(){
 // ── Corregir el pago de una cuota de préstamo: editar (fecha / monto / medio) o revertir ──
 // Datos del pago actual a partir de su asiento activo (la cuota no guarda el medio ni el monto abonado).
 async function _asientoPagoCuota(cuotaId){
-  return await sb(`asientos_contables?anulado=eq.false&origen=eq.prestamo_cuota&origen_id=eq.${cuotaId}&select=id,fecha,asientos_movimientos(debe,haber,plan_cuentas(codigo))`).catch(()=>[]);
+  return await sb(`asientos_contables?anulado=eq.false&origen=eq.prestamo_cuota&origen_id=eq.${cuotaId}&select=id,fecha,asientos_movimientos(debe,haber,descripcion,plan_cuentas(codigo))`).catch(()=>[]);
 }
 async function _anularAsientosCuota(cuotaId){
   const as=await sb(`asientos_contables?anulado=eq.false&origen=eq.prestamo_cuota&origen_id=eq.${cuotaId}&select=id`).catch(()=>[]);
@@ -21218,6 +21282,18 @@ async function editarPagoCuota(cuotaId,prestId){
     const soc=p.sociedad||"SUDES",sel=document.getElementById("mpc-medio");
     const m=[...sel.options].map(o=>o.value).find(n=>getBancoCodigoPorMedio(n,soc)===cred.plan_cuentas?.codigo);
     if(m)sel.value=m;
+  }
+  const hab=movs.filter(m=>(parseFloat(m.haber)||0)>0);
+  if(hab.length>1){   // el pago original tenía varios débitos: se muestran de nuevo uno por uno
+    const soc=p.sociedad||"SUDES",sel=document.getElementById("mpc-medio");
+    document.getElementById("mpc-multi").checked=true;mpcToggleMulti();
+    document.getElementById("mpc-multi-rows").innerHTML="";
+    hab.forEach(m=>{
+      const f=((m.descripcion||"").match(/([0-9]{4}-[0-9]{2}-[0-9]{2})/)||[])[1]||(as[0]?.fecha||"");
+      const med=[...sel.options].map(o=>o.value).find(n=>getBancoCodigoPorMedio(n,soc)===m.plan_cuentas?.codigo);
+      mpcAgregarDebito(f,(parseFloat(m.haber)||0).toFixed(2),med);
+    });
+    mpcSumarDebitos();
   }
   if(!as.length)toast("Esta cuota no tenía asiento: al guardar se genera uno","inf");
 }
