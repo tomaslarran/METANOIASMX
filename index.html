@@ -3490,6 +3490,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
               <option value="Autonomos">Autónomos</option>
               <option value="Cargas sociales">Cargas sociales (F.931)</option>
               <option value="SICORE">SICORE (retenciones practicadas)</option>
+              <option value="TISH">TISH (Municipalidad de Salta)</option>
               <option value="Otro">Otro</option>
             </select>
           </div>
@@ -21048,9 +21049,9 @@ const _PLAN_TIPOS=["IVA","IIBB","Ganancias","Autonomos","Cargas sociales","TISH"
 // Planes de pagos de ARCA a nombre de un socio (autónomos personales) que paga la sociedad: no son deuda de la sociedad,
 // cada cuota se asienta en 1.1.05.004 «Impuestos de socios pagados por la sociedad»
 function _esPlanSocio(p){return /larran|virasoro/i.test((p&&p.nombre)||"")&&/arca|afip|plan de pagos/i.test(((p&&p.entidad)||"")+" "+((p&&p.nombre)||""));}
-function _esPlanImpuesto(p){if(_esPlanSocio(p))return false;const e=((p&&p.entidad)||"")+" "+((p&&p.nombre)||"");return /arca|afip|dgr|rentas/i.test(e);}
+function _esPlanImpuesto(p){if(_esPlanSocio(p))return false;const e=((p&&p.entidad)||"")+" "+((p&&p.nombre)||"");return /arca|afip|dgr|rentas|municipal|tish/i.test(e);}
 // Pasivo del plan: 2.1.03.010 (ARCA) / 2.1.03.011 (Rentas); el resto de los préstamos va a 2.1.02.001
-function _ctaDeudaPrestamo(p){const e=((p&&p.entidad)||"")+" "+((p&&p.nombre)||"");if(/arca|afip/i.test(e))return"2.1.03.010";if(/dgr|rentas/i.test(e))return"2.1.03.011";return"2.1.02.001";}
+function _ctaDeudaPrestamo(p){const e=((p&&p.entidad)||"")+" "+((p&&p.nombre)||"");if(/municipal|tish/i.test(e))return"2.1.03.016";if(/arca|afip/i.test(e))return"2.1.03.010";if(/dgr|rentas/i.test(e))return"2.1.03.011";return"2.1.02.001";}
 function _oplCapital(p){const s=cfPrestCuotas.filter(c=>c.prestamo_id===p.id).reduce((t,c)=>t+(parseFloat(c.capital)||0),0);return Math.round((s>0?s:(parseFloat(p.capital)||parseFloat(p.saldo_actual)||0))*100)/100;}
 // ── Lector del detalle de obligaciones del plan (sin IA): ARCA «Mis Facilidades» y Rentas F951A ──
 const _facilNum=s=>parseFloat(String(s).replace(/\./g,"").replace(",","."))||0;      // 60.831,33 → 60831.33
@@ -27056,7 +27057,7 @@ function _vepParsearTexto(txt){
   while((x=re.exec(t))!==null)montos.push(num(x[1]));
   if(montos.length)d.monto=Math.max(...montos);
   // Tipo de impuesto por las descripciones
-  const tipoPor=[[/AUTONOMO/,"Autonomos"],[/GANANCIAS|GCIAS|GCIA\b/,"Ganancias"],[/INGRESOS BRUTOS|IIBB|ACTIVIDADES ECONOMICAS/,"IIBB"],[/SICORE|RETENCIONES? (?:PRACTICADAS|IMPUESTO)/,"SICORE"],[/\bIVA\b|VALOR AGREGADO/,"IVA"],[/SEG\.?\s*SOCIAL|SEGURIDAD SOCIAL|EMPLEADOR|F\.?\s?931|CARGAS SOCIALES|CONTRIB\.?\s*SEG|SUSS/,"Cargas sociales"]];
+  const tipoPor=[[/TISH|SALUBRIDAD|TASA DE INSPECCION|TASA INSPECCION/,"TISH"],[/AUTONOMO/,"Autonomos"],[/GANANCIAS|GCIAS|GCIA\b/,"Ganancias"],[/INGRESOS BRUTOS|IIBB|ACTIVIDADES ECONOMICAS/,"IIBB"],[/SICORE|RETENCIONES? (?:PRACTICADAS|IMPUESTO)/,"SICORE"],[/\bIVA\b|VALOR AGREGADO/,"IVA"],[/SEG\.?\s*SOCIAL|SEGURIDAD SOCIAL|EMPLEADOR|F\.?\s?931|CARGAS SOCIALES|CONTRIB\.?\s*SEG|SUSS/,"Cargas sociales"]];
   for(const [r,v] of tipoPor){if(r.test(T)){d.tipo_impuesto=v;break;}}
   // Período (si el volante lo informa)
   m=/PERIODO(?: FISCAL)?\s*:?\s*(\d{4})[-\/]?(\d{2})\b/.exec(T)||/PERIODO(?: FISCAL)?\s*:?\s*(\d{2})\/(\d{4})/.exec(T);
