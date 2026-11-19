@@ -1153,6 +1153,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
         Productos
       </div>
+      <div class="sitem" onclick="goPage('bienes',this)" id="nav-bienes">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 13h18"/></svg>
+        Bienes de uso
+      </div>
       <div class="sitem" onclick="goPage('facturas',this)" id="nav-facturas">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l3-2 3 2 3-2 3 2 3-2 1 .7V2z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
         Facturas emitidas
@@ -3034,6 +3038,13 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 </div>
 
 <!-- ══ NOMENCLADOR ══ -->
+<div id="pg-bienes" style="display:none">
+  <div class="pg-header">
+    <div><div class="pg-title">Bienes de uso</div><div class="pg-title-sub">Simuladores, equipos, vehículos, muebles e instalaciones · amortización mensual</div></div>
+  </div>
+  <div id="bu-body"></div>
+</div>
+
 <div id="pg-productos" style="display:none">
   <div class="pg-header">
     <div><div class="pg-title">Productos</div><div class="pg-title-sub">Catálogo de Finnegans: código, IVA y cuenta contable de cada producto</div></div>
@@ -6734,6 +6745,7 @@ function goPage(name,el){
   if(name==="facturas")loadFacturasEmitidas();
   if(name==="clientes")loadClientes();
   if(name==="productos")loadProductosPage();
+  if(name==="bienes")loadBienesUso();
   if(name==="elearning")loadElearning();
   if(name==="comprobantes"){loadComprobantes();cargarProductosFinn();}
   if(name==="impuestos")loadImpuestos();
@@ -32764,6 +32776,213 @@ document.addEventListener("click",e=>{
 let productosFinn=[],_pfDiff=null;
 // ── Página «Productos»: ver y editar el catálogo (código, uso, IVA, cuenta de gasto, activo) ──
 let _prodQ="",_prodUso="",_prodFiltro="",_prodCuentas=[];
+// ── BIENES DE USO: registro de cada bien y amortización mensual (lineal) ──
+let _bienes=[],_bienesAm=[],_buF={soc:"",estado:"activo",q:"",cat:""};
+const _BU_CAT={"Vehículos":["1.2.01.001","1.2.01.002",60],"Muebles y útiles":["1.2.02.001","1.2.02.002",120],"Instalaciones":["1.2.03.001","1.2.03.002",120],"Equipos":["1.2.04.001","1.2.04.002",120]};
+const _buR2=v=>Math.round((Number(v)+Number.EPSILON)*100)/100;
+const _buMesDe=f=>String(f||"").slice(0,7);
+function _buSumaMes(p,n){const[y,m]=p.split("-").map(Number);const d=new Date(y,m-1+n,1);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
+function _buFinMes(p){const[y,m]=p.split("-").map(Number);return p+"-"+String(new Date(y,m,0).getDate()).padStart(2,"0");}
+const _buFmtMes=p=>{if(!p)return"—";const[y,m]=p.split("-");return m+"/"+y;};
+async function loadBienesUso(){
+  const el=document.getElementById("bu-body");if(!el)return;
+  el.innerHTML='<div class="empty">Cargando…</div>';
+  try{
+    [_bienes,_bienesAm]=await Promise.all([_sbAll("bienes_uso?select=*&order=sociedad.asc,fecha_alta.asc,created_at.asc"),_sbAll("bienes_uso_amortizaciones?select=bien_id,periodo,monto,asiento_id&order=periodo.asc")]);
+  }catch(e){el.innerHTML='<div class="empty">Falta correr <b>sql_bienes_uso.sql</b> en Supabase para crear las tablas de bienes de uso.</div>';return;}
+  renderBienesUso();
+}
+// Datos calculados de un bien
+function _buCalc(b){
+  const base=_buR2((Number(b.valor_origen)||0)-(Number(b.valor_residual)||0));
+  const cuota=b.vida_util_meses>0?_buR2(base/b.vida_util_meses):0;
+  const reg=_bienesAm.filter(a=>a.bien_id===b.id);
+  const acum=_buR2((Number(b.amort_acum_inicial)||0)+reg.reduce((s,a)=>s+(Number(a.monto)||0),0));
+  const hasta=b.amort_desde?_buSumaMes(b.amort_desde,b.vida_util_meses-1):null;
+  return{base,cuota,acum,neto:_buR2((Number(b.valor_origen)||0)-acum),reg,hasta};
+}
+// Meses que faltan calcular hasta el período indicado (no repite los ya calculados)
+function _buPendientes(hasta,soc){
+  const out=[];
+  _bienes.filter(b=>b.estado!=="baja"&&b.amort_desde&&(!soc||b.sociedad===soc)).forEach(b=>{
+    const c=_buCalc(b),hechos=new Set(c.reg.map(a=>a.periodo));
+    let acum=c.acum;const fin=c.hasta,bajaMes=b.fecha_baja?_buMesDe(b.fecha_baja):null;
+    for(let p=b.amort_desde;p<=hasta;p=_buSumaMes(p,1)){
+      if(fin&&p>fin)break;if(bajaMes&&p>bajaMes)break;
+      if(hechos.has(p))continue;
+      const resto=_buR2(c.base-acum);if(resto<=0)break;
+      const m=(fin&&p===fin)?resto:_buR2(Math.min(c.cuota,resto));if(m<=0)break;   // el último mes toma el resto para cerrar exacto
+      out.push({bien:b,periodo:p,monto:m});acum=_buR2(acum+m);
+    }
+  });
+  return out;
+}
+function renderBienesUso(){
+  const el=document.getElementById("bu-body");if(!el)return;
+  let list=_bienes.filter(b=>(!_buF.soc||b.sociedad===_buF.soc)&&(!_buF.cat||b.categoria===_buF.cat)&&(_buF.estado==="todos"||(_buF.estado==="baja"?b.estado==="baja":b.estado!=="baja")));
+  if(_buF.q){const Q=_buF.q.toLowerCase();list=list.filter(b=>((b.descripcion||"")+" "+(b.codigo||"")+" "+(b.proveedor||"")).toLowerCase().includes(Q));}
+  const sel=(opts,v)=>opts.map(([a,t])=>`<option value="${esc(a)}"${a===v?" selected":""}>${esc(t)}</option>`).join("");
+  const tot={};
+  list.forEach(b=>{const c=_buCalc(b),k=b.sociedad;const t=tot[k]=tot[k]||{origen:0,acum:0,neto:0,pend:0,n:0};t.origen+=Number(b.valor_origen)||0;t.acum+=c.acum;t.neto+=c.neto;t.n++;if(b.estado!=="baja"&&!b.amort_desde)t.pend++;});
+  const kpi=Object.keys(tot).sort().map(k=>`<div class="sc"><div class="sc-l">${esc(k)} · ${tot[k].n} bien${tot[k].n!==1?"es":""}</div><div class="sc-v">${fmtNum(_buR2(tot[k].neto),true)}</div><div class="sc-s">Origen ${fmtNum(_buR2(tot[k].origen),true)} · Amortizado ${fmtNum(_buR2(tot[k].acum),true)}${tot[k].pend?` · ⏳ ${tot[k].pend} sin recibir`:""}</div></div>`).join("");
+  el.innerHTML=`
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+      <select class="fi sel" style="max-width:130px" onchange="_buF.soc=this.value;renderBienesUso()">${sel([["","Ambas"],["SUDES","SUDES"],["POINTERS","POINTERS"]],_buF.soc)}</select>
+      <select class="fi sel" style="max-width:170px" onchange="_buF.cat=this.value;renderBienesUso()">${sel([["","Todas las categorías"],...Object.keys(_BU_CAT).map(c=>[c,c])],_buF.cat)}</select>
+      <select class="fi sel" style="max-width:140px" onchange="_buF.estado=this.value;renderBienesUso()">${sel([["activo","Activos"],["baja","De baja"],["todos","Todos"]],_buF.estado)}</select>
+      <input class="fi" style="max-width:230px" placeholder="Buscar bien, código o proveedor…" value="${esc(_buF.q)}" oninput="_buF.q=this.value;renderBienesUso();setTimeout(()=>{const i=document.querySelector('#bu-body input.fi');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},0)">
+      <span style="flex:1"></span>
+      <button class="btn" onclick="buAbrirCalculo()">🧮 Calcular amortización</button>
+      <button class="btn" onclick="buExportarExcel()">📥 Exportar Excel</button>
+      <button class="btn pri" onclick="buAbrirForm()">＋ Nuevo bien</button>
+    </div>
+    ${kpi?`<div class="stat-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">${kpi}</div>`:""}
+    ${list.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="color:var(--tx3);border-bottom:1px solid var(--b);text-align:left">
+        <th style="padding:6px">Sociedad</th><th style="padding:6px">Bien</th><th style="padding:6px">Categoría</th><th style="padding:6px">Alta</th>
+        <th style="padding:6px;text-align:right">Valor origen</th><th style="padding:6px">Vida útil</th><th style="padding:6px">Amortiza desde</th>
+        <th style="padding:6px;text-align:right">Cuota mensual</th><th style="padding:6px;text-align:right">Amort. acumulada</th><th style="padding:6px;text-align:right">Valor neto</th><th style="padding:6px"></th></tr></thead>
+      <tbody>${list.map(b=>{const c=_buCalc(b);const baja=b.estado==="baja";
+        const desde=baja?`<span style="color:var(--tx3)">De baja ${b.fecha_baja?fmt(b.fecha_baja):""}</span>`:(b.amort_desde?_buFmtMes(b.amort_desde):`<span style="color:#D97706">⏳ Pendiente de recepción</span> <button class="btn sm" style="margin-left:4px" onclick="buMarcarRecibido('${b.id}')">Recibido</button>`);
+        return`<tr style="border-bottom:1px solid var(--b2);${baja?"opacity:.55":""}">
+          <td style="padding:6px">${esc(b.sociedad)}</td>
+          <td style="padding:6px;max-width:300px"><div style="font-weight:600;color:var(--tx)">${esc(b.descripcion)}</div><div style="color:var(--tx3);font-size:11px">${b.codigo?esc(b.codigo)+" · ":""}${esc(b.proveedor||"")}</div></td>
+          <td style="padding:6px">${esc(b.categoria)}</td><td style="padding:6px">${fmt(b.fecha_alta)}</td>
+          <td style="padding:6px;text-align:right">${fmtNum(b.valor_origen,true)}</td>
+          <td style="padding:6px">${b.vida_util_meses} m <span style="color:var(--tx3)">(${(b.vida_util_meses/12).toFixed(1).replace(".0","")} a)</span></td>
+          <td style="padding:6px">${desde}</td>
+          <td style="padding:6px;text-align:right">${fmtNum(c.cuota,true)}</td>
+          <td style="padding:6px;text-align:right">${fmtNum(c.acum,true)}</td>
+          <td style="padding:6px;text-align:right;font-weight:600">${fmtNum(c.neto,true)}</td>
+          <td style="padding:6px;white-space:nowrap"><button class="btn sm" title="Editar" onclick="buAbrirForm('${b.id}')">✎</button></td></tr>`;}).join("")}</tbody></table></div>`
+    :`<div class="empty"><div class="ei">🏗️</div>No hay bienes de uso con esos filtros.</div>`}`;
+}
+function _buOv(id,html){
+  document.getElementById(id)?.remove();
+  const el=document.createElement("div");el.id=id;
+  el.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10002;display:flex;align-items:center;justify-content:center;padding:14px";
+  el.onclick=e=>{if(e.target===el)el.remove();};
+  el.innerHTML=`<div style="background:var(--surf);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.28);padding:20px;width:100%;max-width:560px;max-height:92vh;overflow-y:auto">${html}</div>`;
+  document.body.appendChild(el);return el;
+}
+function buAbrirForm(id){
+  const b=id?_bienes.find(x=>x.id===id):null;
+  const cats=Object.keys(_BU_CAT);
+  const f=(l,i,v,t="text",ex="")=>`<div class="fg"><label class="fl">${l}</label><input class="fi" id="bu-${i}" type="${t}" value="${esc(v==null?"":v)}" ${ex}></div>`;
+  _buOv("modal-bu",`
+    <div style="font-size:14px;font-weight:700;margin-bottom:12px">${b?"Editar bien":"Nuevo bien de uso"}</div>
+    <input type="hidden" id="bu-id" value="${b?b.id:""}">
+    <div class="form-grid-2">
+      <div class="fg"><label class="fl">Sociedad *</label><select class="fi sel" id="bu-sociedad"><option>SUDES</option><option${b&&b.sociedad==="POINTERS"?" selected":""}>POINTERS</option></select></div>
+      <div class="fg"><label class="fl">Categoría *</label><select class="fi sel" id="bu-categoria" onchange="buCambiaCat()">${cats.map(c=>`<option${b&&b.categoria===c?" selected":""}>${c}</option>`).join("")}</select></div>
+      <div class="fg form-full">${f("Descripción *","descripcion",b&&b.descripcion)}</div>
+      ${f("Código / patente / N° de serie","codigo",b&&b.codigo)}
+      ${f("Proveedor","proveedor",b&&b.proveedor)}
+      ${f("Fecha de alta (compra) *","fecha_alta",b?b.fecha_alta:today(),"date")}
+      ${f("Valor de origen sin IVA *","valor_origen",b&&b.valor_origen,"number",'step="0.01"')}
+      ${f("Valor residual","valor_residual",b?b.valor_residual:0,"number",'step="0.01"')}
+      ${f("Vida útil en meses *","vida",b&&b.vida_util_meses,"number",'step="1" min="1"')}
+      ${f("Empieza a amortizar (mes)","amort_desde",b&&b.amort_desde,"month")}
+      ${f("Amortización acumulada previa","amort_acum_inicial",b?b.amort_acum_inicial:0,"number",'step="0.01"')}
+      <div class="fg"><label class="fl">Estado</label><select class="fi sel" id="bu-estado"><option value="activo">Activo</option><option value="baja"${b&&b.estado==="baja"?" selected":""}>De baja</option></select></div>
+      ${f("Fecha de baja","fecha_baja",b&&b.fecha_baja,"date")}
+      ${f("Ubicación","ubicacion",b&&b.ubicacion)}
+      <div class="fg form-full"><label class="fl">Notas</label><textarea class="fta" id="bu-notas" style="min-height:50px">${esc(b&&b.notas||"")}</textarea></div>
+    </div>
+    <div style="font-size:11px;color:var(--tx3);margin:6px 0 10px">Dejá vacío «Empieza a amortizar» si el bien todavía no llegó: se amortiza desde el mes que lo marques como recibido.</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" onclick="document.getElementById('modal-bu').remove()">Cancelar</button><button class="btn pri" onclick="buGuardar()">Guardar</button></div>`);
+  if(!b)buCambiaCat();
+}
+function buCambiaCat(){const c=document.getElementById("bu-categoria").value;const v=document.getElementById("bu-vida");if(v&&!document.getElementById("bu-id").value)v.value=_BU_CAT[c][2];}
+async function buGuardar(){
+  const id=document.getElementById("bu-id").value,v=i=>document.getElementById("bu-"+i).value.trim();
+  const cat=v("categoria"),d={sociedad:v("sociedad"),categoria:cat,cuenta_activo:_BU_CAT[cat][0],cuenta_amort_acum:_BU_CAT[cat][1],descripcion:v("descripcion"),codigo:v("codigo")||null,proveedor:v("proveedor")||null,fecha_alta:v("fecha_alta"),
+    valor_origen:parseFloat(v("valor_origen")),valor_residual:parseFloat(v("valor_residual"))||0,vida_util_meses:parseInt(v("vida"),10),amort_desde:v("amort_desde")||null,amort_acum_inicial:parseFloat(v("amort_acum_inicial"))||0,
+    estado:v("estado"),fecha_baja:v("fecha_baja")||null,ubicacion:v("ubicacion")||null,notas:document.getElementById("bu-notas").value.trim()||null,updated_at:new Date().toISOString()};
+  if(!d.descripcion||!d.fecha_alta||!(d.valor_origen>0)||!(d.vida_util_meses>0)){toast("Completá descripción, fecha de alta, valor de origen y vida útil","err");return;}
+  try{
+    if(id)await sb(`bienes_uso?id=eq.${id}`,{method:"PATCH",body:JSON.stringify(d)});
+    else await sb("bienes_uso",{method:"POST",body:JSON.stringify(d)});
+    document.getElementById("modal-bu")?.remove();toast("✓ Bien guardado","ok");await loadBienesUso();
+  }catch(e){toast("Error al guardar: "+String(e.message||e).slice(0,100),"err");}
+}
+async function buMarcarRecibido(id){
+  const b=_bienes.find(x=>x.id===id);if(!b)return;
+  const f=prompt("¿En qué fecha llegó / se puso en uso «"+b.descripcion+"»? (AAAA-MM-DD)\nSe empieza a amortizar desde ese mes.",today());
+  if(!f)return;if(!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(f)){toast("Fecha inválida: usá AAAA-MM-DD","err");return;}
+  try{await sb(`bienes_uso?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({amort_desde:_buMesDe(f),updated_at:new Date().toISOString()})});toast("✓ Se amortiza desde "+_buFmtMes(_buMesDe(f)),"ok");await loadBienesUso();}
+  catch(e){toast("Error: "+String(e.message||e).slice(0,100),"err");}
+}
+// ── Cálculo de la amortización del mes (con vista previa) ──
+function buAbrirCalculo(){
+  const hoy=today(),mesAnt=_buSumaMes(_buMesDe(hoy),-1);
+  _buOv("modal-bu-calc",`
+    <div style="font-size:14px;font-weight:700;margin-bottom:4px">🧮 Calcular amortización</div>
+    <div style="font-size:12px;color:var(--tx3);margin-bottom:12px">Calcula las cuotas que faltan hasta el mes elegido (no repite las ya calculadas) y genera un asiento por sociedad y por mes: Debe 5.2.09.001 Amortización de bienes de uso / Haber la amortización acumulada de cada categoría.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
+      <div class="fg"><label class="fl">Sociedad</label><select class="fi sel" id="bu-c-soc"><option value="">Ambas</option><option>SUDES</option><option>POINTERS</option></select></div>
+      <div class="fg"><label class="fl">Hasta el mes</label><input class="fi" id="bu-c-mes" type="month" value="${mesAnt}"></div>
+      <button class="btn" onclick="buPreviaCalculo()">Ver vista previa</button>
+    </div>
+    <div id="bu-c-prev"></div>`);
+  buPreviaCalculo();
+}
+function buPreviaCalculo(){
+  const hasta=document.getElementById("bu-c-mes").value,soc=document.getElementById("bu-c-soc").value,box=document.getElementById("bu-c-prev");
+  if(!hasta){box.innerHTML="";return;}
+  const pend=_buPendientes(hasta,soc);window._buPend=pend;
+  if(!pend.length){box.innerHTML='<div class="empty" style="padding:16px 0">No hay cuotas pendientes hasta ese mes. Los bienes sin recepción no se amortizan.</div>';return;}
+  const porPer={};pend.forEach(x=>{const k=x.bien.sociedad+"|"+x.periodo;(porPer[k]=porPer[k]||[]).push(x);});
+  const ks=Object.keys(porPer).sort((a,b)=>a.split("|")[1].localeCompare(b.split("|")[1])||a.localeCompare(b));
+  const total=_buR2(pend.reduce((s,x)=>s+x.monto,0));
+  box.innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:10px"><thead><tr style="color:var(--tx3);border-bottom:1px solid var(--b);text-align:left"><th style="padding:5px">Sociedad</th><th style="padding:5px">Mes</th><th style="padding:5px">Bienes</th><th style="padding:5px;text-align:right">Amortización</th></tr></thead><tbody>
+    ${ks.map(k=>{const[s,p]=k.split("|"),it=porPer[k];return`<tr style="border-bottom:1px solid var(--b2)"><td style="padding:5px">${esc(s)}</td><td style="padding:5px">${_buFmtMes(p)}</td><td style="padding:5px;color:var(--tx3)">${it.map(x=>esc(x.bien.descripcion.slice(0,40))).join("; ")}</td><td style="padding:5px;text-align:right">${fmtNum(_buR2(it.reduce((a,x)=>a+x.monto,0)),true)}</td></tr>`;}).join("")}
+    <tr style="font-weight:700"><td colspan="3" style="padding:6px">Total — ${ks.length} asiento${ks.length!==1?"s":""}</td><td style="padding:6px;text-align:right">${fmtNum(total,true)}</td></tr></tbody></table>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn" onclick="document.getElementById('modal-bu-calc').remove()">Cancelar</button><button class="btn pri" id="bu-c-go" onclick="buGenerarAmortizacion()">Generar ${ks.length} asiento${ks.length!==1?"s":""}</button></div>`;
+}
+async function buGenerarAmortizacion(){
+  const pend=window._buPend||[];if(!pend.length)return;
+  const btn=document.getElementById("bu-c-go");if(btn){btn.disabled=true;btn.textContent="Generando…";}
+  const por={};pend.forEach(x=>{const k=x.bien.sociedad+"|"+x.periodo;(por[k]=por[k]||[]).push(x);});
+  let n=0;
+  try{
+    for(const k of Object.keys(por).sort((a,b)=>a.split("|")[1].localeCompare(b.split("|")[1]))){
+      const[soc,per]=k.split("|"),it=por[k],total=_buR2(it.reduce((s,x)=>s+x.monto,0));
+      const ctas={};it.forEach(x=>{ctas[x.bien.cuenta_amort_acum]=_buR2((ctas[x.bien.cuenta_amort_acum]||0)+x.monto);});
+      const lineas=[{codigo:"5.2.09.001",debe:total,desc:"Amortización de bienes de uso "+_buFmtMes(per)},...Object.entries(ctas).map(([c,m])=>({codigo:c,haber:m,desc:"Amortización acumulada"}))];
+      const a=await generarAsiento({fecha:_buFinMes(per),sociedad:soc,tipo:"ajuste",origen:"amortizacion_bienes",origen_id:null,descripcion:`Amortización de bienes de uso — ${_buFmtMes(per)} (${soc})`,lineas});
+      if(!a||a._faltantes){toast("No se pudo asentar "+soc+" "+_buFmtMes(per)+(a&&a._faltantes?": faltan cuentas "+a._faltantes.join(", "):""),"err");break;}
+      await sb("bienes_uso_amortizaciones",{method:"POST",body:JSON.stringify(it.map(x=>({bien_id:x.bien.id,periodo:per,monto:x.monto,asiento_id:a.id})))});
+      n++;
+    }
+    document.getElementById("modal-bu-calc")?.remove();
+    toast(n?`✓ Amortización asentada: ${n} asiento${n!==1?"s":""}`:"No se generó ningún asiento",n?"ok":"err");
+    await loadBienesUso();
+  }catch(e){toast("Error: "+String(e.message||e).slice(0,120),"err");if(btn){btn.disabled=false;btn.textContent="Reintentar";}await loadBienesUso();}
+}
+// ── Exportar: cuadro de bienes de uso (para el balance) y detalle de cuotas ──
+async function buExportarExcel(){
+  try{
+    await _paqLib("xlsx");
+    const hoy=today(),yy=parseInt(hoy.slice(0,4)),mm=parseInt(hoy.slice(5,7));
+    const ini=(mm>=7?yy:yy-1)+"-07",fin=(mm>=7?yy+1:yy)+"-06";   // ejercicio vigente (1/7 al 30/6)
+    const lista=_bienes.filter(b=>!_buF.soc||b.sociedad===_buF.soc);
+    const filas=[["Sociedad","Bien","Categoría","Cuenta activo","Cuenta amort. acumulada","Proveedor","Código","Fecha de alta","Amortiza desde","Vida útil (meses)","Valor de origen","Valor residual","Amort. acumulada al inicio del ejercicio","Amortización del ejercicio","Amort. acumulada al cierre","Valor neto al cierre","Estado"]];
+    lista.forEach(b=>{
+      const reg=_bienesAm.filter(a=>a.bien_id===b.id),previas=reg.filter(a=>a.periodo<ini).reduce((s,a)=>s+Number(a.monto),0),ej=reg.filter(a=>a.periodo>=ini&&a.periodo<=fin).reduce((s,a)=>s+Number(a.monto),0);
+      const ai=_buR2((Number(b.amort_acum_inicial)||0)+previas),ac=_buR2(ai+ej);
+      filas.push([b.sociedad,b.descripcion,b.categoria,b.cuenta_activo,b.cuenta_amort_acum,b.proveedor||"",b.codigo||"",b.fecha_alta,b.amort_desde||"(pendiente de recepción)",b.vida_util_meses,_buR2(b.valor_origen),_buR2(b.valor_residual),ai,_buR2(ej),ac,_buR2(b.valor_origen-ac),b.estado==="baja"?"De baja":"Activo"]);
+    });
+    const det=[["Sociedad","Bien","Período","Monto","Asiento"]];
+    _bienesAm.filter(a=>lista.some(b=>b.id===a.bien_id)).forEach(a=>{const b=lista.find(x=>x.id===a.bien_id);det.push([b.sociedad,b.descripcion,a.periodo,_buR2(a.monto),a.asiento_id||""]);});
+    const wb=XLSX.utils.book_new(),h=(rows,nom,an,fm)=>{const ws=XLSX.utils.aoa_to_sheet(rows);ws["!cols"]=an.map(w=>({wch:w}));(fm||[]).forEach(ci=>{for(let r=1;r<rows.length;r++){const c=ws[XLSX.utils.encode_cell({r,c:ci})];if(c&&typeof c.v==="number")c.z="#,##0.00";}});XLSX.utils.book_append_sheet(wb,ws,nom);};
+    h(filas,"Bienes de uso",[10,52,16,13,14,28,14,12,16,10,16,14,18,16,18,16,10],[10,11,12,13,14,15]);
+    h(det,"Amortizaciones",[10,52,10,16,38],[3]);
+    h([["Ejercicio",ini+" a "+fin],["Exportado el",new Date().toLocaleString("es-AR")],["Criterio","Amortización lineal mensual desde el mes de recepción; valor de origen sin IVA."]],"Datos",[14,70]);
+    XLSX.writeFile(wb,`Bienes de uso ${_buF.soc||"Ambas"} ${hoy}.xlsx`);toast("✓ Cuadro de bienes de uso exportado","ok");
+  }catch(e){toast("No se pudo exportar: "+String(e.message||e).slice(0,120),"err");}
+}
+
 async function loadProductosPage(){
   const el=document.getElementById("prod-body");if(!el)return;
   el.innerHTML='<div class="empty">Cargando…</div>';
