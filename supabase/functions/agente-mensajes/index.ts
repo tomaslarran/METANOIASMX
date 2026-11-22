@@ -37,9 +37,10 @@ async function sendEmailEscalacion(texto: string, supabase: any): Promise<void> 
       .from("notificaciones_config")
       .select("usuarios(email)")
       .eq("escal_bot_email", true);
-    let emails: string[] = (rows || []).map((r: any) => r.usuarios?.email).filter(Boolean);
-    // Fallback si nadie tiene el toggle activado aún
-    if (emails.length === 0) emails = [Deno.env.get("ESCALACION_EMAIL_FALLBACK") || "admin@metanoiasmx.com"];
+    const emailsToggle: string[] = (rows || []).map((r: any) => r.usuarios?.email).filter(Boolean);
+    // El admin siempre recibe el aviso (escale o no haya nadie más con el toggle activado)
+    const adminEmail = Deno.env.get("ADMIN_EMAIL_ESCALACION");
+    const emails: string[] = Array.from(new Set([...(adminEmail ? [adminEmail] : []), ...emailsToggle]));
 
     const transporter = nodemailer.createTransport({
       host: Deno.env.get("SMTP_HOST"),

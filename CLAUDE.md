@@ -740,12 +740,13 @@ ALTER TABLE tareas ADD COLUMN IF NOT EXISTS fecha_inicio date;
 - Causa: la consulta de `nps_envios` pendientes (`estado in enviado/pidiendo_nota/esperando_comentario`) no tenía ningún límite de tiempo — una encuesta de prueba vieja sin responder seguía "activa" para siempre e interceptaba cualquier mensaje futuro de ese mismo teléfono antes de llegar a Claude.
 - ✅ Fix: se agregó corte de 2 días (`gte("created_at", ...)`) a esa consulta. Pasado ese plazo, el teléfono deja de quedar atrapado en el flujo NPS y el bot vuelve a responder consultas normales.
 
-### Nota técnica — fallback de email de escalación
-- `sendEmailEscalacion` tenía hardcodeado el mail personal de Tomás como fallback cuando ningún usuario tiene activado `notificaciones_config.escal_bot_email`. Se reemplazó por una variable de entorno `ESCALACION_EMAIL_FALLBACK` (con default `admin@metanoiasmx.com`, que hoy no es una casilla real).
-- **Acción pendiente:** antes de redeployar, confirmar que al menos un usuario del equipo tenga activado el toggle "Avisarme por email" en Notificaciones (así nunca se usa el fallback), o cargar el secret `ESCALACION_EMAIL_FALLBACK` en Supabase con una casilla real del equipo.
+### Nota técnica — mail de escalación del admin
+- `sendEmailEscalacion` tenía hardcodeado el mail personal de Tomás como fallback (solo si nadie más tenía el toggle activado). Por pedido explícito de Tomás, ahora **siempre** recibe el aviso, prenda o no el toggle otra gente — vía secret `ADMIN_EMAIL_ESCALACION` (no hardcodeado en el código, para no repetir el bloqueo del filtro de seguridad por tener su dirección en el archivo).
+- Lista final de destinatarios = `ADMIN_EMAIL_ESCALACION` (si está cargado) + todos los usuarios con `notificaciones_config.escal_bot_email = true`, sin duplicados.
+- **Acción pendiente:** cargar el secret `ADMIN_EMAIL_ESCALACION` en Supabase (Edge Functions → Secrets) con el mail de Tomás.
 
-**Deploy pendiente (Supabase Dashboard → Edge Functions):**
-- `agente-mensajes` — pegar el contenido actualizado de `supabase/functions/agente-mensajes/index.ts` (rama `claude/mobile-presentation-improvements-rrqj1i`) en el Code tab y redeployar.
+**Deploy realizado (22 Nov 2026):** `agente-mensajes` — redeployado con el corte de 2 días de NPS pendiente.
+**Deploy pendiente:** redeployar de nuevo con el cambio de `ADMIN_EMAIL_ESCALACION` (Supabase Dashboard → Edge Functions → agente-mensajes → Code), después de cargar el secret.
 
 ---
 
