@@ -6038,6 +6038,29 @@ async function renderAlertas(){
     });
   }catch(e){}
 
+  // ── Alerta: amortización de bienes de uso sin calcular (hasta el mes anterior) ──
+  try{
+    if(loggedUser?.rol==="admin"){
+      const [bu,am]=await Promise.all([sb("bienes_uso?select=*&estado=eq.activo&amort_desde=not.is.null"),sb("bienes_uso_amortizaciones?select=bien_id,periodo,monto")]);
+      const hastaAm=_buSumaMes(today().slice(0,7),-1),pend=_buPendientes(hastaAm,"",bu,am);
+      if(pend.length){
+        const total=_buR2(pend.reduce((x,p)=>x+p.monto,0)),meses=[...new Set(pend.map(p=>p.periodo))].sort();
+        const txtMes=meses.length>1?`${_buFmtMes(meses[0])} a ${_buFmtMes(meses[meses.length-1])}`:_buFmtMes(meses[0]);
+        alertas.push({tipo:"impuesto",icon:"🏗️",urgencia:meses.length>1?"hoy":"semana",d:meses.length>1?0:3,
+          titulo:`Falta calcular la amortización de bienes de uso (${txtMes})`,
+          sub:`${pend.length} cuota${pend.length!==1?"s":""} por ${fmtNum(total,true)} · tocá para ver la vista previa y confirmar`,fecha:meses[0]+"-01",
+          onclick:`goPage('bienes',document.getElementById('nav-bienes'));setTimeout(buAbrirCalculo,500)`});
+        // aviso en la campanita de los administradores, una sola vez por mes
+        const clave="amort-"+hastaAm;
+        const ya=await sb(`notificaciones?tipo=eq.amortizacion_pendiente&meta->>clave=eq.${clave}&select=id&limit=1`).catch(()=>null);
+        if(ya&&!ya.length){
+          const admins=(typeof users!=="undefined"?users:[]).filter(u=>u.rol==="admin"&&u.estado!=="inactivo");
+          await Promise.all(admins.map(u=>sb("notificaciones",{method:"POST",body:JSON.stringify({usuario_id:u.id,tipo:"amortizacion_pendiente",mensaje:`🏗️ Falta calcular la amortización de bienes de uso (${txtMes}): ${pend.length} cuota${pend.length!==1?"s":""} por ${fmtNum(total,true)}. Entrá a Bienes de uso → Calcular amortización.`,leida:false,meta:{clave}})}))).catch(()=>{});
+        }
+      }
+    }
+  }catch(e){}
+
   // ── Alerta de gastos pagados con medio personal (independencia patrimonial) ──
   try{
     if(!comprobantes.length)comprobantes=await sb("comprobantes_compra?select=*&order=fecha.desc").catch(()=>[]);
@@ -12977,11 +13000,11 @@ async function pollNotificaciones(){
 }
 
 function tipoNotifLabel(tipo){
-  const map={asignacion:"Nueva asignación",modificacion:"Tarea modificada",comentario:"Nuevo comentario",vencimiento:"Vencimiento próximo",colaboracion_chat:"Invitación a chat",mensaje_interno:"Mensaje interno",cumpleanos:"Cumpleaños",elearning_suscripcion_por_vencer:"Suscripción por vencer",elearning_suscripcion_vencida:"Suscripción vencida",elearning_factura_error:"Error de facturación",aviso_compra:"Compra nueva avisada"};
+  const map={asignacion:"Nueva asignación",modificacion:"Tarea modificada",comentario:"Nuevo comentario",vencimiento:"Vencimiento próximo",colaboracion_chat:"Invitación a chat",mensaje_interno:"Mensaje interno",cumpleanos:"Cumpleaños",elearning_suscripcion_por_vencer:"Suscripción por vencer",elearning_suscripcion_vencida:"Suscripción vencida",elearning_factura_error:"Error de facturación",aviso_compra:"Compra nueva avisada",amortizacion_pendiente:"Amortización pendiente"};
   return map[tipo]||"Notificación";
 }
 function tipoNotifIcon(tipo){
-  const map={asignacion:"👤",modificacion:"✏️",comentario:"💬",vencimiento:"⏰",colaboracion_chat:"👥",mensaje_interno:"💬",cumpleanos:"🎂",elearning_suscripcion_por_vencer:"⏰",elearning_suscripcion_vencida:"⌛",elearning_factura_error:"🧾",aviso_compra:"📢"};
+  const map={asignacion:"👤",modificacion:"✏️",comentario:"💬",vencimiento:"⏰",colaboracion_chat:"👥",mensaje_interno:"💬",cumpleanos:"🎂",elearning_suscripcion_por_vencer:"⏰",elearning_suscripcion_vencida:"⌛",elearning_factura_error:"🧾",aviso_compra:"📢",amortizacion_pendiente:"🏗️"};
   return map[tipo]||"🔔";
 }
 function tiempoAtras(iso){
@@ -13052,6 +13075,11 @@ async function clickNotif(id,tareaId,tipo){
   }
   if(tipo==="aviso_compra"){
     goPage("comprobantes",document.getElementById("nav-comprobantes"));
+    return;
+  }
+  if(tipo==="amortizacion_pendiente"){
+    goPage("bienes",document.getElementById("nav-bienes"));
+    setTimeout(()=>{try{buAbrirCalculo();}catch(_){}},500);
     return;
   }
   // Rol comunicaciones: no redirigir a tareas
@@ -15535,9 +15563,11 @@ async function _cierreCargar(soc,mes){
   const idsEv=[...new Set(pagosEv.filter(r=>(r.fecha||"")>=D1&&(r.fecha||"")<=D2).map(r=>r.comprobante_id))];
   const compsEv=idsEv.length?await sb(`comprobantes_compra?id=in.(${idsEv.join(",")})&select=id,proveedor,numero,tipo,total,monto_pagado,estado`).catch(vacio):[];
   const anticipos=await sb(`anticipos_proveedores?sociedad=eq.${soc}&select=*`).catch(vacio);
+  const bienesU=await sb(`bienes_uso?sociedad=eq.${soc}&estado=eq.activo&amort_desde=not.is.null&select=*`).catch(vacio);
+  const amortU=bienesU.length?await sb(`bienes_uso_amortizaciones?bien_id=in.(${bienesU.map(b=>b.id).join(",")})&select=bien_id,periodo,monto`).catch(vacio):[];
   let cierre=null,sinTabla=false;
   try{cierre=(await sb(`cierres_mensuales?sociedad=eq.${soc}&periodo=eq.${mes}&select=*`))[0]||null;}catch(e){sinTabla=true;}
-  return{soc,mes,D1,D2,asientos,cobertura,comps,compsPag,ops,emps,pagosEmp,prest,cuotas,extr,bm,cal,veps,cierre,sinTabla,pagosEv,compsEv,anticipos};
+  return{soc,mes,D1,D2,asientos,cobertura,comps,compsPag,ops,emps,pagosEmp,prest,cuotas,extr,bm,cal,veps,cierre,sinTabla,pagosEv,compsEv,anticipos,bienesU,amortU};
 }
 
 function _cierreResumen(d){
@@ -15658,6 +15688,14 @@ function _cierreChecks(d){
     else if(sinAsAnt.length||sinAsRec.length)add("Anticipos a proveedores","📎","error",txt,subA);
     else if(Math.abs(difD)>1||Math.abs(difH)>1||viejos.length)add("Anticipos a proveedores","📎","alerta",txt,subA);
     else add("Anticipos a proveedores","📎",nAb?"info":"ok",txt,nAb?["Se cancelan al cargar el recibo del proveedor (Comprobantes → 📎 Anticipos)."]:[]);
+  }
+
+  // 5c. Amortización de bienes de uso
+  if((d.bienesU||[]).length){
+    const faltan=_buPendientes(d.mes,d.soc,d.bienesU,d.amortU).filter(x=>x.periodo===d.mes);
+    const hechas=(d.amortU||[]).filter(a=>a.periodo===d.mes);
+    if(faltan.length)add("Amortización de bienes de uso","🏗️","alerta",`Falta calcular ${faltan.length} cuota${faltan.length>1?"s":""} de amortización del mes (${_extM(faltan.reduce((s,x)=>s+x.monto,0))})`,["Bienes de uso → 🧮 Calcular amortización → hasta este mes"]);
+    else if(hechas.length)add("Amortización de bienes de uso","🏗️","ok",`${hechas.length} cuota${hechas.length>1?"s":""} del mes asentada${hechas.length>1?"s":""} (${_extM(hechas.reduce((s,a)=>s+(parseFloat(a.monto)||0),0))})`);
   }
 
   // 6. Sueldos
@@ -32794,19 +32832,19 @@ async function loadBienesUso(){
   renderBienesUso();
 }
 // Datos calculados de un bien
-function _buCalc(b){
+function _buCalc(b,A=_bienesAm){
   const base=_buR2((Number(b.valor_origen)||0)-(Number(b.valor_residual)||0));
   const cuota=b.vida_util_meses>0?_buR2(base/b.vida_util_meses):0;
-  const reg=_bienesAm.filter(a=>a.bien_id===b.id);
+  const reg=A.filter(a=>a.bien_id===b.id);
   const acum=_buR2((Number(b.amort_acum_inicial)||0)+reg.reduce((s,a)=>s+(Number(a.monto)||0),0));
   const hasta=b.amort_desde?_buSumaMes(b.amort_desde,b.vida_util_meses-1):null;
   return{base,cuota,acum,neto:_buR2((Number(b.valor_origen)||0)-acum),reg,hasta};
 }
 // Meses que faltan calcular hasta el período indicado (no repite los ya calculados)
-function _buPendientes(hasta,soc){
+function _buPendientes(hasta,soc,B=_bienes,A=_bienesAm){
   const out=[];
-  _bienes.filter(b=>b.estado!=="baja"&&b.amort_desde&&(!soc||b.sociedad===soc)).forEach(b=>{
-    const c=_buCalc(b),hechos=new Set(c.reg.map(a=>a.periodo));
+  B.filter(b=>b.estado!=="baja"&&b.amort_desde&&(!soc||b.sociedad===soc)).forEach(b=>{
+    const c=_buCalc(b,A),hechos=new Set(c.reg.map(a=>a.periodo));
     let acum=c.acum;const fin=c.hasta,bajaMes=b.fecha_baja?_buMesDe(b.fecha_baja):null;
     for(let p=b.amort_desde;p<=hasta;p=_buSumaMes(p,1)){
       if(fin&&p>fin)break;if(bajaMes&&p>bajaMes)break;
