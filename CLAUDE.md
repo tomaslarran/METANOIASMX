@@ -729,6 +729,26 @@ ALTER TABLE tareas ADD COLUMN IF NOT EXISTS fecha_inicio date;
 
 ---
 
+## Fix (22 Nov 2026) — agente-mensajes: NPS secuestrando conversaciones nuevas + repo desincronizado
+
+### Repo local vs. deploy real
+- ⚠️ El archivo `supabase/functions/agente-mensajes/index.ts` en este repo estaba muy desactualizado respecto al código realmente deployado en Supabase (le faltaban `chequearLimiteIA`, `sendEmailEscalacion`, todo el flujo NPS por WhatsApp, los helpers de respuesta directa de cursos, etc. — todo esto ya corría en producción pero nunca se había copiado de vuelta al repo). Mismo patrón que ya pasó antes con esta función: se edita directo en el dashboard de Supabase y el cambio no vuelve al git.
+- ✅ Se sincronizó el archivo local con el código live (pegado por Tomás) como base de este fix.
+
+### Bug: NPS secuestraba mensajes nuevos sin relación con la encuesta
+- Síntoma reportado: un mensaje de WhatsApp nuevo ("queria saber sobre cursos disponibles") fue respondido con un pedido de nota NPS en vez de información de cursos.
+- Causa: la consulta de `nps_envios` pendientes (`estado in enviado/pidiendo_nota/esperando_comentario`) no tenía ningún límite de tiempo — una encuesta de prueba vieja sin responder seguía "activa" para siempre e interceptaba cualquier mensaje futuro de ese mismo teléfono antes de llegar a Claude.
+- ✅ Fix: se agregó corte de 14 días (`gte("created_at", ...)`) a esa consulta. Pasado ese plazo, el teléfono deja de quedar atrapado en el flujo NPS y el bot vuelve a responder consultas normales.
+
+### Nota técnica — fallback de email de escalación
+- `sendEmailEscalacion` tenía hardcodeado el mail personal de Tomás como fallback cuando ningún usuario tiene activado `notificaciones_config.escal_bot_email`. Se reemplazó por una variable de entorno `ESCALACION_EMAIL_FALLBACK` (con default `admin@metanoiasmx.com`, que hoy no es una casilla real).
+- **Acción pendiente:** antes de redeployar, confirmar que al menos un usuario del equipo tenga activado el toggle "Avisarme por email" en Notificaciones (así nunca se usa el fallback), o cargar el secret `ESCALACION_EMAIL_FALLBACK` en Supabase con una casilla real del equipo.
+
+**Deploy pendiente (Supabase Dashboard → Edge Functions):**
+- `agente-mensajes` — pegar el contenido actualizado de `supabase/functions/agente-mensajes/index.ts` (rama `claude/mobile-presentation-improvements-rrqj1i`) en el Code tab y redeployar.
+
+---
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:
