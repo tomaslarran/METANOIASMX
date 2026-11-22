@@ -232,16 +232,16 @@ serve(async (req) => {
     // ── Flujo NPS por WhatsApp: nota → pregunta de seguimiento → datos faltantes + oferta ──
     if (msg.type === "text" && texto) {
       // Una encuesta nunca respondida no puede quedar "pendiente" para siempre -- si pasaron
-      // más de 14 días sin respuesta, deja de interceptar los mensajes futuros del mismo
+      // más de 2 días sin respuesta, deja de interceptar los mensajes futuros del mismo
       // teléfono (que a esa altura ya no tienen nada que ver con la encuesta) y el bot vuelve
       // a responder consultas normales en vez de seguir pidiendo la nota.
-      const catorceDiasAtras = new Date(Date.now() - 14 * 86400000).toISOString();
+      const corteNPS = new Date(Date.now() - 2 * 86400000).toISOString();
       const { data: pendingNPS } = await supabase
         .from("nps_envios")
         .select("*")
         .eq("telefono", fromId)
         .in("estado", ["enviado", "pidiendo_nota", "esperando_comentario"])
-        .gte("created_at", catorceDiasAtras)
+        .gte("created_at", corteNPS)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();

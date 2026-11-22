@@ -738,7 +738,7 @@ ALTER TABLE tareas ADD COLUMN IF NOT EXISTS fecha_inicio date;
 ### Bug: NPS secuestraba mensajes nuevos sin relación con la encuesta
 - Síntoma reportado: un mensaje de WhatsApp nuevo ("queria saber sobre cursos disponibles") fue respondido con un pedido de nota NPS en vez de información de cursos.
 - Causa: la consulta de `nps_envios` pendientes (`estado in enviado/pidiendo_nota/esperando_comentario`) no tenía ningún límite de tiempo — una encuesta de prueba vieja sin responder seguía "activa" para siempre e interceptaba cualquier mensaje futuro de ese mismo teléfono antes de llegar a Claude.
-- ✅ Fix: se agregó corte de 14 días (`gte("created_at", ...)`) a esa consulta. Pasado ese plazo, el teléfono deja de quedar atrapado en el flujo NPS y el bot vuelve a responder consultas normales.
+- ✅ Fix: se agregó corte de 2 días (`gte("created_at", ...)`) a esa consulta. Pasado ese plazo, el teléfono deja de quedar atrapado en el flujo NPS y el bot vuelve a responder consultas normales.
 
 ### Nota técnica — fallback de email de escalación
 - `sendEmailEscalacion` tenía hardcodeado el mail personal de Tomás como fallback cuando ningún usuario tiene activado `notificaciones_config.escal_bot_email`. Se reemplazó por una variable de entorno `ESCALACION_EMAIL_FALLBACK` (con default `admin@metanoiasmx.com`, que hoy no es una casilla real).
