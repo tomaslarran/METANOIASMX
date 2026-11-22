@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import nodemailer from "npm:nodemailer@6.9.9";
 
 const VERIFY_TOKEN = Deno.env.get("META_WH_VERIFY_TOKEN") || "metanoia_wh_2026";
 const PHONE_NUMBER_ID = Deno.env.get("WA_PHONE_NUMBER_ID") || "1064395966761110";
@@ -7,12 +8,92 @@ const WA_API = `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`;
 const IG_PAGE_ID = "17841470857318268";
 const FB_PAGE_ID = "478694861999786";
 
-const EQUIPO = [
-  { nombre: "Amparo", wa: Deno.env.get("WA_AMPARO") || "5493874462320" },
-  { nombre: "Valentina", wa: Deno.env.get("WA_VALENTINA") || "5493875094959" },
-  { nombre: "Dani", wa: Deno.env.get("WA_DANI") || "5493875374699" },
-  { nombre: "Flor", wa: Deno.env.get("WA_FLOR") || "5493875031295" },
-];
+// Chequea el límite mensual de tokens de IA. Sin JWT en este webhook — se asume
+// la única organización activa (single-tenant hoy; revisar cuando haya multi-tenant real).
+async function chequearLimiteIA(supabase: any) {
+  const inicioMes = new Date();
+  inicioMes.setUTCDate(1);
+  inicioMes.setUTCHours(0, 0, 0, 0);
+  const inicioMesISO = inicioMes.toISOString();
+  const renuevaMes = new Date(inicioMes);
+  renuevaMes.setUTCMonth(renuevaMes.getUTCMonth() + 1);
+  const renuevaStr = renuevaMes.toLocaleDateString("es-AR", { day: "2-digit", month: "long", timeZone: "America/Argentina/Salta" });
+
+  const { data: organizacion } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").limit(1).maybeSingle();
+  if (!organizacion?.limite_tokens_mensual) return { bloqueado: false, mensaje: null as string | null, organizacionId: organizacion?.id ?? null };
+
+  const { data: usoOrg } = await supabase.from("ia_uso").select("input_tokens,output_tokens,cache_creation_input_tokens,cache_read_input_tokens").eq("organizacion_id", organizacion.id).gte("created_at", inicioMesISO);
+  const totalOrg = (usoOrg || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0) + (r.cache_creation_input_tokens || 0) + (r.cache_read_input_tokens || 0), 0);
+  if (totalOrg >= organizacion.limite_tokens_mensual) {
+    return { bloqueado: true, mensaje: `límite mensual de IA de la organización alcanzado (se renueva el ${renuevaStr})`, organizacionId: organizacion.id };
+  }
+  return { bloqueado: false, mensaje: null as string | null, organizacionId: organizacion.id };
+}
+
+async function sendEmailEscalacion(texto: string, supabase: any): Promise<void> {
+  try {
+    // Buscar usuarios con escal_bot_email=true en notificaciones_config
+    const { data: rows } = await supabase
+      .from("notificaciones_config")
+      .select("usuarios(email)")
+      .eq("escal_bot_email", true);
+    let emails: string[] = (rows || []).map((r: any) => r.usuarios?.email).filter(Boolean);
+    // Fallback si nadie tiene el toggle activado aún
+    if (emails.length === 0) emails = [Deno.env.get("ESCALACION_EMAIL_FALLBACK") || "admin@metanoiasmx.com"];
+
+    const transporter = nodemailer.createTransport({
+      host: Deno.env.get("SMTP_HOST"),
+      port: 465,
+      secure: true,
+      auth: { user: Deno.env.get("SMTP_USER"), pass: Deno.env.get("SMTP_PASS") },
+    });
+    const htmlBody = texto.replace(/\n/g, "<br>").replace(/\*(.*?)\*/g, "<strong>$1</strong>");
+    await transporter.sendMail({
+      from: `"Metanoia SMX" <${Deno.env.get("SMTP_USER")}>`,
+      to: emails.join(","),
+      subject: texto.startsWith("⚠️") ? "⚠️ Alerta bot — Metanoia SMX" : "🚨 Consulta derivada — Metanoia SMX",
+      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fafafa;border-left:4px solid #4a2eb4">${htmlBody}</div>`,
+    });
+  } catch (e) {
+    console.error("sendEmailEscalacion error:", (e as Error).message);
+  }
+}
+
+// Cierre comun del flujo NPS (paso 2 normal, y el atajo cuando ya habia un comentario
+// adelantado guardado antes de recibir la nota — ver pidiendo_nota mas abajo).
+async function _cerrarEncuestaNPS(
+  supabase: any, pendingNPS: any, fromId: string, fromName: string, msgId: string,
+  texto: string, respuestaLog: string, sendWA: (to: string, t: string) => Promise<boolean>,
+) {
+  let pideDatos = "";
+  if (pendingNPS.alumno_id) {
+    const { data: alumno } = await supabase.from("alumnos").select("dni,cuit").eq("id", pendingNPS.alumno_id).maybeSingle();
+    if (alumno && (!alumno.dni || !alumno.cuit)) {
+      pideDatos = "\n\nAprovechamos para pedirte un dato: ¿nos pasás tu DNI y CUIT para completar tu perfil? Lo vamos a necesitar para futuras certificaciones.";
+    }
+  }
+
+  let oferta = "";
+  const { data: proximosCursos } = await supabase
+    .from("cursos")
+    .select("nombre,fecha_inicio")
+    .in("estado", ["Convocatoria", "Inscripciones"])
+    .eq("publicacion_aprobada", true)
+    .order("fecha_inicio", { ascending: true })
+    .limit(2);
+  if (proximosCursos && proximosCursos.length) {
+    const lista = proximosCursos.map((c: any) => `• ${c.nombre}${c.fecha_inicio ? ` (${new Date(c.fecha_inicio + "T00:00:00").toLocaleDateString("es-AR")})` : ""}`).join("\n");
+    oferta = `\n\nAprovechamos para contarte que ya tenemos inscripciones abiertas para:\n${lista}\nSi te interesa alguno, escribinos y te pasamos toda la info. 😊`;
+  }
+
+  await supabase.from("nps_envios").update({ estado: "respondido" }).eq("id", pendingNPS.id);
+  await supabase.from("mensajes_publico").insert({
+    plataforma: "whatsapp", from_id: fromId, from_name: fromName,
+    mensaje: texto, estado: "respondido",
+    respuesta: respuestaLog, wa_message_id: msgId,
+  });
+  await sendWA(fromId, `¡Muchas gracias por tu comentario! Lo tenemos en cuenta para seguir mejorando.${pideDatos}${oferta}`);
+}
 
 serve(async (req) => {
   // ── Verificación del webhook (GET) ──────────────────────────────────────────
@@ -39,7 +120,7 @@ serve(async (req) => {
     const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody));
     const expected = "sha256=" + Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("");
     if (signature !== expected) {
-      console.warn("Firma Meta inválida (ignorada temporalmente):", signature.slice(0, 30));
+      return new Response("Forbidden", { status: 403 });
     }
   }
 
@@ -56,6 +137,21 @@ serve(async (req) => {
   // ── WhatsApp ─────────────────────────────────────────────────────────────────
   if (object === "whatsapp_business_account") {
     const value = body?.entry?.[0]?.changes?.[0]?.value;
+
+    // ── Aviso de estado de mensaje (entregado/leído/fallido) — Meta lo manda en un payload
+    // aparte, sin "messages". Hoy solo nos importa "failed" para detectar NPS que nunca llegaron.
+    const statusUpd = value?.statuses?.[0];
+    if (statusUpd) {
+      if (statusUpd.status === "failed") {
+        const motivo = statusUpd.errors?.[0]?.title || statusUpd.errors?.[0]?.message || "Error desconocido";
+        await supabase.from("nps_envios")
+          .update({ estado: "fallido", error_detalle: motivo })
+          .eq("wa_message_id", statusUpd.id)
+          .eq("estado", "enviado");
+      }
+      return new Response("OK", { status: 200 });
+    }
+
     if (!value?.messages?.[0]) return new Response("OK", { status: 200 });
 
     const msg = value.messages[0];
@@ -133,36 +229,106 @@ serve(async (req) => {
       return new Response("OK", { status: 200 });
     }
 
-    // ── Detectar respuesta NPS (número 0-10) ──────────────────────────────────
+    // ── Flujo NPS por WhatsApp: nota → pregunta de seguimiento → datos faltantes + oferta ──
     if (msg.type === "text" && texto) {
-      const npsScore = parseInt(texto);
-      if (!isNaN(npsScore) && npsScore >= 0 && npsScore <= 10 && texto === String(npsScore)) {
-        const { data: pendingNPS } = await supabase
-          .from("nps_envios")
-          .select("*")
-          .eq("telefono", fromId)
-          .eq("estado", "enviado")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      // Una encuesta nunca respondida no puede quedar "pendiente" para siempre -- si pasaron
+      // más de 14 días sin respuesta, deja de interceptar los mensajes futuros del mismo
+      // teléfono (que a esa altura ya no tienen nada que ver con la encuesta) y el bot vuelve
+      // a responder consultas normales en vez de seguir pidiendo la nota.
+      const catorceDiasAtras = new Date(Date.now() - 14 * 86400000).toISOString();
+      const { data: pendingNPS } = await supabase
+        .from("nps_envios")
+        .select("*")
+        .eq("telefono", fromId)
+        .in("estado", ["enviado", "pidiendo_nota", "esperando_comentario"])
+        .gte("created_at", catorceDiasAtras)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-        if (pendingNPS) {
+      const matchNota = texto.match(/\b(10|[0-9])\b/);
+
+      // Paso 1: todavía no registró nota — reconoce el número aunque venga con texto alrededor
+      // (ej. "9/10", "le doy un 8", "un 7 nomás"), siempre que el mensaje sea corto.
+      if (pendingNPS?.estado === "enviado" && texto.length <= 60 && matchNota) {
+        const npsScore = parseInt(matchNota[1]);
+        await supabase.from("nps_respuestas").insert({
+          curso_id: pendingNPS.curso_id,
+          alumno_id: pendingNPS.alumno_id,
+          alumno_nombre: pendingNPS.alumno_nombre,
+          score: npsScore,
+          canal: "whatsapp",
+        });
+        await supabase.from("nps_envios").update({ estado: "esperando_comentario" }).eq("id", pendingNPS.id);
+        await supabase.from("mensajes_publico").insert({
+          plataforma: "whatsapp", from_id: fromId, from_name: fromName,
+          mensaje: texto, estado: "respondido",
+          respuesta: `[NPS ${npsScore}/10 registrado]`, wa_message_id: msgId,
+        });
+        await sendWA(fromId, `¡Gracias por tu calificación (${npsScore}/10)! 🙌 Nos ayuda mucho a seguir mejorando.\n\n¿Nos contás en pocas palabras qué fue lo que más te gustó o qué podríamos mejorar?`);
+        return new Response("OK", { status: 200 });
+      }
+
+      // Paso 1b: contestó con feedback real pero SIN un número (ej. "la verdad me encantó,
+      // el trato, la organización...") — antes esto se perdía por completo: como no había
+      // nota, nunca entraba al flujo de NPS y el mensaje se iba derecho a Claude, sin dejar
+      // ningún rastro en nps_respuestas. Ahora: si el mensaje tiene contenido real (no un
+      // simple "hola"), se lo guarda como borrador de comentario y se le pide la nota una vez.
+      if (pendingNPS?.estado === "enviado" && !matchNota && texto.trim().length > 8) {
+        await supabase.from("nps_envios").update({ estado: "pidiendo_nota", comentario_previo: texto }).eq("id", pendingNPS.id);
+        await supabase.from("mensajes_publico").insert({
+          plataforma: "whatsapp", from_id: fromId, from_name: fromName,
+          mensaje: texto, estado: "respondido",
+          respuesta: "[NPS: comentario guardado, pidiendo nota]", wa_message_id: msgId,
+        });
+        await sendWA(fromId, "¡Gracias por contarnos eso! 🙌 Para que quede bien registrado, ¿nos confirmás con un número del 0 al 10 qué tan probable es que nos recomiendes?");
+        return new Response("OK", { status: 200 });
+      }
+
+      // Paso 1c: ya le pedimos la nota (venía de 1b) — si ahora manda el número, se cierra
+      // directo usando el comentario que ya había dejado adelantado.
+      if (pendingNPS?.estado === "pidiendo_nota") {
+        if (matchNota) {
+          const npsScore = parseInt(matchNota[1]);
           await supabase.from("nps_respuestas").insert({
             curso_id: pendingNPS.curso_id,
             alumno_id: pendingNPS.alumno_id,
             alumno_nombre: pendingNPS.alumno_nombre,
             score: npsScore,
             canal: "whatsapp",
+            comentario: pendingNPS.comentario_previo || null,
           });
-          await supabase.from("nps_envios").update({ estado: "respondido" }).eq("id", pendingNPS.id);
-          await supabase.from("mensajes_publico").insert({
-            plataforma: "whatsapp", from_id: fromId, from_name: fromName,
-            mensaje: texto, estado: "respondido",
-            respuesta: `[NPS ${npsScore}/10 registrado]`, wa_message_id: msgId,
-          });
-          await sendWA(fromId, `¡Gracias por tu respuesta! Tu calificación (${npsScore}/10) fue registrada. ¡Hasta la próxima! 🙌`);
+          await _cerrarEncuestaNPS(supabase, pendingNPS, fromId, fromName, msgId, texto, `[NPS ${npsScore}/10 registrado con comentario adelantado]`, sendWA);
           return new Response("OK", { status: 200 });
         }
+        // sigue sin dar la nota — se sigue sumando lo que dice como parte del comentario
+        const comentarioAcum = [pendingNPS.comentario_previo, texto].filter(Boolean).join(" / ");
+        await supabase.from("nps_envios").update({ comentario_previo: comentarioAcum }).eq("id", pendingNPS.id);
+        await sendWA(fromId, "¡Perfecto, anotado! 🙌 ¿Y del 0 al 10 qué nota le pondrías?");
+        await supabase.from("mensajes_publico").insert({
+          plataforma: "whatsapp", from_id: fromId, from_name: fromName,
+          mensaje: texto, estado: "respondido",
+          respuesta: "[NPS: comentario acumulado, pidiendo nota]", wa_message_id: msgId,
+        });
+        return new Response("OK", { status: 200 });
+      }
+
+      // Paso 2: ya tiene nota registrada y está esperando el comentario — lo que responda ahora
+      // se guarda como comentario cualitativo, y de paso pedimos datos faltantes y avisamos de
+      // próximos cursos/promos vigentes.
+      if (pendingNPS?.estado === "esperando_comentario") {
+        const { data: respRow } = await supabase
+          .from("nps_respuestas")
+          .select("id")
+          .eq("alumno_id", pendingNPS.alumno_id)
+          .eq("curso_id", pendingNPS.curso_id)
+          .eq("canal", "whatsapp")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (respRow) await supabase.from("nps_respuestas").update({ comentario: texto }).eq("id", respRow.id);
+        await _cerrarEncuestaNPS(supabase, pendingNPS, fromId, fromName, msgId, texto, "[Comentario NPS registrado]", sendWA);
+        return new Response("OK", { status: 200 });
       }
     }
 
@@ -170,7 +336,7 @@ serve(async (req) => {
       supabase, fromId, fromName, texto, plataforma: "whatsapp", msgId,
       imageBase64, imageMediaType, imageUrl,
       sendReply: (t) => sendWA(fromId, t),
-      sendEscalacion: (t) => Promise.all(EQUIPO.map(p => sendWA(p.wa, t))).then(() => {}),
+      sendEscalacion: async (t) => { await sendEmailEscalacion(t, supabase); },
     });
 
     return new Response("OK", { status: 200 });
@@ -180,7 +346,6 @@ serve(async (req) => {
   if (object === "instagram" || object === "page") {
     const entry = body.entry?.[0];
     const messaging = entry?.messaging?.[0];
-    if (!messaging?.message || messaging.message.is_echo) return new Response("OK", { status: 200 });
 
     const plataforma = object === "instagram" ? "instagram" : "facebook";
     // Instagram DMs: usa el token de usuario IG (META_ACCESS_TOKEN) + IG_PAGE_ID
@@ -189,17 +354,39 @@ serve(async (req) => {
     const apiToken = isIG ? Deno.env.get("META_ACCESS_TOKEN")! : Deno.env.get("META_FB_PAGE_TOKEN")!;
     const pageId = isIG ? IG_PAGE_ID : FB_PAGE_ID;
 
+    // Reacción (❤️/👍/🔥/etc.) sobre un mensaje nuestro -- no es una consulta, así que
+    // no pasa por la IA: agradecimiento directo y listo, sin preguntar "¿algo más?".
+    if (messaging?.reaction && messaging.reaction.action === "react") {
+      const fromReact = messaging.sender?.id as string | undefined;
+      if (fromReact) {
+        const gracias = "¡Muchas gracias por el apoyo! 🙌";
+        await sendMessenger(fromReact, gracias, pageId, apiToken, isIG);
+        await supabase.from("mensajes_publico").insert({
+          plataforma, from_id: fromReact, from_name: fromReact,
+          mensaje: `[Reacción ${messaging.reaction.emoji || messaging.reaction.reaction || ""}]`.trim(),
+          estado: "respondido", respuesta: gracias,
+        });
+      }
+      return new Response("OK", { status: 200 });
+    }
+
+    if (!messaging?.message || messaging.message.is_echo) return new Response("OK", { status: 200 });
+
     const fromId = messaging.sender.id as string;
     const msgId = messaging.message.mid as string;
 
-    // Obtener nombre del usuario
+    // Obtener nombre del usuario. Instagram-scoped IDs (IGSID) solo se resuelven contra
+    // graph.instagram.com -- graph.facebook.com no los reconoce y devuelve sin "name",
+    // así que el bot se quedaba mudo mostrando el ID numérico en vez del nombre real.
     let fromName = fromId;
     try {
+      const nameBase = isIG ? "https://graph.instagram.com" : "https://graph.facebook.com";
       const nameRes = await fetch(
-        `https://graph.facebook.com/v21.0/${fromId}?fields=name&access_token=${apiToken}`
+        `${nameBase}/v21.0/${fromId}?fields=name,username&access_token=${apiToken}`
       );
       const nameData = await nameRes.json();
       if (nameData.name) fromName = nameData.name;
+      else if (nameData.username) fromName = `@${nameData.username}`;
     } catch (_) {}
 
     let texto = messaging.message.text?.trim() || "";
@@ -252,6 +439,17 @@ serve(async (req) => {
           texto = "[audio no procesado]";
         }
 
+      } else if (att.type === "share" || att.type === "story_mention" || att.type === "template") {
+        // Mención/compartido de una publicación -- agradecimiento directo sin pasar por la
+        // IA y sin la pregunta de cierre habitual ("¿algo más?"): no es una consulta.
+        const gracias = "¡Gracias por la mención! 🙌 Nos alegra mucho el apoyo.";
+        await sendMessenger(fromId, gracias, pageId, apiToken, isIG);
+        await supabase.from("mensajes_publico").insert({
+          plataforma, from_id: fromId, from_name: fromName,
+          mensaje: `[${att.type}]`, estado: "respondido", respuesta: gracias, wa_message_id: msgId,
+        });
+        return new Response("OK", { status: 200 });
+
       } else {
         texto = `[${att.type}]`;
       }
@@ -263,7 +461,7 @@ serve(async (req) => {
       supabase, fromId, fromName, texto, plataforma, msgId,
       imageBase64, imageMediaType, imageUrl,
       sendReply: (t) => sendMessenger(fromId, t, pageId, apiToken, isIG),
-      sendEscalacion: (t) => Promise.all(EQUIPO.map(p => sendWA(p.wa, t))).then(() => {}),
+      sendEscalacion: async (t) => { await sendEmailEscalacion(t, supabase); },
     });
 
     return new Response("OK", { status: 200 });
@@ -271,6 +469,67 @@ serve(async (req) => {
 
   return new Response("OK", { status: 200 });
 });
+
+// ── Respuesta directa (sin IA) para preguntas de cupos/precio de un curso concreto ────────
+// Tercer paso de la iniciativa de estandarización (ver CLAUDE.md "Estandarizar respuestas").
+// Muy conservador a propósito: es de cara al cliente, así que ante cualquier ambigüedad
+// (no se identifica un único curso con confianza, o el mensaje no matchea el patrón) se
+// deja pasar de largo y responde la IA como siempre.
+function _normTxt(s: string): string {
+  return (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+// true si el mensaje, sacando emojis/espacios/signos de puntuación, no deja nada de texto real.
+function _esSoloEmojis(texto: string): boolean {
+  const limpio = (texto || "").trim();
+  if (!limpio) return false;
+  const sinEmoji = limpio.replace(/[\p{Extended_Pictographic}‍️\s.,;:!?¡¿]/gu, "");
+  return sinEmoji.length === 0;
+}
+const _STOPWORDS_CURSO = new Set(["curso", "taller", "workshop", "nivel", "de", "del", "la", "el", "los", "las", "y", "en", "con", "para", "básico", "basico", "avanzado"]);
+function _matchCursoEnTexto(texto: string, cursosList: any[]): any | null {
+  const t = _normTxt(texto);
+  let best: any = null, bestScore = 0, segundo = 0;
+  for (const c of cursosList) {
+    if (!c.nombre) continue;
+    const palabras = _normTxt(c.nombre).split(/[^a-z0-9]+/).filter((w: string) => w.length >= 4 && !_STOPWORDS_CURSO.has(w));
+    if (!palabras.length) continue;
+    const score = palabras.filter((w: string) => t.includes(w)).length;
+    if (score > bestScore) { segundo = bestScore; best = c; bestScore = score; }
+    else if (score > segundo) { segundo = score; }
+  }
+  // Exigimos al menos 1 palabra distintiva matcheada y que no haya ambigüedad con un segundo curso
+  return (best && bestScore >= 1 && bestScore > segundo) ? best : null;
+}
+function _fmtFechaCorta(f: string | null): string {
+  if (!f) return "";
+  const d = new Date(f + "T12:00:00");
+  return d.toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Argentina/Salta" });
+}
+function _tryRespuestaDirectaCurso(texto: string, cursosList: any[]): string | null {
+  if (!texto || texto.length > 150) return null; // mensaje largo -> mejor que lo maneje la IA
+  const t = _normTxt(texto);
+  const esCupos = /cupo|vacante|lugar(es)?\s*(disponible|libre)/.test(t);
+  const esPrecio = /precio|arancel|cuesta|vale|costo/.test(t);
+  const esFecha = /cuando (es|empieza|arranca|comienza|termina)|fecha (de inicio|de fin|del curso)|que dia (es|empieza)/.test(t);
+  if (!esCupos && !esPrecio && !esFecha) return null;
+  const curso = _matchCursoEnTexto(texto, cursosList);
+  if (!curso) return null;
+  if (esCupos) {
+    return curso.cupos_max
+      ? `El curso "${curso.nombre}" tiene un cupo máximo de ${curso.cupos_max} participantes. ¿Querés que te cuente más para anotarte? 😊`
+      : `Por ahora no tengo el cupo exacto cargado para "${curso.nombre}" — dejame tus datos y el equipo te confirma. 😊`;
+  }
+  if (esPrecio) {
+    return curso.arancel
+      ? `El arancel de "${curso.nombre}" es de $${Number(curso.arancel).toLocaleString("es-AR")}. Hasta el 31 de octubre la suscripción anual a la plataforma es sin cargo 🎉 ¿Te cuento más sobre el curso?`
+      : `Por ahora no tengo el arancel cargado para "${curso.nombre}" — dejame tus datos y el equipo te confirma. 😊`;
+  }
+  if (!curso.fecha_inicio) return `Por ahora no tengo la fecha cargada para "${curso.nombre}" — dejame tus datos y el equipo te confirma. 😊`;
+  const rango = curso.fecha_fin && curso.fecha_fin !== curso.fecha_inicio
+    ? `del ${_fmtFechaCorta(curso.fecha_inicio)} al ${_fmtFechaCorta(curso.fecha_fin)}`
+    : `el ${_fmtFechaCorta(curso.fecha_inicio)}`;
+  return `El curso "${curso.nombre}" es ${rango}. ¿Te cuento más para anotarte? 😊`;
+}
 
 // ── Procesamiento común (Claude + DB) ─────────────────────────────────────────
 async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, msgId, imageBase64, imageMediaType, imageUrl, sendReply, sendEscalacion }: {
@@ -283,7 +542,7 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
   imageBase64: string | null;
   imageMediaType: string;
   imageUrl: string | null;
-  sendReply: (text: string) => Promise<void>;
+  sendReply: (text: string) => Promise<boolean>;
   sendEscalacion: (text: string) => Promise<void>;
 }) {
   // Deduplicar
@@ -296,18 +555,23 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
 
   const insertData: any = { plataforma, from_id: fromId, from_name: fromName, mensaje: mensajeGuardado, estado: "pendiente", wa_message_id: msgId };
   if (imageUrl) insertData.imagen_url = imageUrl;
-  await supabase.from("mensajes_publico").insert(insertData);
+  const { data: insertedRow } = await supabase.from("mensajes_publico").insert(insertData).select("id").single();
+  const miRowId = insertedRow?.id;
 
   // Debounce
   await new Promise(r => setTimeout(r, 2000));
 
-  const { data: masNuevos } = await supabase
+  // ¿Soy el mensaje pendiente más reciente de esta conversación? Si llegó uno más nuevo mientras esperaba,
+  // dejo que la invocación de ESE mensaje sea la que procese y combine todo — evita que dos invocaciones
+  // concurrentes se cancelen mutuamente (antes: si había 2+ pendientes TODAS las invocaciones abortaban
+  // y la conversación quedaba sin ninguna respuesta).
+  const { data: masReciente } = await supabase
     .from("mensajes_publico").select("id")
     .eq("from_id", fromId).eq("plataforma", plataforma).eq("estado", "pendiente")
     .gt("created_at", new Date(Date.now() - 1800000).toISOString())
-    .order("created_at", { ascending: false }).limit(2);
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
 
-  if (masNuevos && masNuevos.length > 1) return;
+  if (masReciente && miRowId && masReciente.id !== miRowId) return;
 
   const { data: pendientes } = await supabase
     .from("mensajes_publico").select("id, mensaje")
@@ -321,14 +585,41 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
   const { data: historial } = await supabase
     .from("mensajes_publico").select("mensaje, respuesta")
     .eq("from_id", fromId).eq("plataforma", plataforma).eq("estado", "respondido")
-    .eq("es_respuesta_manual", false)
+    // Postgres: NULL != false, así que un .eq("es_respuesta_manual", false) estricto
+    // excluye también las filas viejas donde esa columna quedó en NULL (nunca se seteó explícitamente)
+    .or("es_respuesta_manual.eq.false,es_respuesta_manual.is.null")
     .gt("created_at", seisHorasAtras)
     .order("created_at", { ascending: false }).limit(5);
 
   const { data: cursos } = await supabase
-    .from("cursos").select("nombre, estado, fecha_inicio, fecha_fin, arancel, cupos_max, descripcion, instructor, linea_negocio, desc_colegio, recurrencia, respaldo_institucional")
+    .from("cursos").select("nombre, estado, fecha_inicio, fecha_fin, arancel, cupos_max, descripcion, instructor_nombre, linea_negocio, descuento_colegio, recurrencia, respaldo_institucional")
     .in("estado", ["Convocatoria", "Inscripciones", "En curso"])
     .order("fecha_inicio", { ascending: true });
+
+  // Mensaje de puro emoji (🎉🔥👏 etc., escrito como texto, no una reacción real de Meta
+  // -- esas ya se manejan aparte en el webhook) -- mismo trato que una reacción: agradecer
+  // directo sin IA y sin la pregunta de cierre habitual, no es una consulta.
+  if (!imageBase64 && _esSoloEmojis(textoCombinado)) {
+    const gracias = "¡Muchas gracias por el apoyo! 🙌";
+    await sendReply(gracias);
+    if (idsPendientes.length > 0) {
+      await supabase.from("mensajes_publico").update({ respuesta: gracias, estado: "respondido" }).in("id", idsPendientes);
+    }
+    return;
+  }
+
+  // Respuesta directa sin IA para preguntas puntuales de cupos/precio con un curso identificado
+  // sin ambigüedad. Solo aplica a mensajes de texto (una imagen siempre necesita razonamiento).
+  if (!imageBase64) {
+    const directa = _tryRespuestaDirectaCurso(textoCombinado, cursos ?? []);
+    if (directa) {
+      await sendReply(directa);
+      if (idsPendientes.length > 0) {
+        await supabase.from("mensajes_publico").update({ respuesta: directa, estado: "respondido" }).in("id", idsPendientes);
+      }
+      return;
+    }
+  }
 
   const { data: publicaciones } = await supabase
     .from("publicaciones").select("plataforma, tipo, tema, caption, fecha_publicacion, url")
@@ -372,6 +663,17 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
 
   const siteContent = await fetchWebContent("https://metanoiasmx.com/");
 
+  const limite = await chequearLimiteIA(supabase);
+  if (limite.bloqueado) {
+    console.warn("Bot pausado por límite de IA:", limite.mensaje);
+    await sendReply("En este momento no puedo responder automáticamente. El equipo se va a comunicar con vos en breve. 😊");
+    await sendEscalacion(`⚠️ Bot ${plataforma} pausado — ${limite.mensaje}. Mensaje de ${fromName} sin responder por IA: "${texto}"`);
+    if (idsPendientes.length > 0) {
+      await supabase.from("mensajes_publico").update({ respuesta: "[Bot pausado — límite de IA alcanzado]", estado: "pendiente" }).in("id", idsPendientes);
+    }
+    return;
+  }
+
   const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -400,6 +702,18 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
 
   const aiData = await aiRes.json();
   const rawResp: string = aiData.content?.[0]?.text ?? "";
+
+  if (aiData.usage) {
+    try {
+      await supabase.from("ia_uso").insert({
+        funcion: "agente-mensajes", modelo: aiData.model || null,
+        input_tokens: aiData.usage.input_tokens || 0, output_tokens: aiData.usage.output_tokens || 0,
+        cache_creation_input_tokens: aiData.usage.cache_creation_input_tokens || 0,
+        cache_read_input_tokens: aiData.usage.cache_read_input_tokens || 0,
+        organizacion_id: limite.organizacionId,
+      });
+    } catch (_) {}
+  }
 
   if (!rawResp) {
     console.error("Claude devolvió respuesta vacía:", JSON.stringify(aiData).slice(0, 300));
@@ -447,7 +761,11 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
     }
   } catch (_) {}
 
-  await sendReply(respuesta);
+  const entregado = await _enviarRespuestaCompleta(sendReply, respuesta, plataforma);
+  if (!entregado) {
+    console.error(`No se pudo entregar la respuesta completa a ${fromName} por ${plataforma}`);
+    await sendEscalacion(`⚠️ La respuesta del bot a ${fromName} por ${plataforma === "whatsapp" ? "WhatsApp" : plataforma === "instagram" ? "Instagram DM" : "Facebook Messenger"} no se pudo entregar completa (falló el envío). Revisar la conversación manualmente.`);
+  }
 
   if (idsPendientes.length > 0) {
     const estadoFinal = escalado ? "escalado" : cerrado ? "cerrado" : "respondido";
@@ -458,7 +776,10 @@ async function procesarMensaje({ supabase, fromId, fromName, texto, plataforma, 
 }
 
 // ── Helpers de envío ──────────────────────────────────────────────────────────
-async function sendWA(to: string, text: string): Promise<void> {
+// Devuelven boolean (éxito real de entrega) -- antes eran void y un fallo de la API
+// (ej. texto que supera el límite de caracteres de Messenger/Instagram) quedaba solo
+// en el log del servidor, mientras la conversación se marcaba igual como "respondido".
+async function sendWA(to: string, text: string): Promise<boolean> {
   const token = Deno.env.get("META_WA_TOKEN");
   try {
     const res = await fetch(WA_API, {
@@ -477,30 +798,74 @@ async function sendWA(to: string, text: string): Promise<void> {
     if (!res.ok) {
       const err = await res.text();
       console.error(`sendWA error [→${to}] ${res.status}:`, err.slice(0, 200));
+      return false;
     }
+    return true;
   } catch (e) {
     console.error("sendWA fetch error:", (e as Error).message);
+    return false;
   }
 }
 
-async function sendMessenger(recipientId: string, text: string, pageId: string, token: string, isInstagram = false): Promise<void> {
+async function sendMessenger(recipientId: string, text: string, pageId: string, token: string, isInstagram = false): Promise<boolean> {
   const base = isInstagram ? "https://graph.instagram.com" : "https://graph.facebook.com";
-  const res = await fetch(`${base}/v21.0/${pageId}/messages`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      recipient: { id: recipientId },
-      message: { text },
-      messaging_type: "RESPONSE",
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    console.error(`sendMessenger error [${pageId}→${recipientId}]:`, err);
+  try {
+    const res = await fetch(`${base}/v21.0/${pageId}/messages`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        recipient: { id: recipientId },
+        message: { text },
+        messaging_type: "RESPONSE",
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      console.error(`sendMessenger error [${pageId}→${recipientId}]:`, err);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("sendMessenger fetch error:", (e as Error).message);
+    return false;
   }
+}
+
+// Divide un texto largo en partes que respetan el límite de caracteres de la
+// plataforma (Instagram/Messenger rechazan un solo mensaje muy largo -- WhatsApp
+// tolera mucho más, ~4096). Corta en el borde de párrafo/línea/espacio más cercano
+// por debajo del límite para no partir una palabra a la mitad.
+function _splitMensaje(texto: string, maxLen: number): string[] {
+  if (texto.length <= maxLen) return [texto];
+  const partes: string[] = [];
+  let resto = texto;
+  while (resto.length > maxLen) {
+    let corte = resto.lastIndexOf("\n\n", maxLen);
+    if (corte < maxLen * 0.4) corte = resto.lastIndexOf("\n", maxLen);
+    if (corte < maxLen * 0.4) corte = resto.lastIndexOf(" ", maxLen);
+    if (corte < maxLen * 0.4) corte = maxLen;
+    partes.push(resto.slice(0, corte).trim());
+    resto = resto.slice(corte).trim();
+  }
+  if (resto) partes.push(resto);
+  return partes;
+}
+
+// Envía un texto completo, partiéndolo en varios mensajes si hace falta. Devuelve
+// false si alguna parte no se pudo entregar (para poder escalar en vez de dar
+// la conversación por respondida en silencio).
+async function _enviarRespuestaCompleta(sendReply: (t: string) => Promise<boolean>, texto: string, plataforma: string): Promise<boolean> {
+  const maxLen = plataforma === "whatsapp" ? 3500 : 900;
+  const partes = _splitMensaje(texto, maxLen);
+  let ok = true;
+  for (const parte of partes) {
+    const enviado = await sendReply(parte);
+    if (!enviado) ok = false;
+  }
+  return ok;
 }
 
 async function downloadMedia(mediaId: string, token: string): Promise<{ buffer: Uint8Array; mimeType: string }> {
@@ -553,9 +918,9 @@ function buildSistema(cursos: any[], publicaciones: any[], fromName: string, pla
         const partes = [
           `• ${c.nombre} [${c.estado}]`,
           `  Inicio: ${fmtFecha(c.fecha_inicio)} — Fin: ${fmtFecha(c.fecha_fin)}`,
-          `  Arancel: ${c.arancel ? "$" + Number(c.arancel).toLocaleString("es-AR") : "a consultar"}${c.desc_colegio ? ` (descuento Colmedsa: ${c.desc_colegio}%)` : ""}`,
+          `  Arancel: ${c.arancel ? "$" + Number(c.arancel).toLocaleString("es-AR") : "a consultar"}${c.descuento_colegio ? ` (descuento Colmedsa: ${c.descuento_colegio}%)` : ""}`,
           `  Cupos máximos: ${c.cupos_max ?? "a confirmar"}`,
-          c.instructor ? `  Instructor: ${c.instructor}` : null,
+          c.instructor_nombre ? `  Instructor: ${c.instructor_nombre}` : null,
           c.linea_negocio ? `  Línea: ${c.linea_negocio}` : null,
           c.respaldo_institucional ? `  Respaldo: ${c.respaldo_institucional}` : null,
           c.descripcion ? `  Descripción completa: ${c.descripcion.slice(0, 1200)}` : null,
