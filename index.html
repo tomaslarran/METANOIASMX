@@ -5197,7 +5197,10 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   <div style="border-top:1px solid var(--b);margin:14px 0;padding-top:14px">
     <div style="font-size:11px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Datos fiscales</div>
     <div class="form-grid-2">
-      <div class="fg"><label class="fl">CUIT</label><input class="fi" id="p-cuit" type="text" placeholder="20-12345678-9"></div>
+      <div class="fg"><label class="fl">CUIT</label>
+        <div style="display:flex;gap:6px"><input class="fi" id="p-cuit" type="text" placeholder="20-12345678-9" style="flex:1;min-width:0"><button type="button" class="btn btn-g" id="p-arca-btn" onclick="provCompletarARCA()" style="white-space:nowrap" title="Trae razón social, domicilio y condición de IVA del padrón de ARCA">🔎 Completar con ARCA</button></div>
+        <div id="p-arca-msg" style="font-size:11px;color:var(--tx3);margin-top:4px;line-height:1.4"></div>
+      </div>
       <div class="fg"><label class="fl">Condición IVA</label>
         <select class="fs" id="p-condicion-iva">
           <option value="">Sin definir</option>
@@ -12153,6 +12156,7 @@ function editProveedor(id){
   const p=proveedores.find(p=>p.id===id);if(!p)return;
   document.getElementById("prov-edit-id").value=id;
   document.getElementById("modal-prov-title").textContent="Editar Proveedor";
+  document.getElementById("p-arca-msg").textContent="";
   document.getElementById("p-nombre").value=p.nombre||"";
   document.getElementById("p-tipo").value=p.tipo||"Empresa";
   document.getElementById("p-esp").value=p.especialidad||"";
@@ -12172,6 +12176,36 @@ function editProveedor(id){
   document.getElementById("p-banco").value=p.banco_cuenta||"";
   document.getElementById("p-titular").value=p.titular_cuenta||"";
   openModal("modal-proveedor");
+}
+
+// Completa la ficha con el padrón de ARCA (función arca-padron). Solo rellena lo que está vacío; si la condición de IVA o el nombre difieren, lo avisa sin pisar.
+async function provCompletarARCA(){
+  const cuit=(document.getElementById("p-cuit").value||"").replace(/\D/g,"");
+  const msg=document.getElementById("p-arca-msg"),btn=document.getElementById("p-arca-btn");
+  if(cuit.length!==11){msg.style.color="var(--red,#EF4444)";msg.textContent="Escribí un CUIT de 11 dígitos.";return}
+  btn.disabled=true;msg.style.color="var(--tx3)";msg.textContent="Consultando ARCA…";
+  try{
+    const r=await fetch(`${SB}/functions/v1/arca-padron`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken||KEY}`},body:JSON.stringify({cuit})});
+    const d=await r.json().catch(()=>({}));
+    if(r.status===404||(!r.ok&&!d.error)){throw new Error("La función arca-padron todavía no está desplegada en Supabase.")}
+    if(!d.ok){throw new Error(d.error||"ARCA no devolvió datos")}
+    const set=(id,v)=>{const el=document.getElementById(id);if(el&&!String(el.value||"").trim()&&v){el.value=v;return true}return false};
+    const avisos=[];
+    set("p-nombre",d.razon_social);
+    set("p-domicilio",d.domicilio);set("p-cp",d.cp);
+    const pe=document.getElementById("p-provincia");if(pe&&!pe.value&&d.provincia&&[...pe.options].some(o=>o.value===d.provincia))pe.value=d.provincia;
+    const ci=document.getElementById("p-condicion-iva");
+    if(ci&&d.condicion_iva){if(!ci.value)ci.value=d.condicion_iva;else if(ci.value!==d.condicion_iva)avisos.push(`⚠️ ARCA informa ${d.condicion_iva.replace("_"," ")} y la ficha dice ${ci.value.replace("_"," ")}`)}
+    const nom=document.getElementById("p-nombre").value.trim();
+    if(nom&&d.razon_social&&nom.toUpperCase()!==d.razon_social.toUpperCase())avisos.push(`Razón social en ARCA: ${d.razon_social}`);
+    const nt=document.getElementById("p-notas");
+    const linea=`ARCA ${new Date().toLocaleDateString("es-AR")}: ${d.razon_social} · ${d.estado_clave} · ${d.tipo_persona}${d.monotributo_categoria?" · "+d.monotributo_categoria:""} · act. principal: ${d.actividad_principal||"—"} — PENDIENTE DE CHEQUEAR`;
+    nt.value=((nt.value||"").replace(/\n?ARCA \d{1,2}\/\d{1,2}\/\d{4}:.*$/s,"").trim()+"\n"+linea).trim();
+    if(d.estado_clave&&d.estado_clave!=="ACTIVO")avisos.push(`⚠️ El CUIT figura ${d.estado_clave} en ARCA`);
+    msg.style.color=avisos.length?"var(--amber,#F59E0B)":"var(--green,#10B981)";
+    msg.textContent="✓ "+d.razon_social+" · "+(d.condicion_iva||"sin IVA/monotributo activo").replace("_"," ")+(avisos.length?" — "+avisos.join(" · "):"")+" · Revisá y guardá.";
+  }catch(e){msg.style.color="var(--red,#EF4444)";msg.textContent=e.message}
+  finally{btn.disabled=false}
 }
 
 async function saveProveedor(){
@@ -14320,7 +14354,7 @@ async function loadBancoMovimientos() {
   try {
     const mes = document.getElementById("conc-mes")?.value || "";
     let url = `banco_movimientos?sociedad=eq.${concSociedad}&order=fecha.desc`;
-    if (mes) url += `&fecha=gte.${mes}-01&fecha=lte.${mes}-31`;
+    if (mes) url += `&fecha=gte.${mes}-01&fecha=lte.${_finMes(mes)}`;
     bancMovimientos = await sb(url);
   } catch (_) { bancMovimientos = []; }
 }
@@ -14823,7 +14857,7 @@ async function concLimpiarMovimientos() {
   if (!confirm(msg)) return;
   try {
     let url = `banco_movimientos?sociedad=eq.${concSociedad}`;
-    if (mes) url += `&fecha=gte.${mes}-01&fecha=lte.${mes}-31`;
+    if (mes) url += `&fecha=gte.${mes}-01&fecha=lte.${_finMes(mes)}`;
     await sb(url, { method: "DELETE" });
     toast("Movimientos eliminados", "ok");
     renderConciliacion();
@@ -30457,6 +30491,7 @@ async function desmarcarImportadoFinnegans(id){
 // Reglas (verificadas contra el simulador): base = pagos del mes + este pago; inscriptos descuentan el monto no sujeto, no inscriptos no;
 // % fijo o, si el % es 0, escala mensual; a retener = total − retenido antes en el mes; si es menor al mínimo no se retiene.
 // ══════════════════════════════════════════════════════════════════════
+function _finMes(m){const a=parseInt(m.slice(0,4),10),b=parseInt(m.slice(5,7),10);return m+"-"+String(new Date(a,b,0).getDate()).padStart(2,"0")}
 let rg830Conceptos=[],rg830Escala=[],_rg830Cargado=false,_mopPrev={base:0,ret:0};
 async function cargarRG830(){
   if(_rg830Cargado)return;
@@ -30507,7 +30542,7 @@ async function _opDetalleRet(op){
     const cu=String(op.cuit||"").replace(/\D/g,""),mes=String(op.fecha_pago||"").slice(0,7);
     let prevBase=0,prevRet=0;
     if(mes&&cu.length===11){
-      const ops=await sb(`ordenes_pago?sociedad=eq.${op.sociedad||"SUDES"}&codigo_sicore=eq.${cod}&fecha_pago=gte.${mes}-01&fecha_pago=lte.${mes}-31&select=id,cuit,base_retencion,monto_retencion,created_at`);
+      const ops=await sb(`ordenes_pago?sociedad=eq.${op.sociedad||"SUDES"}&codigo_sicore=eq.${cod}&fecha_pago=gte.${mes}-01&fecha_pago=lte.${_finMes(mes)}&select=id,cuit,base_retencion,monto_retencion,created_at`);
       ops.filter(o=>o.id!==op.id&&(!op.created_at||String(o.created_at)<String(op.created_at))&&String(o.cuit||"").replace(/\D/g,"")===cu)
          .forEach(o=>{prevBase+=parseFloat(o.base_retencion)||0;prevRet+=parseFloat(o.monto_retencion)||0;});
     }
@@ -30543,8 +30578,8 @@ async function _mopCargarPrevios(cod){
   const fecha=document.getElementById("mop-fecha").value||today();
   if(!cod||cuit.length!==11)return;
   const mes=fecha.slice(0,7);
-  try{
-    const ops=await sb(`ordenes_pago?sociedad=eq.${c.sociedad||"SUDES"}&codigo_sicore=eq.${parseInt(cod,10)}&fecha_pago=gte.${mes}-01&fecha_pago=lte.${mes}-31&select=comprobante_id,cuit,base_retencion,monto_retencion`);
+    try{
+    const ops=await sb(`ordenes_pago?sociedad=eq.${c.sociedad||"SUDES"}&codigo_sicore=eq.${parseInt(cod,10)}&fecha_pago=gte.${mes}-01&fecha_pago=lte.${_finMes(mes)}&select=comprobante_id,cuit,base_retencion,monto_retencion`);
     ops.filter(o=>o.comprobante_id!==compId&&String(o.cuit||"").replace(/\D/g,"")===cuit).forEach(o=>{_mopPrev.base+=parseFloat(o.base_retencion)||0;_mopPrev.ret+=parseFloat(o.monto_retencion)||0;});
   }catch(e){}
 }
