@@ -817,11 +817,6 @@ async function sendMessenger(recipientId: string, text: string, pageId: string, 
   // ver comentario en el webhook) solo funciona contra graph.facebook.com. Se deja el
   // parámetro por si en el futuro hace falta volver a distinguir.
   const base = "https://graph.facebook.com";
-  // DEBUG TEMPORAL (26 Nov 2026) -- diagnóstico del error "Cannot parse access token":
-  // loguea el largo y los extremos del token sin exponer el valor completo, para
-  // confirmar si lo guardado en el secret quedó completo o se corrompió al pegarlo.
-  // Sacar esta línea en cuanto el token de Instagram vuelva a andar.
-  console.log(`[DEBUG token] isInstagram=${isInstagram} pageId=${pageId} len=${token?.length ?? 0} inicio="${token?.slice(0, 8)}" fin="${token?.slice(-8)}"`);
   try {
     const res = await fetch(`${base}/v21.0/${pageId}/messages`, {
       method: "POST",
