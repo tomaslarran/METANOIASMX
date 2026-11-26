@@ -46,9 +46,11 @@ serve(async (req) => {
       }
 
     } else if (plataforma === "instagram" || plataforma === "facebook") {
-      // Instagram DM e Facebook Messenger usan endpoint, page ID y token distintos (igual que en agente-mensajes)
+      // Instagram DM e Facebook Messenger usan page ID y token distintos, pero el mismo
+      // host: el token de Instagram vigente (SUAT, ver nota en agente-mensajes) solo
+      // funciona contra graph.facebook.com, no contra graph.instagram.com.
       const isIG = plataforma === "instagram";
-      const base = isIG ? "https://graph.instagram.com" : "https://graph.facebook.com";
+      const base = "https://graph.facebook.com";
       const pageId = isIG ? IG_PAGE_ID : FB_PAGE_ID;
       const pageToken = isIG ? Deno.env.get("META_ACCESS_TOKEN")! : Deno.env.get("META_FB_PAGE_TOKEN")!;
       const res = await fetch(`${base}/v21.0/${pageId}/messages`, {
