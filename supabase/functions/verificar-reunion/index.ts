@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+﻿import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const cors = {
@@ -19,7 +19,57 @@ function parsearAnalisis(rawText: string): any {
   return JSON.parse(txt);
 }
 
-async function analizarConClaude(transcripcionTexto: string, anthropicKey: string): Promise<any> {
+// Chequea el límite mensual de tokens de IA de la organización y del usuario.
+async function chequearLimiteIA(supabase: any, email: string | null) {
+  const inicioMes = new Date();
+  inicioMes.setUTCDate(1);
+  inicioMes.setUTCHours(0, 0, 0, 0);
+  const inicioMesISO = inicioMes.toISOString();
+  const renuevaMes = new Date(inicioMes);
+  renuevaMes.setUTCMonth(renuevaMes.getUTCMonth() + 1);
+  const renuevaStr = renuevaMes.toLocaleDateString("es-AR", { day: "2-digit", month: "long", timeZone: "America/Argentina/Salta" });
+
+  let usuario: any = null;
+  if (email) {
+    const { data } = await supabase.from("usuarios").select("id,organizacion_id,limite_tokens_mensual").ilike("email", email).maybeSingle();
+    usuario = data;
+  }
+  let organizacionId: string | null = usuario?.organizacion_id ?? null;
+  let organizacion: any = null;
+  if (organizacionId) {
+    const { data } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").eq("id", organizacionId).maybeSingle();
+    organizacion = data;
+  } else {
+    const { data } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").limit(1).maybeSingle();
+    organizacion = data;
+    organizacionId = organizacion?.id ?? null;
+  }
+
+  if (organizacion?.limite_tokens_mensual) {
+    const { data: usoOrg } = await supabase.from("ia_uso").select("input_tokens,output_tokens,cache_creation_input_tokens,cache_read_input_tokens").eq("organizacion_id", organizacionId).gte("created_at", inicioMesISO);
+    const totalOrg = (usoOrg || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0) + (r.cache_creation_input_tokens || 0) + (r.cache_read_input_tokens || 0), 0);
+    if (totalOrg >= organizacion.limite_tokens_mensual) {
+      return { bloqueado: true, motivo: "organizacion", mensaje: `Se alcanzó el límite mensual de uso de IA de la organización. Se renueva el ${renuevaStr}. Pedile a un admin que amplíe el plan.`, usuarioId: usuario?.id ?? null, organizacionId };
+    }
+  }
+  if (usuario?.limite_tokens_mensual) {
+    const { data: usoUser } = await supabase.from("ia_uso").select("input_tokens,output_tokens,cache_creation_input_tokens,cache_read_input_tokens").eq("usuario_id", usuario.id).gte("created_at", inicioMesISO);
+    const totalUser = (usoUser || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0) + (r.cache_creation_input_tokens || 0) + (r.cache_read_input_tokens || 0), 0);
+    if (totalUser >= usuario.limite_tokens_mensual) {
+      return { bloqueado: true, motivo: "usuario", mensaje: `Alcanzaste tu límite mensual personal de uso de IA. Se renueva el ${renuevaStr}. Pedile a un admin que te amplíe el límite.`, usuarioId: usuario.id, organizacionId };
+    }
+  }
+  return { bloqueado: false, motivo: null as string | null, mensaje: null as string | null, usuarioId: usuario?.id ?? null, organizacionId };
+}
+
+async function analizarConClaude(transcripcionTexto: string, anthropicKey: string, supabase?: any, userEmail?: string | null): Promise<any> {
+  let limite: any = null;
+  if (supabase) {
+    limite = await chequearLimiteIA(supabase, userEmail ?? null);
+    if (limite.bloqueado) {
+      return { resumen: limite.mensaje, temas_tratados: [], decisiones: [], tareas_extraidas: [], proximos_pasos: [] };
+    }
+  }
   const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -51,7 +101,7 @@ Formato exacto:
 
 Si el transcript está vacío o es incomprensible, devolvé el JSON con campos vacíos.`,
       messages: [
-        { role: "user", content: `TRANSCRIPT:\n\n${transcripcionTexto.slice(0, 60000)}` },
+        { role: "user", content: `TRANSCRIPT:\n\n${transcripcionTexto.slice(0, 150000)}` },
       ],
     }),
   });
@@ -64,6 +114,17 @@ Si el transcript está vacío o es incomprensible, devolvé el JSON con campos v
   // Si Claude devuelve un error en el cuerpo (ej: overloaded, invalid_request)
   if (claudeData.type === "error") {
     throw new Error(`Claude error: ${claudeData.error?.message || JSON.stringify(claudeData.error)}`);
+  }
+  if (supabase && claudeData.usage) {
+    try {
+      await supabase.from("ia_uso").insert({
+        funcion: "verificar-reunion", modelo: claudeData.model || null,
+        input_tokens: claudeData.usage.input_tokens || 0, output_tokens: claudeData.usage.output_tokens || 0,
+        cache_creation_input_tokens: claudeData.usage.cache_creation_input_tokens || 0,
+        cache_read_input_tokens: claudeData.usage.cache_read_input_tokens || 0,
+        organizacion_id: limite?.organizacionId ?? null, usuario_id: limite?.usuarioId ?? null,
+      });
+    } catch (_) {}
   }
   const rawText = claudeData.content?.[0]?.text ?? "{}";
   try {
@@ -105,7 +166,7 @@ serve(async (req) => {
 
     // ── Modo re-análisis: usar transcripción ya guardada, llamar solo a Claude ──
     if (reanalizar && reunion.transcripcion) {
-      const analisis = await analizarConClaude(reunion.transcripcion, ANTHROPIC_KEY);
+      const analisis = await analizarConClaude(reunion.transcripcion, ANTHROPIC_KEY, supabase, user.email ?? null);
       if (!analisis) throw new Error("Claude no pudo parsear la respuesta como JSON. Revisá los logs de la función.");
 
       await supabase.from("reuniones").update({
@@ -126,71 +187,80 @@ serve(async (req) => {
       }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
 
-    // Si ya está lista y no es re-análisis, devolver resultado cacheado
-    if (reunion.estado === "listo") {
+    // ── Normalizar audios: reuniones del flujo viejo (un solo assembly_job_id) ──
+    let audios: any[] = Array.isArray(reunion.audios) ? [...reunion.audios] : [];
+    if (!audios.length && reunion.assembly_job_id && reunion.estado !== "listo") {
+      audios.push({ id: "original", nombre: "Audio original", estado: "processing", job_id: reunion.assembly_job_id, subido_en: reunion.created_at, legacy: true });
+    }
+    const resumenAudios = () => audios.map((a) => ({ id: a.id, nombre: a.nombre, estado: a.estado, error: a.error || null }));
+
+    // ── Consultar en AssemblyAI cada audio que sigue procesando ──
+    const letrasHablantes = ["A","B","C","D","E","F","G","H","I","J"];
+    const participantes: string[] = reunion.participantes || [];
+    let nuevoCompletado = false;
+    for (const a of audios) {
+      if (a.estado !== "processing" || !a.job_id) continue;
+      const aaiRes = await fetch(`https://api.assemblyai.com/v2/transcript/${a.job_id}`, { headers: { "Authorization": ASSEMBLY_KEY } });
+      const aaiData = await aaiRes.json();
+      if (aaiData.status === "error") {
+        a.estado = "error"; a.error = aaiData.error || "Error en AssemblyAI";
+      } else if (aaiData.status === "completed") {
+        const utterances: { speaker: string; text: string; start: number; end: number }[] = aaiData.utterances || [];
+        const speakerMap: Record<string, string> = {};
+        utterances.forEach((u) => {
+          if (!speakerMap[u.speaker]) {
+            const idx = letrasHablantes.indexOf(u.speaker);
+            speakerMap[u.speaker] = participantes[idx] ?? `Hablante ${u.speaker}`;
+          }
+        });
+        a.diarizada = utterances.map((u) => ({ speaker: speakerMap[u.speaker] || `Hablante ${u.speaker}`, texto: u.text, inicio_ms: u.start, fin_ms: u.end }));
+        a.texto = utterances.length
+          ? utterances.map((u) => `${speakerMap[u.speaker] || `Hablante ${u.speaker}`}: ${u.text}`).join("\n")
+          : (aaiData.text || "");
+        a.duracion_min = aaiData.audio_duration ? Math.round(aaiData.audio_duration / 60) : null;
+        a.estado = "completed";
+        nuevoCompletado = true;
+      }
+    }
+    if (reunion.audios !== undefined || audios.length) {
+      await supabase.from("reuniones").update({ audios }).eq("id", reunion_id);
+    }
+
+    const procesando = audios.some((a) => a.estado === "processing");
+    if (procesando) {
+      await supabase.from("reuniones").update({ estado: "procesando" }).eq("id", reunion_id);
+      return new Response(JSON.stringify({ estado: "procesando", audios: resumenAudios() }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    const completados = audios.filter((a) => a.estado === "completed");
+    if (audios.length && !completados.length) {
+      await supabase.from("reuniones").update({ estado: "error" }).eq("id", reunion_id);
+      return new Response(JSON.stringify({ estado: "error", error: audios.map((a) => a.error).filter(Boolean).join(" | ") || "Falló la transcripción", audios: resumenAudios() }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    // Ya estaba lista y no hay nada nuevo: devolver lo guardado
+    if (reunion.estado === "listo" && !nuevoCompletado) {
       return new Response(JSON.stringify({
-        estado: "listo",
-        resumen: reunion.resumen,
-        decisiones: reunion.decisiones,
-        tareas_extraidas: reunion.tareas_extraidas,
-        transcripcion_diarizada: reunion.transcripcion_diarizada,
-        duracion_min: reunion.duracion_min,
+        estado: "listo", resumen: reunion.resumen, decisiones: reunion.decisiones,
+        tareas_extraidas: reunion.tareas_extraidas, transcripcion_diarizada: reunion.transcripcion_diarizada,
+        duracion_min: reunion.duracion_min, audios: resumenAudios(),
       }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
+    if (!completados.length) throw new Error("La reunión no tiene audios");
 
-    if (!reunion.assembly_job_id) throw new Error("Sin job_id de AssemblyAI");
+    // ── Unir todos los audios completados, en orden ──
+    completados.sort((a, b) => String(a.subido_en || "").localeCompare(String(b.subido_en || "")));
+    const transcripcionTexto = completados.length === 1
+      ? completados[0].texto
+      : completados.map((a, i) => `--- Audio ${i + 1}: ${a.nombre} ---\n${a.texto}`).join("\n\n");
+    const transcripcionDiarizada = completados.flatMap((a, i) => (a.diarizada || []).map((u: any) => ({ ...u, audio: i + 1 })));
+    const duracionMin = completados.reduce((s, a) => s + (a.duracion_min || 0), 0) || null;
 
-    // Consultar estado en AssemblyAI
-    const aaiRes = await fetch(`https://api.assemblyai.com/v2/transcript/${reunion.assembly_job_id}`, {
-      headers: { "Authorization": ASSEMBLY_KEY },
-    });
-    const aaiData = await aaiRes.json();
-
-    if (aaiData.status === "error") {
-      await supabase.from("reuniones").update({ estado: "error" }).eq("id", reunion_id);
-      return new Response(JSON.stringify({ estado: "error", error: aaiData.error }), {
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
-    }
-
-    if (aaiData.status !== "completed") {
-      return new Response(JSON.stringify({ estado: "procesando" }), {
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
-    }
-
-    // ── Transcripción completa ──
-    const utterances: { speaker: string; text: string; start: number; end: number }[] = aaiData.utterances || [];
-    const letrasHablantes = ["A","B","C","D","E","F","G","H","I","J"];
-
-    const participantes: string[] = reunion.participantes || [];
-    const speakerMap: Record<string, string> = {};
-    utterances.forEach(u => {
-      if (!speakerMap[u.speaker]) {
-        const idx = letrasHablantes.indexOf(u.speaker);
-        speakerMap[u.speaker] = participantes[idx] ?? `Hablante ${u.speaker}`;
-      }
-    });
-
-    const transcripcionDiarizada = utterances.map(u => ({
-      speaker: speakerMap[u.speaker] || `Hablante ${u.speaker}`,
-      texto: u.text,
-      inicio_ms: u.start,
-      fin_ms: u.end,
-    }));
-
-    const transcripcionTexto = utterances.length
-      ? utterances.map(u => `${speakerMap[u.speaker] || `Hablante ${u.speaker}`}: ${u.text}`).join("\n")
-      : (aaiData.text || "");
-
-    const duracionMin = aaiData.audio_duration ? Math.round(aaiData.audio_duration / 60) : null;
-
-    // ── Análisis con Claude ──
-    const analisis = await analizarConClaude(transcripcionTexto, ANTHROPIC_KEY) ?? {
+    // ── Análisis con Claude sobre la transcripción completa ──
+    const analisis = await analizarConClaude(transcripcionTexto, ANTHROPIC_KEY, supabase, user.email ?? null) ?? {
       resumen: null, decisiones: [], tareas_extraidas: [], proximos_pasos: [], temas_tratados: [],
     };
 
-    // Guardar en DB
     await supabase.from("reuniones").update({
       transcripcion: transcripcionTexto,
       transcripcion_diarizada: transcripcionDiarizada,
@@ -210,6 +280,7 @@ serve(async (req) => {
       proximos_pasos: analisis.proximos_pasos,
       transcripcion_diarizada: transcripcionDiarizada,
       duracion_min: duracionMin,
+      audios: resumenAudios(),
     }), { headers: { ...cors, "Content-Type": "application/json" } });
 
   } catch (err) {

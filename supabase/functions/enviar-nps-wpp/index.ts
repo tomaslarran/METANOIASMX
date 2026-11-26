@@ -56,7 +56,11 @@ serve(async (req) => {
     const waPhone = formatWAPhone(alumno.telefono);
     if (!waPhone) { results.sin_telefono++; continue; }
 
-    const nombre = [alumno.nombre, alumno.apellido].filter(Boolean).join(" ") || "Alumno";
+    // WhatsApp rechaza parametros de plantilla con tabs/saltos de linea o 4+ espacios seguidos
+    // (error 132018) - saneamos por si el dato en la base viene sucio (ej. un tab pegado del Excel).
+    const sanear = (s: string) => s.replace(/[\t\n\r]+/g, " ").replace(/ {2,}/g, " ").trim();
+    const nombre = sanear(([alumno.nombre, alumno.apellido].filter(Boolean).join(" ") || "Alumno").slice(0, 60));
+    const cursoNombre = sanear((curso?.nombre || "el curso").slice(0, 100));
 
     try {
       const res = await fetch(WA_API, {
@@ -67,15 +71,20 @@ serve(async (req) => {
           to: waPhone,
           type: "template",
           template: {
-            name: "nps_post_curso",
-            language: { code: "es_AR" },
-            components: [{
-              type: "body",
-              parameters: [
-                { type: "text", text: nombre },
-                { type: "text", text: curso?.nombre || "el curso" },
-              ],
-            }],
+            // Personalizada con nombre del alumno + nombre del curso/evento — pendiente de
+            // aprobación de Meta (WhatsApp Manager). NO deployar esta función hasta que
+            // "nps_experiencia_metanoia" figure como Activa/Aprobada, o los envios van a fallar.
+            name: "nps_experiencia_metanoia",
+            language: { code: "es" },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  { type: "text", parameter_name: "nombre", text: nombre },
+                  { type: "text", parameter_name: "curso", text: cursoNombre },
+                ],
+              },
+            ],
           },
         }),
       });
@@ -94,7 +103,9 @@ serve(async (req) => {
         results.sent++;
       } else {
         results.failed++;
-        results.errors.push(`${nombre}: ${data.error?.message || `HTTP ${res.status}`}`);
+        const detalle = data.error?.error_data?.details;
+        console.error("Meta NPS send error, respuesta completa:", JSON.stringify(data.error || data));
+        results.errors.push(`${nombre}: ${data.error?.message || `HTTP ${res.status}`}${detalle ? ` — ${detalle}` : ""}`);
       }
     } catch (e) {
       results.failed++;

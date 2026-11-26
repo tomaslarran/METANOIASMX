@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const cors = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": "https://tomaslarran.github.io",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
@@ -12,6 +12,17 @@ const LI_V2 = "https://api.linkedin.com/v2";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+
+  // Auth: JWT del usuario o CRON_SECRET
+  const authHeader = req.headers.get("Authorization");
+  const cronSecret = req.headers.get("x-cron-secret");
+  const validCron = cronSecret && cronSecret === Deno.env.get("CRON_SECRET");
+  if (!validCron) {
+    if (!authHeader) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
+    const supabaseAuth = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
+    const { data: { user } } = await supabaseAuth.auth.getUser();
+    if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
+  }
 
   try {
     const TOKEN = Deno.env.get("LINKEDIN_ACCESS_TOKEN")!;

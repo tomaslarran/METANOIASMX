@@ -1,0 +1,212 @@
+[
+ {
+  "id": "5892d663-f7e0-40fc-bd0a-b89fa26d6f84",
+  "nombre": "TELECOM ARGENTINA S.A.",
+  "cuit": "30-63945373-8"
+ },
+ {
+  "id": "aec9f7d3-98df-4196-9f8a-531d0408f896",
+  "nombre": "MAGNETO S.R.L",
+  "cuit": "30-70774618-8"
+ },
+ {
+  "id": "7af10a06-5261-4b05-b0ea-639d4206cbd9",
+  "nombre": "Finnegans S.A.",
+  "cuit": "30-69843145-4"
+ },
+ {
+  "id": "dbf6e9a3-549e-4252-9daa-7c9e41b3a47b",
+  "nombre": "HELLBERG ALEJANDRA DANIELA",
+  "cuit": "27-27336710-7"
+ },
+ {
+  "id": "079e9ec5-315b-4585-bd2c-e83a58e95bb6",
+  "nombre": "OPCION SEGUROS S.A.",
+  "cuit": "30-71435879-7"
+ },
+ {
+  "id": "b2f65268-4b5a-4bb9-abee-3c67c0a45fbb",
+  "nombre": "OSDE",
+  "cuit": "30-54674125-3"
+ },
+ {
+  "id": "5c0c1dc2-e03c-4163-9b3c-94407287266c",
+  "nombre": "IPS SANITARIOS (ARCO HECTOR BENITO)",
+  "cuit": "20-16451090-6"
+ },
+ {
+  "id": "9a6aaab9-ed0d-4bdd-895f-7adecfd4af5d",
+  "nombre": "AUREN SALTA SAS",
+  "cuit": "30-71694783-8"
+ },
+ {
+  "id": "ad45989c-68f3-41a1-91fd-0912af650f35",
+  "nombre": "M.LOGISTICA Y DISTRIBUCION S.R.L.",
+  "cuit": "30-70833459-2"
+ },
+ {
+  "id": "db23e2f1-bbfd-43a4-9c40-04a37f0fcfdd",
+  "nombre": "San Roque",
+  "cuit": "23-12433014-9"
+ },
+ {
+  "id": "7da33556-9021-4b7d-b450-2da897641e57",
+  "nombre": "Q SEGURIDAD S.R.L.",
+  "cuit": "30-71519308-2"
+ },
+ {
+  "id": "43c5a793-fbde-4213-ad87-bff59a9787ef",
+  "nombre": "BANCO MACRO SOCIEDAD ANONIMA",
+  "cuit": "30-50001008-4"
+ },
+ {
+  "id": "678d9291-53fa-437e-a89b-5c8556b7e6bf",
+  "nombre": "SUDES SAS",
+  "cuit": "30-71699117-9"
+ },
+ {
+  "id": "3b9ac58d-94c4-4a64-b812-dd720bf0872b",
+  "nombre": "LAJAR S.R.L.",
+  "cuit": "30-71170017-6"
+ },
+ {
+  "id": "b1a16d24-8cea-40fb-a70e-0284f008f54c",
+  "nombre": "Operadora de Estaciones de Servicios S.A.",
+  "cuit": "30-67877449-5"
+ },
+ {
+  "id": "b61b1e5e-2061-4132-a202-494c787d2641",
+  "nombre": "ROBLES GABRIEL ALFREDO",
+  "cuit": "20-22146497-5"
+ },
+ {
+  "id": "442b6717-d387-41ec-80fe-c12c0022243e",
+  "nombre": "EL MILAGRO SH DE LARRAN CARLOS ALBERTO Y",
+  "cuit": "30-63226115-9"
+ },
+ {
+  "id": "ab8120cd-c19b-4e82-a018-9da031f97107",
+  "nombre": "CONSEJO PROFESIONAL DE CIENCIAS ECONOMICAS DE SALTA",
+  "cuit": "30-51768409-7"
+ },
+ {
+  "id": "f41907cd-cb9f-4bc5-b9b2-5327205e8304",
+  "nombre": "CIGI MOTOS SA",
+  "cuit": "30-71859574-2"
+ },
+ {
+  "id": "cd021e0d-9c4f-4dff-b225-7de0b4ba5581",
+  "nombre": "Viaterra SRL",
+  "cuit": "30-71876960-0"
+ },
+ {
+  "id": "995264bd-7227-4105-b060-983905009f05",
+  "nombre": "FERTEL SA",
+  "cuit": "30-55771740-0"
+ },
+ {
+  "id": "a958af4e-4f2f-436f-bc22-b8a2c12fb9be",
+  "nombre": "Kosmos Cosmetica SAS",
+  "cuit": "30-71755070-2"
+ },
+ {
+  "id": "c7ed5f99-87e6-444e-a10c-dde0f4e8eec5",
+  "nombre": "CUMBRES SRL",
+  "cuit": "30-71192583-6"
+ },
+ {
+  "id": "486b127f-96dd-4b0b-a95d-c14026b81f89",
+  "nombre": "PROMEC SERVICIOS SRL",
+  "cuit": "30-71153765-8"
+ },
+ {
+  "id": "2c9c2273-c5b3-490d-a3cb-34762aa3ba68",
+  "nombre": "COMPAÑIA DE SEGUROS LA MERCANTIL ANDINA S.A.",
+  "cuit": "30-50003691-1"
+ },
+ {
+  "id": "e107b5b1-1bfc-467b-a265-ee8017d88fe3",
+  "nombre": "LABORATORIO BEK S.R.L.",
+  "cuit": "33-71687041-9"
+ },
+ {
+  "id": "b7faf8cd-e276-429f-b95e-016b1bb96be6",
+  "nombre": "NARDINI S.R.L.",
+  "cuit": "30-71535273-3"
+ },
+ {
+  "id": "35fab277-1236-4e92-821d-86da3be6b3dd",
+  "nombre": "FULL SERVICE S.R.L.",
+  "cuit": "30-70822514-9"
+ },
+ {
+  "id": "8fa0f0c4-8544-47fa-aefe-93c02f6ce402",
+  "nombre": "AUTOPISTAS DEL SOL S A",
+  "cuit": "30-67723711-9"
+ },
+ {
+  "id": "8f4847e7-86b4-4330-9290-1870c6813b6e",
+  "nombre": "CENTRAL TUCUMANO S.A.",
+  "cuit": "30-70938825-4"
+ },
+ {
+  "id": "943d5f32-e2af-44df-9c39-3a6106fe881c",
+  "nombre": "DISTRIBUIDORA ENERGY NORTE SRL",
+  "cuit": "30-71247653-9"
+ },
+ {
+  "id": "bb8c8b2a-2a87-453b-890e-24147f4e2f27",
+  "nombre": "AUTOPISTAS URBANAS S. A.",
+  "cuit": "30-57487647-4"
+ },
+ {
+  "id": "76e14a14-9a2f-4d5c-b940-9e7a34abc743",
+  "nombre": "GLOBALWEAR S.A.S.",
+  "cuit": "30-71685474-0"
+ },
+ {
+  "id": "668b1364-efc3-4832-be1f-a4232ad9f206",
+  "nombre": "INDUSTRIAS FRIGORIFICAS NORTE GRANDE S A",
+  "cuit": "30-71020433-7"
+ },
+ {
+  "id": "30608e78-9588-4440-bf68-a260e394f8d5",
+  "nombre": "CENCOSUD S.A.",
+  "cuit": "30-59036076-3"
+ },
+ {
+  "id": "faeeb2fe-be24-4239-a6bf-0d6d8ed24de7",
+  "nombre": "TRANSPAC S.R.L.",
+  "cuit": "30-71445374-9"
+ },
+ {
+  "id": "57c6190c-5973-48b6-8e90-873efde37d84",
+  "nombre": "SERDECO S.A.S.",
+  "cuit": "30-71754131-2"
+ },
+ {
+  "id": "1cb4ffd1-6c64-4cc0-b38f-3c6cc2d09053",
+  "nombre": "TRIUNFO COOPERATIVA DE SEGUROS LIMITADA",
+  "cuit": "30-50006577-6"
+ },
+ {
+  "id": "26ebc288-c7f6-44ad-afaa-23a3e9333063",
+  "nombre": "RUTAS SUR ATLANTICO S.A.",
+  "cuit": "30-71945419-0"
+ },
+ {
+  "id": "7f130197-ce96-43d2-ab22-1c2229ad823d",
+  "nombre": "Volkswagen Express Salta",
+  "cuit": "30-70833650-1"
+ },
+ {
+  "id": "0cf90d0c-ea7e-4539-b3cc-9b0fdd890607",
+  "nombre": "Aerolíneas Argentinas S.A",
+  "cuit": "30-64140555-4"
+ },
+ {
+  "id": "177428bd-46ae-4268-8b87-689336b8b656",
+  "nombre": "ZURICH ARGENTINA Compañia de Seguros S.A.",
+  "cuit": "30-50004977-0"
+ }
+]

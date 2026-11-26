@@ -1,7 +1,50 @@
-const corsHeaders = {
+﻿const corsHeaders = {
   "Access-Control-Allow-Origin": "https://tomaslarran.github.io",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Chequea el límite mensual de tokens de IA de la organización y del usuario.
+async function chequearLimiteIA(supabase: any, email: string | null) {
+  const inicioMes = new Date();
+  inicioMes.setUTCDate(1);
+  inicioMes.setUTCHours(0, 0, 0, 0);
+  const inicioMesISO = inicioMes.toISOString();
+  const renuevaMes = new Date(inicioMes);
+  renuevaMes.setUTCMonth(renuevaMes.getUTCMonth() + 1);
+  const renuevaStr = renuevaMes.toLocaleDateString("es-AR", { day: "2-digit", month: "long", timeZone: "America/Argentina/Salta" });
+
+  let usuario: any = null;
+  if (email) {
+    const { data } = await supabase.from("usuarios").select("id,organizacion_id,limite_tokens_mensual").ilike("email", email).maybeSingle();
+    usuario = data;
+  }
+  let organizacionId: string | null = usuario?.organizacion_id ?? null;
+  let organizacion: any = null;
+  if (organizacionId) {
+    const { data } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").eq("id", organizacionId).maybeSingle();
+    organizacion = data;
+  } else {
+    const { data } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").limit(1).maybeSingle();
+    organizacion = data;
+    organizacionId = organizacion?.id ?? null;
+  }
+
+  if (organizacion?.limite_tokens_mensual) {
+    const { data: usoOrg } = await supabase.from("ia_uso").select("input_tokens,output_tokens,cache_creation_input_tokens,cache_read_input_tokens").eq("organizacion_id", organizacionId).gte("created_at", inicioMesISO);
+    const totalOrg = (usoOrg || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0) + (r.cache_creation_input_tokens || 0) + (r.cache_read_input_tokens || 0), 0);
+    if (totalOrg >= organizacion.limite_tokens_mensual) {
+      return { bloqueado: true, motivo: "organizacion", mensaje: `Se alcanzó el límite mensual de uso de IA de la organización. Se renueva el ${renuevaStr}. Pedile a un admin que amplíe el plan.`, usuarioId: usuario?.id ?? null, organizacionId };
+    }
+  }
+  if (usuario?.limite_tokens_mensual) {
+    const { data: usoUser } = await supabase.from("ia_uso").select("input_tokens,output_tokens,cache_creation_input_tokens,cache_read_input_tokens").eq("usuario_id", usuario.id).gte("created_at", inicioMesISO);
+    const totalUser = (usoUser || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0) + (r.cache_creation_input_tokens || 0) + (r.cache_read_input_tokens || 0), 0);
+    if (totalUser >= usuario.limite_tokens_mensual) {
+      return { bloqueado: true, motivo: "usuario", mensaje: `Alcanzaste tu límite mensual personal de uso de IA. Se renueva el ${renuevaStr}. Pedile a un admin que te amplíe el límite.`, usuarioId: usuario.id, organizacionId };
+    }
+  }
+  return { bloqueado: false, motivo: null as string | null, mensaje: null as string | null, usuarioId: usuario?.id ?? null, organizacionId };
+}
 
 function toBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
@@ -22,22 +65,50 @@ Deno.serve(async (req) => {
   if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
 
   try {
-    const { url, tipo } = await req.json();
-    if (!url) throw new Error("url requerida");
+    const { url, tipo, archivo_base64, content_type } = await req.json();
+    if (!url && !archivo_base64) throw new Error("url o archivo requerido");
 
-    const apiKey = Deno.env.get("anthropic_api_key") || Deno.env.get("ANTHROPIC_API_KEY");
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY") || Deno.env.get("anthropic_api_key");
     if (!apiKey) throw new Error("Sin API key");
     const h = { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" };
 
     const model = "claude-sonnet-4-6";
 
-    const fileRes = await fetch(url);
-    if (!fileRes.ok) throw new Error("No se pudo obtener archivo: " + fileRes.status);
-    const ct = fileRes.headers.get("content-type") || "";
-    const base64 = toBase64(await fileRes.arrayBuffer());
-    const isPdf = ct.includes("pdf") || url.toLowerCase().endsWith(".pdf");
+    const limite = await chequearLimiteIA(supabaseAuth, user.email ?? null);
+    if (limite.bloqueado) {
+      return new Response(JSON.stringify({ error: limite.mensaje }), { status: 402, headers: corsHeaders });
+    }
 
-    const promptText = tipo === "vep"
+    let ct = "", base64 = "", isPdf = false;
+    if (archivo_base64) {
+      ct = String(content_type || "");
+      base64 = String(archivo_base64);
+      isPdf = ct.includes("pdf");
+    } else {
+      const fileRes = await fetch(url);
+      if (!fileRes.ok) throw new Error("No se pudo obtener archivo: " + fileRes.status);
+      ct = fileRes.headers.get("content-type") || "";
+      base64 = toBase64(await fileRes.arrayBuffer());
+      isPdf = ct.includes("pdf") || url.toLowerCase().endsWith(".pdf");
+    }
+
+    const promptText = tipo === "recibo"
+      ? "Sos un experto en comprobantes argentinos. Analizá este RECIBO emitido por un proveedor (puede ser un escaneo, estar rotado o repetido como original y duplicado) y devolvé UNICAMENTE un JSON (sin markdown, sin texto extra):\n" +
+        "{\n" +
+        "  \"numero\": \"PPPP-NNNNNNNN (punto de venta y número del recibo, ej: 0087-00088300)\",\n" +
+        "  \"fecha\": \"YYYY-MM-DD\",\n" +
+        "  \"proveedor\": \"razon social del EMISOR\",\n" +
+        "  \"cuit_emisor\": \"XX-XXXXXXXX-X\",\n" +
+        "  \"concepto\": \"descripcion breve de lo cobrado\",\n" +
+        "  \"total\": numero,\n" +
+        "  \"sociedad\": \"SUDES o POINTERS o null\",\n" +
+        "  \"cuit_receptor\": \"CUIT de a quien se emite o null\"\n" +
+        "}\n\nREGLAS:\n" +
+        "1. Emisor = quien cobra (encabezado). Receptor = el pagador (campo Apellido y Nombre / Cliente).\n" +
+        "2. sociedad: CUIT 30-71699117-9 o nombre SUDES → SUDES; CUIT 30-71696585-2 o POINTERS → POINTERS; si no, null.\n" +
+        "3. total: importe total del recibo, número puro sin puntos de miles (1234.56). Si el recibo está repetido (original y duplicado) no lo sumes dos veces.\n" +
+        "4. null si no encontrás el campo."
+      : tipo === "vep"
       ? "Sos un experto en impuestos argentinos (ARCA/AFIP). Analiza este VEP (Volante Electrónico de Pago) y devuelve UNICAMENTE un JSON (sin markdown, sin texto extra):\n" +
         "{\n" +
         "  \"tipo_impuesto\": \"IVA|IIBB|Ganancias|Autonomos|Otro\",\n" +
@@ -104,6 +175,19 @@ Deno.serve(async (req) => {
 
     const text = data.content?.[0]?.text?.trim() ?? "";
     const clean = text.replace(/^```[a-z]*\n?/,"").replace(/\n?```$/,"").trim();
+
+    if (data.usage) {
+      try {
+        await supabaseAuth.from("ia_uso").insert({
+          funcion: "leer-factura", modelo: data.model || model || null,
+          input_tokens: data.usage.input_tokens || 0, output_tokens: data.usage.output_tokens || 0,
+          cache_creation_input_tokens: data.usage.cache_creation_input_tokens || 0,
+          cache_read_input_tokens: data.usage.cache_read_input_tokens || 0,
+          organizacion_id: limite.organizacionId, usuario_id: limite.usuarioId,
+        });
+      } catch (_) {}
+    }
+
     return new Response(clean, { headers:{...corsHeaders,"Content-Type":"application/json"} });
   } catch(e) {
     return new Response(JSON.stringify({error:(e as Error).message}), { status:500, headers:corsHeaders });

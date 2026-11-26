@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+﻿import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const cors = {
@@ -335,6 +335,116 @@ Virasoro, Juárez Muas, De la Vega, Passarell, Jaime, Van Cawlaert — validan c
 MSP representa 76% ingresos Año 1. Meta: <40% dependencia. 4 cursos/mes desde 2027 baja MSP a ~23% Año 4.
 `;
 
+// ── Estándar de calidad de documentos (modelo Congreso, agosto 2026) ─────────
+const ESTANDAR_DOCUMENTOS = `
+## 8. PAQUETE COMPLETO DE DISEÑO — Estándar de calidad Metanoia
+
+Cuando una sesión de diseño avanza lo suficiente (bloques A+B+C+D+E confirmados: necesidad, público, objetivos, nivel, equipamiento), ofrecé proactivamente generar el PAQUETE COMPLETO: 4 entregables que juntos cubren todo lo que el equipo necesita para avanzar a PEV2.
+
+Este estándar surge de la sesión de diseño del Curso de Nutrición Enteral (agosto 2026), presentada en congreso y validada como modelo de calidad institucional. Usarlo como piso mínimo en toda sesión de diseño que llegue a ese nivel de detalle.
+
+---
+
+### Los 4 entregables del paquete
+
+**1. Ficha de Diseño PEV1** (tipo: ficha_diseno)
+Código interno obligatorio: MSX-PEV1-[SIGLA DOMINIO]-[AÑO]-[NNN] (ej: MSX-PEV1-NE-2026-001)
+Campos que NO pueden faltar:
+- **Naturaleza del pedido**: ¿es del convenio MSP, externa al convenio, comercial, EMC? ¿tiene instrumento contractual propio?
+- **Quién solicitó**: nombre, cargo, institución
+- **Brecha de desempeño documentada**: no "queremos aprender X" sino "indicadores negativos en Y en población Z"
+- **Línea de negocio Metanoia**: MSP/Convenio | Colmedsa | Comercial | EMC-Gratuito
+- **Estimación económica**: arancel/participante × participantes estimados = subtotal, con flag explícito de qué falta confirmar (impuestos, forma de pago, instrumento legal)
+- **Nota de consolidación** si el documento integra múltiples sesiones o versiones
+- **Recuadro ⚠️ ALCANCE** obligatorio: "Este documento consolida un borrador PEV1. Todo el contenido clínico requiere validación antes de usarse con participantes reales."
+- Todos los ítems sin dato confirmado marcados como [a confirmar] — nunca inventar
+
+**2. Contenido Teórico Asincrónico** (tipo: contenido_teorico)
+Para cursos con módulos teóricos previos a la jornada práctica.
+Estructura por módulo:
+- Número, título, duración estimada, formato (ej: video + PDF de referencia)
+- Objetivo de aprendizaje cubierto
+- Contenido desarrollado en prosa (no solo títulos — escribir el texto base que sirva para grabar los videos y como material de lectura)
+- Examen de autocomprobación al cierre (4–6 preguntas de opción múltiple con correcta identificada)
+Recuadro ⚠️ ALCANCE al inicio: "Redactado con IA a partir del marco acordado. Requiere revisión clínica línea por línea, especialmente cifras, umbrales y protocolos locales."
+Código: [código_interno]-TEO
+
+**3. Manual de Estaciones — Guía del Facilitador** (tipo: manual_facilitador)
+- Vista consolidada al inicio: tabla resumen de TODAS las estaciones (nombre, equipo, nivel Metanoia, Miller, grupos simultáneos, duración, readiness 🟢🟡🔴)
+- Nota logística crítica si hay equipo compartido entre estaciones (ej: "KERi™ es unidad única, compartida entre E-B y E-D — la tabla de rotación garantiza que nunca coincidan")
+- Por estación: encuadre completo (equipo, nivel, grupos, duración, ratio instructor), objetivo, materiales con cantidades, secuencia interna con timing (tabla pasos), instrumento de evaluación, errores comunes a anticipar
+Código: [código_interno]-EST
+
+**4. Planilla de Cronograma y Rotaciones** (tipo: cronograma)
+La planilla completa tiene 6 hojas:
+1. Carátula + índice de contenido
+2. Tabla maestra de rotación: N turnos × N grupos — VALIDADA para que ningún equipo único esté en dos grupos simultáneamente. Columna "equipo único en uso" por turno.
+3. Cronograma hora a hora de la jornada: acreditación → prebriefing plenario → turnos con pausas → almuerzo/reset → debriefing PEARLS → cierre administrativo
+4. Matriz de estaciones con readiness (🟢🟡🔴) y notas de equipamiento
+5. Checklist de insumos fungibles por jornada con columna "Cantidad real (completar tras piloto)"
+6. Planificación de jornadas múltiples si aplica: tracker con fecha, hospital/institución, participantes, estado, arancel unitario y subtotal — ⚠️ marcando lo que falta confirmar
+
+---
+
+### Cuándo ofrecer el paquete completo
+- Al completar ≥ bloques A+B+C+D+E del intake
+- Al confirmar estructura de estaciones (cantidad, duración, equipo por estación)
+- Proactivamente, sin esperar que lo pidan: "Tenemos suficiente información para armar el paquete completo de 4 documentos — ¿los generamos?"
+- Se genera de a uno (el usuario elige el orden) o en secuencia recomendada: ficha → contenido teórico → manual → planilla
+
+### Marcadores de calidad obligatorios en TODO documento del paquete
+- ⚠️ Recuadro de alcance al inicio con las limitaciones del borrador y qué requiere validación
+- 🟢🟡🔴 Readiness por estación/equipo donde corresponda
+- Código interno en formato MSX-PEV1-[SIGLA]-[AÑO]-[NNN]
+- Nota al pie: "Borrador generado con apoyo de IA. No aprobado para uso. Requiere curaduría (Dirección Médica) y aprobación PEV plenaria."
+- Items sin dato confirmado → placeholder [a confirmar], nunca un número inventado
+- Implicancias contractuales o económicas → siempre declarar qué está confirmado y qué falta definir
+`;
+
+// Chequea el límite mensual de tokens de IA de la organización y del usuario.
+// email=null (funciones sin JWT, ej. webhooks/cron) asume la única organización activa (single-tenant hoy).
+async function chequearLimiteIA(supabase: any, email: string | null) {
+  const inicioMes = new Date();
+  inicioMes.setUTCDate(1);
+  inicioMes.setUTCHours(0, 0, 0, 0);
+  const inicioMesISO = inicioMes.toISOString();
+  const renuevaMes = new Date(inicioMes);
+  renuevaMes.setUTCMonth(renuevaMes.getUTCMonth() + 1);
+  const renuevaStr = renuevaMes.toLocaleDateString("es-AR", { day: "2-digit", month: "long", timeZone: "America/Argentina/Salta" });
+
+  let usuario: any = null;
+  if (email) {
+    const { data } = await supabase.from("usuarios").select("id,organizacion_id,limite_tokens_mensual").ilike("email", email).maybeSingle();
+    usuario = data;
+  }
+  let organizacionId: string | null = usuario?.organizacion_id ?? null;
+  let organizacion: any = null;
+  if (organizacionId) {
+    const { data } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").eq("id", organizacionId).maybeSingle();
+    organizacion = data;
+  } else {
+    const { data } = await supabase.from("organizaciones").select("id,limite_tokens_mensual").limit(1).maybeSingle();
+    organizacion = data;
+    organizacionId = organizacion?.id ?? null;
+  }
+
+  if (organizacion?.limite_tokens_mensual) {
+    const { data: usoOrg } = await supabase.from("ia_uso").select("input_tokens,output_tokens,cache_creation_input_tokens,cache_read_input_tokens").eq("organizacion_id", organizacionId).gte("created_at", inicioMesISO);
+    const totalOrg = (usoOrg || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0) + (r.cache_creation_input_tokens || 0) + (r.cache_read_input_tokens || 0), 0);
+    if (totalOrg >= organizacion.limite_tokens_mensual) {
+      return { bloqueado: true, motivo: "organizacion", mensaje: `Se alcanzó el límite mensual de uso de IA de la organización. Se renueva el ${renuevaStr}. Pedile a un admin que amplíe el plan.`, usuarioId: usuario?.id ?? null, organizacionId };
+    }
+  }
+  if (usuario?.limite_tokens_mensual) {
+    const { data: usoUser } = await supabase.from("ia_uso").select("input_tokens,output_tokens,cache_creation_input_tokens,cache_read_input_tokens").eq("usuario_id", usuario.id).gte("created_at", inicioMesISO);
+    const totalUser = (usoUser || []).reduce((s: number, r: any) => s + (r.input_tokens || 0) + (r.output_tokens || 0) + (r.cache_creation_input_tokens || 0) + (r.cache_read_input_tokens || 0), 0);
+    if (totalUser >= usuario.limite_tokens_mensual) {
+      return { bloqueado: true, motivo: "usuario", mensaje: `Alcanzaste tu límite mensual personal de uso de IA. Se renueva el ${renuevaStr}. Pedile a un admin que te amplíe el límite.`, usuarioId: usuario.id, organizacionId };
+    }
+  }
+  return { bloqueado: false, motivo: null as string | null, mensaje: null as string | null, usuarioId: usuario?.id ?? null, organizacionId };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
@@ -345,7 +455,7 @@ serve(async (req) => {
   if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
 
   try {
-    const { message, historial = [], canal = "panel", archivos = [] } = await req.json();
+    const { message, historial = [], canal = "panel", archivos = [], curso_id = null } = await req.json();
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -362,14 +472,38 @@ serve(async (req) => {
       instructores.data = inst.data ?? [];
     }
 
+    // Cuando la charla está vinculada a un curso ya existente, traemos su ficha completa
+    // (metadata + instructores + inscriptos + materiales) para que el agente la tenga como contexto.
+    let cursoContexto: any = null;
+    if (curso_id) {
+      const [cursoRow, cursoInst, inscrip, cursoMat] = await Promise.all([
+        supabase.from("cursos").select("*").eq("id", curso_id).maybeSingle(),
+        supabase.from("curso_instructores").select("rol,instructores(nombre,apellido,email,especialidad)").eq("curso_id", curso_id),
+        supabase.from("inscripciones").select("estado,monto,cuotas,alumnos(nombre,apellido)").eq("curso_id", curso_id).neq("estado", "Baja"),
+        supabase.from("curso_materiales").select("cantidad_estimada,inventario(nombre,stock_actual)").eq("curso_id", curso_id),
+      ]);
+      if (cursoRow.data) {
+        cursoContexto = {
+          curso: cursoRow.data,
+          instructores_asignados: cursoInst.data ?? [],
+          inscriptos_count: (inscrip.data ?? []).length,
+          inscriptos: inscrip.data ?? [],
+          materiales: cursoMat.data ?? [],
+        };
+      }
+    }
+
     const hoy = new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Salta" });
 
     const conciso = canal === "whatsapp"
       ? "Respondé MUY CONCISO (máximo 4 párrafos cortos, sin tablas largas). Usá emojis para claridad."
       : "Podés usar listas y formato markdown. Sé detallado cuando diseñes cursos o conduzcas intakes.";
 
-    const sistema = `## ROL
-Sos el agente de cursos de Metanoia SMX. Asistís al equipo interno (instructores, coordinadores y dirección) en la consulta, diseño y planificación de cursos de simulación médica. Hoy es ${hoy}.
+    // Bloque 100% estático — nunca cambia entre requests, así se puede cachear del lado de
+    // Anthropic (cache_control más abajo). "Hoy es X" y "conciso" quedan afuera a propósito:
+    // si entraran acá invalidarían el cache en cada día/canal distinto.
+    const sistemaEstatico = `## ROL
+Sos el agente de cursos de Metanoia SMX. Asistís al equipo interno (instructores, coordinadores y dirección) en la consulta, diseño y planificación de cursos de simulación médica.
 
 ## CONTEXTO
 Operás dentro del panel de gestión interno de Metanoia SMX (Salta, Argentina). Los usuarios son miembros del equipo, no el público general. Tenés acceso a los cursos actuales, instructores, inventario de equipos, marcos normativos y estrategia de oferta. Todo lo que producís es para uso interno — borradores, fichas, respuestas a consultas del equipo.
@@ -383,7 +517,7 @@ Tenés cuatro modos de operación:
 
 **3. DISEÑO** — Ayudar a estructurar cursos usando la metodología institucional (niveles de simulación, categorías de objetivos, nomenclatura Metanoia).
 
-**4. INTAKE GUIADO** — Cuando alguien quiere diseñar un curso nuevo, conducís el proceso bloque por bloque (A→J) según la Plantilla de Diseño, una cosa a la vez, hasta producir la Ficha de Diseño PEV1. Preguntá explícitamente si quieren entrar en este modo antes de empezar.
+**4. INTAKE GUIADO** — Cuando alguien quiere diseñar un curso nuevo, conducís el proceso bloque por bloque (A→J) según la Plantilla de Diseño, una cosa a la vez, hasta producir la Ficha de Diseño PEV1. Preguntá explícitamente si quieren entrar en este modo antes de empezar. Desde que confirman, reportá el avance en cada respuesta con PROGRESO_JSON (ver sección 7 más abajo) — esto alimenta el panel de progreso del proyecto en el panel.
 
 **5. ESCENARIO CLÍNICO** — Cuando el usuario pida "generame un escenario", "armá un caso clínico de...", "quiero proyectar un escenario de...", u otras variantes: diseñás el caso clínico completo con texto explicativo Y al final del mensaje incluís este bloque JSON exacto (sin modificar el formato de las etiquetas):
 <ESCENARIO_JSON>{"titulo":"Título del escenario","paciente":{"nombre":"Nombre Apellido","edad":55,"sexo":"M","motivo":"Motivo de consulta en primera persona"},"svs":{"fc":"90","ta":"120/80","fr":"18","sat":"98","temp":"37.0"},"presentacion":"Descripción clínica detallada del estado actual del paciente al ingreso...","antecedentes":"HTA, DBT, tabaquismo...","hallazgos":["Hallazgo al examen 1","Hallazgo al examen 2","Hallazgo al examen 3"],"sonido":"normal","preguntas":["¿Cuál es el diagnóstico más probable?","¿Cuál es el primer paso del manejo?","¿Qué estudios solicitás?"],"nivel":"intermedio","urgencia":"amarilla"}</ESCENARIO_JSON>
@@ -400,10 +534,12 @@ Tipos disponibles y cuándo ofrecerlos:
 - **planilla_prebrief** → Guía de prebriefing. Datos: {curso, duracion_min, secciones:[{titulo,contenido,puntos:[]}], nota_pie}
 - **planilla_debrief** → Planilla PEARLS de debriefing. Datos: {curso, duracion_min, secciones:[{sigla,titulo,descripcion,preguntas:[],puntos_clave:[]}], nota_pie}
 - **instrumento_eval** → Instrumento de evaluación (OSATS/GOALS/checklist). Datos: {curso, estacion, tipo, items:[{n,descripcion,escala}], escala_descripcion:{}, nota_formativa, nota_pie}
+- **contenido_teorico** → Programa teórico asincrónico (videos + PDFs) con módulos desarrollados en prosa y examen por módulo. Ofrecer cuando hay componente teórico previo a la jornada práctica. Datos: {codigo_interno, modulos:[{numero,titulo,duracion_estimada,formato,objetivo,secciones:[{titulo,contenido}],examen:[{n,pregunta,opciones:[],correcta}]}], nota_alcance, nota_pie}
 - **examen** → Evaluación teórica. Datos: {titulo, preguntas:[{n,pregunta,opciones:[],correcta}], nota_pie}
 - **consentimiento** → Consentimiento de grabación. Datos: {curso, fecha, texto_consentimiento, puntos_clave:[], nota_pie}
 
 REGLAS de documentos:
+- CONSISTENCIA NUMÉRICA OBLIGATORIA: usá siempre los mismos valores ya confirmados en la conversación (cupos/participantes, horas cátedra, cantidad de grupos, fechas, duración de estaciones, etc.) — NUNCA los recalcules, redondees ni inventes un valor distinto al que ya se acordó con el instructor. Si un documento necesita un dato que todavía no se confirmó, dejalo como placeholder explícito (ej. "[definir]") en vez de inventar un número.
 - Solo UN <DOCUMENTO_JSON> por respuesta — nunca dos.
 - Para cronograma: SIEMPRE preguntá el formato antes de generar; no generes hasta recibir respuesta.
 - Cuando completes ≥3 bloques del intake guiado, ofrecé proactivamente la ficha_diseno.
@@ -411,6 +547,23 @@ REGLAS de documentos:
 - Siempre incluir en datos: nota_pie: "Borrador generado con apoyo de IA. No aprobado para uso. Requiere curaduría (Dirección Médica) y aprobación PEV plenaria."
 - Completá el campo datos lo más posible con la información disponible en la conversación.
 - Explicá el documento en texto antes del tag — el JSON no reemplaza la explicación.
+
+**7. PROGRESO DEL PROYECTO** — Mientras estés conduciendo un INTAKE GUIADO (modo 4), en CADA respuesta agregá al final del mensaje (después de cualquier otro bloque JSON) este tag:
+<PROGRESO_JSON>{"A":{"estado":"completo","resumen":"máx 8 palabras"},"B":{"estado":"en_curso","resumen":"..."}}</PROGRESO_JSON>
+Reglas del progreso:
+- Claves válidas: A, B, C, D, E, F, G, H, I, J (los bloques de la Plantilla de Diseño). Incluí solo los bloques que ya se tocaron en la conversación — no hace falta poner los 10 siempre.
+- estado: "pendiente" (mencionado pero sin datos confirmados) | "en_curso" (se está discutiendo ahora) | "completo" (el instructor confirmó el contenido del bloque).
+- resumen: máximo 8 palabras con el dato clave ya confirmado en ese bloque (ej: "Residentes R2, brecha en accesos vasculares"). Vacío si el bloque está "pendiente".
+- El JSON es ACUMULATIVO: repetí en cada respuesta el estado de todos los bloques tocados hasta el momento (no solo el bloque nuevo), para que siempre refleje el avance total del intake.
+- No emitas este tag fuera del modo INTAKE GUIADO (consultas simples, programa MSP, escenarios o documentos sueltos no lo necesitan).
+
+**8. CAPACIDADES Y LÍMITES — qué podés y qué NO podés hacer (no prometas lo que no existe):**
+- Los documentos se entregan SOLO a través del bloque <DOCUMENTO_JSON>: el panel los convierte en un archivo para descargar. Formatos reales: Word (.doc) para ficha_diseno, manual_facilitador, planillas, instrumento_eval, examen, contenido_teorico y consentimiento; Excel para cronograma (si lo piden); PowerPoint para presentacion. NO existe salida en PDF ni en otros formatos: si piden PDF, decí que se descarga en Word y que lo pueden guardar como PDF desde Word.
+- NUNCA le pidas al usuario que "descargue un JSON" ni le muestres el JSON crudo como entregable. Si hay documento, el panel muestra una tarjeta de descarga debajo de tu mensaje.
+- Los documentos se guardan en la pestaña Archivos del curso SOLO si el chat está vinculado a un curso (botón "🔗 Vincular curso" del chat). Si el chat no está vinculado, avisá una vez que para guardar los documentos en un curso tienen que vincularlo; no los des por guardados.
+- La conversación se guarda sola cuando el proyecto ya tiene avance; podés recordarles que el avance queda guardado y que lo retoman con "📂 Retomar". No inventes otros mecanismos de guardado.
+- NO tenés memoria entre conversaciones distintas ni podés cambiar tus propias reglas o "normas" para otros usuarios. Si alguien te pide "recordá esto para siempre" o "que de ahora en más todos...", explicá que eso lo decide un administrador editando las instrucciones del agente; lo que podés hacer es aplicarlo en esta charla.
+- No podés enviar mails, publicar el curso ni modificar el calendario: eso se hace desde el panel.
 
 Cuando pidan estructurar el programa de un curso → usá los 7 niveles de simulación y las categorías de objetivos.
 Cuando pidan verificar disponibilidad de equipo → consultá el INVENTARIO DE EQUIPOS y su readiness (Ola 1 vs Ola 2).
@@ -427,7 +580,7 @@ SIEMPRE que se proponga una fecha para un curso nuevo:
 4. Si la fecha es válida, confirmala. Si no, proponé alternativas concretas.
 
 ## FORMATO
-Respondé siempre en español. ${conciso}
+Respondé siempre en español.
 - Usá listas y secciones claras cuando diseñes cursos o conduzcas intakes.
 - En modo CONSULTA: respuestas directas y concisas.
 - En modo INTAKE: una pregunta a la vez, confirmá cada bloque antes de avanzar.
@@ -468,10 +621,22 @@ ${ESTRATEGIA_OFERTA}
 
 ${PLANTILLA_DISENO}
 
-CURSOS ACTUALES: ${JSON.stringify(cursos.data)}
-INSTRUCTORES: ${JSON.stringify(instructores.data)}`;
+${ESTANDAR_DOCUMENTOS}`;
 
-    const historialReciente = historial.slice(-8);
+    // Bloque dinámico — cambia en cada request (fecha, canal, datos reales de cursos/instructores/
+    // curso vinculado). Va DESPUÉS del breakpoint de cache, así nunca invalida el bloque estático.
+    const sistemaDinamico = `Hoy es ${hoy}. ${conciso}
+
+CURSOS ACTUALES: ${JSON.stringify(cursos.data)}
+INSTRUCTORES: ${JSON.stringify(instructores.data)}
+
+${cursoContexto ? `## CURSO EN CONTEXTO
+Esta conversación está vinculada al siguiente curso ya existente. Es el foco de la charla: usá estos datos reales (no los reinventes ni le pidas al usuario datos que ya están acá) al responder consultas, generar documentos o discutir cambios sobre este curso en particular.
+${JSON.stringify(cursoContexto, null, 2)}` : ""}`;
+
+    // Anthropic rechaza cualquier campo que no sea role/content en messages — el historial
+    // del frontend trae campos extra (nombre, escenario, progreso) para uso propio del panel.
+    const historialReciente = historial.slice(-8).map((h: any) => ({ role: h.role, content: h.content }));
 
     let userContent: any = message;
     if (archivos && archivos.length > 0) {
@@ -493,6 +658,13 @@ INSTRUCTORES: ${JSON.stringify(instructores.data)}`;
       userContent = contentBlocks;
     }
 
+    const limite = await chequearLimiteIA(supabase, user.email ?? null);
+    if (limite.bloqueado) {
+      return new Response(JSON.stringify({ respuesta: limite.mensaje }), {
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -503,7 +675,15 @@ INSTRUCTORES: ${JSON.stringify(instructores.data)}`;
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 4096,
-        system: sistema,
+        // Prompt caching (GA, sin beta header): el bloque estático (marcos normativos, inventario,
+        // programa MSP, plantilla de diseño — miles de tokens que nunca cambian) se cachea del lado
+        // de Anthropic. Las llamadas siguientes dentro de la ventana de cache pagan ~10% de esos
+        // tokens en vez del 100%. El bloque dinámico (fecha, cursos, instructores, curso vinculado)
+        // va sin cache_control, así nunca invalida el bloque estático.
+        system: [
+          { type: "text", text: sistemaEstatico, cache_control: { type: "ephemeral" } },
+          { type: "text", text: sistemaDinamico },
+        ],
         messages: [...historialReciente, { role: "user", content: userContent }],
       }),
     });
@@ -511,6 +691,22 @@ INSTRUCTORES: ${JSON.stringify(instructores.data)}`;
     const data = await res.json();
     if (data.type === "error") throw new Error(data.error?.message ?? "API error");
     const respuesta = data.content?.[0]?.text ?? "No pude generar una respuesta.";
+
+    if (data.usage) {
+      try {
+        // Con caching activo, input_tokens es SOLO el remanente sin cachear -- los tokens que
+        // vinieron de cache quedan en cache_creation_input_tokens/cache_read_input_tokens, dos
+        // campos separados. Si no se suman acá, el limite de IA y el desglose por funcion
+        // subestiman el uso real (el bloque estatico cacheado "desaparece" de la cuenta).
+        await supabase.from("ia_uso").insert({
+          funcion: "agente-cursos", modelo: data.model || null,
+          input_tokens: data.usage.input_tokens || 0, output_tokens: data.usage.output_tokens || 0,
+          cache_creation_input_tokens: data.usage.cache_creation_input_tokens || 0,
+          cache_read_input_tokens: data.usage.cache_read_input_tokens || 0,
+          organizacion_id: limite.organizacionId, usuario_id: limite.usuarioId,
+        });
+      } catch (_) {}
+    }
 
     return new Response(JSON.stringify({ respuesta }), {
       headers: { ...cors, "Content-Type": "application/json" },
