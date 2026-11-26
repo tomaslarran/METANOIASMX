@@ -376,12 +376,16 @@ serve(async (req) => {
     const fromId = messaging.sender.id as string;
     const msgId = messaging.message.mid as string;
 
-    // Obtener nombre del usuario. Instagram-scoped IDs (IGSID) solo se resuelven contra
-    // graph.instagram.com -- graph.facebook.com no los reconoce y devuelve sin "name",
-    // así que el bot se quedaba mudo mostrando el ID numérico en vez del nombre real.
+    // Obtener nombre del usuario. El token de Instagram vigente (26 Nov 2026 en adelante,
+    // generado como "token de usuario del sistema" vía Business Login/SUAT) es del
+    // ecosistema Facebook -- confirmado con pruebas reales: graph.facebook.com lo acepta,
+    // graph.instagram.com lo rechaza con "Cannot parse access token" (código 190).
+    // El token viejo (nativo de Instagram, vencido el 23/10/2026) sí necesitaba
+    // graph.instagram.com para resolver IDs de Instagram (IGSID) -- si en el futuro se
+    // vuelve a generar un token de ese tipo, esta rama hay que volver a invertirla.
     let fromName = fromId;
     try {
-      const nameBase = isIG ? "https://graph.instagram.com" : "https://graph.facebook.com";
+      const nameBase = "https://graph.facebook.com";
       const nameRes = await fetch(
         `${nameBase}/v21.0/${fromId}?fields=name,username&access_token=${apiToken}`
       );
@@ -809,7 +813,10 @@ async function sendWA(to: string, text: string): Promise<boolean> {
 }
 
 async function sendMessenger(recipientId: string, text: string, pageId: string, token: string, isInstagram = false): Promise<boolean> {
-  const base = isInstagram ? "https://graph.instagram.com" : "https://graph.facebook.com";
+  // El parámetro isInstagram ya no cambia el host: el token de Instagram vigente (SUAT,
+  // ver comentario en el webhook) solo funciona contra graph.facebook.com. Se deja el
+  // parámetro por si en el futuro hace falta volver a distinguir.
+  const base = "https://graph.facebook.com";
   try {
     const res = await fetch(`${base}/v21.0/${pageId}/messages`, {
       method: "POST",

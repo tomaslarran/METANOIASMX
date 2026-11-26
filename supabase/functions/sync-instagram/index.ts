@@ -8,7 +8,9 @@ const cors = {
 
 const IG_USER_ID = "17841470857318268"; // @metanoiasmx
 const FB_PAGE_ID = "478694861999786";   // Metanoiasme.ok
-const IG_BASE = "https://graph.instagram.com/v21.0";
+// El token de Instagram vigente (SUAT, ver nota en agente-mensajes) solo funciona contra
+// graph.facebook.com -- graph.instagram.com lo rechaza con "Cannot parse access token".
+const IG_BASE = "https://graph.facebook.com/v21.0";
 const FB_BASE = "https://graph.facebook.com/v21.0";
 
 serve(async (req) => {
