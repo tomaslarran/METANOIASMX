@@ -1583,17 +1583,19 @@ Pago del 13/08 ($1.358.192,50) = factura 0080-00364280 ($1.326.135,00) + ND A 00
 
 ## Fix (22 Nov 2026) — Auditoría de layout: botones ocultos en topbar/Cash Flow y mobile
 
-Pedido de Tomás: revisar a fondo el código por "cosas que no se ven" y "botones que se escapan" en el topbar y en Cash Flow, y lo mismo en mobile. Hallazgos (pendientes de corregir en esta misma sesión):
+Pedido de Tomás: revisar a fondo el código por "cosas que no se ven" y "botones que se escapan" en el topbar y en Cash Flow, y lo mismo en mobile. 3 auditorías en paralelo (topbar, Cash Flow, mobile general) + corrección de los 9 hallazgos:
 
-1. **`.topbar-right` sin wrap/scroll** — en anchos de escritorio intermedios (ventana no maximizada, zoom >100%) los botones más a la derecha del topbar (Actualizar, Nueva tarea, selector de persona) quedan recortados por `body{overflow-x:hidden}` sin ningún scroll posible. Solo hay un `display:none` para mobile (`@media max-width:768px`), nada para el rango intermedio.
-2. **`.cd-tabs` (sub-tabs de Cash Flow) sin wrap/scroll en desktop** — 8 tabs con etiquetas largas se desbordan en laptops comunes (1280-1400px); el `overflow-x:auto` solo existe dentro del media query mobile. Tabs como "Cuentas & Caja" y "Pendientes de pago" quedan inalcanzables.
-3. **`#btn-token-alert` no se oculta en mobile** — puede empujar al toggle de tema fuera del viewport en pantallas angostas cuando hay un token por vencer.
-4. **`.form-grid{grid-template-columns:1fr}` sin `!important`** — cuando se combina con un `style` inline de grid (8 ocurrencias en el archivo), el inline gana y el colapso a 1 columna en mobile nunca se aplica. Afecta directamente el modal de Orden de Pago en Cash Flow (3 grids) y un modal de Comunicaciones.
-5. **Formulario de Caja** (`#cuentas-panel-caja`, grid inline `1fr 1fr`) no está en la lista de selectores que colapsan a 1 columna en mobile.
-6. **Proyector fullscreen de escenarios clínicos** — cero media queries; grids de vitales (`repeat(5,1fr)`, fuente 38px) se cortan en mobile.
-7. **Debriefing** — formulario de cabecera (`1fr 1fr 1fr`) y fila de lista (`flex` sin wrap) sin adaptación mobile.
-8. **Competency Tracker** — fila de ítem sin `flex-wrap` junto a los pill-buttons de escala.
-9. **Libro Diario** — tabla de detalle de asiento sin wrapper `overflow-x:auto` (a diferencia de VEPs, que sí lo tiene).
+1. ✅ **Topbar en anchos intermedios** — en ventanas no maximizadas (notebook con sidebar, ~900-1150px) los botones de la derecha (Actualizar, Nueva tarea, selector de persona) quedaban recortados por `body{overflow-x:hidden}` sin scroll posible; solo había `display:none` para mobile puro. Fix: nuevo breakpoint `@media(max-width:1150px) and (min-width:769px)` que oculta el selector de persona (`#usel`) y los textos "Actualizar"/"Nueva tarea" (quedan solo los íconos) — se descartó wrappear (rompía el `margin-top` fijo del layout) o hacer scroll horizontal (clipeaba el dropdown de usuario, que es `position:absolute` y queda fuera de la caja).
+2. ✅ **`.cd-tabs` (sub-tabs de Cash Flow)** — ya estaba resuelto en `main` antes de este merge (overflow-x:auto aplicado también en desktop, no solo mobile). Sin acción.
+3. ✅ **`#btn-token-alert`** — agregado a la lista de botones que se ocultan en mobile (ya existe el aviso redundante en el Dashboard).
+4. ✅ **`.form-grid{grid-template-columns:1fr}` sin `!important`** — agregado. Arregla de una sola vez las 13 instancias de `class="form-grid"` + `style` inline en el archivo, incluido el modal de Orden de Pago (3 grids) en Cash Flow.
+5. ✅ **Formulario de Caja** — el grid inline (`#caja-form-grid` ahora) colapsa a 1 columna en mobile.
+6. ✅ **Proyector fullscreen de escenarios clínicos** — IDs nuevos (`#esc-top-grid`, `#esc-vitals-grid`, `#esc-body-grid`, `.esc-sv-val`) + reglas mobile: grids a 1 columna, vitales a 2 columnas, fuente de valores reducida.
+7. ✅ **Debriefing** — formulario de cabecera (`.dbrief-form-grid`) colapsa a 1 columna en mobile; fila de lista (`.dbrief-row`/`.dbrief-row-actions`) ahora permite wrap.
+8. ✅ **Competency Tracker** — fila de ítem (`.eval-item-row`): el label ya no se puede aplastar a 0px (`min-width:120px`) y el grupo de pill-buttons de la escala wrapea a una segunda línea en vez de desbordar (soluciona instrumentos con escalas largas tipo 1-10).
+9. ✅ **Libro Diario** — tabla de detalle de asiento envuelta en `overflow-x:auto` (mismo patrón que VEPs), con `min-width:420px` para que no se aplaste.
+
+Verificado: los 6 bloques `<script>` del archivo parsean sin errores de sintaxis (`new Function(...)` sobre cada uno).
 
 ---
 
