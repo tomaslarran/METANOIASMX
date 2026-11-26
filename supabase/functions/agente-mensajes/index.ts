@@ -37,9 +37,10 @@ async function sendEmailEscalacion(texto: string, supabase: any): Promise<void> 
       .from("notificaciones_config")
       .select("usuarios(email)")
       .eq("escal_bot_email", true);
-    let emails: string[] = (rows || []).map((r: any) => r.usuarios?.email).filter(Boolean);
-    // Fallback si nadie tiene el toggle activado aún
-    if (emails.length === 0) emails = ["tlarran@metanoiasmx.com"];
+    const emailsToggle: string[] = (rows || []).map((r: any) => r.usuarios?.email).filter(Boolean);
+    // El admin siempre recibe el aviso (escale o no haya nadie más con el toggle activado)
+    const adminEmail = Deno.env.get("ADMIN_EMAIL_ESCALACION");
+    const emails: string[] = Array.from(new Set([...(adminEmail ? [adminEmail] : []), ...emailsToggle]));
 
     const transporter = nodemailer.createTransport({
       host: Deno.env.get("SMTP_HOST"),
@@ -231,11 +232,17 @@ serve(async (req) => {
 
     // ── Flujo NPS por WhatsApp: nota → pregunta de seguimiento → datos faltantes + oferta ──
     if (msg.type === "text" && texto) {
+      // Una encuesta nunca respondida no puede quedar "pendiente" para siempre -- si pasaron
+      // más de 2 días sin respuesta, deja de interceptar los mensajes futuros del mismo
+      // teléfono (que a esa altura ya no tienen nada que ver con la encuesta) y el bot vuelve
+      // a responder consultas normales en vez de seguir pidiendo la nota.
+      const corteNPS = new Date(Date.now() - 2 * 86400000).toISOString();
       const { data: pendingNPS } = await supabase
         .from("nps_envios")
         .select("*")
         .eq("telefono", fromId)
         .in("estado", ["enviado", "pidiendo_nota", "esperando_comentario"])
+        .gte("created_at", corteNPS)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();

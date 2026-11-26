@@ -1559,6 +1559,46 @@ Pago del 13/08 ($1.358.192,50) = factura 0080-00364280 ($1.326.135,00) + ND A 00
 4. Control de **Cierre de mes** de septiembre (verificar todo en verde), valuación de inversiones y los asientos que defina María.
 5. Después: facturación real (IVA de los cursos, corte de Finnegans, enganche de la plataforma a SUDES), Libro IVA Ventas, rol `contable`, cuenta en dólares, cambio de dominio.
 
+---
+
+## Fix (22 Nov 2026) — agente-mensajes: NPS secuestrando conversaciones nuevas + repo desincronizado
+
+### Repo local vs. deploy real
+- ⚠️ El archivo `supabase/functions/agente-mensajes/index.ts` en la rama de mobile (`claude/mobile-presentation-improvements-rrqj1i`) estaba muy desactualizado respecto al código realmente deployado en Supabase (le faltaban `chequearLimiteIA`, `sendEmailEscalacion`, todo el flujo NPS por WhatsApp, los helpers de respuesta directa de cursos, etc. — todo esto ya corría en producción pero nunca se había copiado de vuelta al repo). Mismo patrón que ya pasó antes con esta función: se edita directo en el dashboard de Supabase y el cambio no vuelve al git.
+- ✅ Se sincronizó con el código live (pegado por Tomás) y luego se mergeó `main` sobre esa rama (22 Nov 2026) para traer todo lo de Bienes de uso / Libro Diario / TISH / etc. que faltaba.
+
+### Bug: NPS secuestraba mensajes nuevos sin relación con la encuesta
+- Síntoma reportado: un mensaje de WhatsApp nuevo ("queria saber sobre cursos disponibles") fue respondido con un pedido de nota NPS en vez de información de cursos.
+- Causa: la consulta de `nps_envios` pendientes (`estado in enviado/pidiendo_nota/esperando_comentario`) no tenía ningún límite de tiempo — una encuesta de prueba vieja sin responder seguía "activa" para siempre e interceptaba cualquier mensaje futuro de ese mismo teléfono antes de llegar a Claude. **Esto seguía roto en `main`/producción** (main no tenía este fix) hasta este merge.
+- ✅ Fix: se agregó corte de 2 días (`gte("created_at", ...)`) a esa consulta. Pasado ese plazo, el teléfono deja de quedar atrapado en el flujo NPS y el bot vuelve a responder consultas normales.
+
+### Nota técnica — mail de escalación del admin
+- `sendEmailEscalacion` tenía hardcodeado el mail personal de Tomás como fallback (solo si nadie más tenía el toggle activado) — así seguía en `main` también. Por pedido explícito de Tomás, ahora **siempre** recibe el aviso, prenda o no el toggle otra gente — vía secret `ADMIN_EMAIL_ESCALACION` (no hardcodeado en el código, para no repetir el bloqueo del filtro de seguridad por tener su dirección en el archivo).
+- Lista final de destinatarios = `ADMIN_EMAIL_ESCALACION` (si está cargado) + todos los usuarios con `notificaciones_config.escal_bot_email = true`, sin duplicados.
+- **Acción pendiente:** cargar el secret `ADMIN_EMAIL_ESCALACION` en Supabase (Edge Functions → Secrets) con el mail de Tomás.
+
+**Deploy pendiente:** redeployar `agente-mensajes` con el código final post-merge (Supabase Dashboard → Edge Functions → agente-mensajes → Code), después de cargar el secret `ADMIN_EMAIL_ESCALACION`.
+
+---
+
+## Fix (22 Nov 2026) — Auditoría de layout: botones ocultos en topbar/Cash Flow y mobile
+
+Pedido de Tomás: revisar a fondo el código por "cosas que no se ven" y "botones que se escapan" en el topbar y en Cash Flow, y lo mismo en mobile. 3 auditorías en paralelo (topbar, Cash Flow, mobile general) + corrección de los 9 hallazgos:
+
+1. ✅ **Topbar en anchos intermedios** — en ventanas no maximizadas (notebook con sidebar, ~900-1150px) los botones de la derecha (Actualizar, Nueva tarea, selector de persona) quedaban recortados por `body{overflow-x:hidden}` sin scroll posible; solo había `display:none` para mobile puro. Fix: nuevo breakpoint `@media(max-width:1150px) and (min-width:769px)` que oculta el selector de persona (`#usel`) y los textos "Actualizar"/"Nueva tarea" (quedan solo los íconos) — se descartó wrappear (rompía el `margin-top` fijo del layout) o hacer scroll horizontal (clipeaba el dropdown de usuario, que es `position:absolute` y queda fuera de la caja).
+2. ✅ **`.cd-tabs` (sub-tabs de Cash Flow)** — ya estaba resuelto en `main` antes de este merge (overflow-x:auto aplicado también en desktop, no solo mobile). Sin acción.
+3. ✅ **`#btn-token-alert`** — agregado a la lista de botones que se ocultan en mobile (ya existe el aviso redundante en el Dashboard).
+4. ✅ **`.form-grid{grid-template-columns:1fr}` sin `!important`** — agregado. Arregla de una sola vez las 13 instancias de `class="form-grid"` + `style` inline en el archivo, incluido el modal de Orden de Pago (3 grids) en Cash Flow.
+5. ✅ **Formulario de Caja** — el grid inline (`#caja-form-grid` ahora) colapsa a 1 columna en mobile.
+6. ✅ **Proyector fullscreen de escenarios clínicos** — IDs nuevos (`#esc-top-grid`, `#esc-vitals-grid`, `#esc-body-grid`, `.esc-sv-val`) + reglas mobile: grids a 1 columna, vitales a 2 columnas, fuente de valores reducida.
+7. ✅ **Debriefing** — formulario de cabecera (`.dbrief-form-grid`) colapsa a 1 columna en mobile; fila de lista (`.dbrief-row`/`.dbrief-row-actions`) ahora permite wrap.
+8. ✅ **Competency Tracker** — fila de ítem (`.eval-item-row`): el label ya no se puede aplastar a 0px (`min-width:120px`) y el grupo de pill-buttons de la escala wrapea a una segunda línea en vez de desbordar (soluciona instrumentos con escalas largas tipo 1-10).
+9. ✅ **Libro Diario** — tabla de detalle de asiento envuelta en `overflow-x:auto` (mismo patrón que VEPs), con `min-width:420px` para que no se aplaste.
+
+Verificado: los 6 bloques `<script>` del archivo parsean sin errores de sintaxis (`new Function(...)` sobre cada uno).
+
+---
+
 ## Notas técnicas críticas
 
 1. **Token Facebook (permanente via System User):** `META_FB_PAGE_TOKEN` ya no vence. Se generó mediante Usuario del Sistema en Meta Business Suite:
