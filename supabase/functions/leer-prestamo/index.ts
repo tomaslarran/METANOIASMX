@@ -87,7 +87,12 @@ Deno.serve(async (req) => {
 
 Todos los montos deben ser números puros (sin puntos ni comas como separadores de miles, sin símbolo $).
 Si no encontrás un campo, usá null.
-Si no hay detalle de capital/intereses por cuota, dejá esos campos en null.`;
+Si no hay detalle de capital/intereses por cuota, dejá esos campos en null.
+
+Planes de pago de impuestos (DGR Salta / Rentas F951A, ARCA, Municipalidad):
+- Cada cuota suele tener DOS vencimientos (1° y 2° vencimiento, el 2° con recargo por pagar tarde). Es UNA SOLA cuota: devolvé una fila por cuota, con la fecha y el monto del 1° vencimiento. Nunca cargues el 2° vencimiento como otra cuota.
+- La cuota 0 (o «Anticipo») es una cuota más: nro 0, con su monto como capital e intereses 0.
+- «Amortización» es el capital y «Interés» los intereses de cada cuota.`;
 
     const claudeBody = {
       model: "claude-sonnet-4-6",
