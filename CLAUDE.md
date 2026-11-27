@@ -356,11 +356,25 @@ idea cruda → definición concreta → línea de negocio → a quién sirve →
 - Validación con contador externo (al menos un cierre mensual completo con el sistema nuevo)
 
 ### Convertir el panel en producto SaaS vendible (visión, surgida en congreso, 10 Sep 2026)
-- [ ] Empezar a preparar el panel para venderlo como plataforma a terceros (otras instituciones/centros de simulación) — suscripciones, gestión de usuarios por organización. Ya existe una base de multi-tenancy arrancada (`organizaciones`, `organizacion_id` en `usuarios` y `agente_cursos_chats`, ver sección "Implementado 3 Sep 2026 — Multi-tenancy foundation") pero falta:
-  - Definir el modelo comercial (planes, precios, qué incluye cada uno)
-  - Extender `organizacion_id` a las tablas que todavía no lo tienen (cursos, alumnos, instructores, finanzas, etc.) y todas las policies RLS filtrando por organización, no solo por `authenticated`
-  - Onboarding de una organización nueva (alta de org + admin inicial)
 - [x] **Análisis de costo de tokens de IA por organización/curso** — arrancado 11 Sep 2026: logging real de tokens por función (`ia_uso`, ver sección "Implementado (11 Sep 2026) — Logging de uso de IA"). Falta el análisis con datos reales (recién arranca a acumular desde el deploy) y decidir el modelo de precios; ver `estrategia_comercial_claude.md` para el marco de la conversación.
+- [ ] Definir el modelo comercial (planes, precios, qué incluye cada uno)
+- [ ] Onboarding de una organización nueva (alta de org + admin inicial) — Fase 3 del plan de abajo
+- [ ] Extender multi-tenancy real a Finanzas y Comunicaciones (hoy solo Cursos, ver abajo)
+
+#### Multi-tenancy real — en progreso (27 Nov 2026)
+
+**Motivación concreta:** interés real (sin fecha todavía) de un centro de simulación en La Plata en contratar licencia/acceso al panel. Decisión de Tomás: no esperar a tener el modelo comercial cerrado — arrancar la base técnica real de una vez (no la versión cosmética que había arrancado el 3 Sep 2026, donde las tablas tenían `organizacion_id` pero las policies seguían siendo `{authenticated} USING(true)` para todos). Alcance de hoy: **solo el módulo Cursos y gestión académica** (lo único que La Plata necesitaría) — Finanzas y Comunicaciones quedan fuera por ahora, pero el patrón queda armado para extenderlos después sin rediseñar nada.
+
+- ✅ **Fase 1 (27 Nov 2026) — base de datos y RLS real**: `sql_multitenancy_cursos_fase1.sql` (**pendiente de correr en Supabase**). Agrega:
+  - Función `current_organizacion_id()` — resuelve la organización del usuario logueado por su email contra `usuarios` (vía `auth.jwt()->>'email'`), `SECURITY DEFINER` para no pisarse con la RLS de `usuarios`.
+  - **Backfill crítico de `usuarios.organizacion_id`** — la columna se agregó el 3 Sep 2026 pero **nunca se pobló**; sin este paso `current_organizacion_id()` devolvía `NULL` para todo el mundo y la Fase 1 habría dejado a todo el equipo sin ver nada de Cursos.
+  - `organizacion_id` (con `DEFAULT current_organizacion_id()` — una fila nueva se autoasigna sola, **sin tocar ninguna función de creación del frontend**) + backfill a Metanoia SMX + policy RLS real por organización en: `cursos`, `curso_tareas`, `curso_costos`, `curso_instructores`, `curso_materiales`, `curso_archivos`, `inscripciones`, `alumnos`, `instructores`, `plantillas_curso`, `evaluaciones_alumno`, `debriefings`, `nps_respuestas`, `nps_envios`, `video_cola`.
+  - `instrumentos_evaluacion` con tratamiento especial: los 4 instrumentos estándar (OSATS, GOALS, Mini-CEX, DOPS) quedan **compartidos** (`organizacion_id = NULL`, visibles para cualquier organización nueva sin tener que recrearlos); los que el equipo cree después quedan de su propia organización. ⚠️ Verificar los nombres exactos en la tabla real antes de correr (el filtro `nombre NOT IN (...)` puede necesitar ajuste de mayúsculas/acentos).
+  - Es **aditivo y seguro de correr ya**: hoy toda la data es de Metanoia SMX y todos los usuarios actuales quedan backfilleados a esa misma organización, así que el comportamiento del panel no cambia en nada para el equipo — solo deja la separación real lista para cuando entre un segundo cliente.
+  - **Patrón reusable documentado en el script** para cuando se quiera extender a Finanzas/Comunicaciones: mismo recipe de 3 pasos (ALTER + DEFAULT, backfill, policy por organización) tabla por tabla.
+- [ ] **Fase 2** — filtrado explícito en el frontend de las pantallas de Cursos (hoy RLS ya separa los datos del lado del servidor, así que no es bloqueante, pero conviene no depender solo de RLS para la UX en pantallas que asumen "todo lo que veo es mío").
+- [ ] **Fase 3** — onboarding de una organización nueva (alta de org + primer usuario admin) sin tener que hacerlo a mano por SQL.
+- [ ] **Fase 4 (más adelante, sin fecha)** — repetir el mismo patrón en Finanzas y Comunicaciones si se decide vender también ese alcance.
 
 ### Producto (baja prioridad)
 - [ ] Módulo COFRADIA — gestión de planes, suscriptores y contenido (Línea D)
