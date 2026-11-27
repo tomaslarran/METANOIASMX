@@ -271,13 +271,10 @@ body.light-mode .mini-sel option{background:#ffffff;color:#1A1D2E}
 .curso-detail{background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);margin-top:16px;overflow:hidden}
 .cd-header{padding:16px 20px;border-bottom:1px solid var(--b);display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .cd-title{font-family:var(--fc);font-size:18px;font-weight:700;letter-spacing:-0.02em}
-.cd-tabs{display:flex;gap:2px;padding:0 20px;border-bottom:1px solid var(--b);overflow-x:auto;overflow-y:visible;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:var(--b) transparent}
-.cd-tabs::-webkit-scrollbar{height:6px}
-.cd-tabs::-webkit-scrollbar-track{background:transparent}
-.cd-tabs::-webkit-scrollbar-thumb{background:var(--b);border-radius:3px}
-.cd-tab{padding:10px 14px;font-size:12px;font-weight:500;color:var(--tx2);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;flex-shrink:0}
-.cd-tab:hover{color:var(--tx)}
-.cd-tab.on{color:var(--tx);border-bottom-color:var(--pu)}
+.cd-tabs{display:flex;gap:6px;padding:0 20px;flex-wrap:wrap}
+.cd-tab{padding:6px 12px;border:1px solid var(--b);border-radius:14px;background:transparent;font-size:12px;font-weight:500;color:var(--tx2);cursor:pointer;transition:all .15s;white-space:nowrap}
+.cd-tab:hover{border-color:var(--b2);color:var(--tx)}
+.cd-tab.on{background:var(--pl);border-color:var(--pu);color:var(--tx)}
 .cd-body{padding:20px}
 /* Rol comunicaciones: oculta todo el sidebar excepto items marcados */
 /* ── Notificaciones: filas por rol ── */
@@ -717,10 +714,6 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
 /* ── BOTTOM NAV MOBILE ── */
 .mobile-nav{display:none}
 @media(max-width:768px){
-  /* CD-tabs: scroll horizontal en lugar de wrap */
-  .cd-tabs{overflow-x:auto;overflow-y:visible;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-  .cd-tabs::-webkit-scrollbar{display:none}
-  .cd-tab{white-space:nowrap;flex-shrink:0}
   /* Bottom nav */
   .mobile-nav{display:flex;position:fixed;bottom:0;left:0;right:0;background:rgba(13,15,26,.97);backdrop-filter:blur(14px);border-top:1px solid var(--b);padding:0 0 env(safe-area-inset-bottom);z-index:150}
   .mn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 2px 10px;gap:2px;cursor:pointer;color:var(--tx3);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;-webkit-tap-highlight-color:transparent;transition:color .15s;position:relative}
@@ -2360,7 +2353,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
   </div>
 
   <!-- TABS -->
-  <div class="cd-tabs" style="display:flex;gap:2px;border-bottom:1px solid var(--b);margin-bottom:18px">
+  <div class="cd-tabs" style="margin-bottom:18px">
     <button class="cd-tab on" id="cftab-resumen" onclick="setCFTab('resumen',this)">📊 Resumen mensual</button>
     <button class="cd-tab" id="cftab-prestamos" onclick="setCFTab('prestamos',this)">🏦 Préstamos y cuotas</button>
     <button class="cd-tab" id="cftab-cobranzas" onclick="setCFTab('cobranzas',this)">📥 Cobranzas</button>
@@ -3830,7 +3823,7 @@ mark.hl{background:rgba(124,58,237,.3);color:#C4B5FD;border-radius:2px;padding:0
     <div class="sc"><div class="sc-l">Borradores</div><div class="sc-v va" id="cfB">—</div><div class="sc-s">en edición</div></div>
     <div class="sc"><div class="sc-l">Aprobados</div><div class="sc-v vg" id="cfP">—</div><div class="sc-s">listos</div></div>
   </div>
-  <div class="cd-tabs" style="gap:0;margin-bottom:16px">
+  <div class="cd-tabs" style="margin-bottom:16px">
     <div class="cd-tab on" id="cf-tab-triage" onclick="setCofradiaTab('triage')" style="cursor:pointer">📋 Triage</div>
     <div class="cd-tab" id="cf-tab-borradores" onclick="setCofradiaTab('borradores')" style="cursor:pointer">✍️ Borradores</div>
     <div class="cd-tab" id="cf-tab-fuentes" onclick="setCofradiaTab('fuentes')" style="cursor:pointer">📡 Fuentes</div>
@@ -6848,15 +6841,6 @@ function closeModal(id){const el=document.getElementById(id);el.classList.remove
 // Previene cerrar modal cuando el mousedown empezó dentro del contenido y el mouseup terminó en el overlay
 let _movDown=null;
 document.addEventListener('mousedown',e=>{_movDown=e.target.classList.contains('mov')?e.target:null;},{capture:true});
-// Barras de tabs con scroll horizontal (.cd-tabs): con mouse (sin trackpad) la rueda vertical
-// mueve la barra para el costado, para que no "parezca cortada" sin forma de verla entera.
-document.addEventListener('wheel',e=>{
-  const bar=e.target.closest(".cd-tabs");
-  if(!bar||bar.scrollWidth<=bar.clientWidth)return;
-  if(Math.abs(e.deltaY)<=Math.abs(e.deltaX))return;
-  bar.scrollLeft+=e.deltaY;
-  e.preventDefault();
-},{passive:false});
 function openM(id){openModal(id)}
 function closeM(id){closeModal(id)}
 function closeMovOuter(e,id){if(e.target===document.getElementById(id))closeModal(id)}
