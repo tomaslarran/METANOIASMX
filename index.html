@@ -19542,6 +19542,7 @@ async function confirmarRegistrarCobro(){
       toast(msg,"ok");
       if(c.recibo_id)await recDepositoCheque({fecha,soc,monto,medio,dest,cobranza:c}).catch(()=>{});
       else if(String(c.notas||"").includes(FE_TAG_CARTERA))await feCobroChequeCartera({fecha,soc,monto,facturaTxt:factura,medio,dest,cobranza:c}).catch(()=>{});
+      else if(String(c.notas||"").includes(FE_TAG_COBRO_ASENTADO))await recDepositoCheque({fecha,soc,monto,medio,dest,cobranza:c,origen:"cheque_cartera_deposito"}).catch(()=>{}); // el cobro de la factura ya está asentado
       else await feCobroDesdeCashFlow({fecha,soc,monto,facturaTxt:factura,medio,dest}).catch(()=>{});
       renderCFCobranzas();renderCFResumen();
 
@@ -23193,8 +23194,62 @@ async function feCobroChequeCartera({fecha,soc,monto,facturaTxt,medio,dest,cobra
   else if(r.motivo)toast("Depósito asentado; anticipo no aplicado: "+r.motivo,"inf");
   return r;
 }
+// Cheques que se atan a una factura desde «Contabilizar cobro» (cuenta Cheques en cartera): el cobro ya quedó asentado,
+// así que al depositarlo desde Cobranzas solo pasa de la cartera al banco, sin volver a cobrar la factura.
+const FE_TAG_COBRO_ASENTADO="[EN CARTERA: cobro asentado]";
+let _fcCheques=[];
+// Igual que feBuscarFacturaPorTexto pero contra las facturas de la pantalla Facturas emitidas (impFacturasEmitidas solo se carga en Impuestos)
+function _fcFacturaDeTexto(txt,soc){
+  const m=/(?:\b([ABC])\s*-?\s*)?(\d{1,5})\s*-\s*(\d{1,8})/i.exec(String(txt||""));if(!m)return null;
+  const letra=(m[1]||"").toUpperCase(),pto=parseInt(m[2],10),nro=parseInt(m[3],10);
+  const c=(feFacturas||[]).filter(f=>f.sociedad===soc&&f.ambiente==="produccion"&&Number(f.pto_vta)===pto&&Number(f.cbte_numero)===nro&&!FE_ES_NC(f.cbte_tipo)&&(!letra||feLetra(f.cbte_tipo)===letra));
+  return c.length===1?c[0]:null;
+}
+const _fcEsCheque=c=>/cheque/i.test(c.tipo||"")||/cheque|echeq/i.test(c.nombre||"")||!!c.numero_cheque;
+// Cheques que se pueden atar a la factura f: los que están en la cartera y no se usaron para otra factura.
+// Los del balance al 30/06 (Fenix) se ofrecen aunque ya estén depositados, porque su anticipo puede seguir sin aplicar.
+async function feChequesParaCobro(f){
+  const rows=await sb(`cf_cobranzas?sociedad=eq.${encodeURIComponent(f.sociedad)}&recibo_id=is.null&select=*&order=fecha_vencimiento.asc`).catch(()=>[]);
+  const libre=c=>{
+    if(!c.numero_factura)return true;
+    const g=_fcFacturaDeTexto(c.numero_factura,f.sociedad);
+    return !g||g.id===f.id;                     // atado a esta factura, o a un número que no existe (mal tipeado)
+  };
+  return (Array.isArray(rows)?rows:[]).filter(c=>{
+    const n=String(c.notas||"");
+    if(!_fcEsCheque(c)||n.includes(FE_TAG_COBRO_ASENTADO)||!libre(c))return false;
+    if(n.includes(FE_TAG_CARTERA))return ["Pendiente","Cobrado","Descontado"].includes(c.estado);
+    return c.estado==="Pendiente";
+  });
+}
+function feCobroCtaCambio(){
+  const esCartera=document.getElementById("fc-cta").value==="1.1.01.005";
+  document.getElementById("fc-cheque").style.display=esCartera?"block":"none";
+  if(esCartera)feCobroChequeCambio();
+}
+function feCobroChequeCambio(){
+  const id=document.getElementById("fc-cheque-sel").value,c=_fcCheques.find(x=>x.id===id),info=document.getElementById("fc-cheque-info");
+  if(!c){info.innerHTML=_fcCheques.length?"Elegí el cheque o cargá uno nuevo.":"No hay cheques en la cartera de esta sociedad: cargá el nuevo.";return;}
+  const f=feFacturas.find(x=>x.id===document.getElementById("fc-id").value),s=f?feSaldoCobro(f):0;
+  document.getElementById("fc-monto").value=feR2(Math.min(parseFloat(c.monto)||0,s||0));
+  info.innerHTML=String(c.notas||"").includes(FE_TAG_CARTERA)
+    ?`<b>Este cheque ya estaba en la cartera desde el balance al 30/06.</b> El cobro se asienta contra <b>Anticipos de clientes</b> (Debe Anticipos / Haber Deudores): no se vuelve a sumar a la cartera.${c.estado!=="Pendiente"?` El cheque ya figura ${esc(c.estado.toLowerCase())}; su depósito no se toca.`:" Cuando lo deposites desde Cobranzas pasa al banco."}`
+    :`El cheque queda en la cartera <b>atado a esta factura</b> (Debe Cheques en cartera / Haber Deudores). Cuando lo deposites desde Cobranzas, pasa de la cartera al banco sin volver a cobrar la factura.`;
+}
+// Cargar un cheque nuevo (mismo formulario de Echeq de terceros, con lectura del PDF) y volver al cobro con ese cheque elegido
+function feCobroNuevoCheque(){
+  const fid=document.getElementById("fc-id").value,f=feFacturas.find(x=>x.id===fid);if(!f)return;
+  const fecha=document.getElementById("fc-fecha").value,monto=document.getElementById("fc-monto").value;
+  closeM("modal-fe-cobro");
+  etAbrir();
+  document.getElementById("et-sociedad").value=f.sociedad;
+  if(monto)document.getElementById("et-monto").value=monto;
+  if(!document.getElementById("et-librador").value)document.getElementById("et-librador").value=f.receptor_nombre||"";
+  _etAlGuardar=id=>feCobroAbrir(fid,{chequeId:id,fecha});
+}
 // Pantalla Facturas emitidas → «Contabilizar cobro»: solo el asiento (para cobros que ya están cargados en caja, banco o cobranzas)
-function feCobroAbrir(id){
+async function feCobroAbrir(id,pre){
+  pre=pre||{};
   const f=feFacturas.find(x=>x.id===id);if(!f)return;
   const s=feSaldoCobro(f);if(s===null||s<0.01){toast("Esa factura no tiene saldo por cobrar","inf");return;}
   let d=document.getElementById("modal-fe-cobro");
@@ -23207,7 +23262,12 @@ function feCobroAbrir(id){
         <div class="fg"><label class="fl">Fecha del cobro *</label><input class="fi" id="fc-fecha" type="date"></div>
         <div class="fg"><label class="fl">Importe cobrado *</label><input class="fi" id="fc-monto" type="number" step="0.01" min="0"></div>
       </div>
-      <div class="fg"><label class="fl">¿Dónde entró la plata? *</label><select class="fi" id="fc-cta"></select></div>
+      <div class="fg"><label class="fl">¿Dónde entró la plata? *</label><select class="fi" id="fc-cta" onchange="feCobroCtaCambio()"></select></div>
+      <div id="fc-cheque" style="display:none;background:var(--surf2);border:1px solid var(--b);border-radius:8px;padding:10px 12px;margin-top:8px">
+        <div class="fg" style="margin-bottom:6px"><label class="fl">¿Qué cheque es? *</label><select class="fi" id="fc-cheque-sel" onchange="feCobroChequeCambio()"></select></div>
+        <div id="fc-cheque-info" style="font-size:11px;color:var(--tx2);line-height:1.5;margin-bottom:8px"></div>
+        <button class="bc" type="button" onclick="feCobroNuevoCheque()">＋ Cargar un cheque nuevo (lee el PDF del Echeq)</button>
+      </div>
       <div style="font-size:11px;color:var(--tx3);line-height:1.5;margin-top:6px">Esto <b>solo genera el asiento</b> (Debe la cuenta elegida / Haber Deudores por ventas). No crea movimientos de caja ni de banco: usalo para cobros que ya cargaste. Para un cobro nuevo, usá Cash Flow → Cobranzas con el N° de esta factura y el asiento sale solo.</div>
       <div class="ma" style="margin-top:14px"><button class="bc" onclick="closeM('modal-fe-cobro')">Cancelar</button><button class="bk" id="fc-btn" onclick="feCobroGuardar()">Generar asiento</button></div>
     </div></div>`;
@@ -23216,21 +23276,46 @@ function feCobroAbrir(id){
   const ctas=[["1.1.01.001","Caja efectivo"],[f.sociedad==="POINTERS"?"1.1.01.003":"1.1.01.002",`Banco Macro ${f.sociedad}`],["1.1.01.005","Cheques de terceros en cartera"],["1.1.04.001","Inversiones (cheque depositado en el fondo)"],["2.1.07.001","Anticipos de clientes (aplica un anticipo ya recibido)"]];
   document.getElementById("fc-cta").innerHTML=ctas.map(([c,n])=>`<option value="${c}">${esc(n)}</option>`).join("");
   document.getElementById("fc-id").value=id;
-  document.getElementById("fc-fecha").value=today();
+  document.getElementById("fc-fecha").value=pre.fecha||today();
   document.getElementById("fc-monto").value=s;
   document.getElementById("fc-res").innerHTML=`<b>${esc(FE_TIPOS[f.cbte_tipo]||"")} ${esc(feNum(f))}</b> · ${esc(f.receptor_nombre||"")}<br>Total ${feM(f.total)} · cobrado ${feM(feCobros[id]||0)} · <b>saldo ${feM(s)}</b>`;
+  // Cheques de la cartera de esta sociedad: se preselecciona el atado a esta factura, o el del mismo importe
+  _fcCheques=await feChequesParaCobro(f);
+  const etq=c=>`${c.nombre||c.librador||"Cheque"} · ${feM(c.monto)} · vto ${c.fecha_vencimiento?String(c.fecha_vencimiento).slice(0,10).split("-").reverse().join("/"):"—"}${c.estado!=="Pendiente"?" · "+c.estado.toLowerCase():""}${String(c.notas||"").includes(FE_TAG_CARTERA)?" · del balance al 30/06":""}`;
+  const atado=_fcCheques.find(c=>c.numero_factura&&(_fcFacturaDeTexto(c.numero_factura,f.sociedad)||{}).id===f.id);
+  const dias=d=>Math.abs((new Date(d||"2100-01-01")-new Date(f.fecha))/864e5);
+  const mismo=_fcCheques.filter(c=>Math.abs((parseFloat(c.monto)||0)-s)<0.01).sort((a,b)=>dias(a.fecha_vencimiento)-dias(b.fecha_vencimiento))[0]; // mismo importe, vencimiento más cercano a la factura
+  const elegido=pre.chequeId||(atado||mismo||{}).id||"";
+  document.getElementById("fc-cheque-sel").innerHTML=`<option value="">— Elegí el cheque —</option>`+_fcCheques.map(c=>`<option value="${c.id}"${c.id===elegido?" selected":""}>${esc(etq(c))}</option>`).join("");
+  if(pre.chequeId||pre.cta)document.getElementById("fc-cta").value=pre.cta||"1.1.01.005";
+  feCobroCtaCambio();
   openM("modal-fe-cobro");
 }
 async function feCobroGuardar(){
   const id=document.getElementById("fc-id").value,f=feFacturas.find(x=>x.id===id);if(!f)return;
-  const fecha=document.getElementById("fc-fecha").value,monto=parseFloat(document.getElementById("fc-monto").value)||0,cuenta=document.getElementById("fc-cta").value;
+  const fecha=document.getElementById("fc-fecha").value,monto=parseFloat(document.getElementById("fc-monto").value)||0;
+  let cuenta=document.getElementById("fc-cta").value;
   if(!fecha||!(monto>0)){toast("Completá la fecha y el importe","err");return;}
+  // Cheque de terceros: hay que decir cuál es (ya cargado o nuevo), para no sumar a la cartera un cheque que ya estaba
+  let cheque=null,del3006=false;
+  if(cuenta==="1.1.01.005"){
+    cheque=_fcCheques.find(x=>x.id===document.getElementById("fc-cheque-sel").value);
+    if(!cheque){toast("Elegí el cheque de la cartera o cargá el cheque nuevo","err");return;}
+    del3006=String(cheque.notas||"").includes(FE_TAG_CARTERA);
+    if(del3006)cuenta=FE_CTA_ANTICIPOS_CLIENTES;     // ya estaba en la cartera desde la apertura: se aplica el anticipo
+  }
   const btn=document.getElementById("fc-btn");btn.disabled=true;
   try{
     const r=await feAsientoCobro(f,{fecha,monto,cuenta});
     if(r.ok){
+      if(cheque){
+        const notas=del3006?cheque.notas:[String(cheque.notas||"").trim(),FE_TAG_COBRO_ASENTADO].filter(Boolean).join(" ");
+        await sb(`cf_cobranzas?id=eq.${cheque.id}`,{method:"PATCH",body:JSON.stringify({numero_factura:`${feLetra(f.cbte_tipo)}-${feNum(f)}`,notas,updated_at:new Date().toISOString()})})
+          .catch(e=>toast("Asiento generado, pero no se pudo atar el cheque a la factura: "+String(e.message||e).slice(0,100),"err"));
+        if(typeof cfCobranzas!=="undefined"){const c=cfCobranzas.find(x=>x.id===cheque.id);if(c)Object.assign(c,{numero_factura:`${feLetra(f.cbte_tipo)}-${feNum(f)}`,notas});}
+      }
       closeM("modal-fe-cobro");
-      toast(`✓ Cobro contabilizado por ${feM(r.importe)}${r.excedente>0.5?` (el importe excedía el saldo en ${feM(r.excedente)})`:""}`,"ok");
+      toast(`✓ Cobro contabilizado por ${feM(r.importe)}${del3006?" contra Anticipos de clientes (cheque del balance al 30/06)":cheque?" · cheque atado a la factura":""}${r.excedente>0.5?` (el importe excedía el saldo en ${feM(r.excedente)})`:""}`,"ok");
       feRender();
     }else toast(r.faltantes?`Faltan las cuentas ${r.faltantes.join(", ")} en el plan`:("No se pudo contabilizar: "+(r.motivo||"error")),"err");
   }catch(e){toast("No se pudo contabilizar el cobro: "+String(e.message||e).slice(0,140),"err");}
@@ -23437,10 +23522,11 @@ async function recAnular(id){
   }catch(e){toast("No se pudo anular: "+String(e.message||e).slice(0,140),"err");}
 }
 // Al depositar/cobrar un cheque que vino con un recibo: pasa de la cartera a la cuenta elegida
-async function recDepositoCheque({fecha,soc,monto,medio,dest,cobranza}){
+async function recDepositoCheque({fecha,soc,monto,medio,dest,cobranza,origen}){
   if(typeof generarAsiento!=="function")return null;
   const cuenta=feCuentaCobro({medio,dest,soc});
-  const a=await generarAsiento({fecha,sociedad:soc,tipo:"ajuste",origen:"recibo_cheque",origen_id:cobranza.id,descripcion:`Depósito de cheque — ${cobranza.nombre}`,lineas:[{codigo:cuenta,debe:feR2(monto),desc:"Depósito"},{codigo:REC_CTA_CARTERA,haber:feR2(monto),desc:"Cheques en cartera"}]});
+  if(cuenta===REC_CTA_CARTERA)return null;                 // sigue en la cartera: no hay depósito que asentar
+  const a=await generarAsiento({fecha,sociedad:soc,tipo:"ajuste",origen:origen||"recibo_cheque",origen_id:cobranza.id,descripcion:`Depósito de cheque — ${cobranza.nombre}`,lineas:[{codigo:cuenta,debe:feR2(monto),desc:"Depósito"},{codigo:REC_CTA_CARTERA,haber:feR2(monto),desc:"Cheques en cartera"}]});
   if(a&&a.id)toast(`🧮 Asiento del depósito generado (cartera → ${cuenta})`,"ok");
   else if(a&&a._faltantes)toast(`No se generó el asiento del depósito: faltan las cuentas ${a._faltantes.join(", ")}`,"err");
   return a;
@@ -31261,7 +31347,7 @@ async function enviarComprobantePagoProveedor(c,op,extra={}){
    Endosar = usarlos para pagar a un proveedor: contra una factura (editor de pagos, línea «Echeq de terceros»)
    o a cuenta, sin factura (queda como anticipo abierto). Contable: Haber 1.1.01.005 (provisorio hasta Fase 3). */
 const ET_ENDOSO_MEDIO="Echeq de terceros (endoso)";
-let echeqsTer=[],etFiltro="cartera",_etEditId=null,_etArchivo=null,_etEndosoId=null,_etFacturas=[];
+let echeqsTer=[],etFiltro="cartera",_etEditId=null,_etArchivo=null,_etEndosoId=null,_etFacturas=[],_etAlGuardar=null; // _etAlGuardar: a quién avisar al cargar un cheque nuevo (ej. «Contabilizar cobro»)
 const etF=f=>f?String(f).slice(0,10).split("-").reverse().join("/"):"—";
 const etMonto=v=>_extM(v);
 async function renderEcheqsTerceros(){
@@ -31315,7 +31401,7 @@ function etSetFiltro(k){etFiltro=k;return renderEcheqsTerceros();}
 
 /* ── cargar / completar los datos de un Echeq recibido ── */
 function etAbrir(id){
-  _etEditId=id||null;_etArchivo=null;
+  _etEditId=id||null;_etArchivo=null;_etAlGuardar=null;
   const c=id?echeqsTer.find(x=>x.id===id):null;
   const set=(k,v)=>{const e=document.getElementById("et-"+k);if(e)e.value=v??"";};
   document.getElementById("et-titulo").textContent=c?"Datos del Echeq recibido":"Cargar Echeq recibido";
@@ -31375,9 +31461,11 @@ async function etGuardar(){
         else toast("⚠️ No se pudo guardar el archivo (los datos sí quedaron)","err");
       }catch(_){toast("⚠️ No se pudo guardar el archivo (los datos sí quedaron)","err");}
     }
+    const eraNuevo=!_etEditId,alGuardar=_etAlGuardar;_etAlGuardar=null;
     closeModal("modal-et");toast(_etEditId?"Datos guardados":"Echeq cargado en la cartera","ok");
     if(typeof loadCF==="function"&&typeof cfCobranzas!=="undefined"){try{cfCobranzas=await sb("cf_cobranzas?select=*&order=fecha_vencimiento");}catch(_){}}
     renderEcheqsTerceros();
+    if(eraNuevo&&id&&typeof alGuardar==="function")await alGuardar(id);   // volver al cobro con este cheque elegido
   }catch(e){toast("Error: "+(e.message||e),"err");}
   finally{btn.disabled=false;}
 }

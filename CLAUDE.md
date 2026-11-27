@@ -2467,3 +2467,10 @@ Los commits `6314e63` (botón ✉️ Reenviar comprobante de pago + aviso claro 
 - **Nivel 3 (pagar, facturar, asientos nuevos, cambiar medio o importe):** no se hace por el conector; el contexto le dice a Claude qué botón del panel usar.
 - La lista de campos permitidos está en la constante `EDITABLE` de `metanoia-mcp/index.ts` (único lugar a tocar). Conviene dejar `confirmar_cambio` en «Preguntar siempre» en la configuración del conector de cada Claude.
 - El chat del panel (`asistente-admin`) sigue siendo solo de consulta.
+
+### 🧾 Cobro con cheque de terceros: elegir el cheque de la cartera o cargar uno nuevo (27 Nov 2026, v157)
+- **Problema:** en Facturas emitidas → 🧮 *Contabilizar cobro*, elegir «Cheques de terceros en cartera» asentaba Debe cartera / Haber Deudores sin preguntar qué cheque era. Con los cheques de Fenix (que ya estaban en la cartera desde el balance al 30/06, contra Anticipos de clientes) eso duplicó $40M de cartera por sociedad y no aplicó el anticipo. Se anularon los 4 asientos mal hechos (oct y nov, SUDES y POINTERS) con el conector (`asistente_cambios` 7668eeb9…).
+- **Ahora:** al elegir esa cuenta aparece «¿Qué cheque es?» con los cheques de la cartera de la sociedad (preselecciona el atado a la factura o el del mismo importe con vencimiento más cercano) y el botón **＋ Cargar un cheque nuevo** (abre el formulario de Echeq de terceros con lectura del PDF y vuelve al cobro con ese cheque elegido).
+  - **Cheque del balance al 30/06** (`[EN CARTERA 30/06]`): el asiento va **Debe Anticipos de clientes / Haber Deudores** (no se suma a la cartera); se ofrece aunque ya esté depositado.
+  - **Cheque nuevo o ya cargado sin asiento:** Debe Cheques en cartera / Haber Deudores, y el cheque queda marcado `[EN CARTERA: cobro asentado]` con el N° de factura. Al **Cobrar** ese cheque desde Cobranzas solo se asienta el depósito (cartera → banco), sin volver a cobrar la factura.
+- Pendiente de hacer a mano: aplicar el anticipo a las 4 facturas de Fenix de oct/nov (🧮 → Cheques de terceros en cartera → elegir el cheque de ese mes).
