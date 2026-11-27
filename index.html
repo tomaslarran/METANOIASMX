@@ -36762,6 +36762,7 @@ if('serviceWorker' in navigator){
     <div class="ai-header-info">
       <div class="ai-header-title" id="ai-header-title">Agente Financiero</div>
       <select id="ai-agente-sel" onchange="cambiarAgente(this.value)" style="font-size:10px;background:transparent;border:none;color:var(--tx3);cursor:pointer;outline:none;font-family:var(--f);margin-top:1px">
+        <option value="asistente">🤖 Asistente (datos)</option>
         <option value="financiero">💰 Finanzas</option>
         <option value="tareas">✅ Tareas</option>
         <option value="cursos">🎓 Cursos</option>
@@ -36791,6 +36792,7 @@ if('serviceWorker' in navigator){
   const BASE_URL = 'https://jppxmdvddvbsvymogvcp.supabase.co/functions/v1/';
   const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwcHhtZHZkZHZic3Z5bW9ndmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMjcyODAsImV4cCI6MjA5MDgwMzI4MH0.KPAqCKfUteE3XK9QFqb_44Hm8jYQxfjVLkrlyGvaMhE';
   const AGENTES = {
+    asistente:   { fn: 'asistente-admin',    titulo: 'Asistente de datos',  placeholder: 'Preguntá lo que quieras sobre los datos…' },
     financiero:  { fn: 'agente-financiero',  titulo: 'Agente Financiero',   placeholder: 'Preguntá sobre finanzas…' },
     tareas:      { fn: 'agente-tareas',      titulo: 'Agente de Tareas',    placeholder: 'Preguntá sobre tareas…' },
     cursos:      { fn: 'agente-cursos',      titulo: 'Agente de Cursos',    placeholder: 'Preguntá sobre cursos…' },
@@ -36807,7 +36809,7 @@ if('serviceWorker' in navigator){
     if (!sel) return;
     // Definir agentes permitidos por rol
     const permitidos = {
-      admin:          ['financiero','tareas','cursos','plataforma'],
+      admin:          ['asistente','financiero','tareas','cursos','plataforma'],
       instructor:     ['tareas','cursos'],
       comunicaciones: ['tareas','cursos'],
       logistica:      ['tareas'],
@@ -36817,6 +36819,13 @@ if('serviceWorker' in navigator){
     Array.from(sel.options).forEach(opt => {
       opt.hidden = !allowed.includes(opt.value);
     });
+    // Los administradores arrancan con el asistente de datos
+    if (rol === 'admin' && agenteActual === 'financiero' && !historial.length) {
+      agenteActual = 'asistente';
+      sel.value = 'asistente';
+      document.getElementById('ai-header-title').textContent = AGENTES.asistente.titulo;
+      document.getElementById('ai-input').placeholder = AGENTES.asistente.placeholder;
+    }
     // Si el agente actual no está permitido, cambiar al primero permitido
     if (!allowed.includes(agenteActual)) {
       agenteActual = allowed[0];
@@ -36866,7 +36875,9 @@ if('serviceWorker' in navigator){
       iniciado = true;
       const tieneHistorial = cargarHistorial();
       if (!tieneHistorial) {
-        addAgentMsg('Hola! Soy tu agente financiero. Puedo ayudarte con consultas sobre facturación, cash flow, cobranzas, préstamos y proyecciones. ¿Qué querés saber?', false, false);
+        addAgentMsg(agenteActual === 'asistente'
+          ? 'Hola! Soy el asistente de datos. Puedo consultar cualquier información del panel (facturas, pagos, banco, caja, asientos, cursos, alumnos…) y responderte con los datos reales. Por ahora solo consulto: no modifico nada. ¿Qué querés saber?'
+          : 'Hola! Soy tu agente financiero. Puedo ayudarte con consultas sobre facturación, cash flow, cobranzas, préstamos y proyecciones. ¿Qué querés saber?', false, false);
       }
     }
     if (panelOpen) setTimeout(() => document.getElementById('ai-input').focus(), 300);
@@ -36892,14 +36903,15 @@ if('serviceWorker' in navigator){
     document.getElementById('ai-send').disabled = true;
 
     addUserMsg(msg, true);
-    const thinking = addAgentMsg('Analizando datos…', true, true);
+    const thinking = addAgentMsg(agenteActual === 'asistente' ? 'Consultando la base de datos… (puede tardar unos segundos)' : 'Analizando datos…', true, true);
 
     try {
       const res = await fetchEdge(AGENTES[agenteActual].fn, { message: msg, historial });
       const data = await res.json();
       const respuesta = data.respuesta || data.error || 'Error al procesar la respuesta.';
       thinking.remove();
-      addAgentMsg(respuesta, false, true);
+      const el = addAgentMsg(respuesta, false, true);
+      if (Array.isArray(data.consultas) && data.consultas.length) agregarConsultas(el, data.consultas);
       historial.push({ role: 'user', content: msg });
       historial.push({ role: 'assistant', content: respuesta });
       if (historial.length > 12) historial = historial.slice(-12);
@@ -36926,11 +36938,26 @@ if('serviceWorker' in navigator){
     const msgs = document.getElementById('ai-msgs');
     const el = document.createElement('div');
     el.className = 'ai-msg agent' + (thinking ? ' thinking' : '');
-    const content = thinking ? escHtml(text) : (typeof marked !== 'undefined' ? marked.parse(text) : escHtml(text));
+    // Se escapa el HTML antes del Markdown: las respuestas pueden traer datos escritos por terceros (proveedores, chats del público)
+    const content = thinking ? escHtml(text) : (typeof marked !== 'undefined' ? marked.parse(escHtml(text)) : escHtml(text));
     el.innerHTML = `<div class="ai-bubble">${content}</div>`;
     msgs.appendChild(el);
     if (scroll) msgs.scrollTop = msgs.scrollHeight;
     return el;
+  }
+
+  // Muestra, plegadas debajo de la respuesta, las consultas que hizo el asistente (para poder controlarlas)
+  function agregarConsultas(el, consultas) {
+    const items = consultas.map(c => {
+      const estado = c.error ? `<span style="color:var(--re)">error: ${escHtml(String(c.error).slice(0,160))}</span>`
+        : `${c.filas ?? 0} fila${c.filas === 1 ? '' : 's'}${c.recortado ? ' (había más)' : ''}`;
+      const sql = c.sql ? `<pre style="white-space:pre-wrap;font-size:10px;background:var(--surf2);padding:6px;border-radius:6px;margin:4px 0 0">${escHtml(c.sql)}</pre>` : '';
+      return `<li style="margin-bottom:6px">${escHtml(c.motivo || c.herramienta)} — ${estado}${sql}</li>`;
+    }).join('');
+    const det = document.createElement('details');
+    det.style.cssText = 'font-size:11px;color:var(--tx3);margin-top:6px';
+    det.innerHTML = `<summary style="cursor:pointer">🔎 ${consultas.length} consulta${consultas.length === 1 ? '' : 's'} a la base</summary><ul style="padding-left:16px;margin:6px 0 0">${items}</ul>`;
+    el.querySelector('.ai-bubble').appendChild(det);
   }
 
   function escHtml(s) {
