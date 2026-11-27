@@ -271,8 +271,10 @@ body.light-mode .mini-sel option{background:#ffffff;color:#1A1D2E}
 .curso-detail{background:var(--surf);border:1px solid var(--b);border-radius:var(--rl);margin-top:16px;overflow:hidden}
 .cd-header{padding:16px 20px;border-bottom:1px solid var(--b);display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .cd-title{font-family:var(--fc);font-size:18px;font-weight:700;letter-spacing:-0.02em}
-.cd-tabs{display:flex;gap:2px;padding:0 20px;border-bottom:1px solid var(--b);overflow-x:auto;overflow-y:visible;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-.cd-tabs::-webkit-scrollbar{display:none}
+.cd-tabs{display:flex;gap:2px;padding:0 20px;border-bottom:1px solid var(--b);overflow-x:auto;overflow-y:visible;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:var(--b) transparent}
+.cd-tabs::-webkit-scrollbar{height:6px}
+.cd-tabs::-webkit-scrollbar-track{background:transparent}
+.cd-tabs::-webkit-scrollbar-thumb{background:var(--b);border-radius:3px}
 .cd-tab{padding:10px 14px;font-size:12px;font-weight:500;color:var(--tx2);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;flex-shrink:0}
 .cd-tab:hover{color:var(--tx)}
 .cd-tab.on{color:var(--tx);border-bottom-color:var(--pu)}
@@ -6846,6 +6848,15 @@ function closeModal(id){const el=document.getElementById(id);el.classList.remove
 // Previene cerrar modal cuando el mousedown empezó dentro del contenido y el mouseup terminó en el overlay
 let _movDown=null;
 document.addEventListener('mousedown',e=>{_movDown=e.target.classList.contains('mov')?e.target:null;},{capture:true});
+// Barras de tabs con scroll horizontal (.cd-tabs): con mouse (sin trackpad) la rueda vertical
+// mueve la barra para el costado, para que no "parezca cortada" sin forma de verla entera.
+document.addEventListener('wheel',e=>{
+  const bar=e.target.closest(".cd-tabs");
+  if(!bar||bar.scrollWidth<=bar.clientWidth)return;
+  if(Math.abs(e.deltaY)<=Math.abs(e.deltaX))return;
+  bar.scrollLeft+=e.deltaY;
+  e.preventDefault();
+},{passive:false});
 function openM(id){openModal(id)}
 function closeM(id){closeModal(id)}
 function closeMovOuter(e,id){if(e.target===document.getElementById(id))closeModal(id)}
