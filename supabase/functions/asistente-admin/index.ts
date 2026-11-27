@@ -30,7 +30,7 @@ async function chequearLimiteIA(supabase: any, email: string | null) {
 
   let usuario: any = null;
   if (email) {
-    const { data } = await supabase.from("usuarios").select("id,nombre,rol,activo,organizacion_id,limite_tokens_mensual").ilike("email", email).maybeSingle();
+    const { data } = await supabase.from("usuarios").select("id,nombre,rol,estado,organizacion_id,limite_tokens_mensual").ilike("email", email).maybeSingle();
     usuario = data;
   }
   let organizacionId: string | null = usuario?.organizacion_id ?? null;
@@ -139,7 +139,7 @@ serve(async (req) => {
 
     const limite = await chequearLimiteIA(supabase, user.email ?? null);
     const usuario = limite.usuario;
-    if (!usuario || usuario.rol !== "admin" || usuario.activo === false) {
+    if (!usuario || usuario.rol !== "admin" || ["inactivo","suspendido"].includes(usuario.estado)) {
       return json({ respuesta: "El asistente de datos está disponible solo para administradores." }, 403);
     }
     if (limite.bloqueado) return json({ respuesta: limite.mensaje });

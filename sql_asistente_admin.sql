@@ -64,7 +64,7 @@ DECLARE
   v_email text := lower(coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'email', ''));
 BEGIN
   IF v_email = '' OR NOT EXISTS (
-    SELECT 1 FROM usuarios u WHERE lower(u.email) = v_email AND u.rol = 'admin' AND coalesce(u.activo, true)
+    SELECT 1 FROM usuarios u WHERE lower(u.email) = v_email AND u.rol = 'admin' AND coalesce(u.estado, '') NOT IN ('inactivo','suspendido')
   ) THEN
     RAISE EXCEPTION 'Solo administradores pueden usar el asistente';
   END IF;

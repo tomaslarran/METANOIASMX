@@ -81,8 +81,8 @@ async function siguiente() {
   if (nivel && nivel.nextLevel === "aal2" && nivel.currentLevel !== "aal2") { mostrar("paso-mfa"); return; }
 
   // Solo administradores del panel
-  const { data: u, error: eU } = await supabase.from("usuarios").select("nombre,rol,activo").ilike("email", session.user.email).maybeSingle();
-  if (eU || !u || u.rol !== "admin" || u.activo === false) {
+  const { data: u, error: eU } = await supabase.from("usuarios").select("nombre,rol,estado").ilike("email", session.user.email).maybeSingle();
+  if (eU || !u || u.rol !== "admin" || ["inactivo","suspendido"].includes(u.estado)) {
     mostrar(null);
     aviso("Este conector es solo para administradores del panel. Si creés que es un error, hablá con Tomás.", true);
     try { await supabase.auth.oauth.denyAuthorization(authId); } catch (_) {}

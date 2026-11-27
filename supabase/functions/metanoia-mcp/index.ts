@@ -73,8 +73,8 @@ Deno.serve(async (req) => {
   if (!user?.email) return noAutorizado();
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
-  const { data: usuario } = await admin.from("usuarios").select("id,nombre,rol,activo").ilike("email", user.email).maybeSingle();
-  if (!usuario || usuario.rol !== "admin" || usuario.activo === false) {
+  const { data: usuario } = await admin.from("usuarios").select("id,nombre,rol,estado").ilike("email", user.email).maybeSingle();
+  if (!usuario || usuario.rol !== "admin" || ["inactivo","suspendido"].includes(usuario.estado)) {
     return json({ error: "insufficient_scope", error_description: "El conector Metanoia es solo para administradores del panel." }, 403);
   }
 
