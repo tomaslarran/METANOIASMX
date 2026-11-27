@@ -16988,17 +16988,19 @@ async function saveCajaMovimiento(){
     const ref=`Transferencia: ${document.getElementById("caja-tr-desde").selectedOptions[0].text} → ${document.getElementById("caja-tr-hacia").selectedOptions[0].text}`;
 
     try{
+      let refId=null; // id del movimiento de caja (o de banco) para el origen del asiento
+      const _id=r=>Array.isArray(r)&&r[0]&&r[0].id?r[0].id:null;
       // EGRESO desde origen
       if(D.tipo==="caja"){
-        await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
+        refId=_id(await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
           sociedad:D.sociedad,fecha,tipo:"egreso",concepto,categoria:"Transferencia",
           monto,moneda:D.moneda||"ARS",observaciones:obs?`${ref} | ${obs}`:ref,creado_por:loggedUser?.nombre||null
-        })});
+        })}));
       } else if(D.tipo==="banco"){
-        await sb("banco_movimientos",{method:"POST",body:JSON.stringify({
+        refId=_id(await sb("banco_movimientos",{method:"POST",body:JSON.stringify({
           sociedad:D.sociedad,fecha,concepto,importe:-monto,saldo:null,
           conciliado:false,referencia:ref
-        })});
+        })}));
       } else if(D.tipo==="inv"){
         // Rescate de inversión
         await sb("cf_inversiones_movimientos",{method:"POST",body:JSON.stringify({
@@ -17014,15 +17016,17 @@ async function saveCajaMovimiento(){
 
       // INGRESO hacia destino
       if(H.tipo==="caja"){
-        await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
+        const idH=_id(await sb("caja_movimientos",{method:"POST",body:JSON.stringify({
           sociedad:H.sociedad,fecha,tipo:"ingreso",concepto,categoria:"Transferencia",
           monto,moneda:H.moneda||"ARS",observaciones:obs?`${ref} | ${obs}`:ref,creado_por:loggedUser?.nombre||null
-        })});
+        })}));
+        refId=idH||refId;                       // el asiento se ata al movimiento de caja
       } else if(H.tipo==="banco"){
-        await sb("banco_movimientos",{method:"POST",body:JSON.stringify({
+        const idH=_id(await sb("banco_movimientos",{method:"POST",body:JSON.stringify({
           sociedad:H.sociedad,fecha,concepto,importe:monto,saldo:null,
           conciliado:false,referencia:ref
-        })});
+        })}));
+        refId=refId||idH;
       } else if(H.tipo==="inv"){
         // Aporte a inversión
         await sb("cf_inversiones_movimientos",{method:"POST",body:JSON.stringify({
@@ -17042,10 +17046,13 @@ async function saveCajaMovimiento(){
       const ctaCB=a=>a.tipo==="caja"?((a.moneda||"ARS")==="ARS"?"1.1.01.001":null):a.tipo==="banco"?((a.moneda||"ARS")==="ARS"?(a.sociedad==="POINTERS"?"1.1.01.003":"1.1.01.002"):null):null;
       const cD=ctaCB(D),cH=ctaCB(H);
       if(cD&&cH&&D.sociedad===H.sociedad&&typeof generarAsiento==="function"){
-        const a=await generarAsiento({fecha,sociedad:D.sociedad,tipo:"ajuste",origen:"caja_transferencia",origen_id:null,
+        if(!refId)toast("Transferencia registrada, pero no se generó el asiento (no volvió el id del movimiento)","err");
+        else{
+        const a=await generarAsiento({fecha,sociedad:D.sociedad,tipo:"ajuste",origen:"caja_transferencia",origen_id:refId,
           descripcion:`${D.tipo==="banco"&&H.tipo==="caja"?"Extracción de efectivo":D.tipo==="caja"&&H.tipo==="banco"?"Depósito de efectivo":"Transferencia"}: ${ref}${concepto?" — "+concepto:""}`.slice(0,250),
           lineas:[{codigo:cH,debe:monto,desc:H.tipo==="caja"?"Caja":"Banco"},{codigo:cD,haber:monto,desc:D.tipo==="caja"?"Caja":"Banco"}]}).catch(()=>null);
         if(!(a&&a.id))toast("Transferencia registrada, pero no se generó el asiento"+(a&&a._faltantes?": faltan las cuentas "+a._faltantes.join(", "):""),"err");
+        }
       }else if(D.tipo!=="inv"&&H.tipo!=="inv"&&D.sociedad!==H.sociedad)toast("Ojo: transferencia entre sociedades distintas, el asiento se hace a mano","inf");
       document.getElementById("caja-form-monto").value="";
       document.getElementById("caja-form-concepto").value="";
