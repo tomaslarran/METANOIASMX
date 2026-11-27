@@ -30158,7 +30158,8 @@ async function registrarPagoFactura(c,{fecha,medio,obs,socioId,monto,op,echeq}){
   return via;
 }
 
-async function confirmarPagoComp(){
+function confirmarPagoComp(){return _conBloqueoPago(_confirmarPagoComp);}
+async function _confirmarPagoComp(){
   const id=document.getElementById("pagar-comp-id").value;
   const fecha=document.getElementById("pagar-comp-fecha").value||today();
   const obs=document.getElementById("pagar-comp-obs").value.trim();
@@ -30891,7 +30892,15 @@ async function abrirPagarOP(opId,opts={}){
 }
 
 
-async function confirmarPagarOP(){
+// Bloqueo de doble clic: mientras un pago se está registrando no se acepta otro (el 25/11 un doble clic registró dos veces la OP-202611-0004)
+let _pagoEnCurso=false;
+async function _conBloqueoPago(fn){
+  if(_pagoEnCurso){toast("Ya se está registrando un pago, esperá un momento…","inf");return;}
+  _pagoEnCurso=true;
+  try{return await fn();}finally{_pagoEnCurso=false;}
+}
+function confirmarPagarOP(){return _conBloqueoPago(_confirmarPagarOP);}
+async function _confirmarPagarOP(){
   const op=_opPagar;
   if(!op)return;
   const fecha=document.getElementById("pop-fecha").value||today();
