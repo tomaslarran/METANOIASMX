@@ -57,6 +57,7 @@
   </div>
 
   <div id="msg" class="msg"></div>
+  <button class="sec hidden" id="btn-otra">Usar otra cuenta</button>
 </div>
 
 <script type="module">
@@ -82,11 +83,10 @@ async function siguiente() {
 
   // Solo administradores del panel
   const { data: u, error: eU } = await supabase.from("usuarios").select("nombre,rol,estado").ilike("email", session.user.email).maybeSingle();
-  if (eU || !u || u.rol !== "admin" || ["inactivo","suspendido"].includes(u.estado)) {
-    mostrar(null);
-    aviso("Este conector es solo para administradores del panel. Si creés que es un error, hablá con Tomás.", true);
-    try { await supabase.auth.oauth.denyAuthorization(authId); } catch (_) {}
-    return;
+  if (eU) { mostrar(null); $("btn-otra").classList.remove("hidden"); return aviso("No se pudo verificar tu usuario (" + session.user.email + "): " + eU.message, true); }
+  if (!u || u.rol !== "admin" || ["inactivo","suspendido"].includes(u.estado)) {
+    mostrar(null); $("btn-otra").classList.remove("hidden");
+    return aviso("Este conector es solo para administradores del panel. Ingresaste como " + session.user.email + ". Si es otra cuenta, tocá «Usar otra cuenta».", true);
   }
 
   const { data, error } = await supabase.auth.oauth.getAuthorizationDetails(authId);
@@ -97,6 +97,8 @@ async function siguiente() {
   mostrar("paso-permiso");
   aviso("");
 }
+
+$("btn-otra").onclick = async () => { await supabase.auth.signOut(); $("btn-otra").classList.add("hidden"); aviso(""); mostrar("paso-login"); };
 
 $("btn-login").onclick = async () => {
   const btn = $("btn-login"); btn.disabled = true; aviso("Ingresando…");
