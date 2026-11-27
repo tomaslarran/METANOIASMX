@@ -430,7 +430,10 @@ Deno.serve(async (req) => {
         }
         await admin.from("asistente_cambios").update({ estado: "deshecho", deshecho_en: new Date().toISOString(), deshecho_por: user.email }).eq("id", cambio_id);
         await registrar("deshacer_cambio", cambio_id, ops.length, null);
-        return texto(`↩ Cambio deshecho (cambio_id ${cambio_id}). Volvieron los valores anteriores:\n\n${resumenOps(ops.map((o) => ({ ...o, antes: o.despues, despues: o.accion === "alta" ? {} : o.antes })))}`);
+        const det = ops.map((o, i) => o.accion === "alta"
+          ? `${i + 1}. Se quitó la fila dada de alta en ${o.tabla} (id ${o.id}).`
+          : resumenOps([{ ...o, antes: o.despues, despues: o.antes }]).replace(/^1\./, `${i + 1}.`)).join("\n");
+        return texto(`↩ Cambio deshecho (cambio_id ${cambio_id}). Volvieron los valores anteriores:\n\n${det}`);
       },
     );
 
