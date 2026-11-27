@@ -17037,6 +17037,16 @@ async function saveCajaMovimiento(){
         }
       }
 
+      // Asiento de la transferencia entre caja y banco en pesos de la misma sociedad (retiro de efectivo o depósito).
+      // Las de inversiones las asienta invSyncAsientos; dólares y entre sociedades distintas se asientan a mano.
+      const ctaCB=a=>a.tipo==="caja"?((a.moneda||"ARS")==="ARS"?"1.1.01.001":null):a.tipo==="banco"?((a.moneda||"ARS")==="ARS"?(a.sociedad==="POINTERS"?"1.1.01.003":"1.1.01.002"):null):null;
+      const cD=ctaCB(D),cH=ctaCB(H);
+      if(cD&&cH&&D.sociedad===H.sociedad&&typeof generarAsiento==="function"){
+        const a=await generarAsiento({fecha,sociedad:D.sociedad,tipo:"ajuste",origen:"caja_transferencia",origen_id:null,
+          descripcion:`${D.tipo==="banco"&&H.tipo==="caja"?"Extracción de efectivo":D.tipo==="caja"&&H.tipo==="banco"?"Depósito de efectivo":"Transferencia"}: ${ref}${concepto?" — "+concepto:""}`.slice(0,250),
+          lineas:[{codigo:cH,debe:monto,desc:H.tipo==="caja"?"Caja":"Banco"},{codigo:cD,haber:monto,desc:D.tipo==="caja"?"Caja":"Banco"}]}).catch(()=>null);
+        if(!(a&&a.id))toast("Transferencia registrada, pero no se generó el asiento"+(a&&a._faltantes?": faltan las cuentas "+a._faltantes.join(", "):""),"err");
+      }else if(D.tipo!=="inv"&&H.tipo!=="inv"&&D.sociedad!==H.sociedad)toast("Ojo: transferencia entre sociedades distintas, el asiento se hace a mano","inf");
       document.getElementById("caja-form-monto").value="";
       document.getElementById("caja-form-concepto").value="";
       document.getElementById("caja-form-obs").value="";
