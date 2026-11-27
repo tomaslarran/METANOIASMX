@@ -181,6 +181,7 @@ serve(async (req) => {
           try {
             const { filas, recortado } = await correrSQL(sql);
             consultas.push({ herramienta: nombre, motivo, sql, filas: filas.length, recortado });
+            try { await supabase.from("asistente_consultas_log").insert({ canal: "panel", usuario_id: usuario.id, usuario_email: user.email, herramienta: nombre, sql, filas: filas.length }); } catch (_) { /* sin registro */ }
             let texto = JSON.stringify(filas);
             if (texto.length > MAX_CARACTERES) texto = texto.slice(0, MAX_CARACTERES) + " …[resultado recortado: agregá filtros o agrupá]";
             if (recortado) texto += `\n[Se muestran las primeras ${MAX_FILAS} filas; hay más.]`;
@@ -188,6 +189,7 @@ serve(async (req) => {
           } catch (e) {
             const msg = String((e as Error).message || e);
             consultas.push({ herramienta: nombre, motivo, sql, error: msg });
+            try { await supabase.from("asistente_consultas_log").insert({ canal: "panel", usuario_id: usuario.id, usuario_email: user.email, herramienta: nombre, sql, error: msg }); } catch (_) { /* sin registro */ }
             return { texto: `Error de la base: ${msg}`, error: true };
           }
         }

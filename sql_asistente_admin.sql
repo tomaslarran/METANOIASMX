@@ -90,3 +90,20 @@ GRANT EXECUTE ON FUNCTION asistente_consulta(text) TO authenticated;
 -- Prueba (desde el SQL editor no hay usuario conectado, así que debería decir
 -- "Solo administradores pueden usar el asistente"):
 -- SELECT asistente_consulta('select count(*) from comprobantes_compra');
+
+-- 4) Registro de cada consulta del asistente (chat del panel y conector de Claude de escritorio).
+--    Solo lo escriben las funciones (service role); los administradores lo pueden leer.
+CREATE TABLE IF NOT EXISTS asistente_consultas_log (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  canal text,            -- 'panel' o 'conector'
+  usuario_id uuid,
+  usuario_email text,
+  herramienta text,
+  sql text,
+  filas int,
+  error text,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE asistente_consultas_log ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Solo autenticados leen" ON asistente_consultas_log;
+CREATE POLICY "Solo autenticados leen" ON asistente_consultas_log FOR SELECT TO authenticated USING (true);
